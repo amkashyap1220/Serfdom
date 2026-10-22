@@ -22,12 +22,24 @@ Both clients connect to the same authoritative multiplayer service and persisten
 - Testing: Vitest (Phase 1); document commands in the root README.
 - Formatting: Prettier, pinned exact version (Phase 0). Linting: ESLint (Phase 1). Type checks: `tsc` (Phase 1).
 
-### Current repository tooling (Phase 0)
+### Current repository tooling
 
 - Runtime: Node.js 24 LTS (`.nvmrc`; `package.json` `engines`; `.npmrc` `engine-strict=true` makes npm refuse other versions).
 - Package manager: npm. `.npmrc` `save-exact=true` records exact versions; `package-lock.json` is committed.
-- Monorepo: npm workspaces. The root `package.json` will list `client`, `shared`, and `server` in `"workspaces"` as each folder is created; none exist yet.
+- Monorepo: npm workspaces. Current workspace: `client` (`@serfdom/client`). `shared` and `server` are added when needed.
 - Line endings: LF everywhere (`.gitattributes` `eol=lf`, `.editorconfig`, Prettier `endOfLine`).
+- Pinned versions (Phase 1): Phaser 4.2.1, Vite 8.3.5, Vitest 5.0.5, TypeScript 6.0.3, ESLint 10.13.0 with typescript-eslint 8.72.0, Prettier 3.9.10.
+  - TypeScript is held at 6.0.x because typescript-eslint 8.72 supports only `typescript <6.1.0`. Revisit TypeScript 7 when typescript-eslint supports it.
+- Tool locations: shared tooling (TypeScript, ESLint, Prettier) is installed at the root; Vite/Vitest/Phaser belong to `client`. ESLint uses one flat config at the root (`eslint.config.mjs`).
+
+### Current client structure (Phase 1)
+
+- `client/index.html`: `#game-container` (960×640) is a flex row of `#hud` (240×640, plain DOM) and `#gameplay` (720×640, holds the Phaser canvas). Both use `flex: 0 0 <width>` so neither can grow or shrink into the other.
+- The HUD is DOM, outside Phaser entirely, so it is outside the world camera's coordinate space by construction (PROVISIONAL, T-011).
+- Phaser canvas = 720×640 with `Scale.NONE` and camera zoom 1: one world pixel is one CSS pixel. At `devicePixelRatio` 1 that is also one device pixel. Higher DPR or browser zoom makes the browser upscale the canvas; CSS `image-rendering: pixelated` keeps that blocky, but non-integer ratios (e.g. 1.25, 1.5) can make pixel widths uneven. Not yet addressed.
+- `pixelArt: true` disables texture smoothing/antialiasing and rounds texture positions to whole pixels.
+- Pure rules live in Phaser-free modules (`layout.ts`, `camera-math.ts`) with Vitest unit tests; `WorldScene.ts` only renders.
+- `main.ts` measures the real DOM after the first frame and prints it in the HUD debug readout and `console.table`; mismatches against `layout.ts` produce `[layout]` console warnings.
 
 These are proposals, not permission to install every dependency immediately. Inspect the repository and choose the minimum needed for the current phase.
 

@@ -16,9 +16,9 @@ Add inventory entries only when assets are actually needed and generated/integra
 
 ## Asset inventory
 
-| Asset path   | Purpose | Canvas/frame size | Frames | Palette | Source/prompt notes | Verified in game? |
-| ------------ | ------- | ----------------- | ------ | ------- | ------------------- | ----------------- |
-| _(none yet)_ |         |                   |        |         |                     |                   |
+| Asset path                                                                | Purpose                    | Canvas/frame size | Frames | Palette                                                                               | Source/prompt notes                              | Verified in game?                                                  |
+| ------------------------------------------------------------------------- | -------------------------- | ----------------- | ------ | ------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
+| `player-placeholder` (runtime texture, `client/src/scenes/WorldScene.ts`) | Phase 1 player placeholder | 16×16             | 1      | Placeholder colors only (yellow fill, 2×2 dark center mark); not the verified palette | Generated in code; no image file. Not final art. | Rendered in headless Chrome screenshot; awaiting user visual check |
 
 Record the size of individual frames, not just the overall spritesheet.
 

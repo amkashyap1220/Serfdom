@@ -22,8 +22,31 @@ Current commands (run from the repository root):
 | `npm ci`               | Installs exactly the versions in `package-lock.json`; fails on the wrong Node major. | Phase 0 |
 | `npm run format:check` | Every file matches Prettier formatting. Prints offending files and exits non-zero.   | Phase 0 |
 | `npm run format`       | Rewrites files to fix formatting (not a check; changes files).                       | Phase 0 |
+| `npm run lint`         | ESLint over the whole repo.                                                          | Phase 1 |
+| `npm run typecheck`    | `tsc --noEmit` in every workspace that defines it.                                   | Phase 1 |
+| `npm test`             | Vitest unit tests in every workspace that defines them.                              | Phase 1 |
+| `npm run build`        | Vite production build of the client into `client/dist/`.                             | Phase 1 |
+| `npm run check`        | All of the above checks in order; stops at the first failure.                        | Phase 1 |
+| `npm run dev`          | Starts the dev server at http://localhost:5173/ (fixed port).                        | Phase 1 |
 
-Type checks, lint, unit tests, and build arrive in Phase 1.
+Exit codes: 0 means pass. When piping output (e.g. `| tail`), `$?` reports the last command in the pipe, not npm; use `${PIPESTATUS[0]}` in bash or run without a pipe.
+
+### Phase 1 layout check: the HUD debug readout
+
+The left HUD currently shows a measured readout (also printed via `console.table`):
+
+| Row                                          | Expected at 100% browser zoom         |
+| -------------------------------------------- | ------------------------------------- |
+| Container / HUD / Gameplay / Canvas (CSS px) | 960×640 / 240×640 / 720×640 / 720×640 |
+| Canvas backing (px)                          | 720×640                               |
+| devicePixelRatio                             | Your display's value (1 = no scaling) |
+| Camera zoom                                  | 1                                     |
+| Camera center (world)                        | 1000, 1000 (the player's position)    |
+| Visible from center                          | ±360 × ±320                           |
+| ≥300 each way?                               | yes                                   |
+| HUD/gameplay overlap?                        | no                                    |
+
+Mismatched sizes also log a `[layout] … expected …` warning in the console. Note: "≥300 each way?" describes what the camera renders. If the browser window is smaller than the container, part of the view is scrolled off-screen; that is the PROVISIONAL small-window behavior (T-012).
 
 ### B. Manual feature tests
 

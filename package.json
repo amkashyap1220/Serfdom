@@ -6,10 +6,24 @@
     "node": ">=24.0.0 <25.0.0"
   },
   "scripts": {
+    "dev": "npm run dev -w @serfdom/client",
+    "build": "npm run build -w @serfdom/client",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "test": "npm run test --workspaces --if-present",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
-    "prettier": "3.9.10"
-  }
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0"
+  },
+  "workspaces": [
+    "client"
+  ]
 }

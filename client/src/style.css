@@ -1,0 +1,70 @@
+/* Approved layout (D-026, D-027). Keep in sync with src/layout.ts. */
+
+html,
+body {
+  margin: 0;
+  background: #0e1014;
+  color: #c9d1dc;
+  font-family: system-ui, sans-serif;
+}
+
+#game-container {
+  display: flex;
+  width: 960px;
+  height: 640px;
+  /* Centered horizontally. Below 960×640 the page scrolls rather than
+     shrinking: PROVISIONAL until smaller-window behavior is decided. */
+  margin: 0 auto;
+}
+
+#hud {
+  /* flex: 0 0 = never grow or shrink, so the HUD can never cover gameplay. */
+  flex: 0 0 240px;
+  height: 640px;
+  box-sizing: border-box;
+  padding: 12px;
+  overflow: hidden;
+  background: #171a21;
+  border-right: 1px solid #2c3340;
+  font-size: 12px;
+}
+
+#hud h1 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+#hud p {
+  margin: 0 0 12px;
+  color: #8a94a6;
+}
+
+#hud-debug {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+#hud-debug dt {
+  color: #8a94a6;
+}
+
+#hud-debug dd {
+  margin: 0;
+  text-align: right;
+}
+
+#gameplay {
+  flex: 0 0 720px;
+  height: 640px;
+  overflow: hidden;
+}
+
+#gameplay canvas {
+  display: block;
+  /* If the browser scales the canvas (e.g. page zoom), keep pixels blocky. */
+  image-rendering: pixelated;
+}

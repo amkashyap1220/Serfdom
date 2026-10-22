@@ -4,8 +4,8 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-- [ ] Phase 0 — Repository orientation and environment _(tooling done; awaiting user clean-clone check)_
-- [ ] Phase 1 — Playable local client skeleton
+- [x] Phase 0 — Repository orientation and environment
+- [x] Phase 1 — Playable local client skeleton
 - [ ] Phase 2 — Movement, collision, and camera following
 - [ ] Phase 3 — Combat prototype
 - [ ] Phase 4 — Authoritative multiplayer foundation
@@ -46,4 +46,18 @@ Keep this concise and update it after each meaningful milestone.
 - Recorded T-007–T-010 in the decision register; T-001 direction confirmed.
 - Checks: `npm run format:check` and a fresh-clone `npm ci` + `npm run format:check`; results in the delivery notes.
 - Known: npm offers an upgrade to npm 12; deliberately not taken (major-version change, no need yet).
-- Next step: user verifies a clean clone; then Phase 1 — Vite + Phaser + TypeScript client skeleton.
+- User verified a fresh GitHub clone: `npm ci` and `npm run format:check` passed. Phase 0 complete.
+- Next step: Phase 1 — Vite + Phaser + TypeScript client skeleton.
+
+### Phase 1 — First slice: layout, placeholder player, camera — 2026-10-22
+
+- Added `client/` npm workspace: Phaser 4.2.1, Vite 8.3.5, Vitest 5.0.5; root TypeScript 6.0.3 and ESLint 10.13.0 + typescript-eslint 8.72.0. Root scripts: `dev`, `build`, `lint`, `typecheck`, `test`, `check`.
+- DOM layout: 960×640 container, 240×640 DOM HUD, 720×640 Phaser canvas. Debug world 2000×2000 with grid, offset labels, 600×600 visibility-target box, 16×16 placeholder player at (1000, 1000), screen-fixed center ticks. HUD shows a measured layout readout.
+- Unit tests for camera visibility math (7 tests).
+- Decisions recorded: T-001 versions, T-011 (DOM HUD), T-012 (small window scrolls), T-013 (no camera bounds yet). All PROVISIONAL.
+- Checks run by Claude: `npm run check` passed; headless Chrome at 1000×700 measured container 960×640, HUD 240×640, gameplay/canvas 720×640, camera center (1000, 1000), ±360×±320 visible, no overlap, no console errors or `[layout]` warnings. At 800×500 the layout keeps its size and the page scrolls.
+- Lessons: flags passed through nested `npm run` reach npm, not Vite (port is now set in `vite.config.ts`). Stopping the dev server from a tool can orphan the Vite child process on Windows; `Ctrl+C` in a terminal does not.
+- User reported a console 404: browser auto-request for `/favicon.ico`. Fixed with an empty inline icon in `client/index.html`; re-check showed all 11 page requests succeed.
+- Not separately reported: devicePixelRatio of the user's display, browser zoom, window resizing while running.
+- User ran the Phase 1 manual checks in their browser and reported them passed (layout readout, centering, visibility box, crispness, console). Phase 1 complete.
+- Next step: Phase 2 — movement, collision, camera following.
