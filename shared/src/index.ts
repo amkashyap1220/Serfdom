@@ -15,7 +15,13 @@ export {
   TICK_RATE,
   TICK_SECONDS,
 } from "./movement-config.ts";
-export { DUMMY_ENEMY, PLAYER_WEAPON } from "./combat-config.ts";
+export {
+  DUMMY_ENEMY,
+  ENEMY_RING_ATTACK,
+  PLAYER_HEALTH,
+  PLAYER_WEAPON,
+} from "./combat-config.ts";
+export { applyDamage } from "./health.ts";
 export {
   stepProjectile,
   type HitTarget,
@@ -36,11 +42,19 @@ export {
   type FireMode,
   type PointerState,
 } from "./weapon.ts";
-export { damageEnemy, isAlive, stepRespawn, type EnemyState } from "./enemy.ts";
+export {
+  damageEnemy,
+  isAlive,
+  ringDirections,
+  stepRespawn,
+  type EnemyState,
+} from "./enemy.ts";
 export {
   aimTargets,
   createSimState,
+  isPlayerAlive,
   stepSim,
+  type PlayerState,
   type SimEvent,
   type SimState,
   type TickInput,

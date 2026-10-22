@@ -3,6 +3,8 @@ import type { Rect, Vec2 } from "./geometry.ts";
 
 export interface Projectile {
   id: number;
+  /** Player shots hit enemies; enemy bullets hit the player. */
+  owner: "player" | "enemy";
   position: Vec2;
   /** Unit direction of travel. */
   direction: Vec2;

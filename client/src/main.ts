@@ -137,8 +137,18 @@ function reportLive(game: Phaser.Game): void {
       "Ability (Space)",
       keys.ability ? "pressed — not yet defined" : "not yet defined",
     ],
+    [
+      "Player HP",
+      sim.player.hp > 0
+        ? `${sim.player.hp}/${sim.player.maxHp}`
+        : `dead (respawn ${sim.player.respawnIn.toFixed(1)}s)`,
+    ],
+    ["Hits taken / deaths", `${totals.playerHits} / ${totals.deaths}`],
     ["Dummy HP", enemies],
-    ["Shots in flight", String(sim.projectiles.length)],
+    [
+      "In flight (yours/enemy)",
+      `${sim.projectiles.filter((p) => p.owner === "player").length}/${sim.projectiles.filter((p) => p.owner === "enemy").length}`,
+    ],
     ["Shots/hits/blocked", `${totals.shots}/${totals.hits}/${totals.blocked}`],
     ["Dummy defeats", String(totals.defeats)],
   ]);

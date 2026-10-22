@@ -7,7 +7,7 @@ Keep this concise and update it after each meaningful milestone.
 - [x] Phase 0 — Repository orientation and environment
 - [x] Phase 1 — Playable local client skeleton
 - [x] Phase 2 — Movement, collision, and camera following
-- [ ] Phase 3 — Combat prototype
+- [x] Phase 3 — Combat prototype
 - [ ] Phase 4 — Authoritative multiplayer foundation
 - [ ] Phase 5 — Shared combat and enemies
 - [ ] Phase 6 — Dungeon vertical slice
@@ -92,3 +92,14 @@ Keep this concise and update it after each meaningful milestone.
 - Cosmetic: long HUD values wrap in the 240 px HUD.
 - User manual test passed (all 7 steps; prototype values felt good). Slice 3b complete.
 - Next step: slice 3c (enemy attacks, player HP 200, 15×15 hurtbox, prototype death/respawn).
+
+### Phase 3c — Enemy ring attack, player HP, prototype death — 2026-10-22
+
+- User decisions: ring burst pattern, values as proposed, auto respawn after 2 s (T-019).
+- Shared: `health.ts` (`applyDamage`), projectile `owner`, enemy `attackCooldown` + `ringDirections`, player HP/hurtbox/respawn in `sim.ts`. 93 shared tests, including a hurtbox test (bullet path 10.4 px from center hits, 10.6 px misses; a 16×16 box would still be hit).
+- Client: orange enemy bullets, red player hit flash, centered prototype death message, HUD rows for player HP, hits taken / deaths, projectiles in flight by owner. 23 client tests.
+- Test fixes (my test assumptions, not game bugs): respawn test now starts from the exact death tick; a test variable needed an explicit `SimState` type (caught by `tsc`, not Vitest).
+- Checks: `npm run check` passed. Live visible-Chrome run on the user's 5173 server: no attacks outside 300 px; on the 180° ring line, 3 hits in ~6 s while auto aim defeated the dummy; in Manual, died after exactly 10 hits; W while dead did nothing; respawned at (1000, 1000) with 200/200, dummy 500/500, 0 bullets; between ring lines 0 hits in 6 s; no console errors.
+- User manual test passed (all 5 steps; pattern readable and avoidable, values feel reasonable). Slice 3c complete.
+- Phase 3 acceptance: engage with approved inputs ✅; readable/avoidable attacks ✅ (user-confirmed); damage/defeat match documented rules ✅; tests cover normal hits and edge cases ✅. Phase 3 complete.
+- Next step: Phase 4 — authoritative multiplayer foundation (needs server/transport decisions first).

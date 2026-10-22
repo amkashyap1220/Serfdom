@@ -4,6 +4,7 @@ import { stepProjectile, type Projectile } from "./projectile.ts";
 function shot(overrides: Partial<Projectile> = {}): Projectile {
   return {
     id: 1,
+    owner: "player",
     position: { x: 0, y: 0 },
     direction: { x: 1, y: 0 },
     speed: 400,

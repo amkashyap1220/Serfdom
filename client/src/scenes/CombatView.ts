@@ -16,7 +16,8 @@ const COLORS = {
   enemy: 0xc0392b,
   enemyMark: 0x2b0b07,
   flash: 0xffffff,
-  projectile: 0x7fdbff,
+  playerShot: 0x7fdbff,
+  enemyBullet: 0xff9f1c,
 } as const;
 
 interface EnemySprite {
@@ -102,8 +103,8 @@ export class CombatView {
     }
 
     const g = this.projectiles.clear();
-    g.fillStyle(COLORS.projectile);
     for (const p of state.projectiles) {
+      g.fillStyle(p.owner === "enemy" ? COLORS.enemyBullet : COLORS.playerShot);
       g.fillRect(
         Math.round(p.position.x - p.size / 2),
         Math.round(p.position.y - p.size / 2),

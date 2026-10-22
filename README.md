@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phase 3 (combat prototype) is in progress. Done so far: Q/E view rotation (3a) and shooting a target dummy with three fire modes (3b). The 16×16 placeholder player moves with W A S D (screen-relative) around a debug map with walls; T cycles Auto aim / Auto fire / Manual (left click). Enemies do not attack yet (3c). See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
+Phase 3 (combat prototype) is complete. Done so far: Q/E view rotation (3a) and shooting a target dummy with three fire modes (3b). The 16×16 placeholder player moves with W A S D (screen-relative) around a debug map with walls; T cycles Auto aim / Auto fire / Manual (left click). The dummy fires an 8-bullet ring every 2 s while you are within 300 px; you have 200 HP and, in this prototype only, respawn at the start 2 s after dying (not the final permadeath rules). See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
 
 ## Development setup
 

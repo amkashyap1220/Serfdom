@@ -1,4 +1,5 @@
 import type { Vec2 } from "./geometry.ts";
+import { applyDamage } from "./health.ts";
 
 export interface EnemyState {
   id: number;
@@ -9,6 +10,8 @@ export interface EnemyState {
   maxHp: number;
   /** Seconds until it comes back; 0 while alive. */
   respawnIn: number;
+  /** Seconds until its next attack is allowed. */
+  attackCooldown: number;
 }
 
 export function isAlive(enemy: EnemyState): boolean {
@@ -24,15 +27,11 @@ export function damageEnemy(
   damage: number,
   respawnSeconds: number,
 ): { enemy: EnemyState; defeated: boolean } {
-  if (!(damage >= 0) || !Number.isFinite(damage)) {
-    throw new RangeError(`damage must be finite and >= 0, got ${damage}`);
-  }
+  const { hp, died } = applyDamage(enemy.hp, damage); // validates damage
   if (!isAlive(enemy)) return { enemy, defeated: false };
-  const hp = Math.max(enemy.hp - damage, 0);
-  const defeated = hp === 0;
   return {
-    enemy: { ...enemy, hp, respawnIn: defeated ? respawnSeconds : 0 },
-    defeated,
+    enemy: { ...enemy, hp, respawnIn: died ? respawnSeconds : 0 },
+    defeated: died,
   };
 }
 
@@ -46,7 +45,21 @@ export function stepRespawn(
   if (respawnIn > 1e-9)
     return { enemy: { ...enemy, respawnIn }, respawned: false };
   return {
-    enemy: { ...enemy, hp: enemy.maxHp, respawnIn: 0 },
+    enemy: { ...enemy, hp: enemy.maxHp, respawnIn: 0, attackCooldown: 0 },
     respawned: true,
   };
+}
+
+/**
+ * Unit directions for a ring of `count` evenly spaced bullets, the first
+ * pointing east (+x) and continuing clockwise on screen (world y is down).
+ */
+export function ringDirections(count: number): Vec2[] {
+  if (!Number.isInteger(count) || count < 1) {
+    throw new RangeError(`count must be a positive integer, got ${count}`);
+  }
+  return Array.from({ length: count }, (_, i) => {
+    const a = (i / count) * Math.PI * 2;
+    return { x: Math.cos(a), y: Math.sin(a) };
+  });
 }

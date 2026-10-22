@@ -21,3 +21,29 @@ export const DUMMY_ENEMY = {
   /** Seconds after defeat before it reappears at full HP. */
   respawnSeconds: 3,
 } as const;
+
+/** Prototype player health (D-039) and hurtbox (D-038). */
+export const PLAYER_HEALTH = {
+  maxHp: 200,
+  /** Square box enemy projectiles can hit: 15×15, ½ px inset per side of the 16×16 sprite. */
+  hurtboxSize: 15,
+  /** PROTOTYPE ONLY, not the final permadeath rule: seconds until respawn at the start. */
+  respawnSeconds: 2,
+} as const;
+
+/** Prototype enemy attack: a ring burst (user-chosen pattern and values, 2026-10-22). */
+export const ENEMY_RING_ATTACK = {
+  /** Bullets per ring, evenly spaced; the first points east (+x). */
+  bullets: 8,
+  /** Seconds between rings. */
+  intervalSeconds: 2,
+  damage: 20,
+  /** World pixels per second. */
+  speed: 120,
+  /** Square hit box of each bullet. */
+  size: 6,
+  /** Max travel distance. */
+  range: 400,
+  /** The enemy attacks only while the player's center is within this distance of its center. */
+  aggroRange: 300,
+} as const;

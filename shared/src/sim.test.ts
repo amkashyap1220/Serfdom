@@ -40,6 +40,7 @@ describe("enemy damage and respawn", () => {
     hp: 30,
     maxHp: 500,
     respawnIn: 0,
+    attackCooldown: 0,
   };
 
   it("reduces HP and reports defeat at zero, never below", () => {

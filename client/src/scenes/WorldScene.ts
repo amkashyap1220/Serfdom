@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import {
   aimTargets,
+  isPlayerAlive,
   consumeFixedSteps,
   createSimState,
   DUMMY_ENEMY,
@@ -39,6 +40,9 @@ import {
 import { CombatView, makeSquareTexture } from "./CombatView";
 
 const PLAYER_TEXTURE = "player-placeholder";
+const PLAYER_HIT_TEXTURE = "player-placeholder-hit";
+/** How long the player shows the hit flash. */
+const PLAYER_HIT_FLASH_MS = 100;
 
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
 // The void beyond the map is the game background color set in main.ts.
@@ -51,6 +55,7 @@ const COLORS = {
   visibilityTarget: 0x5cb85c,
   player: 0xf0c419,
   playerMark: 0x1d2129,
+  playerHit: 0xff4d4d,
   viewportCenter: 0x5bc0de,
 } as const;
 
@@ -66,7 +71,16 @@ export interface WorldDebugState {
   viewRotation: number;
   fireMode: FireMode;
   /** Running totals since load, for the HUD. */
-  totals: { shots: number; hits: number; blocked: number; defeats: number };
+  totals: Totals;
+}
+
+interface Totals {
+  shots: number;
+  hits: number;
+  blocked: number;
+  defeats: number;
+  playerHits: number;
+  deaths: number;
 }
 
 const NO_KEYS: KeyState = {
@@ -103,7 +117,16 @@ export class WorldScene extends Phaser.Scene {
   private viewRotation = 0;
   private fireMode: FireMode = "autoAim";
   private carriedSeconds = 0;
-  private readonly totals = { shots: 0, hits: 0, blocked: 0, defeats: 0 };
+  private readonly totals: Totals = {
+    shots: 0,
+    hits: 0,
+    blocked: 0,
+    defeats: 0,
+    playerHits: 0,
+    deaths: 0,
+  };
+  private playerFlashUntil = 0;
+  private deathText!: Phaser.GameObjects.Text;
 
   constructor() {
     super("world");
@@ -126,14 +149,31 @@ export class WorldScene extends Phaser.Scene {
       PLAYER_START.y,
       PLAYER_TEXTURE,
     );
+    makeSquareTexture(
+      this,
+      PLAYER_HIT_TEXTURE,
+      PLAYER_SPRITE_SIZE,
+      COLORS.playerHit,
+      COLORS.playerMark,
+    );
     this.world.add(this.player);
     const overlay = this.drawScreenOverlay();
+    this.deathText = this.add
+      .text(this.scale.width / 2, this.scale.height / 2 - 40, "", {
+        fontFamily: "monospace",
+        fontSize: "14px",
+        color: "#ffffff",
+        backgroundColor: "#000000aa",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setVisible(false);
     this.readKeys = createKeyReader(this);
     this.readPointer = createPointerReader(this);
 
     // D-033: no camera bounds; the camera always centers the player and
     // shows void past the map edge.
-    this.cameras.main.setZoom(1).ignore(overlay);
+    this.cameras.main.setZoom(1).ignore([overlay, this.deathText]);
     this.cameras
       .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
       .ignore(this.world);
@@ -218,6 +258,8 @@ export class WorldScene extends Phaser.Scene {
       else if (e.type === "hit") this.totals.hits++;
       else if (e.type === "blocked") this.totals.blocked++;
       else if (e.type === "defeated") this.totals.defeats++;
+      else if (e.type === "playerHit") this.totals.playerHits++;
+      else if (e.type === "playerDied") this.totals.deaths++;
     }
   }
 
@@ -232,7 +274,23 @@ export class WorldScene extends Phaser.Scene {
    */
   private syncView(events: readonly SimEvent[], nowMs: number): void {
     const { x, y } = this.renderPosition();
-    this.player.setPosition(x, y).setRotation(-this.viewRotation);
+    if (events.some((e) => e.type === "playerHit")) {
+      this.playerFlashUntil = nowMs + PLAYER_HIT_FLASH_MS;
+    }
+    const alive = isPlayerAlive(this.sim.player);
+    this.player
+      .setPosition(x, y)
+      .setRotation(-this.viewRotation)
+      .setVisible(alive)
+      .setTexture(
+        nowMs < this.playerFlashUntil ? PLAYER_HIT_TEXTURE : PLAYER_TEXTURE,
+      );
+    // PROTOTYPE ONLY: not the final permadeath rules.
+    this.deathText
+      .setVisible(!alive)
+      .setText(
+        `You died — prototype respawn in ${this.sim.player.respawnIn.toFixed(1)}s`,
+      );
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
     this.combat.sync(this.sim, events, this.viewRotation, nowMs);
   }
