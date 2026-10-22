@@ -41,12 +41,27 @@ The left HUD currently shows a measured readout (also printed via `console.table
 | Canvas backing (px)                          | 720×640                               |
 | devicePixelRatio                             | Your display's value (1 = no scaling) |
 | Camera zoom                                  | 1                                     |
-| Camera center (world)                        | 1000, 1000 (the player's position)    |
 | Visible from center                          | ±360 × ±320                           |
 | ≥300 each way?                               | yes                                   |
 | HUD/gameplay overlap?                        | no                                    |
 
 Mismatched sizes also log a `[layout] … expected …` warning in the console. Note: "≥300 each way?" describes what the camera renders. If the browser window is smaller than the container, part of the view is scrolled off-screen; that is the PROVISIONAL small-window behavior (T-012).
+
+The HUD "Live" section (Phase 2) updates every frame. "Player on screen" must read **360, 320** (center of the 720×640 canvas) at all times; "Camera center (world)" equals the player position rounded to whole pixels.
+
+### Phase 2 movement/collision map
+
+Debug map (`client/src/test-world.ts`), player starts at (1000, 1000), speed 150 px/s:
+
+| Feature                | Where (world px)                           | Expected                                              |
+| ---------------------- | ------------------------------------------ | ----------------------------------------------------- |
+| Square block           | x 1100–1164, y 900–964 (up-right of start) | Blocks on every face; slide along it diagonally       |
+| L-shaped inside corner | wall x 868–900 / floor y 1150–1182         | Pushing S+A into it stops cleanly, no jitter          |
+| Wide gap (24 px)       | between x 1200 and 1224 at y 1250          | Player (16 px) fits through                           |
+| Narrow gap (12 px)     | between x 1200 and 1212 at y 1400          | Player cannot pass                                    |
+| Border walls           | 32 px thick at the world edge              | Player stops at x/y = 40 or 1960; void (black) beyond |
+
+Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests
 

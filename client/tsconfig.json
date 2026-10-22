@@ -4,6 +4,9 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // Needed because the client type-checks @serfdom/shared's source, which
+    // uses explicit .ts import paths.
+    "allowImportingTsExtensions": true,
     "types": ["vite/client"],
     "strict": true,
     "noUncheckedIndexedAccess": true,

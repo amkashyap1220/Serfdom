@@ -14,6 +14,7 @@
     "vitest": "5.0.5"
   },
   "dependencies": {
+    "@serfdom/shared": "0.0.0",
     "phaser": "4.2.1"
   }
 }

@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phase 1 (local client skeleton) is complete: the browser client shows the approved 960×640 layout, a placeholder HUD, and a debug world with a 16×16 placeholder player. There is no gameplay yet. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
+Phase 2 (movement, collision, camera following) is complete: the 16×16 placeholder player moves with W A S D around a debug map with walls, and the camera keeps them centered. There is no combat yet. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
 
 ## Development setup
 
@@ -74,18 +74,26 @@ Run from the repository root:
 ### Repository layout
 
 ```
+shared/      pure game rules shared by client and (later) server (npm workspace @serfdom/shared)
+  src/movement.ts (+ .test.ts)    WASD direction, movement step, wall collision
+  src/fixed-step.ts (+ .test.ts)  fixed 60 Hz simulation timestep
+  src/movement-config.ts          PROVISIONAL speed / body / tick values
 client/      browser client (npm workspace @serfdom/client): Phaser 4 + TypeScript + Vite
   index.html     page: #game-container = #hud (DOM) + #gameplay (Phaser canvas)
   src/main.ts    creates the Phaser game; measures the layout into the HUD debug readout
   src/layout.ts  approved CSS-pixel layout constants
   src/camera-math.ts (+ .test.ts)  pure camera visibility rules
-  src/test-world.ts  PROVISIONAL debug-world values
-  src/scenes/WorldScene.ts  debug grid, placeholder player, camera
+  src/test-world.ts (+ .test.ts)  PROVISIONAL debug map: size, start, walls
+  src/input.ts       WASD key reader
+  src/debug-list.ts  HUD debug readout rows
+  src/scenes/WorldScene.ts  debug map, movement loop, placeholder player, camera
 docs/        design, roadmap, architecture, decisions, testing, work log
 CLAUDE.md    instructions for Claude as pair-programmer
 ```
 
-Planned (added only when their phase begins): `shared/` (shared types/rules) and `server/` (Phase 4, authoritative WebSocket server), as further npm workspaces.
+Planned: `server/` (Phase 4, authoritative WebSocket server) as a further npm workspace.
+
+If `npm run dev` shows a blank game with `504 (Outdated Optimize Dep)` in the console after dependencies change, stop the server (`Ctrl+C`) and start it again.
 
 No environment variables or secrets are needed yet. When they are, a placeholder-only `.env.example` will be committed; real `.env` files are git-ignored.
 

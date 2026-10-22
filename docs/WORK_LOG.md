@@ -6,7 +6,7 @@ Keep this concise and update it after each meaningful milestone.
 
 - [x] Phase 0 — Repository orientation and environment
 - [x] Phase 1 — Playable local client skeleton
-- [ ] Phase 2 — Movement, collision, and camera following
+- [x] Phase 2 — Movement, collision, and camera following
 - [ ] Phase 3 — Combat prototype
 - [ ] Phase 4 — Authoritative multiplayer foundation
 - [ ] Phase 5 — Shared combat and enemies
@@ -61,3 +61,14 @@ Keep this concise and update it after each meaningful milestone.
 - Not separately reported: devicePixelRatio of the user's display, browser zoom, window resizing while running.
 - User ran the Phase 1 manual checks in their browser and reported them passed (layout readout, centering, visibility box, crispness, console). Phase 1 complete.
 - Next step: Phase 2 — movement, collision, camera following.
+
+### Phase 2 — Movement, collision, camera following — 2026-10-22
+
+- User decisions: D-031 (WASD only, 8-way, normalized diagonals), D-032 (instant start/stop), D-033 (camera always centers player; void beyond map), T-014 (own movement code in `shared/`), speed 150 px/s.
+- Added `shared/` workspace (`@serfdom/shared`): `movement.ts` (direction, swept axis-separated box collision), `fixed-step.ts` (60 Hz accumulator), `movement-config.ts`. 28 unit tests.
+- Client: WASD reader, debug map with border walls, block, L-corner, 24 px and 12 px gaps; camera re-centered each frame on the rounded position; HUD live readout; layout re-measured on resize. `test-world.test.ts` guards the map (3 tests).
+- Checks run by Claude: `npm run check` passed (38 tests). Headless Chrome driven via DevTools protocol: D for 1 s = +150.0 px; open-space S+D for 1 s = dx 107.8, dy 107.8 (~151 px/s incl. timing slack); A+D = no movement; release = immediate stop; push into block stops at x = 1092.0; D+S slides along block face; left border stops at x = 40.0 with void visible; "Player on screen" 360, 320 throughout; no console errors.
+- Found: after adding a workspace dependency, an already-running dev server serves `504 (Outdated Optimize Dep)` for Phaser and the game stays blank; reload does not fix it, restarting the server does. Documented in README.
+- Not verified: real keyboard feel, crispness while moving on a real monitor, high-refresh displays (possible slight judder: no interpolation yet, T-016), resizing while moving.
+- User manual test passed (all 7 steps) on a 120 Hz display; no judder reported; speed 150 px/s confirmed as fine for now. Phase 2 complete.
+- Next step: Phase 3 — combat prototype; first needs the hybrid auto-combat/aim model (open question 2).

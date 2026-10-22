@@ -26,20 +26,24 @@ Both clients connect to the same authoritative multiplayer service and persisten
 
 - Runtime: Node.js 24 LTS (`.nvmrc`; `package.json` `engines`; `.npmrc` `engine-strict=true` makes npm refuse other versions).
 - Package manager: npm. `.npmrc` `save-exact=true` records exact versions; `package-lock.json` is committed.
-- Monorepo: npm workspaces. Current workspace: `client` (`@serfdom/client`). `shared` and `server` are added when needed.
+- Monorepo: npm workspaces. Current workspaces: `shared` (`@serfdom/shared`) and `client` (`@serfdom/client`). `server` is added in Phase 4.
+- `@serfdom/shared` is consumed as TypeScript source (its `exports` points at `src/index.ts`); Vite compiles it for the client. It has no DOM types (`lib: ["ES2022"]`), so browser-only code there is a type error. Internal imports use explicit `.ts` paths so Node can later run it directly; the client tsconfig sets `allowImportingTsExtensions` because it type-checks that source.
 - Line endings: LF everywhere (`.gitattributes` `eol=lf`, `.editorconfig`, Prettier `endOfLine`).
 - Pinned versions (Phase 1): Phaser 4.2.1, Vite 8.3.5, Vitest 5.0.5, TypeScript 6.0.3, ESLint 10.13.0 with typescript-eslint 8.72.0, Prettier 3.9.10.
   - TypeScript is held at 6.0.x because typescript-eslint 8.72 supports only `typescript <6.1.0`. Revisit TypeScript 7 when typescript-eslint supports it.
 - Tool locations: shared tooling (TypeScript, ESLint, Prettier) is installed at the root; Vite/Vitest/Phaser belong to `client`. ESLint uses one flat config at the root (`eslint.config.mjs`).
 
-### Current client structure (Phase 1)
+### Current client structure (Phases 1–2)
 
 - `client/index.html`: `#game-container` (960×640) is a flex row of `#hud` (240×640, plain DOM) and `#gameplay` (720×640, holds the Phaser canvas). Both use `flex: 0 0 <width>` so neither can grow or shrink into the other.
 - The HUD is DOM, outside Phaser entirely, so it is outside the world camera's coordinate space by construction (PROVISIONAL, T-011).
 - Phaser canvas = 720×640 with `Scale.NONE` and camera zoom 1: one world pixel is one CSS pixel. At `devicePixelRatio` 1 that is also one device pixel. Higher DPR or browser zoom makes the browser upscale the canvas; CSS `image-rendering: pixelated` keeps that blocky, but non-integer ratios (e.g. 1.25, 1.5) can make pixel widths uneven. Not yet addressed.
 - `pixelArt: true` disables texture smoothing/antialiasing and rounds texture positions to whole pixels.
-- Pure rules live in Phaser-free modules (`layout.ts`, `camera-math.ts`) with Vitest unit tests; `WorldScene.ts` only renders.
-- `main.ts` measures the real DOM after the first frame and prints it in the HUD debug readout and `console.table`; mismatches against `layout.ts` produce `[layout]` console warnings.
+- Pure rules live in Phaser-free modules with Vitest unit tests: client `layout.ts`, `camera-math.ts`; shared `movement.ts`, `fixed-step.ts`, `movement-config.ts`. `WorldScene.ts` wires input → simulation → rendering and holds no rules of its own.
+- Simulation loop (Phase 2): each rendered frame, `consumeFixedSteps` converts elapsed time into whole 1/60 s ticks (remainder carried, stalls capped at 0.25 s). Input is sampled once per frame; each tick calls `stepMovement`. The sprite and camera then use the same rounded position, so the player is always exactly centered (D-028, D-033) and texture-aligned.
+- Collision (`shared/src/movement.ts`): body = axis-aligned box around the player center. X then Y are resolved separately against wall rectangles (sliding). Each axis is swept, so no tunneling at any step size. Touching edges do not count as overlap.
+- Keyboard: `client/src/input.ts` binds W/A/S/D only (D-031). Phaser resets held keys on window blur.
+- `main.ts` measures the real DOM after the first frame and on every window resize, printing it in the HUD "Layout" readout (and `console.table` once); mismatches against `layout.ts` produce `[layout]` console warnings. The HUD "Live" readout updates every frame: player position, camera center, player on-screen position, keys held.
 
 These are proposals, not permission to install every dependency immediately. Inspect the repository and choose the minimum needed for the current phase.
 
