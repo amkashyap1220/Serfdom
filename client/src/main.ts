@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { rotateVec } from "@serfdom/shared";
 import "./style.css";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
@@ -76,23 +77,38 @@ function reportLayout(game: Phaser.Game, logTable: boolean): void {
 /** Per-frame readout: where the player is and whether the camera is centered on them. */
 function reportLive(game: Phaser.Game): void {
   const scene = worldScene(game);
-  const { position, renderPosition, input } = scene.getDebugState();
+  const { position, renderPosition, keys, viewRotation } =
+    scene.getDebugState();
   const camera = scene.cameras.main;
-  // Where the player is drawn inside the canvas, in CSS pixels at zoom 1.
-  const onScreenX = (renderPosition.x - camera.scrollX) * camera.zoom;
-  const onScreenY = (renderPosition.y - camera.scrollY) * camera.zoom;
+  // Where the player is drawn inside the canvas (CSS pixels): the camera
+  // rotates and zooms the world around its midpoint, which sits at the
+  // canvas center.
+  const fromMid = rotateVec(
+    {
+      x: renderPosition.x - camera.midPoint.x,
+      y: renderPosition.y - camera.midPoint.y,
+    },
+    viewRotation,
+  );
+  const onScreenX = camera.width / 2 + fromMid.x * camera.zoom;
+  const onScreenY = camera.height / 2 + fromMid.y * camera.zoom;
+  const { move, rotate } = keys;
   const held =
     [
-      input.up ? "W" : "",
-      input.left ? "A" : "",
-      input.down ? "S" : "",
-      input.right ? "D" : "",
+      move.up ? "W" : "",
+      move.left ? "A" : "",
+      move.down ? "S" : "",
+      move.right ? "D" : "",
+      rotate.left ? "Q" : "",
+      rotate.right ? "E" : "",
+      rotate.reset ? "Z" : "",
     ].join("") || "—";
 
   liveList.set([
     ["Player (world)", `${position.x.toFixed(1)}, ${position.y.toFixed(1)}`],
     ["Camera center (world)", `${camera.midPoint.x}, ${camera.midPoint.y}`],
-    ["Player on screen", `${onScreenX}, ${onScreenY}`],
+    ["Player on screen", `${round1(onScreenX)}, ${round1(onScreenY)}`],
+    ["View rotation", `${round1((viewRotation * 180) / Math.PI)}°`],
     ["Keys held", held],
   ]);
 }
@@ -120,6 +136,12 @@ function verifyLayout(
   if (hud.right > view.left) {
     console.warn("[layout] HUD overlaps the gameplay viewport");
   }
+}
+
+/** One decimal, and never "-0.0". */
+function round1(n: number): string {
+  const r = Math.round(n * 10) / 10;
+  return (r === 0 ? 0 : r).toFixed(1);
 }
 
 function size(rect: DOMRect): string {

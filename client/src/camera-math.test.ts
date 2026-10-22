@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MIN_VISIBLE_WORLD_PX,
   meetsVisibilityTarget,
+  stepViewRotation,
   visibleExtentFromCenter,
 } from "./camera-math";
 import { LAYOUT } from "./layout";
@@ -57,5 +58,60 @@ describe("meetsVisibilityTarget", () => {
 
   it("uses the approved 300-pixel minimum by default", () => {
     expect(MIN_VISIBLE_WORLD_PX).toBe(300);
+  });
+});
+
+describe("stepViewRotation", () => {
+  const none = { left: false, right: false, reset: false };
+  const deg = (r: number) => (r * 180) / Math.PI;
+
+  it("does not change without Q/E", () => {
+    expect(stepViewRotation(1, none, 1)).toBe(1);
+  });
+
+  it("turns 120° per second with Q (left = positive)", () => {
+    expect(deg(stepViewRotation(0, { ...none, left: true }, 1))).toBeCloseTo(
+      120,
+      9,
+    );
+  });
+
+  it("wraps into [0, 360°) both ways", () => {
+    expect(deg(stepViewRotation(0, { ...none, right: true }, 0.5))).toBeCloseTo(
+      300,
+      9,
+    );
+    expect(deg(stepViewRotation(0, { ...none, left: true }, 3.5))).toBeCloseTo(
+      60,
+      9,
+    );
+  });
+
+  it("cancels when Q and E are both held", () => {
+    expect(
+      stepViewRotation(0.5, { left: true, right: true, reset: false }, 1),
+    ).toBe(0.5);
+  });
+
+  it("resets to north with Z, even while turning", () => {
+    expect(
+      stepViewRotation(2, { left: true, right: false, reset: true }, 1),
+    ).toBe(0);
+  });
+
+  it("ignores negative and NaN frame times", () => {
+    expect(stepViewRotation(1, { ...none, left: true }, -1)).toBe(1);
+    expect(stepViewRotation(1, { ...none, left: true }, Number.NaN)).toBe(1);
+  });
+});
+
+describe("visibility under rotation", () => {
+  it("still sees ≥300 px in every world direction at any angle", () => {
+    // The viewport contains a circle of radius min(360, 320) = 320 around its
+    // center, and rotation only turns the world inside that circle.
+    const extent = visibleExtentFromCenter(720, 640, 1);
+    expect(Math.min(extent.horizontal, extent.vertical)).toBeGreaterThanOrEqual(
+      MIN_VISIBLE_WORLD_PX,
+    );
   });
 });

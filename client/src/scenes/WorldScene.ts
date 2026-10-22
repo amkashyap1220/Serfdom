@@ -7,11 +7,11 @@ import {
   PLAYER_SPEED,
   stepMovement,
   TICK_SECONDS,
-  type MoveInput,
+  worldDirectionFromInput,
   type Vec2,
 } from "@serfdom/shared";
-import { MIN_VISIBLE_WORLD_PX } from "../camera-math";
-import { createWasdReader } from "../input";
+import { MIN_VISIBLE_WORLD_PX, stepViewRotation } from "../camera-math";
+import { createKeyReader, type KeyState } from "../input";
 import {
   GRID,
   PLAYER_SPRITE_SIZE,
@@ -41,15 +41,31 @@ export interface WorldDebugState {
   position: Vec2;
   /** Position actually drawn and centered on (whole world pixels). */
   renderPosition: Vec2;
-  input: MoveInput;
+  keys: KeyState;
+  /** Camera rotation in radians, [0, 2π). */
+  viewRotation: number;
 }
 
-/** Phase 2 debug scene: test map, WASD movement with walls, player-centered camera. */
+const NO_KEYS: KeyState = {
+  move: NO_INPUT,
+  rotate: { left: false, right: false, reset: false },
+};
+
+/**
+ * Debug scene: test map, WASD movement with walls, player-centered camera
+ * with Q/E rotation.
+ *
+ * Two cameras: the main camera draws the world layer and rotates; a second,
+ * never-rotating "overlay" camera draws screen-fixed debug marks. A single
+ * camera would rotate the screen overlay too.
+ */
 export class WorldScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Image;
-  private readInput: () => MoveInput = () => NO_INPUT;
+  private world!: Phaser.GameObjects.Layer;
+  private readKeys: () => KeyState = () => NO_KEYS;
   private position: Vec2 = { ...PLAYER_START };
-  private lastInput: MoveInput = NO_INPUT;
+  private lastKeys: KeyState = NO_KEYS;
+  private viewRotation = 0;
   private carriedSeconds = 0;
 
   constructor() {
@@ -57,6 +73,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.world = this.add.layer();
     this.drawFloorAndGrid();
     this.drawWalls();
     this.createPlayerTexture();
@@ -65,12 +82,16 @@ export class WorldScene extends Phaser.Scene {
       PLAYER_START.y,
       PLAYER_TEXTURE,
     );
-    this.drawScreenOverlay();
-    this.readInput = createWasdReader(this);
+    this.world.add(this.player);
+    const overlay = this.drawScreenOverlay();
+    this.readKeys = createKeyReader(this);
 
     // D-033: no camera bounds; the camera always centers the player and
     // shows void past the map edge.
-    this.cameras.main.setZoom(1);
+    this.cameras.main.setZoom(1).ignore(overlay);
+    this.cameras
+      .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
+      .ignore(this.world);
     this.syncView();
   }
 
@@ -84,11 +105,22 @@ export class WorldScene extends Phaser.Scene {
     this.carriedSeconds = remainder;
 
     // Input is sampled once per rendered frame and held for its steps.
-    this.lastInput = this.readInput();
+    this.lastKeys = this.readKeys();
+    // View rotation is presentation only (never sent to a server), so it
+    // follows real frame time rather than simulation ticks.
+    this.viewRotation = stepViewRotation(
+      this.viewRotation,
+      this.lastKeys.rotate,
+      deltaMs / 1000,
+    );
+    const direction = worldDirectionFromInput(
+      this.lastKeys.move,
+      this.viewRotation,
+    );
     for (let i = 0; i < steps; i++) {
       this.position = stepMovement(
         this.position,
-        this.lastInput,
+        direction,
         PLAYER_BODY,
         TEST_WALLS,
         TICK_SECONDS,
@@ -102,7 +134,8 @@ export class WorldScene extends Phaser.Scene {
     return {
       position: { ...this.position },
       renderPosition: this.renderPosition(),
-      input: this.lastInput,
+      keys: this.lastKeys,
+      viewRotation: this.viewRotation,
     };
   }
 
@@ -110,11 +143,15 @@ export class WorldScene extends Phaser.Scene {
    * Draws the player and centers the camera on the same whole-pixel point.
    * Rounding both identically keeps the sprite exactly centered and crisp;
    * rounding them separately can make the player wobble by a pixel.
+   *
+   * The camera rotates around the viewport center (= the player). The player
+   * sprite is counter-rotated so it stays upright and pixel-aligned on screen
+   * (PROVISIONAL: characters upright, world rotates).
    */
   private syncView(): void {
     const { x, y } = this.renderPosition();
-    this.player.setPosition(x, y);
-    this.cameras.main.centerOn(x, y);
+    this.player.setPosition(x, y).setRotation(-this.viewRotation);
+    this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
   }
 
   private renderPosition(): Vec2 {
@@ -123,6 +160,7 @@ export class WorldScene extends Phaser.Scene {
 
   private drawFloorAndGrid(): void {
     const g = this.add.graphics();
+    this.world.add(g);
     g.fillStyle(COLORS.floor);
     g.fillRect(0, 0, TEST_WORLD.width, TEST_WORLD.height);
 
@@ -149,13 +187,14 @@ export class WorldScene extends Phaser.Scene {
     };
     for (let x = 0; x <= TEST_WORLD.width; x += GRID.label) {
       for (let y = 0; y <= TEST_WORLD.height; y += GRID.label) {
-        this.add.text(x + 2, y + 2, `${x},${y}`, style);
+        this.world.add(this.add.text(x + 2, y + 2, `${x},${y}`, style));
       }
     }
   }
 
   private drawWalls(): void {
     const g = this.add.graphics();
+    this.world.add(g);
     for (const wall of TEST_WALLS) {
       g.fillStyle(COLORS.wall);
       g.fillRect(wall.x, wall.y, wall.width, wall.height);
@@ -177,12 +216,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /**
-   * Debug overlay fixed to the screen (scrollFactor 0 = ignores the camera):
+   * Debug overlay fixed to the screen (drawn by the non-rotating overlay camera):
    * the 600×600 visibility target (D-029; at zoom 1, screen pixels = world
    * pixels) and four ticks around the viewport center. If the camera keeps
    * the player centered, the player stays between the ticks and inside the box.
    */
-  private drawScreenOverlay(): void {
+  private drawScreenOverlay(): Phaser.GameObjects.Graphics {
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
     const g = this.add.graphics().setScrollFactor(0);
@@ -202,5 +241,6 @@ export class WorldScene extends Phaser.Scene {
     g.lineBetween(cx + gap, cy, cx + gap + len, cy);
     g.lineBetween(cx, cy - gap - len, cx, cy - gap);
     g.lineBetween(cx, cy + gap, cx, cy + gap + len);
+    return g;
   }
 }

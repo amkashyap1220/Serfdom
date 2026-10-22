@@ -61,6 +61,8 @@ Debug map (`client/src/test-world.ts`), player starts at (1000, 1000), speed 150
 | Narrow gap (12 px)     | between x 1200 and 1212 at y 1400          | Player cannot pass                                    |
 | Border walls           | 32 px thick at the world edge              | Player stops at x/y = 40 or 1960; void (black) beyond |
 
+Rotation (Phase 3a): hold Q/E to turn the view at 120°/s; Z snaps back to 0°. HUD "View rotation" shows the angle. At any angle: W moves up the screen, "Player on screen" stays 360, 320, the player sprite stays upright and crisp, and the green box and blue ticks stay square to the screen. Expected cosmetic artifact: floor, walls, and grid labels look jagged while rotated.
+
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests

@@ -72,3 +72,13 @@ Keep this concise and update it after each meaningful milestone.
 - Not verified: real keyboard feel, crispness while moving on a real monitor, high-refresh displays (possible slight judder: no interpolation yet, T-016), resizing while moving.
 - User manual test passed (all 7 steps) on a 120 Hz display; no judder reported; speed 150 px/s confirmed as fine for now. Phase 2 complete.
 - Next step: Phase 3 — combat prototype; first needs the hybrid auto-combat/aim model (open question 2).
+
+### Phase 3a — Q/E view rotation — 2026-10-22
+
+- User decisions recorded: D-034 (three fire modes, toggle key), D-035 (Space = ability, effect undefined), D-036 (R = exit dungeon, Phase 6), D-037 (dodge by movement only), D-038 (15×15 hurtbox; walls 16×16), D-039 (200 HP prototype), D-040 (smooth Q/E rotation, screen-relative WASD), D-041 (projectile basic attack).
+- Shared: `rotateVec`, `worldDirectionFromInput`; `stepMovement` now takes a direction vector and rejects length > 1 (future anti-speed-hack check). 35 shared tests.
+- Client: Q/E/Z keys, `stepViewRotation` (+ tests), world `Layer` on a rotating main camera, non-rotating overlay camera, upright player sprite, HUD "View rotation". 17 client tests. T-017 recorded.
+- Checks: `npm run check` passed. Headless and then a visible Chrome run on the user's 5173 server: Q 0.75 s → 91.3°, W at 91.3° moved world-west (up the screen) until the L-wall, E back to ~45°, Z → 0°, player on screen 360, 320 throughout, player sprite upright and crisp in an 8× zoom capture, no console errors.
+- Found: chained `sed -i` edits left the running dev server serving a stale `shared/src/index.ts` ("does not provide an export named 'rotateVec'"); re-saving the file fixed it. Canvas was at a half-pixel x (244.5) in a 985 px-wide window because the container is centered; no softening was visible in captures, left as is and noted.
+- User manual test passed (all 5 steps: Q/E/Z, screen-relative WASD at odd angles, collision while rotated, look/direction/speed accepted as is, alt-tab). Slice 3a complete.
+- Next step: slice 3b (player attack, fire modes, target enemy).

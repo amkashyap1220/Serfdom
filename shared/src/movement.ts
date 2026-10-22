@@ -1,4 +1,4 @@
-import type { Rect, Size, Vec2 } from "./geometry.ts";
+import { rotateVec, type Rect, type Size, type Vec2 } from "./geometry.ts";
 
 /** Which movement keys are held (D-031: WASD, 8-way). */
 export interface MoveInput {
@@ -30,8 +30,30 @@ export function directionFromInput(input: MoveInput): Vec2 {
 }
 
 /**
+ * World-space movement direction for keys pressed relative to the screen
+ * (D-040). `viewRotation` is the camera rotation in radians; the camera shows
+ * a world vector v on screen as rotateVec(v, viewRotation), so "up the screen"
+ * in the world is the screen direction rotated back by -viewRotation.
+ */
+export function worldDirectionFromInput(
+  input: MoveInput,
+  viewRotation: number,
+): Vec2 {
+  const screen = directionFromInput(input);
+  if (screen.x === 0 && screen.y === 0) return screen;
+  return rotateVec(screen, -viewRotation);
+}
+
+/** Longest allowed direction vector; the slack absorbs float rounding from rotation. */
+const MAX_DIRECTION_LENGTH = 1 + 1e-9;
+
+/**
  * Advances a body by one simulation step (D-032: instant movement, no
  * acceleration) and stops it at walls.
+ *
+ * `direction` is a unit vector or (0, 0). Anything longer is rejected: a
+ * longer vector would mean moving faster than `speed`, which the server
+ * must never accept from a client.
  *
  * `position` is the body's center. Movement is resolved one axis at a time
  * (x, then y), so pushing diagonally into a wall slides along it instead of
@@ -41,7 +63,7 @@ export function directionFromInput(input: MoveInput): Vec2 {
  */
 export function stepMovement(
   position: Vec2,
-  input: MoveInput,
+  direction: Vec2,
   body: Size,
   walls: readonly Rect[],
   dtSeconds: number,
@@ -58,8 +80,12 @@ export function stepMovement(
   if (!(speed >= 0) || !Number.isFinite(speed)) {
     throw new RangeError(`speed must be finite and >= 0, got ${speed}`);
   }
+  if (!(Math.hypot(direction.x, direction.y) <= MAX_DIRECTION_LENGTH)) {
+    throw new RangeError(
+      `direction must be finite with length <= 1, got (${direction.x}, ${direction.y})`,
+    );
+  }
 
-  const dir = directionFromInput(input);
   const distance = speed * dtSeconds;
   const halfW = body.width / 2;
   const halfH = body.height / 2;
@@ -70,13 +96,13 @@ export function stepMovement(
       overlapsOpen(position.y - halfH, position.y + halfH, w.y, w.y + w.height),
     )
     .map((w): Span => [w.x, w.x + w.width]);
-  const x = sweepAxis(position.x, dir.x * distance, halfW, xBlockers);
+  const x = sweepAxis(position.x, direction.x * distance, halfW, xBlockers);
 
   // Y pass uses the already-moved x, which is what produces wall sliding.
   const yBlockers = walls
     .filter((w) => overlapsOpen(x - halfW, x + halfW, w.x, w.x + w.width))
     .map((w): Span => [w.y, w.y + w.height]);
-  const y = sweepAxis(position.y, dir.y * distance, halfH, yBlockers);
+  const y = sweepAxis(position.y, direction.y * distance, halfH, yBlockers);
 
   return { x, y };
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Rect } from "./geometry.ts";
+import type { Rect, Vec2 } from "./geometry.ts";
 import {
   directionFromInput,
+  worldDirectionFromInput,
   NO_INPUT,
   stepMovement,
   type MoveInput,
@@ -10,9 +11,15 @@ import {
 const BODY = { width: 16, height: 16 };
 const SPEED = 150;
 const DT = 1 / 60;
+const STILL: Vec2 = { x: 0, y: 0 };
 
 function keys(held: Partial<MoveInput>): MoveInput {
   return { ...NO_INPUT, ...held };
+}
+
+/** Direction a set of held keys produces (no view rotation). */
+function dir(held: Partial<MoveInput>): Vec2 {
+  return directionFromInput(keys(held));
 }
 
 function length(v: { x: number; y: number }): number {
@@ -52,11 +59,43 @@ describe("directionFromInput", () => {
   });
 });
 
+describe("worldDirectionFromInput (screen-relative movement, D-040)", () => {
+  it("equals the screen direction with no rotation", () => {
+    expect(worldDirectionFromInput(keys({ up: true }), 0)).toEqual({
+      x: 0,
+      y: -1,
+    });
+  });
+
+  it("maps W to the world direction that appears as up on a rotated screen", () => {
+    // The camera shows world vector v as rotateVec(v, r). For W to look like
+    // "up" on screen, rotating the result by r must give (0, -1).
+    for (const r of [Math.PI / 2, Math.PI / 4, 1.234, -2]) {
+      const w = worldDirectionFromInput(keys({ up: true }), r);
+      const onScreen = {
+        x: w.x * Math.cos(r) - w.y * Math.sin(r),
+        y: w.x * Math.sin(r) + w.y * Math.cos(r),
+      };
+      expect(onScreen.x).toBeCloseTo(0, 12);
+      expect(onScreen.y).toBeCloseTo(-1, 12);
+    }
+  });
+
+  it("keeps diagonals unit length at any rotation", () => {
+    const w = worldDirectionFromInput(keys({ up: true, left: true }), 0.7);
+    expect(length(w)).toBeCloseTo(1, 12);
+  });
+
+  it("is zero with no keys at any rotation", () => {
+    expect(worldDirectionFromInput(NO_INPUT, 1)).toEqual({ x: 0, y: 0 });
+  });
+});
+
 describe("stepMovement in open space", () => {
   const start = { x: 100, y: 100 };
 
   it("moves speed × dt in a straight line", () => {
-    const p = stepMovement(start, keys({ right: true }), BODY, [], DT, SPEED);
+    const p = stepMovement(start, dir({ right: true }), BODY, [], DT, SPEED);
     expect(p.x).toBeCloseTo(100 + SPEED * DT, 10);
     expect(p.y).toBe(100);
   });
@@ -64,7 +103,7 @@ describe("stepMovement in open space", () => {
   it("moves the same distance diagonally as straight", () => {
     const p = stepMovement(
       start,
-      keys({ down: true, left: true }),
+      dir({ down: true, left: true }),
       BODY,
       [],
       DT,
@@ -77,13 +116,13 @@ describe("stepMovement in open space", () => {
   });
 
   it("does not move with no input (instant stop)", () => {
-    expect(stepMovement(start, NO_INPUT, BODY, [], DT, SPEED)).toEqual(start);
+    expect(stepMovement(start, STILL, BODY, [], DT, SPEED)).toEqual(start);
   });
 
   it("covers exactly the speed in one second of 60 steps", () => {
     let p = start;
     for (let i = 0; i < 60; i++) {
-      p = stepMovement(p, keys({ up: true }), BODY, [], DT, SPEED);
+      p = stepMovement(p, dir({ up: true }), BODY, [], DT, SPEED);
     }
     expect(p.y).toBeCloseTo(100 - SPEED, 9);
   });
@@ -97,7 +136,7 @@ describe("stepMovement against walls", () => {
     // Body right edge at 199; one step would reach 201.5.
     const p = stepMovement(
       { x: 191, y: 100 },
-      keys({ right: true }),
+      dir({ right: true }),
       BODY,
       [wall],
       DT,
@@ -110,7 +149,7 @@ describe("stepMovement against walls", () => {
     const flush = { x: 192, y: 100 };
     const p = stepMovement(
       flush,
-      keys({ right: true }),
+      dir({ right: true }),
       BODY,
       [wall],
       DT,
@@ -122,7 +161,7 @@ describe("stepMovement against walls", () => {
   it("can move away from a wall it is touching", () => {
     const p = stepMovement(
       { x: 192, y: 100 },
-      keys({ left: true }),
+      dir({ left: true }),
       BODY,
       [wall],
       DT,
@@ -134,7 +173,7 @@ describe("stepMovement against walls", () => {
   it("slides along the wall when pushing diagonally into it", () => {
     const p = stepMovement(
       { x: 192, y: 100 },
-      keys({ right: true, down: true }),
+      dir({ right: true, down: true }),
       BODY,
       [wall],
       DT,
@@ -149,7 +188,7 @@ describe("stepMovement against walls", () => {
     const floor: Rect = { x: 0, y: 300, width: 1000, height: 32 };
     const p = stepMovement(
       { x: 100, y: 292 },
-      keys({ right: true }),
+      dir({ right: true }),
       BODY,
       [floor],
       DT,
@@ -162,7 +201,7 @@ describe("stepMovement against walls", () => {
     const thin: Rect = { x: 200, y: 0, width: 1, height: 400 };
     const p = stepMovement(
       { x: 100, y: 100 },
-      keys({ right: true }),
+      dir({ right: true }),
       BODY,
       [thin],
       10, // 1500 px in one step
@@ -175,7 +214,7 @@ describe("stepMovement against walls", () => {
     const near: Rect = { x: 150, y: 0, width: 10, height: 400 };
     const p = stepMovement(
       { x: 100, y: 100 },
-      keys({ right: true }),
+      dir({ right: true }),
       BODY,
       [wall, near],
       10,
@@ -193,7 +232,7 @@ describe("stepMovement against walls", () => {
     for (let i = 0; i < 60; i++) {
       p = stepMovement(
         p,
-        keys({ right: true, down: true }),
+        dir({ right: true, down: true }),
         BODY,
         corner,
         DT,
@@ -216,7 +255,7 @@ describe("stepMovement through gaps", () => {
   function walkDown(x: number, walls: Rect[]): number {
     let p = { x, y: 150 };
     for (let i = 0; i < 120; i++) {
-      p = stepMovement(p, keys({ down: true }), BODY, walls, DT, SPEED);
+      p = stepMovement(p, dir({ down: true }), BODY, walls, DT, SPEED);
     }
     return p.y;
   }
@@ -236,7 +275,7 @@ describe("stepMovement through gaps", () => {
 
 describe("stepMovement input validation", () => {
   const p = { x: 0, y: 0 };
-  const right = keys({ right: true });
+  const right = dir({ right: true });
 
   it("rejects non-finite positions", () => {
     expect(() =>
@@ -254,6 +293,26 @@ describe("stepMovement input validation", () => {
     expect(() => stepMovement(p, right, BODY, [], Number.NaN, SPEED)).toThrow(
       RangeError,
     );
+  });
+
+  it("rejects a direction longer than 1 (would exceed speed)", () => {
+    expect(() => stepMovement(p, { x: 1, y: 1 }, BODY, [], DT, SPEED)).toThrow(
+      RangeError,
+    );
+    expect(() => stepMovement(p, { x: 2, y: 0 }, BODY, [], DT, SPEED)).toThrow(
+      RangeError,
+    );
+  });
+
+  it("rejects a non-finite direction", () => {
+    expect(() =>
+      stepMovement(p, { x: Number.NaN, y: 0 }, BODY, [], DT, SPEED),
+    ).toThrow(RangeError);
+  });
+
+  it("accepts a rotated unit direction despite float rounding", () => {
+    const d = worldDirectionFromInput(keys({ up: true, right: true }), 0.3);
+    expect(() => stepMovement(p, d, BODY, [], DT, SPEED)).not.toThrow();
   });
 
   it("rejects negative or non-finite speed", () => {

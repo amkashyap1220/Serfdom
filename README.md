@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phase 2 (movement, collision, camera following) is complete: the 16×16 placeholder player moves with W A S D around a debug map with walls, and the camera keeps them centered. There is no combat yet. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
+Phase 3 (combat prototype) is in progress. Slice 3a adds Q/E view rotation (Z resets) on top of Phase 2: the 16×16 placeholder player moves with W A S D (screen-relative) around a debug map with walls, and the camera keeps them centered. There is no combat yet. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
 
 ## Development setup
 

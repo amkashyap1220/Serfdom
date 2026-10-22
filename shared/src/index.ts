@@ -1,7 +1,8 @@
-export type { Rect, Size, Vec2 } from "./geometry.ts";
+export { rotateVec, type Rect, type Size, type Vec2 } from "./geometry.ts";
 export { consumeFixedSteps, type FixedStepResult } from "./fixed-step.ts";
 export {
   directionFromInput,
+  worldDirectionFromInput,
   NO_INPUT,
   stepMovement,
   type MoveInput,
