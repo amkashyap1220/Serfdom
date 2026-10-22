@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Environment files: never commit real secrets. Only .env.example is tracked.
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor clutter (shared VS Code settings may be added deliberately later)
+.vscode/
+.idea/
+*.swp

@@ -5,7 +5,9 @@ Claude must teach the user how to verify each change. This document defines the 
 ## 1. The three levels of verification
 
 ### A. Automated checks
+
 Commands the developer runs repeatedly, such as:
+
 - Unit tests.
 - Type checking.
 - Linting/formatting checks.
@@ -13,8 +15,20 @@ Commands the developer runs repeatedly, such as:
 
 Claude must use the actual scripts in `package.json` or the repository's tooling. Never invent a command and claim it works without checking.
 
+Current commands (run from the repository root):
+
+| Command                | What it checks                                                                       | Since   |
+| ---------------------- | ------------------------------------------------------------------------------------ | ------- |
+| `npm ci`               | Installs exactly the versions in `package-lock.json`; fails on the wrong Node major. | Phase 0 |
+| `npm run format:check` | Every file matches Prettier formatting. Prints offending files and exits non-zero.   | Phase 0 |
+| `npm run format`       | Rewrites files to fix formatting (not a check; changes files).                       | Phase 0 |
+
+Type checks, lint, unit tests, and build arrive in Phase 1.
+
 ### B. Manual feature tests
+
 The user launches the app and performs a short sequence of actions. Instructions must include:
+
 - Where to run the command.
 - Which URL/window to open.
 - Exactly what to click or press.
@@ -23,7 +37,9 @@ The user launches the app and performs a short sequence of actions. Instructions
 - How to collect logs if it fails.
 
 ### C. Integration and multiplayer tests
+
 As the architecture grows, test boundaries between systems:
+
 - Two browser clients see synchronized state.
 - Server restart and persistence.
 - Invalid client requests are rejected.
@@ -46,6 +62,7 @@ For every delivered milestone, Claude should provide:
 ## 3. How to report a bug to Claude
 
 When something fails, send:
+
 - The milestone/feature being tested.
 - Steps to reproduce, in order.
 - Expected behavior.
@@ -60,6 +77,7 @@ Screenshots or short recordings are useful for visual problems. Remove secrets, 
 ## 4. Claude's bug-fix loop
 
 Claude should:
+
 1. Restate the observed failure and reproduction steps.
 2. Identify the likely layer: UI/rendering, input, game rule, networking, server, persistence, or environment.
 3. Reproduce the issue with a test or local run where possible.
@@ -84,6 +102,7 @@ Claude should:
 ## 6. Early-stage manual checklist
 
 When a browser prototype exists:
+
 - [ ] App loads without a blank screen.
 - [ ] Browser console has no unexpected errors.
 - [ ] Player is visible.
@@ -94,6 +113,7 @@ When a browser prototype exists:
 - [ ] Automated checks pass.
 
 When multiplayer exists:
+
 - [ ] Two clients can connect.
 - [ ] Each client sees the other.
 - [ ] Actions appear consistently on both clients.
@@ -102,6 +122,7 @@ When multiplayer exists:
 - [ ] A client cannot award itself arbitrary damage, XP, gold, or items.
 
 When persistence exists:
+
 - [ ] Data survives server restart.
 - [ ] Users cannot access another account's characters.
 - [ ] Duplicate requests do not duplicate rewards.
@@ -110,6 +131,7 @@ When persistence exists:
 ## 7. Work log format
 
 At the end of a meaningful session, update `docs/WORK_LOG.md` with:
+
 - Date.
 - Phase/milestone.
 - What changed.

@@ -4,51 +4,53 @@ Use this as the canonical decision register. Never mark a decision confirmed unl
 
 ## Confirmed requirements
 
-| ID | Decision | Status |
-|---|---|---|
-| D-001 | Serfdom is a browser-first multiplayer top-down action RPG. | CONFIRMED |
-| D-002 | A future Steam release should launch as a windowed desktop application. | CONFIRMED |
-| D-003 | Browser and Steam players must be able to play together. | CONFIRMED |
-| D-004 | Browser and desktop clients share the same authoritative backend, accounts, progression, and economy. | CONFIRMED |
-| D-005 | The current design target is 13 launch classes. | CONFIRMED |
-| D-006 | Level 1 is Serf only; choose one of 13 classes at level 2. | CONFIRMED |
-| D-007 | Maximum character level is 20; no levels or stat increases after level 20. | CONFIRMED |
-| D-008 | Lifetime EXP continues to be tracked after level 20 on one lifetime EXP leaderboard. | CONFIRMED |
-| D-009 | A dead character retains its final lifetime EXP score. | CONFIRMED |
-| D-010 | Dungeon rewards are individualized randomized rewards for each player who completes the dungeon. | CONFIRMED |
-| D-011 | A player who dies before dungeon completion receives no completion rewards. | CONFIRMED |
-| D-012 | Party size is up to four players. | CONFIRMED |
-| D-013 | Dungeon design combines procedural assembly with handcrafted/fixed or special modes. | CONFIRMED |
-| D-014 | Dungeon access is open to characters that meet the dungeon's eligibility rules. | CONFIRMED |
-| D-015 | Players can retreat freely through rooms they have already cleared. | CONFIRMED |
-| D-016 | Loot pools are specific to dungeon difficulty. | CONFIRMED |
-| D-017 | Goblin Warrens targets 3–5 minutes for new players; geared veterans should be able to clear it quickly. | CONFIRMED |
-| D-018 | Goblin Warrens is primarily aimed at levels 1–9, but eligibility rules can allow higher-level players. | CONFIRMED |
-| D-019 | The game uses a hybrid auto-combat/dodging direction; exact controls and behavior are not yet fully specified. | CONFIRMED at high level |
-| D-020 | There is one head armor slot, not a separate cap slot. | CONFIRMED |
-| D-021 | Claude should teach the user how to run and test each milestone and help debug based on concrete feedback. | CONFIRMED |
-
-
-| D-022 | Player sized enemies target 16×16 pixel sprites; player characters target 16×16 pixels. | CONFIRMED |
-| D-023 | Visual direction is chunky, readable retro pixel art based on the user's sprite-sheet reference. | CONFIRMED |
+| ID    | Decision                                                                                                                                                                                                         | Status                                                   |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| D-001 | Serfdom is a browser-first multiplayer top-down action RPG.                                                                                                                                                      | CONFIRMED                                                |
+| D-002 | A future Steam release should launch as a windowed desktop application.                                                                                                                                          | CONFIRMED                                                |
+| D-003 | Browser and Steam players must be able to play together.                                                                                                                                                         | CONFIRMED                                                |
+| D-004 | Browser and desktop clients share the same authoritative backend, accounts, progression, and economy.                                                                                                            | CONFIRMED                                                |
+| D-005 | The current design target is 13 launch classes.                                                                                                                                                                  | CONFIRMED                                                |
+| D-006 | Level 1 is Serf only; choose one of 13 classes at level 2.                                                                                                                                                       | CONFIRMED                                                |
+| D-007 | Maximum character level is 20; no levels or stat increases after level 20.                                                                                                                                       | CONFIRMED                                                |
+| D-008 | Lifetime EXP continues to be tracked after level 20 on one lifetime EXP leaderboard.                                                                                                                             | CONFIRMED                                                |
+| D-009 | A dead character retains its final lifetime EXP score.                                                                                                                                                           | CONFIRMED                                                |
+| D-010 | Dungeon rewards are individualized randomized rewards for each player who completes the dungeon.                                                                                                                 | CONFIRMED                                                |
+| D-011 | A player who dies before dungeon completion receives no completion rewards.                                                                                                                                      | CONFIRMED                                                |
+| D-012 | Party size is up to four players.                                                                                                                                                                                | CONFIRMED                                                |
+| D-013 | Dungeon design combines procedural assembly with handcrafted/fixed or special modes.                                                                                                                             | CONFIRMED                                                |
+| D-014 | Dungeon access is open to characters that meet the dungeon's eligibility rules.                                                                                                                                  | CONFIRMED                                                |
+| D-015 | Players can retreat freely through rooms they have already cleared.                                                                                                                                              | CONFIRMED                                                |
+| D-016 | Loot pools are specific to dungeon difficulty.                                                                                                                                                                   | CONFIRMED                                                |
+| D-017 | Goblin Warrens targets 3–5 minutes for new players; geared veterans should be able to clear it quickly.                                                                                                          | CONFIRMED                                                |
+| D-018 | Goblin Warrens is primarily aimed at levels 1–9, but eligibility rules can allow higher-level players.                                                                                                           | CONFIRMED                                                |
+| D-019 | The game uses a hybrid auto-combat/dodging direction; exact controls and behavior are not yet fully specified.                                                                                                   | CONFIRMED at high level                                  |
+| D-020 | There is one head armor slot, not a separate cap slot.                                                                                                                                                           | CONFIRMED                                                |
+| D-021 | Claude should teach the user how to run and test each milestone and help debug based on concrete feedback.                                                                                                       | CONFIRMED                                                |
+| D-022 | Player sized enemies target 16×16 pixel sprites; player characters target 16×16 pixels.                                                                                                                          | CONFIRMED                                                |
+| D-023 | Visual direction is chunky, readable retro pixel art based on the user's sprite-sheet reference.                                                                                                                 | CONFIRMED                                                |
 | D-024 | Use Pokémon Emerald as the requested palette reference, while creating original Serfdom assets rather than copying game sprites or characters. Exact palette entries must be verified before being called exact. | CONFIRMED direction; exact RGB list pending verification |
-| D-025 | AI-generate art just in time as assets become necessary; use placeholders during early gameplay work. | CONFIRMED |
-| D-026 | Initial desktop game container targets 960×640 CSS pixels. | CONFIRMED |
-| D-027 | Fixed 240×640 CSS-pixel HUD on the left; separate 720×640 CSS-pixel gameplay viewport on the right; no overlap. | CONFIRMED |
-| D-028 | Camera follows and normally centers the player within the gameplay viewport, excluding the HUD. | CONFIRMED |
-| D-029 | Target at least 300 world pixels of visibility in every cardinal direction during normal gameplay; initial 1:1 CSS/world scale shows 360 horizontally and 320 vertically from player center. | CONFIRMED |
-| D-030 | Crisp pixel art without smoothing; Phaser zoom/display scale preserves visibility; source/world/CSS/device pixels are distinct. | CONFIRMED |
+| D-025 | AI-generate art just in time as assets become necessary; use placeholders during early gameplay work.                                                                                                            | CONFIRMED                                                |
+| D-026 | Initial desktop game container targets 960×640 CSS pixels.                                                                                                                                                       | CONFIRMED                                                |
+| D-027 | Fixed 240×640 CSS-pixel HUD on the left; separate 720×640 CSS-pixel gameplay viewport on the right; no overlap.                                                                                                  | CONFIRMED                                                |
+| D-028 | Camera follows and normally centers the player within the gameplay viewport, excluding the HUD.                                                                                                                  | CONFIRMED                                                |
+| D-029 | Target at least 300 world pixels of visibility in every cardinal direction during normal gameplay; initial 1:1 CSS/world scale shows 360 horizontally and 320 vertically from player center.                     | CONFIRMED                                                |
+| D-030 | Crisp pixel art without smoothing; Phaser zoom/display scale preserves visibility; source/world/CSS/device pixels are distinct.                                                                                  | CONFIRMED                                                |
 
 ## Technical direction — proposed, verify during setup
 
-| ID | Direction | Status |
-|---|---|---|
-| T-001 | Phaser + TypeScript for the shared game client. | PROPOSED |
-| T-002 | Electron or a comparable wrapper for the Steam desktop build. | PROPOSED |
-| T-003 | WebSockets for real-time multiplayer. | PROPOSED |
-| T-004 | Authoritative game server. | STRONG ARCHITECTURAL REQUIREMENT |
-| T-005 | PostgreSQL for persistent data. | PROPOSED |
-| T-006 | One canonical Serfdom account, with optional Steam account linking. | PROPOSED; account UX unresolved |
+| ID    | Direction                                                                                                                              | Status                                                                      |
+| ----- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| T-001 | Phaser + TypeScript for the shared game client, built with Vite and tested with Vitest.                                                | CONFIRMED direction (2026-10-22); versions pinned when installed in Phase 1 |
+| T-002 | Electron or a comparable wrapper for the Steam desktop build.                                                                          | PROPOSED                                                                    |
+| T-003 | WebSockets for real-time multiplayer.                                                                                                  | PROPOSED                                                                    |
+| T-004 | Authoritative game server.                                                                                                             | STRONG ARCHITECTURAL REQUIREMENT                                            |
+| T-005 | PostgreSQL for persistent data.                                                                                                        | PROPOSED                                                                    |
+| T-006 | One canonical Serfdom account, with optional Steam account linking.                                                                    | PROPOSED; account UX unresolved                                             |
+| T-007 | Node.js 24 LTS runtime, enforced via `.nvmrc`, `engines`, and `engine-strict`.                                                         | CONFIRMED (2026-10-22)                                                      |
+| T-008 | npm with workspaces; one repository with `client/`, `server/`, `shared/` packages added only when their phase needs them.              | CONFIRMED (2026-10-22)                                                      |
+| T-009 | Prettier (pinned exact version) formats the whole repo, including docs; LF line endings enforced via `.gitattributes`/`.editorconfig`. | PROVISIONAL default (2026-10-22); reversible                                |
+| T-010 | ESLint is added in Phase 1 once TypeScript code exists. No `.env.example` until a configuration value or secret is actually needed.    | PROVISIONAL default (2026-10-22)                                            |
 
 ## Older draft material — do not silently treat as final
 

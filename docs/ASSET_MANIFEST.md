@@ -7,7 +7,7 @@ Add inventory entries only when assets are actually needed and generated/integra
 ## Confirmed visual direction
 
 - Chunky, readable, crisp retro pixel art with original Serfdom designs.
-- Pokémon Emerald is a palette *reference*, not permission to copy sprites, characters, tiles, or logos. Exact RGB entries must be verified before being described as exact.
+- Pokémon Emerald is a palette _reference_, not permission to copy sprites, characters, tiles, or logos. Exact RGB entries must be verified before being described as exact.
 - Player character: **16×16 source pixels**.
 - Player-sized ordinary enemies: **16×16 source pixels**.
 - Larger enemies and bosses may use larger sprite canvases.
@@ -16,22 +16,22 @@ Add inventory entries only when assets are actually needed and generated/integra
 
 ## Asset inventory
 
-| Asset path | Purpose | Canvas/frame size | Frames | Palette | Source/prompt notes | Verified in game? |
-|---|---|---|---|---|---|---|
-| *(none yet)* | | | | | | |
+| Asset path   | Purpose | Canvas/frame size | Frames | Palette | Source/prompt notes | Verified in game? |
+| ------------ | ------- | ----------------- | ------ | ------- | ------------------- | ----------------- |
+| _(none yet)_ |         |                   |        |         |                     |                   |
 
 Record the size of individual frames, not just the overall spritesheet.
 
 ## Source dimensions by category
 
-| Category | Source dimensions | Status |
-|---|---|---|
-| Player character | 16×16 pixels | CONFIRMED |
-| Player-sized ordinary enemy | 16×16 pixels | CONFIRMED |
-| Larger enemy / boss | By design | OPEN |
-| Projectiles / effects | By readability needs | OPEN |
-| Environment tiles | To be determined | OPEN |
-| Inventory / equipment / HUD icons | To be determined | OPEN |
+| Category                          | Source dimensions    | Status    |
+| --------------------------------- | -------------------- | --------- |
+| Player character                  | 16×16 pixels         | CONFIRMED |
+| Player-sized ordinary enemy       | 16×16 pixels         | CONFIRMED |
+| Larger enemy / boss               | By design            | OPEN      |
+| Projectiles / effects             | By readability needs | OPEN      |
+| Environment tiles                 | To be determined     | OPEN      |
+| Inventory / equipment / HUD icons | To be determined     | OPEN      |
 
 Source sprite pixels, world pixels, CSS pixels, and device pixels are distinct. Source dimensions do not automatically define collision dimensions.
 

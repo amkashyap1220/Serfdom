@@ -7,6 +7,7 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 **Goal:** Know what is in the repository and make the local environment reproducible.
 
 Tasks:
+
 - Inspect the repository before changing files.
 - Check available Node.js/package-manager versions and Git state.
 - Choose and document a package manager and supported runtime version.
@@ -16,6 +17,7 @@ Tasks:
 - Choose a lightweight, understandable project structure.
 
 Acceptance:
+
 - A clean clone can be set up by following the README.
 - Git status is understood and no secret files are tracked.
 - The available checks and their commands are documented.
@@ -29,6 +31,7 @@ Ask the user if a significant framework or deployment choice is needed. Do not a
 Candidate stack: Phaser + TypeScript, pending repository inspection and confirmation.
 
 Tasks:
+
 - Initialize the browser client and show a simple scene.
 - Build a 960×640 CSS-pixel game container with a fixed 240×640 left HUD and a separate 720×640 gameplay viewport.
 - Render a 16×16 source-pixel player placeholder.
@@ -38,6 +41,7 @@ Tasks:
 - Document run/check commands.
 
 Acceptance:
+
 - [ ] Game loads without unexpected console errors.
 - [ ] Container is 960×640 CSS pixels at target desktop size.
 - [ ] HUD is 240×640 and gameplay viewport 720×640, with no overlap.
@@ -56,6 +60,7 @@ Art policy: use placeholders initially. Player and player-sized ordinary enemies
 **Goal:** The player moves through a test world while the camera follows and preserves approved visibility.
 
 Tasks:
+
 - Implement the user-approved movement/control model.
 - Normalize diagonal movement where applicable.
 - Add walls/obstacles and collision; keep movement logic independently testable.
@@ -66,6 +71,7 @@ Tasks:
 - Test browser resizing and crisp sprite rendering while moving.
 
 Acceptance:
+
 - [ ] Approved movement directions and diagonal speed behave correctly.
 - [ ] Player cannot pass through blocking obstacles.
 - [ ] No unintended sticking or teleporting.
@@ -83,12 +89,14 @@ Blocking questions: confirm final movement controls, map-edge treatment when nee
 **Goal:** Validate the intended hybrid auto-combat and dodging loop against one enemy.
 
 Tasks:
+
 - Confirm the control and attack model with the user.
 - Add one simple enemy and a readable attack pattern.
 - Add hit feedback, damage/health, and death/respawn behavior for the prototype only, clearly separating this from final permadeath rules.
 - Add automated tests for deterministic damage/range/cooldown rules once defined.
 
 Acceptance:
+
 - Player can engage the enemy using the approved input model.
 - Enemy attacks are readable and avoidable.
 - Damage and defeat behavior match documented rules.
@@ -101,6 +109,7 @@ Do not invent final balance formulas. Use clearly labeled prototype values only 
 **Goal:** Two browser clients connect to one server and see a consistent shared world.
 
 Tasks:
+
 - Add a small WebSocket-based authoritative server.
 - Define typed client/server messages.
 - Validate incoming messages and reject invalid input.
@@ -109,6 +118,7 @@ Tasks:
 - Add basic server logging that avoids sensitive information.
 
 Acceptance:
+
 - Two browser tabs/devices can connect.
 - Each sees the other player.
 - Invalid messages are rejected safely.
@@ -122,6 +132,7 @@ Do not add public matchmaking or production-scale infrastructure yet.
 **Goal:** Multiplayer clients interact with the same server-authoritative enemy and combat state.
 
 Tasks:
+
 - Move consequential health/damage/enemy state to the server.
 - Define projectile and attack resolution.
 - Validate rate limits, cooldowns, range, and action eligibility.
@@ -129,6 +140,7 @@ Tasks:
 - Handle simultaneous attacks deterministically enough for the chosen model.
 
 Acceptance:
+
 - Both clients see consistent enemy health and defeat state.
 - Client-side tampering cannot award arbitrary damage or rewards.
 - Combat tests pass.
@@ -139,6 +151,7 @@ Acceptance:
 **Goal:** A small, completable dungeon demonstrates the intended loop.
 
 Tasks:
+
 - Implement a small handcrafted layout first.
 - Add an entrance, a few encounters, and one simple boss/exit.
 - Add clear completion and failure states.
@@ -147,6 +160,7 @@ Tasks:
 - Add deterministic seeds only when procedural generation begins.
 
 Acceptance:
+
 - A player can enter, fight, complete, and leave the test dungeon.
 - A death before completion grants no completion rewards.
 - Multiplayer players share encounter state.
@@ -157,6 +171,7 @@ Acceptance:
 **Goal:** Characters and accounts survive a server restart.
 
 Tasks:
+
 - Confirm authentication and account rules.
 - Select a persistence layer (PostgreSQL is the current proposal).
 - Design schema/migrations.
@@ -164,6 +179,7 @@ Tasks:
 - Add authorization and transaction tests.
 
 Acceptance:
+
 - Data survives a server restart.
 - One account cannot access another account's characters.
 - Invalid inventory/economy updates are rejected.
@@ -176,6 +192,7 @@ Do not store passwords in plaintext or put secrets in source control.
 **Goal:** Implement level 1 Serf, class choice at level 2, level cap 20, lifetime EXP, and approved death rules.
 
 Tasks:
+
 - Reconcile the final 13-class roster and class definitions.
 - Implement progression formulas only after approval.
 - Implement death, equipment loss, account persistence, and any resurrection exception according to confirmed rules.
@@ -183,6 +200,7 @@ Tasks:
 - Test cap behavior and post-cap EXP.
 
 Acceptance:
+
 - Level 1 is Serf only.
 - Class selection occurs at level 2.
 - Level 20 is the cap; no further levels or stat gains occur.
@@ -194,6 +212,7 @@ Acceptance:
 **Goal:** Establish a small equipment loop before expanding the catalogue.
 
 Tasks:
+
 - Confirm equipment slots, weapon/armor categories, and class restrictions.
 - Implement a small representative subset of items.
 - Centralize tier/stat/drop configuration.
@@ -201,6 +220,7 @@ Tasks:
 - Add tests for drop eligibility, random roll bounds, and inventory ownership.
 
 Acceptance:
+
 - Equipment can be obtained and equipped according to rules.
 - Each completing player receives individual reward rolls.
 - A player dying before completion receives no completion rewards.
@@ -211,6 +231,7 @@ Acceptance:
 **Goal:** Implement the confirmed launch class roster and signature abilities.
 
 Tasks:
+
 - Resolve all 13 class names and design concepts.
 - Define class ability items and Artifacts without assuming the older ten-class draft is final.
 - Add one class at a time behind tests.
@@ -218,6 +239,7 @@ Tasks:
 - Test costs, cooldowns, targeting, and invalid activations once specified.
 
 Acceptance:
+
 - All implemented classes match approved documentation.
 - The server validates ability use.
 - No unapproved mechanics are silently introduced.
@@ -227,6 +249,7 @@ Acceptance:
 **Goal:** Expand from a tiny handcrafted test to reusable room-based dungeons.
 
 Tasks:
+
 - Build a library of handcrafted rooms.
 - Assemble rooms procedurally where appropriate.
 - Preserve fixed and special dungeon formats where designed.
@@ -236,6 +259,7 @@ Tasks:
 - Configure difficulty-specific reward pools.
 
 Acceptance:
+
 - Generated dungeons pass structural validation.
 - A reported bad layout can be reproduced with a seed.
 - Fixed/special dungeons remain possible.
@@ -246,12 +270,14 @@ Acceptance:
 **Goal:** Add shared stash, gold, vendor, marketplace, and upgrades.
 
 Tasks:
+
 - Confirm item loss, stash eligibility, pricing, and fees.
 - Implement atomic, server-side transactions.
 - Test simultaneous trades and duplicate/negative balance exploits.
 - Ensure browser and desktop users use the same economy.
 
 Acceptance:
+
 - A trade cannot duplicate an item or gold.
 - Failed transactions leave both sides unchanged.
 - Shared storage works across characters on one account.
@@ -262,6 +288,7 @@ Acceptance:
 **Goal:** Package the same client as a windowed desktop app and verify it plays with browser users.
 
 Tasks:
+
 - Package the web client using Electron or another agreed wrapper.
 - Keep core gameplay/network code shared.
 - Add platform-specific features only when requested.
@@ -269,6 +296,7 @@ Tasks:
 - Later, add Steamworks integration as a separate milestone.
 
 Acceptance:
+
 - Desktop app launches in a window.
 - Browser and desktop clients can log in and join the same party/dungeon.
 - Both observe consistent game state and rewards.
@@ -277,6 +305,7 @@ Acceptance:
 ## Phase 14 — Release hardening
 
 Only after the game loop is fun and core systems are stable:
+
 - Security review and input validation.
 - Load and soak testing.
 - Database backups/migration strategy.
@@ -288,6 +317,7 @@ Only after the game loop is fun and core systems are stable:
 ## Rule for advancing phases
 
 At the end of each phase, Claude should report:
+
 1. Acceptance criteria and pass/fail status.
 2. Automated checks actually run.
 3. Exact manual tests for the user.

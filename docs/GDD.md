@@ -11,6 +11,7 @@ Serfdom is a browser-first, multiplayer top-down bullet-hell action RPG with sho
 Browser and Steam players must be able to play together. Both versions use the same online game servers, accounts, character progression, and economy.
 
 Design pillars:
+
 - Readable, skill-based combat with enemy patterns and projectiles.
 - Short, repeatable dungeon runs.
 - High-stakes permadeath and meaningful equipment loss.
@@ -23,11 +24,13 @@ Design pillars:
 ## 2. Platform, game window, HUD, and camera
 
 ### Platform
+
 - Browser-first: players visit the website, log in, and play without downloading a client.
 - A future Steam desktop client may package the shared web client using Electron or a comparable wrapper.
 - Browser and desktop clients use the same authoritative backend, accounts, progression, and economy.
 
 ### Approved initial desktop layout
+
 - **Total game container:** 960×640 CSS pixels.
 - **Fixed HUD on the left:** 240×640 CSS pixels.
 - **Gameplay viewport on the right:** 720×640 CSS pixels.
@@ -35,6 +38,7 @@ Design pillars:
 - These are CSS layout dimensions, not automatically the internal renderer resolution or device-pixel dimensions.
 
 ### Approved camera behavior
+
 - Top-down camera follows the player, who is normally centered **inside the gameplay viewport**.
 - Target visibility is at least **300 world pixels above, below, left, and right** of the player's center in normal gameplay.
 - The gameplay viewport must therefore display at least 600×600 world pixels.
@@ -43,6 +47,7 @@ Design pillars:
 - At map boundaries, camera clamping or alternative edge treatment must be chosen intentionally and tested.
 
 ### Rendering and UI
+
 - Player and player-sized ordinary enemy source sprites are 16×16 pixels; larger enemies/bosses may use larger canvases.
 - Keep source pixels, world pixels, CSS pixels, and device pixels distinct.
 - Configure Phaser zoom/scale to preserve approved world-space visibility.
@@ -52,6 +57,7 @@ Design pillars:
 - Minimum supported window size, compact layout, and mobile treatment remain OPEN.
 
 ### First-client acceptance
+
 - Game container measures 960×640 CSS pixels at target desktop size.
 - HUD measures 240×640; gameplay viewport measures 720×640, with no overlap.
 - A 16×16 player placeholder renders crisply.
@@ -76,6 +82,7 @@ Design pillars:
 The user wants assets to be **AI-generated as they become necessary**, not to create a huge art library before gameplay needs it.
 
 Workflow:
+
 1. Begin with simple placeholder shapes during early gameplay and networking work.
 2. When a real asset is needed for a milestone, create only the minimum asset or sprite set needed for that feature.
 3. Use an available image-generation capability when the development environment supports it. If Claude's current environment cannot generate an actual image file, do not pretend it can; ask the user how they want to handle that asset or provide a ready-to-use generation prompt and integration requirements.
@@ -89,6 +96,7 @@ The exact hexadecimal RGB palette entries and permitted color variants should be
 ## 3. Progression
 
 ### Confirmed
+
 - A new character is a **Serf at level 1 only**.
 - At **level 2**, the player chooses one of **13 launch classes**.
 - Maximum character level is **20**.
@@ -99,6 +107,7 @@ The exact hexadecimal RGB palette entries and permitted color variants should be
 - Dungeon EXP is awarded on successful completion; a character that dies before completion receives no completion rewards.
 
 ### Design details still to resolve
+
 - The exact 13 launch class names and final class roster are not fully present in this context package. Do not assume the earlier ten-class draft is the final roster.
 - XP curve, exact per-level requirements, and whether any other sources of XP exist need explicit approval.
 - Exact class stat caps and level-up stat growth need explicit approval.
@@ -109,18 +118,18 @@ The current requirement is 13 launch classes, with class selection at level 2. T
 
 ### Prior class/ability concepts — provisional pending roster reconciliation
 
-| Draft class | Ability item | Core concept | Draft Artifact twist |
-|---|---|---|---|
-| Fighter | Shield | Guard: briefly reduce incoming damage or use a defensive bash; implementation unresolved. | Aegis of the Last Stand: blocked damage powers a shockwave, capped. |
-| Barbarian | War Horn | Battle Cry temporarily increases attack power. | Horn of the Blood King: kills during the buff restore a small amount of health. |
-| Rogue | Cloak | Vanish disrupts targeting and grants evasiveness. | Veil of the Unseen End: leaves a decoy/shadow that draws attacks before bursting. |
-| Ranger | Quiver | Volley fires a special arrow or small volley. | Quiver of the Worldseeker: piercing special arrows trigger a secondary seeking arrow on elite/boss hit. |
-| Wizard | Spellbook | Arcane Blast detonates area damage. | Aetherion's Codex: pulls enemies together before detonating. |
-| Cleric | Tome | Healing restores the user and nearby allies. | The Tome of the First Dawn: healing also grants capped temporary shielding. |
-| Bard | Instrument | Inspiration temporarily buffs nearby allies. | The Worldsong: pulse destroys or deflects a limited number of nearby enemy projectiles. |
-| Warlock | Grimoire | Curse marks enemies for increased damage. | The Black Testament: cursed kills leave fragments that restore mana and briefly extend nearby curses. |
-| Druid | Totem | Nature's Reach creates a targeted damaging or entangling area. | The Worldroot Totem: periodically roots enemies and empowers the next hit against them. |
-| Sorcerer | Scepter | Chain Lightning jumps between enemies. | Eternity's Conduit: final strike creates a short-lived field that arcs between enemies entering it. |
+| Draft class | Ability item | Core concept                                                                              | Draft Artifact twist                                                                                    |
+| ----------- | ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Fighter     | Shield       | Guard: briefly reduce incoming damage or use a defensive bash; implementation unresolved. | Aegis of the Last Stand: blocked damage powers a shockwave, capped.                                     |
+| Barbarian   | War Horn     | Battle Cry temporarily increases attack power.                                            | Horn of the Blood King: kills during the buff restore a small amount of health.                         |
+| Rogue       | Cloak        | Vanish disrupts targeting and grants evasiveness.                                         | Veil of the Unseen End: leaves a decoy/shadow that draws attacks before bursting.                       |
+| Ranger      | Quiver       | Volley fires a special arrow or small volley.                                             | Quiver of the Worldseeker: piercing special arrows trigger a secondary seeking arrow on elite/boss hit. |
+| Wizard      | Spellbook    | Arcane Blast detonates area damage.                                                       | Aetherion's Codex: pulls enemies together before detonating.                                            |
+| Cleric      | Tome         | Healing restores the user and nearby allies.                                              | The Tome of the First Dawn: healing also grants capped temporary shielding.                             |
+| Bard        | Instrument   | Inspiration temporarily buffs nearby allies.                                              | The Worldsong: pulse destroys or deflects a limited number of nearby enemy projectiles.                 |
+| Warlock     | Grimoire     | Curse marks enemies for increased damage.                                                 | The Black Testament: cursed kills leave fragments that restore mana and briefly extend nearby curses.   |
+| Druid       | Totem        | Nature's Reach creates a targeted damaging or entangling area.                            | The Worldroot Totem: periodically roots enemies and empowers the next hit against them.                 |
+| Sorcerer    | Scepter      | Chain Lightning jumps between enemies.                                                    | Eternity's Conduit: final strike creates a short-lived field that arcs between enemies entering it.     |
 
 These concepts are not proof that the final class roster is ten classes. Ask the user to reconcile the prior draft with the current 13-class requirement before implementing the full roster.
 
@@ -129,6 +138,7 @@ These concepts are not proof that the final class roster is ten classes. Ask the
 The current high-level direction is **hybrid auto-combat and skillful dodging**. Do not assume the earlier fully manual aiming/firing proposal is final without asking.
 
 Confirmed high-level intent:
+
 - Real-time combat.
 - Enemy projectiles and readable attack patterns.
 - Player positioning and dodging matter.
@@ -137,6 +147,7 @@ Confirmed high-level intent:
 - Combat must remain responsive while server-authoritative.
 
 Still unresolved:
+
 - Whether normal attacks auto-fire, require input, or vary by weapon/class.
 - Whether aiming is manual, automatic, or hybrid.
 - Exact controls for movement, aiming, rotation, and abilities.
@@ -149,6 +160,7 @@ Never implement a final combat formula or input scheme based only on a prior pro
 ## 6. Stats
 
 Previously proposed stats:
+
 - HP
 - MP
 - Attack
@@ -159,6 +171,7 @@ Previously proposed stats:
 - Wisdom
 
 Prior meanings:
+
 - HP: health.
 - MP: resource for class abilities.
 - Attack: outgoing damage.
@@ -173,6 +186,7 @@ These names and roles are prior design material; confirm any change against the 
 ## 7. Death and account persistence
 
 ### Confirmed direction
+
 - Character permadeath is a core game pillar.
 - A character that dies before dungeon completion does not receive completion rewards.
 - A dead character's final lifetime EXP remains on the lifetime EXP leaderboard.
@@ -180,6 +194,7 @@ These names and roles are prior design material; confirm any change against the 
 - Account-level resources and eligible shared storage were previously planned to persist through character death.
 
 ### Prior persistence concepts requiring final reconciliation
+
 - Gold persists through character death.
 - Shared stash is account-wide and can transfer eligible items between characters.
 - Two free character slots; additional slots purchasable with gold.
@@ -192,6 +207,7 @@ Do not implement death handling until the exact inventory-loss and reward rules 
 ## 8. Equipment
 
 Prior draft equipment slots:
+
 1. Weapon
 2. Class ability item
 3. Head armor
@@ -206,6 +222,7 @@ Prior draft equipment slots:
 Important correction: there is **one head armor slot**; do not add a separate cap/hat slot.
 
 Prior weapon types:
+
 - Sword
 - Dagger
 - Axe
@@ -215,11 +232,13 @@ Prior weapon types:
 - Mace
 
 Prior armor types:
+
 - Cloth
 - Leather
 - Plate
 
 Prior accessories:
+
 - Rings, necklaces, capes.
 - Stat variants based on HP, MP, Attack, Dexterity, Speed, Defense, Vitality, and Wisdom.
 
@@ -228,6 +247,7 @@ Equipment restrictions and class proficiencies were previously drafted but are n
 ## 9. Tiers, modifiers, Artifacts, and Shiny items
 
 Prior draft:
+
 - Ordinary gear tiers T0–T10.
 - Artifacts are a separate special category with unique fixed effects.
 - Item stats may be randomized independently from the fixed Artifact effect.
@@ -241,6 +261,7 @@ Prior draft:
 These rates and modifier rules are balance proposals, not immutable requirements. Do not bake unapproved rates into scattered code; use centralized configuration and ask before locking them.
 
 ### Prior named Artifact concepts
+
 - Axe: Doomrend, the World-Ender — spectral axes chain to nearby enemies.
 - Sword: Excalibur, the Dawn's Judgment — consecutive hits build Radiance toward a piercing beam.
 - Dagger: Whisper, the Unseen End — kills enable a brief shadowstep and empowered next attack.
@@ -260,6 +281,7 @@ These effects must be reconciled with the final 13-class roster and latest desig
 ## 10. Dungeons
 
 Dungeon design is a mix of procedural assembly and handcrafted content:
+
 - A library of handcrafted rooms can be assembled procedurally.
 - Fixed handcrafted dungeons and unique/special dungeon modes are also possible.
 - Generation must validate connectivity, reachable objectives, valid encounter order, and other structural constraints.
@@ -273,6 +295,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - The first dungeon should be gentle enough to teach core play.
 
 ### Goblin Warrens
+
 - Introductory dungeon, primarily aimed at levels 1–9.
 - Target first-time clear: 3–5 minutes.
 - Geared veterans should be able to stomp it; difficulty is primarily gated by clear speed for them.
@@ -296,6 +319,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 ## 12. Economy and leaderboards
 
 Prior economy direction:
+
 - Persistent gold.
 - Grand Serf Exchange marketplace for eligible gear/potions traded for gold.
 - Lord's Vendor buys back eligible items at 50% of reference value.
@@ -304,6 +328,7 @@ Prior economy direction:
 - Economy transactions must be server-authoritative and shared across platforms.
 
 Confirmed leaderboard direction:
+
 - One lifetime EXP leaderboard.
 - EXP continues accumulating after level 20 even though no further levels or stat gains occur.
 - Living characters display current accumulated lifetime EXP.
@@ -325,6 +350,7 @@ Other leaderboard ideas (survival time, dungeon clears, bosses, fastest clears, 
 ## 14. Current prototype goal
 
 Build a small vertical slice before building the full game:
+
 1. The browser client shows the approved 960×640 layout, fixed 240-pixel HUD, 720×640 gameplay viewport, 16×16 player, and player-centered camera with at least 300 world pixels of cardinal visibility.
 2. A browser game loads.
 3. Player can move and interact with the world.

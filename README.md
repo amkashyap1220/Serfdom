@@ -15,7 +15,61 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-This is a context and planning starter pack, not a finished game implementation. The codebase, framework versions, deployment provider, server framework, and exact database schema should be selected or verified during the early phases.
+Phase 0 (repository and environment setup) is in progress. There is no game code yet; the next phase adds the browser client skeleton. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
+
+## Development setup
+
+### Prerequisites
+
+- **Node.js 24 LTS** (includes npm). The exact major version is enforced: npm refuses to install with another major version.
+- **Git**.
+
+On Windows, both can be installed from PowerShell with:
+
+```powershell
+winget install --id OpenJS.NodeJS.LTS -e
+winget install --id Git.Git -e
+```
+
+Restart your terminal/editor afterwards, then confirm:
+
+```sh
+node --version   # v24.x.x
+npm --version
+git --version
+```
+
+### Set up a clean clone
+
+```sh
+git clone https://github.com/amkashyap1220/Serfdom.git
+cd Serfdom
+npm ci
+```
+
+`npm ci` installs exactly the dependency versions recorded in `package-lock.json`.
+
+### Checks
+
+Run from the repository root:
+
+| Command                | Purpose                                          |
+| ---------------------- | ------------------------------------------------ |
+| `npm run format:check` | Verify every file matches Prettier formatting.   |
+| `npm run format`       | Reformat files in place (changes files on disk). |
+
+Type checking, linting, tests, and a dev server will be added in Phase 1.
+
+### Repository layout
+
+```
+docs/        design, roadmap, architecture, decisions, testing, work log
+CLAUDE.md    instructions for Claude as pair-programmer
+```
+
+Planned (added only when their phase begins): `client/` (Phase 1, Phaser + TypeScript + Vite), `shared/` (shared types/rules), `server/` (Phase 4, authoritative WebSocket server). These become npm workspaces.
+
+No environment variables or secrets are needed yet. When they are, a placeholder-only `.env.example` will be committed; real `.env` files are git-ignored.
 
 ## Source-of-truth order
 
@@ -37,4 +91,3 @@ When a design decision changes, update the relevant docs and decision log in the
 - 16×16 source-pixel player and player-sized ordinary enemy sprites.
 - Player-centered camera showing at least 300 world pixels in each cardinal direction in normal play.
 - Crisp pixel-art rendering without smoothing.
-- Start with Phase 0; the pack contains documentation, not a completed game.

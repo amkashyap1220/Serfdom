@@ -1,0 +1,15 @@
+{
+  "name": "serfdom",
+  "private": true,
+  "description": "Browser-first multiplayer top-down action RPG.",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

@@ -18,8 +18,16 @@ Both clients connect to the same authoritative multiplayer service and persisten
 - Real-time transport: WebSockets.
 - Server: TypeScript/JavaScript runtime with a small authoritative game-server process.
 - Database: PostgreSQL, when persistent account/game data is introduced.
-- Testing: choose tools that fit the selected package manager and framework; document commands in the root README.
-- Formatting/type checks: select and pin reproducible tooling during Phase 0.
+- Build/dev server: Vite (Phase 1).
+- Testing: Vitest (Phase 1); document commands in the root README.
+- Formatting: Prettier, pinned exact version (Phase 0). Linting: ESLint (Phase 1). Type checks: `tsc` (Phase 1).
+
+### Current repository tooling (Phase 0)
+
+- Runtime: Node.js 24 LTS (`.nvmrc`; `package.json` `engines`; `.npmrc` `engine-strict=true` makes npm refuse other versions).
+- Package manager: npm. `.npmrc` `save-exact=true` records exact versions; `package-lock.json` is committed.
+- Monorepo: npm workspaces. The root `package.json` will list `client`, `shared`, and `server` in `"workspaces"` as each folder is created; none exist yet.
+- Line endings: LF everywhere (`.gitattributes` `eol=lf`, `.editorconfig`, Prettier `endOfLine`).
 
 These are proposals, not permission to install every dependency immediately. Inspect the repository and choose the minimum needed for the current phase.
 
@@ -28,6 +36,7 @@ These are proposals, not permission to install every dependency immediately. Ins
 The client is untrusted. It may send intentions such as “move,” “attempt attack,” “activate ability,” or “use item.” It must not be allowed to dictate consequential results.
 
 The server owns and validates:
+
 - Player session and party membership.
 - Legal movement and collisions, to the degree needed by the game model.
 - Attack eligibility, damage, enemy HP, and enemy defeat.
@@ -68,6 +77,7 @@ Do not finalize the protocol before the first multiplayer milestone. Start small
 ## 6. Persistence principles
 
 When persistence is introduced:
+
 - Use migrations.
 - Keep credentials and secrets in environment variables.
 - Commit `.env.example` only with placeholders.

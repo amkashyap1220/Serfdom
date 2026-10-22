@@ -99,6 +99,7 @@ Teach testing as part of development, not as an afterthought.
 ## Documentation discipline
 
 Keep these files current:
+
 - `docs/GDD.md`: intended game behavior and design.
 - `docs/ROADMAP.md`: phase order and acceptance criteria.
 - `docs/ARCHITECTURE.md`: current technical structure and boundaries.
