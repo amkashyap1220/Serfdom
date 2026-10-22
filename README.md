@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phase 3 (combat prototype) is complete. Done so far: Q/E view rotation (3a) and shooting a target dummy with three fire modes (3b). The 16×16 placeholder player moves with W A S D (screen-relative) around a debug map with walls; T cycles Auto aim / Auto fire / Manual (left click). The dummy fires an 8-bullet ring every 2 s while you are within 300 px; you have 200 HP and, in this prototype only, respawn at the start 2 s after dying (not the final permadeath rules). See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
+Phases 0–3 are complete (setup, client skeleton, movement/camera, single-player combat prototype). Phase 4 (authoritative multiplayer) is in progress: slice 4a connects browsers to a Node game server that assigns guest ids and tracks who is online. Movement is not shared yet (4b); combat is still local to each browser (Phase 5). See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
 
 ## Development setup
 
@@ -55,7 +55,7 @@ npm ci
 npm run dev
 ```
 
-Open <http://localhost:5173/>. Stop the server with `Ctrl+C` in the terminal. The port is fixed: if 5173 is already in use, the server exits with "Port 5173 is already in use" rather than silently picking another port.
+This starts **both** the game server (`[server]`, ws://localhost:8080) and the browser client (`[client]`, http://localhost:5173/) in one terminal. Open <http://localhost:5173/>; open a second tab to see a second player join. Stop both with `Ctrl+C`. To run them separately: `npm run dev:server` and `npm run dev:client`. If either port is in use, the command fails with a clear message. Optional overrides go in a root `.env` (copy `.env.example`). The port is fixed: if 5173 is already in use, the server exits with "Port 5173 is already in use" rather than silently picking another port.
 
 ### Checks
 
@@ -91,7 +91,12 @@ docs/        design, roadmap, architecture, decisions, testing, work log
 CLAUDE.md    instructions for Claude as pair-programmer
 ```
 
-Planned: `server/` (Phase 4, authoritative WebSocket server) as a further npm workspace.
+server/ authoritative game server (npm workspace @serfdom/server): Node 24 + ws, TypeScript run directly via Node type stripping
+src/main.ts entry point (PORT env, default 8080)
+src/game-server.ts (+ .test.ts) connections, guest ids, presence, input validation
+src/log.ts logger (never logs IPs or private data)
+
+Shared protocol: `shared/src/protocol.ts` (+ tests) defines and validates every network message.
 
 If `npm run dev` shows a blank game with `504 (Outdated Optimize Dep)` in the console after dependencies change, stop the server (`Ctrl+C`) and start it again.
 

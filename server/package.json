@@ -1,0 +1,21 @@
+{
+  "name": "@serfdom/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../.env --watch src/main.ts",
+    "start": "node --env-file-if-exists=../.env src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@serfdom/shared": "0.0.0",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/ws": "8.18.2",
+    "vitest": "5.0.5"
+  }
+}

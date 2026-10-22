@@ -59,3 +59,13 @@ export {
   type SimState,
   type TickInput,
 } from "./sim.ts";
+export {
+  encodeMessage,
+  MAX_MESSAGE_BYTES,
+  parseClientMessage,
+  parseServerMessage,
+  PROTOCOL_VERSION,
+  type ClientMessage,
+  type ParseResult,
+  type ServerMessage,
+} from "./protocol.ts";

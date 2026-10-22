@@ -103,3 +103,13 @@ Keep this concise and update it after each meaningful milestone.
 - User manual test passed (all 5 steps; pattern readable and avoidable, values feel reasonable). Slice 3c complete.
 - Phase 3 acceptance: engage with approved inputs ✅; readable/avoidable attacks ✅ (user-confirmed); damage/defeat match documented rules ✅; tests cover normal hits and edge cases ✅. Phase 3 complete.
 - Next step: Phase 4 — authoritative multiplayer foundation (needs server/transport decisions first).
+
+### Phase 4a — Game server, guest ids, presence — 2026-10-22
+
+- User accepted Claude's recommendations for all Phase 4 choices: T-020 (Node + ws, no framework, type stripping), T-021 (hand-written validators), T-022 (guest ids), T-023 (server-authoritative movement plan), T-024 (combat local until Phase 5), T-025 (dev workflow, no private data in logs).
+- Added `server/` workspace (ws 8.22.0, @types/node 24.19.2, @types/ws 8.18.2) and `concurrently` 10.0.6; `npm run dev` now starts both. Added `.env.example` (placeholders only).
+- Shared: `protocol.ts` + 18 tests. Server: `GameServer` + 11 integration tests with real sockets. Client: `net.ts` `Connection`, HUD Server / Online rows.
+- Findings: a test race (client saw close before server cleanup) fixed by waiting for server state; `tsc` caught `wss.address()` possibly null.
+- Checks: `npm run check` passed (111 shared, 11 server, 23 client tests; server tests passed 3 runs in a row). Live: two visible tabs plus the user's own open tab connected as #1–#3, joins/leaves propagated, no console errors, server log has guest ids only. Headless: offline on server stop, reconnected on restart.
+- User manual test passed (all steps: combined dev command, two tabs, join/leave, offline and reconnect). Slice 4a complete.
+- Next step: slice 4b (server-authoritative movement, other players visible).

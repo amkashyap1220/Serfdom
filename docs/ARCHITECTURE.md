@@ -33,6 +33,16 @@ Both clients connect to the same authoritative multiplayer service and persisten
   - TypeScript is held at 6.0.x because typescript-eslint 8.72 supports only `typescript <6.1.0`. Revisit TypeScript 7 when typescript-eslint supports it.
 - Tool locations: shared tooling (TypeScript, ESLint, Prettier) is installed at the root; Vite/Vitest/Phaser belong to `client`. ESLint uses one flat config at the root (`eslint.config.mjs`).
 
+### Current server structure (Phase 4a)
+
+- `server/` workspace: Node 24 runs `src/main.ts` directly (type stripping; `erasableSyntaxOnly` keeps the code strippable; `--watch` restarts on change in dev). No build step.
+- `GameServer` (`server/src/game-server.ts`) wraps a `ws` `WebSocketServer`. Per connection it keeps a session: guest id (null until a valid hello), invalid-message count, hello timer.
+- Handshake: client sends `hello {protocol}`; the server refuses a different `PROTOCOL_VERSION` (error + close 1008), otherwise assigns the next guest id (never reused), replies `welcome {playerId, players}`, and broadcasts `playerJoined`. On close it broadcasts `playerLeft`. The server's session map is the canonical list of who is online.
+- Trust boundary: `ws` `maxPayload` (1 KB) closes oversized frames (1009) before decoding; binary frames and anything `parseClientMessage` rejects get an `error` reply; 5 invalid messages or no hello within 5 s closes the connection (1008).
+- Protocol: `shared/src/protocol.ts` holds message types, strict parsers (exact keys, typed fields), and `PROTOCOL_VERSION`. The client validates server messages with the same module.
+- Client: `client/src/net.ts` `Connection` keeps one socket, mirrors presence from the server, and retries every 2 s when disconnected. The game keeps running locally while offline.
+- Config: root `.env` (optional, git-ignored; see `.env.example`) is read by Vite (`envDir: ".."`, `VITE_SERVER_URL`) and by Node (`--env-file-if-exists`, `PORT`).
+
 ### Current client structure (Phases 1–2)
 
 - `client/index.html`: `#game-container` (960×640) is a flex row of `#hud` (240×640, plain DOM) and `#gameplay` (720×640, holds the Phaser canvas). Both use `flex: 0 0 <width>` so neither can grow or shrink into the other.

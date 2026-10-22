@@ -17,17 +17,18 @@ Claude must use the actual scripts in `package.json` or the repository's tooling
 
 Current commands (run from the repository root):
 
-| Command                | What it checks                                                                       | Since   |
-| ---------------------- | ------------------------------------------------------------------------------------ | ------- |
-| `npm ci`               | Installs exactly the versions in `package-lock.json`; fails on the wrong Node major. | Phase 0 |
-| `npm run format:check` | Every file matches Prettier formatting. Prints offending files and exits non-zero.   | Phase 0 |
-| `npm run format`       | Rewrites files to fix formatting (not a check; changes files).                       | Phase 0 |
-| `npm run lint`         | ESLint over the whole repo.                                                          | Phase 1 |
-| `npm run typecheck`    | `tsc --noEmit` in every workspace that defines it.                                   | Phase 1 |
-| `npm test`             | Vitest unit tests in every workspace that defines them.                              | Phase 1 |
-| `npm run build`        | Vite production build of the client into `client/dist/`.                             | Phase 1 |
-| `npm run check`        | All of the above checks in order; stops at the first failure.                        | Phase 1 |
-| `npm run dev`          | Starts the dev server at http://localhost:5173/ (fixed port).                        | Phase 1 |
+| Command                                     | What it checks                                                                         | Since   |
+| ------------------------------------------- | -------------------------------------------------------------------------------------- | ------- |
+| `npm ci`                                    | Installs exactly the versions in `package-lock.json`; fails on the wrong Node major.   | Phase 0 |
+| `npm run format:check`                      | Every file matches Prettier formatting. Prints offending files and exits non-zero.     | Phase 0 |
+| `npm run format`                            | Rewrites files to fix formatting (not a check; changes files).                         | Phase 0 |
+| `npm run lint`                              | ESLint over the whole repo.                                                            | Phase 1 |
+| `npm run typecheck`                         | `tsc --noEmit` in every workspace that defines it.                                     | Phase 1 |
+| `npm test`                                  | Vitest unit tests in every workspace that defines them.                                | Phase 1 |
+| `npm run build`                             | Vite production build of the client into `client/dist/`.                               | Phase 1 |
+| `npm run check`                             | All of the above checks in order; stops at the first failure.                          | Phase 1 |
+| `npm run dev`                               | Starts game server (ws://localhost:8080) and client (http://localhost:5173/) together. | Phase 4 |
+| `npm run dev:server` / `npm run dev:client` | Start just one of them.                                                                | Phase 4 |
 
 Exit codes: 0 means pass. When piping output (e.g. `| tail`), `$?` reports the last command in the pipe, not npm; use `${PIPESTATUS[0]}` in bash or run without a pipe.
 
@@ -66,6 +67,8 @@ Rotation (Phase 3a): hold Q/E to turn the view at 120°/s; Z snaps back to 0°. 
 Shooting (Phase 3b): target dummy at (1300, 1100), 500 HP, just outside auto-aim range from the start. HUD rows: Fire mode (T), Dummy HP, Shots in flight, Shots/hits/blocked, Dummy defeats, Mouse (world). Expected: Auto aim fires only with the dummy within 300 px; 4 shots/s; 20 hits defeat it; it respawns after 3 s; Auto fire shoots toward the mouse without clicking; Manual fires only while left click is held; standing at about (1090, 890) (top-left of the square block) every auto-aim shot is blocked. Shots already in flight still land after you switch modes.
 
 Enemy attacks and death (Phase 3c): within 300 px the dummy fires 8 orange bullets in a ring (first one east) every 2 s; each hit does 20 (player flashes red); 10 hits = death at 200 HP. HUD rows: Player HP, Hits taken / deaths, In flight (yours/enemy). Standing directly west of the dummy at (1075, 1100) every ring hits you; standing between ring lines at about (1162, 1045) none do. While dead: no movement or shooting, centered message "You died — prototype respawn in …s"; after 2 s you are back at (1000, 1000) with 200 HP, bullets cleared, dummy at full HP.
+
+Multiplayer presence (Phase 4a): with `npm run dev` running, each tab's HUD shows `Server: connected as #N` and `Online (guest ids)`. Opening a second tab adds an id in both tabs; closing it removes it. Stopping the server shows `offline (retrying)`; restarting it reconnects automatically within ~2 s. The server terminal prints `guest #N joined/left (K online)` and never IP addresses. Server integration tests (`server/src/game-server.test.ts`) cover handshake, presence, disconnect cleanup, protocol mismatch, malformed/unknown/binary/oversized messages, the invalid-message limit, hello timeout, and port-in-use.
 
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 

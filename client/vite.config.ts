@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // Read .env files from the repository root, shared with the server.
+  envDir: "..",
   server: {
     port: 5173,
     // Fail loudly if the port is taken instead of silently picking another,

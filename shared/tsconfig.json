@@ -9,6 +9,10 @@
     "moduleResolution": "bundler",
     // Explicit .ts import paths let Node run these files directly later.
     "allowImportingTsExtensions": true,
+    // Only syntax Node can strip without compiling (no enums, namespaces,
+    // or constructor parameter properties), because the server runs this
+    // code directly with Node type stripping.
+    "erasableSyntaxOnly": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,

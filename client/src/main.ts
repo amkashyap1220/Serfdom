@@ -4,11 +4,13 @@ import "./style.css";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
+import { Connection, type ConnectionStatus } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
 
 const gameplay = requireElement("gameplay");
 const layoutList = new DebugList(requireElement("hud-layout"));
 const liveList = new DebugList(requireElement("hud-live"));
+const connection = new Connection();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -120,7 +122,15 @@ function reportLive(game: Phaser.Game): void {
     )
     .join(", ");
 
+  const net = connection.snapshot;
   liveList.set([
+    ["Server", describeStatus(net.status)],
+    [
+      "Online (guest ids)",
+      net.players.length > 0
+        ? net.players.map((id) => `#${id}`).join(" ")
+        : "—",
+    ],
     ["Player (world)", `${position.x.toFixed(1)}, ${position.y.toFixed(1)}`],
     ["Camera center (world)", `${camera.midPoint.x}, ${camera.midPoint.y}`],
     ["Player on screen", `${round1(onScreenX)}, ${round1(onScreenY)}`],
@@ -176,6 +186,17 @@ function verifyLayout(
   }
   if (hud.right > view.left) {
     console.warn("[layout] HUD overlaps the gameplay viewport");
+  }
+}
+
+function describeStatus(status: ConnectionStatus): string {
+  switch (status.kind) {
+    case "connecting":
+      return "connecting…";
+    case "connected":
+      return `connected as #${status.playerId}`;
+    case "disconnected":
+      return "offline (retrying)";
   }
 }
 
