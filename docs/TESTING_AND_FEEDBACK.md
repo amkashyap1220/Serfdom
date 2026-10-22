@@ -63,6 +63,8 @@ Debug map (`client/src/test-world.ts`), player starts at (1000, 1000), speed 150
 
 Rotation (Phase 3a): hold Q/E to turn the view at 120°/s; Z snaps back to 0°. HUD "View rotation" shows the angle. At any angle: W moves up the screen, "Player on screen" stays 360, 320, the player sprite stays upright and crisp, and the green box and blue ticks stay square to the screen. Expected cosmetic artifact: floor, walls, and grid labels look jagged while rotated.
 
+Shooting (Phase 3b): target dummy at (1300, 1100), 500 HP, just outside auto-aim range from the start. HUD rows: Fire mode (T), Dummy HP, Shots in flight, Shots/hits/blocked, Dummy defeats, Mouse (world). Expected: Auto aim fires only with the dummy within 300 px; 4 shots/s; 20 hits defeat it; it respawns after 3 s; Auto fire shoots toward the mouse without clicking; Manual fires only while left click is held; standing at about (1090, 890) (top-left of the square block) every auto-aim shot is blocked. Shots already in flight still land after you switch modes.
+
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests

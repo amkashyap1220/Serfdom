@@ -74,3 +74,26 @@ export function stepViewRotation(
   const full = Math.PI * 2;
   return ((next % full) + full) % full;
 }
+
+/**
+ * Converts a point on the canvas (CSS pixels from its top-left) to world
+ * pixels, for a camera centered on `center` with the given rotation and
+ * zoom. This is the exact inverse of how the camera draws the world: offset
+ * from the canvas center, undo zoom, then undo rotation.
+ */
+export function screenToWorld(
+  screen: { x: number; y: number },
+  viewport: { width: number; height: number },
+  center: { x: number; y: number },
+  rotation: number,
+  zoom: number,
+): { x: number; y: number } {
+  const dx = (screen.x - viewport.width / 2) / zoom;
+  const dy = (screen.y - viewport.height / 2) / zoom;
+  const cos = Math.cos(-rotation);
+  const sin = Math.sin(-rotation);
+  return {
+    x: center.x + dx * cos - dy * sin,
+    y: center.y + dx * sin + dy * cos,
+  };
+}

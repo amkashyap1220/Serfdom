@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { rotateVec } from "@serfdom/shared";
+import { FIRE_MODE_LABELS, rotateVec } from "@serfdom/shared";
 import "./style.css";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
@@ -77,8 +77,17 @@ function reportLayout(game: Phaser.Game, logTable: boolean): void {
 /** Per-frame readout: where the player is and whether the camera is centered on them. */
 function reportLive(game: Phaser.Game): void {
   const scene = worldScene(game);
-  const { position, renderPosition, keys, viewRotation } =
-    scene.getDebugState();
+  const {
+    sim,
+    renderPosition,
+    keys,
+    pointer,
+    pointerWorld,
+    viewRotation,
+    fireMode,
+    totals,
+  } = scene.getDebugState();
+  const position = sim.player.position;
   const camera = scene.cameras.main;
   // Where the player is drawn inside the canvas (CSS pixels): the camera
   // rotates and zooms the world around its midpoint, which sits at the
@@ -102,7 +111,14 @@ function reportLive(game: Phaser.Game): void {
       rotate.left ? "Q" : "",
       rotate.right ? "E" : "",
       rotate.reset ? "Z" : "",
+      keys.ability ? " Space" : "",
+      pointer.leftDown ? " LMB" : "",
     ].join("") || "—";
+  const enemies = sim.enemies
+    .map((e) =>
+      e.hp > 0 ? `${e.hp}/${e.maxHp}` : `respawn ${e.respawnIn.toFixed(1)}s`,
+    )
+    .join(", ");
 
   liveList.set([
     ["Player (world)", `${position.x.toFixed(1)}, ${position.y.toFixed(1)}`],
@@ -110,6 +126,21 @@ function reportLive(game: Phaser.Game): void {
     ["Player on screen", `${round1(onScreenX)}, ${round1(onScreenY)}`],
     ["View rotation", `${round1((viewRotation * 180) / Math.PI)}°`],
     ["Keys held", held],
+    [
+      "Mouse (world)",
+      pointerWorld
+        ? `${round1(pointerWorld.x)}, ${round1(pointerWorld.y)}`
+        : "—",
+    ],
+    ["Fire mode (T)", FIRE_MODE_LABELS[fireMode]],
+    [
+      "Ability (Space)",
+      keys.ability ? "pressed — not yet defined" : "not yet defined",
+    ],
+    ["Dummy HP", enemies],
+    ["Shots in flight", String(sim.projectiles.length)],
+    ["Shots/hits/blocked", `${totals.shots}/${totals.hits}/${totals.blocked}`],
+    ["Dummy defeats", String(totals.defeats)],
   ]);
 }
 

@@ -1,24 +1,42 @@
 import * as Phaser from "phaser";
 import {
+  aimTargets,
   consumeFixedSteps,
+  createSimState,
+  DUMMY_ENEMY,
   MAX_FRAME_SECONDS,
   NO_INPUT,
-  PLAYER_BODY,
-  PLAYER_SPEED,
-  stepMovement,
+  nextFireMode,
+  PLAYER_WEAPON,
+  resolveFireIntent,
+  stepSim,
   TICK_SECONDS,
   worldDirectionFromInput,
+  type FireMode,
+  type SimEvent,
+  type SimState,
   type Vec2,
 } from "@serfdom/shared";
-import { MIN_VISIBLE_WORLD_PX, stepViewRotation } from "../camera-math";
-import { createKeyReader, type KeyState } from "../input";
 import {
+  MIN_VISIBLE_WORLD_PX,
+  screenToWorld,
+  stepViewRotation,
+} from "../camera-math";
+import {
+  createKeyReader,
+  createPointerReader,
+  type KeyState,
+  type PointerInput,
+} from "../input";
+import {
+  DUMMY_POSITIONS,
   GRID,
   PLAYER_SPRITE_SIZE,
   PLAYER_START,
   TEST_WALLS,
   TEST_WORLD,
 } from "../test-world";
+import { CombatView, makeSquareTexture } from "./CombatView";
 
 const PLAYER_TEXTURE = "player-placeholder";
 
@@ -37,23 +55,33 @@ const COLORS = {
 } as const;
 
 export interface WorldDebugState {
-  /** Simulated player center (world pixels, unrounded). */
-  position: Vec2;
+  sim: SimState;
   /** Position actually drawn and centered on (whole world pixels). */
   renderPosition: Vec2;
   keys: KeyState;
+  pointer: PointerInput;
+  /** Mouse position in world pixels, or null if unknown. */
+  pointerWorld: Vec2 | null;
   /** Camera rotation in radians, [0, 2π). */
   viewRotation: number;
+  fireMode: FireMode;
+  /** Running totals since load, for the HUD. */
+  totals: { shots: number; hits: number; blocked: number; defeats: number };
 }
 
 const NO_KEYS: KeyState = {
   move: NO_INPUT,
   rotate: { left: false, right: false, reset: false },
+  toggleFireMode: false,
+  ability: false,
 };
 
 /**
  * Debug scene: test map, WASD movement with walls, player-centered camera
- * with Q/E rotation.
+ * with Q/E rotation, and the Phase 3b shooting prototype against a dummy.
+ *
+ * All rules run in the shared simulation (stepSim); this scene only gathers
+ * input, advances fixed ticks, and draws the result.
  *
  * Two cameras: the main camera draws the world layer and rotates; a second,
  * never-rotating "overlay" camera draws screen-fixed debug marks. A single
@@ -62,11 +90,20 @@ const NO_KEYS: KeyState = {
 export class WorldScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Image;
   private world!: Phaser.GameObjects.Layer;
+  private combat!: CombatView;
   private readKeys: () => KeyState = () => NO_KEYS;
-  private position: Vec2 = { ...PLAYER_START };
+  private readPointer: () => PointerInput = () => ({
+    screen: null,
+    leftDown: false,
+  });
+  private sim: SimState = createSimState(PLAYER_START, DUMMY_POSITIONS);
   private lastKeys: KeyState = NO_KEYS;
+  private lastPointer: PointerInput = { screen: null, leftDown: false };
+  private lastPointerWorld: Vec2 | null = null;
   private viewRotation = 0;
+  private fireMode: FireMode = "autoAim";
   private carriedSeconds = 0;
+  private readonly totals = { shots: 0, hits: 0, blocked: 0, defeats: 0 };
 
   constructor() {
     super("world");
@@ -76,7 +113,14 @@ export class WorldScene extends Phaser.Scene {
     this.world = this.add.layer();
     this.drawFloorAndGrid();
     this.drawWalls();
-    this.createPlayerTexture();
+    this.combat = new CombatView(this, this.world, DUMMY_ENEMY.size);
+    makeSquareTexture(
+      this,
+      PLAYER_TEXTURE,
+      PLAYER_SPRITE_SIZE,
+      COLORS.player,
+      COLORS.playerMark,
+    );
     this.player = this.add.image(
       PLAYER_START.x,
       PLAYER_START.y,
@@ -85,6 +129,7 @@ export class WorldScene extends Phaser.Scene {
     this.world.add(this.player);
     const overlay = this.drawScreenOverlay();
     this.readKeys = createKeyReader(this);
+    this.readPointer = createPointerReader(this);
 
     // D-033: no camera bounds; the camera always centers the player and
     // shows void past the map edge.
@@ -92,10 +137,10 @@ export class WorldScene extends Phaser.Scene {
     this.cameras
       .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
       .ignore(this.world);
-    this.syncView();
+    this.syncView([], 0);
   }
 
-  update(_time: number, deltaMs: number): void {
+  update(time: number, deltaMs: number): void {
     const { steps, remainder } = consumeFixedSteps(
       this.carriedSeconds,
       deltaMs / 1000,
@@ -106,6 +151,22 @@ export class WorldScene extends Phaser.Scene {
 
     // Input is sampled once per rendered frame and held for its steps.
     this.lastKeys = this.readKeys();
+    this.lastPointer = this.readPointer();
+    if (this.lastKeys.toggleFireMode) {
+      this.fireMode = nextFireMode(this.fireMode);
+    }
+    // The mouse is converted with the view as it is on screen right now
+    // (before this frame's movement), which is what the player is aiming at.
+    this.lastPointerWorld = this.lastPointer.screen
+      ? screenToWorld(
+          this.lastPointer.screen,
+          this.scale,
+          this.renderPosition(),
+          this.viewRotation,
+          this.cameras.main.zoom,
+        )
+      : null;
+
     // View rotation is presentation only (never sent to a server), so it
     // follows real frame time rather than simulation ticks.
     this.viewRotation = stepViewRotation(
@@ -113,30 +174,51 @@ export class WorldScene extends Phaser.Scene {
       this.lastKeys.rotate,
       deltaMs / 1000,
     );
-    const direction = worldDirectionFromInput(
-      this.lastKeys.move,
-      this.viewRotation,
-    );
+    const move = worldDirectionFromInput(this.lastKeys.move, this.viewRotation);
+
+    const events: SimEvent[] = [];
     for (let i = 0; i < steps; i++) {
-      this.position = stepMovement(
-        this.position,
-        direction,
-        PLAYER_BODY,
+      // Re-resolved every tick: auto aim follows the closest living enemy.
+      const fire = resolveFireIntent(
+        this.fireMode,
+        { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
+        this.sim.player.position,
+        aimTargets(this.sim),
+        PLAYER_WEAPON.range,
+      );
+      const result = stepSim(
+        this.sim,
+        { move, fire },
         TEST_WALLS,
         TICK_SECONDS,
-        PLAYER_SPEED,
       );
+      this.sim = result.state;
+      events.push(...result.events);
     }
-    this.syncView();
+    this.countEvents(events);
+    this.syncView(events, time);
   }
 
   getDebugState(): WorldDebugState {
     return {
-      position: { ...this.position },
+      sim: this.sim,
       renderPosition: this.renderPosition(),
       keys: this.lastKeys,
+      pointer: this.lastPointer,
+      pointerWorld: this.lastPointerWorld,
       viewRotation: this.viewRotation,
+      fireMode: this.fireMode,
+      totals: { ...this.totals },
     };
+  }
+
+  private countEvents(events: readonly SimEvent[]): void {
+    for (const e of events) {
+      if (e.type === "shot") this.totals.shots++;
+      else if (e.type === "hit") this.totals.hits++;
+      else if (e.type === "blocked") this.totals.blocked++;
+      else if (e.type === "defeated") this.totals.defeats++;
+    }
   }
 
   /**
@@ -148,14 +230,16 @@ export class WorldScene extends Phaser.Scene {
    * sprite is counter-rotated so it stays upright and pixel-aligned on screen
    * (PROVISIONAL: characters upright, world rotates).
    */
-  private syncView(): void {
+  private syncView(events: readonly SimEvent[], nowMs: number): void {
     const { x, y } = this.renderPosition();
     this.player.setPosition(x, y).setRotation(-this.viewRotation);
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
+    this.combat.sync(this.sim, events, this.viewRotation, nowMs);
   }
 
   private renderPosition(): Vec2 {
-    return { x: Math.round(this.position.x), y: Math.round(this.position.y) };
+    const p = this.sim.player.position;
+    return { x: Math.round(p.x), y: Math.round(p.y) };
   }
 
   private drawFloorAndGrid(): void {
@@ -201,18 +285,6 @@ export class WorldScene extends Phaser.Scene {
       g.lineStyle(1, COLORS.wallEdge);
       g.strokeRect(wall.x + 0.5, wall.y + 0.5, wall.width - 1, wall.height - 1);
     }
-  }
-
-  /** Builds the 16×16 source-pixel placeholder with a 2×2 mark at its exact center. */
-  private createPlayerTexture(): void {
-    const s = PLAYER_SPRITE_SIZE;
-    const g = this.make.graphics({}, false);
-    g.fillStyle(COLORS.player);
-    g.fillRect(0, 0, s, s);
-    g.fillStyle(COLORS.playerMark);
-    g.fillRect(s / 2 - 1, s / 2 - 1, 2, 2);
-    g.generateTexture(PLAYER_TEXTURE, s, s);
-    g.destroy();
   }
 
   /**

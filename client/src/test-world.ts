@@ -51,3 +51,13 @@ export const TEST_WALLS: readonly Rect[] = [
   { x: 1000, y: 1400, width: 200, height: 32 },
   { x: 1212, y: 1400, width: 200, height: 32 },
 ];
+
+/**
+ * Target dummies (Phase 3b). (1300, 1100) is ~316 px from the start, just
+ * outside the 300 px auto-aim range, so nothing fires until you walk closer.
+ * Standing at about (1090, 890), top-left of the square block, the dummy is
+ * in range but the block lies on the line of fire: shots must be blocked.
+ */
+export const DUMMY_POSITIONS: readonly { x: number; y: number }[] = [
+  { x: 1300, y: 1100 },
+];

@@ -82,3 +82,13 @@ Keep this concise and update it after each meaningful milestone.
 - Found: chained `sed -i` edits left the running dev server serving a stale `shared/src/index.ts` ("does not provide an export named 'rotateVec'"); re-saving the file fixed it. Canvas was at a half-pixel x (244.5) in a 985 px-wide window because the container is centered; no softening was visible in captures, left as is and noted.
 - User manual test passed (all 5 steps: Q/E/Z, screen-relative WASD at odd angles, collision while rotated, look/direction/speed accepted as is, alt-tab). Slice 3a complete.
 - Next step: slice 3b (player attack, fire modes, target enemy).
+
+### Phase 3b — Shooting a target dummy, three fire modes — 2026-10-22
+
+- Shared (pure, tested): `collision.ts` (swept box-vs-rect hit time), `projectile.ts`, `weapon.ts` (fire modes, closest target in range, aim, cooldown), `enemy.ts` (damage, defeat, respawn), `sim.ts` (one combat tick + events), `combat-config.ts`. 80 shared tests.
+- Client: T / Space / mouse input, `screenToWorld`, `CombatView` (dummy, upright HP label, hit flash, projectiles), dummy at (1300, 1100), HUD combat rows. 23 client tests. T-018 recorded.
+- Bug caught before testing: cooldown gave the 2nd shot one tick early after idle; fixed and covered by a test ([0, 15, 30, 45] at 60 Hz).
+- Checks: `npm run check` passed. Live visible-Chrome run on the user's 5173 server: no fire on load; auto aim in range defeated the dummy in exactly 20 hits; respawn after 3 s; auto fire 4 shots/s toward mouse at the correct world point; manual 0 shots without click, 4 shots/s while held; behind the block 8 shots / 8 blocked / 0 hits; no console errors.
+- Cosmetic: long HUD values wrap in the 240 px HUD.
+- User manual test passed (all 7 steps; prototype values felt good). Slice 3b complete.
+- Next step: slice 3c (enemy attacks, player HP 200, 15×15 hurtbox, prototype death/respawn).

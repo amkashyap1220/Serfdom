@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phase 3 (combat prototype) is in progress. Slice 3a adds Q/E view rotation (Z resets) on top of Phase 2: the 16×16 placeholder player moves with W A S D (screen-relative) around a debug map with walls, and the camera keeps them centered. There is no combat yet. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
+Phase 3 (combat prototype) is in progress. Done so far: Q/E view rotation (3a) and shooting a target dummy with three fire modes (3b). The 16×16 placeholder player moves with W A S D (screen-relative) around a debug map with walls; T cycles Auto aim / Auto fire / Manual (left click). Enemies do not attack yet (3c). See [`docs/WORK_LOG.md`](docs/WORK_LOG.md) for current status.
 
 ## Development setup
 

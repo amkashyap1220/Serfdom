@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { PLAYER_BODY, type Rect } from "@serfdom/shared";
-import { PLAYER_START, TEST_WALLS, TEST_WORLD } from "./test-world";
+import { PLAYER_BODY, PLAYER_WEAPON, type Rect } from "@serfdom/shared";
+import {
+  DUMMY_POSITIONS,
+  PLAYER_START,
+  TEST_WALLS,
+  TEST_WORLD,
+} from "./test-world";
 
 function overlaps(a: Rect, b: Rect): boolean {
   return (
@@ -40,5 +45,21 @@ describe("debug test world", () => {
     };
     expect(gapAt(1250)).toBeGreaterThan(PLAYER_BODY.width);
     expect(gapAt(1400)).toBeLessThan(PLAYER_BODY.width);
+  });
+});
+
+describe("target dummies", () => {
+  it("are not inside walls", () => {
+    for (const p of DUMMY_POSITIONS) {
+      const box: Rect = { x: p.x - 8, y: p.y - 8, width: 16, height: 16 };
+      expect(TEST_WALLS.filter((w) => overlaps(w, box))).toEqual([]);
+    }
+  });
+
+  it("start outside auto-aim range so nothing fires on load", () => {
+    for (const p of DUMMY_POSITIONS) {
+      const d = Math.hypot(p.x - PLAYER_START.x, p.y - PLAYER_START.y);
+      expect(d).toBeGreaterThan(PLAYER_WEAPON.range);
+    }
   });
 });

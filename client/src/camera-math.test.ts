@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MIN_VISIBLE_WORLD_PX,
   meetsVisibilityTarget,
+  screenToWorld,
   stepViewRotation,
   visibleExtentFromCenter,
 } from "./camera-math";
@@ -113,5 +114,35 @@ describe("visibility under rotation", () => {
     expect(Math.min(extent.horizontal, extent.vertical)).toBeGreaterThanOrEqual(
       MIN_VISIBLE_WORLD_PX,
     );
+  });
+});
+
+describe("screenToWorld", () => {
+  const view = { width: 720, height: 640 };
+  const center = { x: 1000, y: 1000 };
+
+  it("maps the canvas center to the camera center", () => {
+    const p = screenToWorld({ x: 360, y: 320 }, view, center, 1.1, 1);
+    expect(p.x).toBeCloseTo(1000, 9);
+    expect(p.y).toBeCloseTo(1000, 9);
+  });
+
+  it("is a plain offset with no rotation at zoom 1", () => {
+    expect(screenToWorld({ x: 460, y: 300 }, view, center, 0, 1)).toEqual({
+      x: 1100,
+      y: 980,
+    });
+  });
+
+  it("undoes rotation: 'up the screen' at 90° is world west", () => {
+    // Camera rotation +90° draws world west (-1, 0) as screen up.
+    const p = screenToWorld({ x: 360, y: 220 }, view, center, Math.PI / 2, 1);
+    expect(p.x).toBeCloseTo(900, 9);
+    expect(p.y).toBeCloseTo(1000, 9);
+  });
+
+  it("undoes zoom", () => {
+    const p = screenToWorld({ x: 460, y: 320 }, view, center, 0, 2);
+    expect(p.x).toBeCloseTo(1050, 9);
   });
 });
