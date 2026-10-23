@@ -1,16 +1,26 @@
 import * as Phaser from "phaser";
-import { rotateVec } from "@serfdom/shared";
+import {
+  ENEMY_KINDS,
+  ENEMY_STATS,
+  rotateVec,
+  type EnemyKind,
+} from "@serfdom/shared";
 import type { CombatViewModel } from "../combat-view-model";
 
-const ENEMY_TEXTURE = "enemy-placeholder";
-const ENEMY_FLASH_TEXTURE = "enemy-placeholder-flash";
+const texture = (kind: EnemyKind) => `enemy-${kind}`;
+const flashTexture = (kind: EnemyKind) => `enemy-${kind}-flash`;
 /** How long an enemy shows the white hit flash. */
 const HIT_FLASH_MS = 80;
 
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
+const ENEMY_COLORS: Record<EnemyKind, number> = {
+  dummy: 0xc0392b,
+  grunt: 0x4caf50,
+  slinger: 0x9b59b6,
+};
+
 const COLORS = {
-  enemy: 0xc0392b,
-  enemyMark: 0x2b0b07,
+  enemyMark: 0x1a1a1a,
   flash: 0xffffff,
   playerShot: 0x7fdbff,
   enemyBullet: 0xff9f1c,
@@ -26,8 +36,9 @@ interface EnemySprite {
 
 /**
  * Draws combat state (enemies, HP labels, projectiles) from a view model
- * built either from the local offline sim or from server snapshots. Holds
- * no game rules. A hit flash plays whenever an enemy's HP drops.
+ * built from server snapshots. Holds no game rules. Each enemy kind has its
+ * own placeholder color and size; a hit flash plays whenever an enemy's HP
+ * drops; enemies that leave the snapshot (defeated in a dungeon) are removed.
  */
 export class CombatView {
   private readonly enemies = new Map<number, EnemySprite>();
@@ -36,22 +47,24 @@ export class CombatView {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly layer: Phaser.GameObjects.Layer,
-    size: number,
   ) {
-    makeSquareTexture(
-      scene,
-      ENEMY_TEXTURE,
-      size,
-      COLORS.enemy,
-      COLORS.enemyMark,
-    );
-    makeSquareTexture(
-      scene,
-      ENEMY_FLASH_TEXTURE,
-      size,
-      COLORS.flash,
-      COLORS.flash,
-    );
+    for (const kind of ENEMY_KINDS) {
+      const { size } = ENEMY_STATS[kind];
+      makeSquareTexture(
+        scene,
+        texture(kind),
+        size,
+        ENEMY_COLORS[kind],
+        COLORS.enemyMark,
+      );
+      makeSquareTexture(
+        scene,
+        flashTexture(kind),
+        size,
+        COLORS.flash,
+        COLORS.flash,
+      );
+    }
     this.projectiles = scene.add.graphics();
     layer.add(this.projectiles);
   }
@@ -62,8 +75,16 @@ export class CombatView {
    * enemy on screen whatever the view rotation.
    */
   sync(view: CombatViewModel, viewRotation: number, nowMs: number): void {
+    const present = new Set(view.enemies.map((e) => e.id));
+    for (const [id, sprite] of this.enemies) {
+      if (!present.has(id)) {
+        sprite.image.destroy();
+        sprite.label.destroy();
+        this.enemies.delete(id);
+      }
+    }
     for (const enemy of view.enemies) {
-      const sprite = this.enemySprite(enemy.id, enemy.hp);
+      const sprite = this.enemySprite(enemy.id, enemy.kind, enemy.hp);
       if (enemy.hp < sprite.lastHp) sprite.flashUntil = nowMs + HIT_FLASH_MS;
       sprite.lastHp = enemy.hp;
       const x = Math.round(enemy.x);
@@ -74,7 +95,9 @@ export class CombatView {
         .setPosition(x, y)
         .setRotation(-viewRotation)
         .setTexture(
-          nowMs < sprite.flashUntil ? ENEMY_FLASH_TEXTURE : ENEMY_TEXTURE,
+          nowMs < sprite.flashUntil
+            ? flashTexture(enemy.kind)
+            : texture(enemy.kind),
         );
 
       const above = rotateVec(
@@ -86,7 +109,7 @@ export class CombatView {
         .setRotation(-viewRotation)
         .setText(
           alive
-            ? `${enemy.hp}/${enemy.maxHp}`
+            ? `${Math.ceil(enemy.hp)}`
             : `respawn ${enemy.respawnIn.toFixed(1)}s`,
         );
     }
@@ -103,10 +126,10 @@ export class CombatView {
     }
   }
 
-  private enemySprite(id: number, hp: number): EnemySprite {
+  private enemySprite(id: number, kind: EnemyKind, hp: number): EnemySprite {
     let sprite = this.enemies.get(id);
     if (!sprite) {
-      const image = this.scene.add.image(0, 0, ENEMY_TEXTURE);
+      const image = this.scene.add.image(0, 0, texture(kind));
       const label = this.scene.add
         .text(0, 0, "", {
           fontFamily: "monospace",

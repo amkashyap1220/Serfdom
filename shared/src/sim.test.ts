@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DUMMY_ENEMY, PLAYER_WEAPON } from "./combat-config.ts";
+import { DUMMY_ENEMY, PLAYER_WEAPON, PLAYER_HEALTH } from "./combat-config.ts";
 import { damageEnemy, stepRespawn, type EnemyState } from "./enemy.ts";
 import type { Rect } from "./geometry.ts";
 import { TICK_SECONDS } from "./movement-config.ts";
@@ -50,6 +50,8 @@ const count = (events: SimEvent[], type: SimEvent["type"]) =>
 describe("enemy damage and respawn", () => {
   const enemy: EnemyState = {
     id: 1,
+    kind: "dummy",
+    roomId: null,
     position: { x: 0, y: 0 },
     size: 16,
     hp: 30,
@@ -112,7 +114,7 @@ describe("players joining and leaving", () => {
     s = { ...s, players: s.players.map((p) => ({ ...p, hp: 0 })) };
     s = addPlayer(s, 1, { x: 9, y: 9 }); // "play again": fresh state
     expect(findPlayer(s, 1)).toMatchObject({
-      hp: 200,
+      hp: PLAYER_HEALTH.maxHp,
       position: { x: 9, y: 9 },
     });
     s = removePlayer(s, 2);

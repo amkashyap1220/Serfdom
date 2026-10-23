@@ -22,11 +22,24 @@ export const DUMMY_ENEMY = {
   respawnSeconds: 3,
 } as const;
 
-/** Prototype player health (D-039) and hurtbox (D-038). */
+/**
+ * A fresh level-1 Serf's health (D-055: 20 HP, replacing D-039's 200 test
+ * value) and hurtbox (D-038).
+ */
 export const PLAYER_HEALTH = {
-  maxHp: 200,
+  maxHp: 20,
   /** Square box enemy projectiles can hit: 15×15, ½ px inset per side of the 16×16 sprite. */
   hurtboxSize: 15,
+} as const;
+
+/**
+ * HP regeneration (D-056): always on, also mid-fight. GDD §6: Vitality
+ * drives regen; until stats exist (Phase 8) a level-1 Serf regenerates the
+ * base rate. Phase 8 replaces this with base + per-Vitality.
+ */
+export const PLAYER_REGEN = {
+  /** HP per second for a fresh level-1 Serf (full from empty in 40 s). */
+  hpPerSecond: 0.5,
 } as const;
 
 /** Prototype enemy attack: a ring burst (user-chosen pattern and values, 2026-10-22). */
@@ -35,7 +48,8 @@ export const ENEMY_RING_ATTACK = {
   bullets: 8,
   /** Seconds between rings. */
   intervalSeconds: 2,
-  damage: 20,
+  /** Scaled from 20 (for 200 HP) to keep ~10 hits to kill a 20 HP Serf (D-055). */
+  damage: 2,
   /** World pixels per second. */
   speed: 120,
   /** Square hit box of each bullet. */

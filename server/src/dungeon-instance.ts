@@ -1,20 +1,26 @@
 import {
   addPlayer,
   applyPlayerInput,
+  blockingWalls,
+  closedDoorIds,
   createSimState,
   dungeonInfo,
   findPlayer,
-  isAlive,
+  isRunComplete,
   MAX_PARTY_SIZE,
+  newRunProgress,
   newRunStats,
   recordRunEvents,
   removePlayer,
   roundCoord,
+  spawnEnemies,
+  stepRooms,
   stepWorld,
   TICK_SECONDS,
   type DungeonId,
   type DungeonLayout,
   type PlayerInput,
+  type RunProgress,
   type RunResult,
   type RunStats,
   type ServerMessage,
@@ -49,15 +55,18 @@ export interface RunEnd {
  * run for good, even inside the window.
  *
  * Each tick: apply each member's queued inputs (the move-credit rule in
- * input-queue.ts), advance the world once, update run stats from the
- * events, then end the runs of players who died (D-050) and, once every
- * enemy is defeated, of every survivor (completed; T-031 stand-in rule).
+ * input-queue.ts) against the walls plus closed doors, advance the world
+ * once, update run stats from the events, advance the rooms (wake, spawn
+ * waves, clear, open doors; dungeon-run.ts), then end the runs of players
+ * who died (D-050) and, once every required room is cleared, of every
+ * survivor (completed; T-031).
  */
 export class DungeonInstance {
   readonly id: number;
   readonly dungeon: DungeonId;
   readonly layout: DungeonLayout;
   private sim: SimState;
+  private rooms: RunProgress;
   private readonly members = new Map<number, Member>();
   /** Everyone who was ever in this run, so nobody rejoins it. */
   private readonly everJoined = new Set<number>();
@@ -77,10 +86,9 @@ export class DungeonInstance {
     this.layout = dungeonInfo(dungeon).layout;
     this.maxQueuedInputs = options.maxQueuedInputs;
     this.joinWindowTicks = options.joinWindowTicks;
-    // Dungeon enemies stay dead (no respawn).
-    this.sim = createSimState(this.layout.enemySpawns, {
-      respawnSeconds: null,
-    });
+    // Enemies come from room waves and stay dead (no respawn).
+    this.sim = createSimState([], { respawnSeconds: null });
+    this.rooms = newRunProgress(this.layout);
     for (const playerId of playerIds) this.join(playerId);
   }
 
@@ -120,6 +128,16 @@ export class DungeonInstance {
     return this.sim;
   }
 
+  /** Room states, in layout order (tests and diagnostics). */
+  get roomProgress(): RunProgress {
+    return this.rooms;
+  }
+
+  /** Doors still closed right now. */
+  get closedDoors(): string[] {
+    return closedDoorIds(this.rooms, this.layout);
+  }
+
   /** Replaces the simulation (tests only). */
   setStateForTest(state: SimState): void {
     this.sim = state;
@@ -151,18 +169,13 @@ export class DungeonInstance {
    */
   tick(): { ended: RunEnd[]; faulted: number[] } {
     this.age++;
+    const walls = blockingWalls(this.layout, this.closedDoors);
     const faulted: number[] = [];
     for (const [id, member] of this.members) {
       const { apply } = takeInputsForTick(member.inputs);
       try {
         for (const input of apply) {
-          const r = applyPlayerInput(
-            this.sim,
-            id,
-            input,
-            this.layout.walls,
-            TICK_SECONDS,
-          );
+          const r = applyPlayerInput(this.sim, id, input, walls, TICK_SECONDS);
           this.sim = r.state;
           member.stats = recordRunEvents(member.stats, id, r.events);
         }
@@ -172,7 +185,7 @@ export class DungeonInstance {
     }
     for (const id of faulted) this.end(id, "left");
 
-    const world = stepWorld(this.sim, this.layout.walls, TICK_SECONDS);
+    const world = stepWorld(this.sim, walls, TICK_SECONDS);
     this.sim = world.state;
     for (const [id, member] of this.members) {
       member.stats = recordRunEvents(member.stats, id, world.events);
@@ -188,7 +201,12 @@ export class DungeonInstance {
       const end = this.end(e.playerId, "died");
       if (end) ended.push(end);
     }
-    if (this.members.size > 0 && !this.sim.enemies.some(isAlive)) {
+
+    const rooms = stepRooms(this.rooms, this.sim, this.layout);
+    this.rooms = rooms.progress;
+    this.sim = spawnEnemies(this.sim, rooms.spawns);
+
+    if (this.members.size > 0 && isRunComplete(this.rooms, this.layout)) {
       for (const id of this.playerIds) {
         const end = this.end(id, "completed");
         if (end) ended.push(end);
@@ -222,6 +240,7 @@ export class DungeonInstance {
       players: this.snapshotPlayers(),
       enemies: this.sim.enemies.map((e) => ({
         id: e.id,
+        kind: e.kind,
         x: e.position.x,
         y: e.position.y,
         size: e.size,
@@ -240,6 +259,7 @@ export class DungeonInstance {
         speed: p.speed,
         size: p.size,
       })),
+      closedDoors: this.closedDoors,
     };
   }
 

@@ -158,11 +158,11 @@ function reportLive(game: Phaser.Game): void {
       keys.ability ? " Space" : "",
       pointer.leftDown ? " LMB" : "",
     ].join("") || "—";
-  const enemies = view.enemies
-    .map((e) =>
-      e.hp > 0 ? `${e.hp}/${e.maxHp}` : `respawn ${e.respawnIn.toFixed(1)}s`,
-    )
-    .join(", ");
+  const alive = view.enemies.filter((e) => e.hp > 0);
+  const byKind = new Map<string, number>();
+  for (const e of alive) byKind.set(e.kind, (byKind.get(e.kind) ?? 0) + 1);
+  const enemies =
+    [...byKind].map(([kind, n]) => `${n} ${kind}`).join(", ") || "none";
 
   const conn = net.connection.snapshot;
   liveList.set([
@@ -210,9 +210,10 @@ function reportLive(game: Phaser.Game): void {
       "Ability (Space)",
       keys.ability ? "pressed — not yet defined" : "not yet defined",
     ],
-    ["Player HP", local.hp > 0 ? `${local.hp}/${local.maxHp}` : "—"],
+    ["Player HP", local.hp > 0 ? `${local.hp.toFixed(1)}/${local.maxHp}` : "—"],
     ["Hits taken", String(totals.playerHits)],
-    ["Dummy HP", enemies],
+    ["Enemies alive", enemies],
+    ["Doors closed", online ? String(net.closedDoors.length) : "—"],
     [
       "In flight (yours/enemy)",
       `${view.projectiles.filter((p) => p.owner === "player").length}/${view.projectiles.filter((p) => p.owner === "enemy").length}`,

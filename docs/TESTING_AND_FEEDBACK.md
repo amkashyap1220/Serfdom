@@ -78,6 +78,25 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→875, 3→1250, 4→1625). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Goblin Warrens checklist (Phase 6b)
+
+Run `npm run dev` (restart it if it was running before 6b: protocol v5), open http://localhost:5173/, Ctrl+Shift+R.
+
+You are a fresh level-1 Serf: **20 HP**, regenerating **0.5 HP/s** all the time (HUD `Player HP`, one decimal). About 10 hits kill you.
+
+1. Queue (Enter). After ≤ 5 s you are in the **Entrance cave**: room names in each room's top-left corner, brown walls, HUD `Doors closed: 5` (the entrance door opened at once).
+2. Walk east (D) through the gap into the **Tunnel**: 5 green squares (grunts, 150 HP) appear and run at you. Touching one costs 2 HP at most every 0.8 s per grunt (several at once add up fast).
+3. A red-brown block (a closed door) closes the tunnel's east end; you cannot walk or shoot through it. Kill the grunts: the door disappears and `Doors closed` drops to 4.
+4. **Goblin camp**: grunts plus 3 purple squares (slingers, 110 HP) that keep their distance and throw orange rocks (2 damage). Clearing it opens **two** doors: north (optional side den) and east (`Doors closed: 2`).
+5. Optional: the **Side den** (4 grunts, 2 slingers). Clearing it opens nothing.
+6. **Ambush hall**: a first wave; when it dies a second, larger wave spawns, partly behind you near the entry.
+7. **Guard room**: 6 grunts and a line of 6 slingers. Clearing it opens the last door.
+8. Step into the **Warlord's throne** (empty until 6c): DUNGEON CLEARED with your stats.
+9. Dying anywhere shows the death screen. Pressing R anywhere returns to the menu.
+10. With two windows (queue within 5 s of each other): both see the same enemies and doors; a room wakes for both when either enters it.
+
+Report: how far you got, your HP when you died or finished, the clear time, whether it felt too hard or too easy (and where), and any console errors.
+
 ### Menu, queue, and run checklist (Phase 6a)
 
 Run `npm run dev` (restart it if it was running before 6a: protocol v4), open **two separate windows** at http://localhost:5173/, reload both with Ctrl+Shift+R.

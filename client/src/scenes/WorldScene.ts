@@ -1,7 +1,6 @@
 import * as Phaser from "phaser";
 import {
   consumeFixedSteps,
-  DUMMY_ENEMY,
   dungeonInfo,
   MAX_FRAME_SECONDS,
   NO_INPUT,
@@ -11,6 +10,7 @@ import {
   TICK_SECONDS,
   worldDirectionFromInput,
   type AimTarget,
+  type DungeonLayout,
   type FireMode,
   type Vec2,
 } from "@serfdom/shared";
@@ -27,8 +27,9 @@ import {
   type PointerInput,
 } from "../input";
 import { NetSync } from "../net-sync";
-import { GRID, PLAYER_SPRITE_SIZE } from "../render-config";
+import { PLAYER_SPRITE_SIZE } from "../render-config";
 import { CombatView, makeSquareTexture } from "./CombatView";
+import { MapView } from "./MapView";
 import { RemotePlayersView } from "./RemotePlayersView";
 
 const PLAYER_TEXTURE = "player-placeholder";
@@ -37,13 +38,7 @@ const PLAYER_HIT_TEXTURE = "player-placeholder-hit";
 const PLAYER_HIT_FLASH_MS = 100;
 
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
-// The void beyond the map is the game background color set in main.ts.
 const COLORS = {
-  floor: 0x1d2129,
-  gridMinor: 0x2c3340,
-  gridMajor: 0x46505f,
-  wall: 0x6b5b4b,
-  wallEdge: 0x9c8670,
   visibilityTarget: 0x5cb85c,
   player: 0xf0c419,
   playerMark: 0x1d2129,
@@ -51,11 +46,8 @@ const COLORS = {
   viewportCenter: 0x5bc0de,
 } as const;
 
-/**
- * The map being drawn and collided against. Phase 6a has one dungeon, so
- * one map; 6b gives each dungeon its own.
- */
-const MAP = dungeonInfo("goblin-warrens").layout;
+/** Drawn behind the menu screens, outside any run. */
+const MENU_MAP = dungeonInfo("goblin-warrens").layout;
 
 /** What the scene knows about the player this browser controls. */
 export interface LocalView {
@@ -114,10 +106,13 @@ const NO_KEYS: KeyState = {
  */
 export class WorldScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Image;
+  /** Map underneath, then the world (enemies, players, shots) on top. */
+  private mapLayer!: Phaser.GameObjects.Layer;
   private world!: Phaser.GameObjects.Layer;
+  private map!: MapView;
   private combat!: CombatView;
   private remotes!: RemotePlayersView;
-  readonly net = new NetSync(MAP.walls);
+  readonly net = new NetSync();
   private readKeys: () => KeyState = () => NO_KEYS;
   private readPointer: () => PointerInput = () => ({
     screen: null,
@@ -139,10 +134,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.mapLayer = this.add.layer();
     this.world = this.add.layer();
-    this.drawFloorAndGrid();
-    this.drawWalls();
-    this.combat = new CombatView(this, this.world, DUMMY_ENEMY.size);
+    this.map = new MapView(this, this.mapLayer);
+    this.map.show(MENU_MAP);
+    this.combat = new CombatView(this, this.world);
     this.remotes = new RemotePlayersView(this, this.world, PLAYER_SPRITE_SIZE);
     makeSquareTexture(
       this,
@@ -158,7 +154,11 @@ export class WorldScene extends Phaser.Scene {
       COLORS.playerHit,
       COLORS.playerMark,
     );
-    this.player = this.add.image(MAP.spawn.x, MAP.spawn.y, PLAYER_TEXTURE);
+    this.player = this.add.image(
+      MENU_MAP.spawn.x,
+      MENU_MAP.spawn.y,
+      PLAYER_TEXTURE,
+    );
     this.world.add(this.player);
     const overlay = this.drawScreenOverlay();
     this.readKeys = createKeyReader(this);
@@ -169,7 +169,7 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.setZoom(1).ignore(overlay);
     this.cameras
       .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
-      .ignore(this.world);
+      .ignore([this.mapLayer, this.world]);
     this.lastLocalHp = this.localView().hp;
     this.syncView(0);
   }
@@ -264,7 +264,9 @@ export class WorldScene extends Phaser.Scene {
 
   /** Our position (predicted) and HP (from the server); outside a run, the spawn and 0 HP. */
   private localView(): LocalView {
-    if (!this.net.online) return { position: MAP.spawn, hp: 0, maxHp: 0 };
+    if (!this.net.online) {
+      return { position: this.currentLayout().spawn, hp: 0, maxHp: 0 };
+    }
     const self = this.net.selfState;
     return {
       position: this.net.position,
@@ -302,6 +304,8 @@ export class WorldScene extends Phaser.Scene {
       );
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
 
+    this.map.show(this.currentLayout());
+    this.map.syncDoors(this.net.closedDoors);
     this.lastView = this.net.viewModel(performance.now());
     this.combat.sync(this.lastView, this.viewRotation, nowMs);
     this.remotes.sync(
@@ -315,49 +319,10 @@ export class WorldScene extends Phaser.Scene {
     return { x: Math.round(p.x), y: Math.round(p.y) };
   }
 
-  private drawFloorAndGrid(): void {
-    const g = this.add.graphics();
-    this.world.add(g);
-    g.fillStyle(COLORS.floor);
-    g.fillRect(0, 0, MAP.world.width, MAP.world.height);
-
-    for (let x = 0; x <= MAP.world.width; x += GRID.minor) {
-      g.lineStyle(
-        1,
-        x % GRID.major === 0 ? COLORS.gridMajor : COLORS.gridMinor,
-      );
-      g.lineBetween(x, 0, x, MAP.world.height);
-    }
-    for (let y = 0; y <= MAP.world.height; y += GRID.minor) {
-      g.lineStyle(
-        1,
-        y % GRID.major === 0 ? COLORS.gridMajor : COLORS.gridMinor,
-      );
-      g.lineBetween(0, y, MAP.world.width, y);
-    }
-
-    // Absolute world coordinates, so positions in the HUD can be matched to the map.
-    const style = {
-      fontFamily: "monospace",
-      fontSize: "10px",
-      color: "#8a94a6",
-    };
-    for (let x = 0; x <= MAP.world.width; x += GRID.label) {
-      for (let y = 0; y <= MAP.world.height; y += GRID.label) {
-        this.world.add(this.add.text(x + 2, y + 2, `${x},${y}`, style));
-      }
-    }
-  }
-
-  private drawWalls(): void {
-    const g = this.add.graphics();
-    this.world.add(g);
-    for (const wall of MAP.walls) {
-      g.fillStyle(COLORS.wall);
-      g.fillRect(wall.x, wall.y, wall.width, wall.height);
-      g.lineStyle(1, COLORS.wallEdge);
-      g.strokeRect(wall.x + 0.5, wall.y + 0.5, wall.width - 1, wall.height - 1);
-    }
+  /** The current run's dungeon, or the menu backdrop outside a run. */
+  private currentLayout(): DungeonLayout {
+    const id = this.net.dungeon;
+    return id ? dungeonInfo(id).layout : MENU_MAP;
   }
 
   /**

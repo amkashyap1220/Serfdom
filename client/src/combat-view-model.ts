@@ -1,9 +1,12 @@
+import type { EnemyKind } from "@serfdom/shared";
+
 /**
  * What the combat renderer draws: the server's snapshots plus local
  * prediction (NetSync.viewModel), kept separate from the network types.
  */
 export interface EnemyView {
   id: number;
+  kind: EnemyKind;
   x: number;
   y: number;
   size: number;

@@ -1,6 +1,6 @@
 import {
-  DUNGEONS,
   dungeonInfo,
+  LISTED_DUNGEONS,
   MAX_PARTY_SIZE,
   type DungeonId,
 } from "@serfdom/shared";
@@ -128,7 +128,7 @@ export class ScreenView {
     if (current?.comingIn) {
       body.append(el("p", "hint", `Coming in ${current.comingIn}.`));
     } else {
-      for (const d of DUNGEONS) {
+      for (const d of LISTED_DUNGEONS) {
         const card = el("div", "dungeon-card");
         card.append(
           el("h2", "", d.name),
@@ -224,8 +224,8 @@ export class ScreenView {
     if (!screen || e.repeat || e.target instanceof HTMLButtonElement) return;
     if (e.key === "Enter") {
       if (screen.kind === "menu" && screen.tab === "dungeons") {
-        const first = DUNGEONS[0];
-        this.actions.queue(first.id);
+        const first = LISTED_DUNGEONS[0];
+        if (first) this.actions.queue(first.id);
       } else if (screen.kind === "results" && screen.result === "completed") {
         this.actions.queue(screen.dungeon);
       } else if (

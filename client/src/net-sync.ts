@@ -1,6 +1,9 @@
 import {
+  blockingWalls,
   boxAround,
+  dungeonInfo,
   TICK_SECONDS,
+  type DungeonId,
   type PlayerInput,
   type Rect,
   type SnapshotEnemy,
@@ -39,7 +42,9 @@ export class NetSync {
   private predictorId: number | null = null;
   private readonly remotes = new RemoteInterpolator();
   private readonly shots = new LocalShots();
-  private readonly walls: readonly Rect[];
+  /** Static walls of the current dungeon plus its closed doors. */
+  private walls: readonly Rect[] = [];
+  private currentDungeon: DungeonId | null = null;
   private latest: { snapshot: SnapshotMessage; receivedAtMs: number } | null =
     null;
   private self: SnapshotPlayer | null = null;
@@ -53,8 +58,7 @@ export class NetSync {
   lastSnapshotBytes = 0;
   private bytesWindow: { atMs: number; bytes: number }[] = [];
 
-  constructor(walls: readonly Rect[]) {
-    this.walls = walls;
+  constructor() {
     this.connection = new Connection({
       onSnapshot: (s, t, bytes) => this.onSnapshot(s, t, bytes),
       onDisconnect: (reason) => {
@@ -63,7 +67,16 @@ export class NetSync {
       },
       onConnected: () => this.onConnected(),
       onLobby: (message, at) => {
-        if (message.type === "runStarted") this.resetRun(true);
+        if (message.type === "runStarted") {
+          this.resetRun(true);
+          this.currentDungeon = message.dungeon;
+          // Until the first snapshot says otherwise, every door is closed.
+          const layout = dungeonInfo(message.dungeon).layout;
+          this.walls = blockingWalls(
+            layout,
+            layout.doors.map((d) => d.id),
+          );
+        }
         if (message.type === "runEnded") this.resetRun(false);
         this.onLobby(message, at);
       },
@@ -107,6 +120,15 @@ export class NetSync {
   /** Our authoritative HP etc. from the latest snapshot. */
   get selfState(): SnapshotPlayer | null {
     return this.self;
+  }
+
+  /** The dungeon of the current run, or null outside a run. */
+  get dungeon(): DungeonId | null {
+    return this.inRun ? this.currentDungeon : null;
+  }
+
+  get closedDoors(): readonly string[] {
+    return this.latest?.snapshot.closedDoors ?? [];
   }
 
   get enemies(): readonly SnapshotEnemy[] {
@@ -187,6 +209,14 @@ export class NetSync {
     const status = this.connection.snapshot.status;
     if (status.kind !== "connected" || !this.inRun) return;
     this.latest = { snapshot, receivedAtMs };
+    if (this.currentDungeon) {
+      // Doors open during a run: predict against what the server says now.
+      this.walls = blockingWalls(
+        dungeonInfo(this.currentDungeon).layout,
+        snapshot.closedDoors,
+      );
+      this.predictor?.setWalls(this.walls);
+    }
     this.lastSnapshotBytes = bytes;
     this.bytesWindow.push({ atMs: receivedAtMs, bytes });
     while (

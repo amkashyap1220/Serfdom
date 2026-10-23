@@ -1,14 +1,16 @@
 import { boxAround } from "./collision.ts";
 import {
   DUMMY_ENEMY,
-  ENEMY_RING_ATTACK,
   PLAYER_HEALTH,
+  PLAYER_REGEN,
   PLAYER_WEAPON,
 } from "./combat-config.ts";
+import { enemyAct } from "./enemy-ai.ts";
+import type { EnemyKind } from "./enemy-config.ts";
 import {
   damageEnemy,
   isAlive,
-  ringDirections,
+  newEnemy,
   scaleEnemyForParty,
   stepRespawn,
   type EnemyState,
@@ -51,6 +53,14 @@ export interface SimState {
   enemies: readonly EnemyState[];
   projectiles: readonly Projectile[];
   nextProjectileId: number;
+  nextEnemyId: number;
+}
+
+/** An enemy to add to the simulation (dungeon room waves). */
+export interface EnemySpawn {
+  kind: EnemyKind;
+  at: Vec2;
+  roomId: string | null;
 }
 
 /** One tick of a player's intent: where to move and whether/where to fire. */
@@ -100,23 +110,31 @@ export function createSimState(
     options.respawnSeconds === undefined
       ? DUMMY_ENEMY.respawnSeconds
       : options.respawnSeconds;
-  return {
+  const empty: SimState = {
     players: [],
-    enemies: enemyPositions.map((position, i) => ({
-      id: i + 1,
-      position: { ...position },
-      size: DUMMY_ENEMY.size,
-      hp: DUMMY_ENEMY.maxHp,
-      maxHp: DUMMY_ENEMY.maxHp,
-      baseMaxHp: DUMMY_ENEMY.maxHp,
-      scaledFor: 1,
-      respawnIn: 0,
-      respawnSeconds,
-      attackCooldown: 0,
-    })),
+    enemies: [],
     projectiles: [],
     nextProjectileId: 1,
+    nextEnemyId: 1,
   };
+  return spawnEnemies(
+    empty,
+    enemyPositions.map((at) => ({ kind: "dummy", at, roomId: null })),
+    respawnSeconds,
+  );
+}
+
+/** Adds enemies at full (solo) HP; they rescale for the party on the next world tick. */
+export function spawnEnemies(
+  state: SimState,
+  spawns: readonly EnemySpawn[],
+  respawnSeconds: number | null = null,
+): SimState {
+  let nextEnemyId = state.nextEnemyId;
+  const added = spawns.map((s) =>
+    newEnemy(nextEnemyId++, s.kind, s.at, s.roomId, respawnSeconds),
+  );
+  return { ...state, enemies: [...state.enemies, ...added], nextEnemyId };
 }
 
 export function newPlayer(id: number, spawn: Vec2): PlayerState {
@@ -225,12 +243,15 @@ export function applyPlayerInput(
 
 /**
  * One world tick, in order:
+ * 0. Living players regenerate HP (D-056), capped at max HP.
  * 1. Rescale enemy HP for the number of living players (D-045).
- * 2. Enemies with a living player within aggro range fire a ring.
+ * 2. Each enemy acts by kind (enemy-ai.ts): moves, fires, or lands a
+ *    contact hit on a living player.
  * 3. Projectiles move and resolve hits (player shots → enemies; enemy
  *    bullets → any living player's 15×15 hurtbox at their server position,
  *    D-044).
- * 4. Enemy respawn timers.
+ * 4. Enemy respawn timers. Defeated enemies that never respawn (dungeons)
+ *    are removed, so snapshots do not grow with the dead.
  * A player reaching 0 HP stays in the state as dead until removed or reset
  * (D-046); only the caller decides what "back to the menu" means.
  */
@@ -240,51 +261,46 @@ export function stepWorld(
   dtSeconds: number,
 ): { state: SimState; events: SimEvent[] } {
   const events: SimEvent[] = [];
-  let players = [...state.players];
+  let players = state.players.map((p) => regenerate(p, dtSeconds));
   const alivePlayers = () => players.filter(isPlayerAlive);
   const partySize = alivePlayers().length;
   let enemies = state.enemies.map((e) => scaleEnemyForParty(e, partySize));
   const projectiles = [...state.projectiles];
   let nextId = state.nextProjectileId;
 
-  // 2. Enemy ring attacks.
+  // 2. Enemies act. Living players are re-read for each enemy, so a
+  // player killed by one enemy is not targeted by the next.
   enemies = enemies.map((enemy) => {
-    const inRange =
-      isAlive(enemy) &&
-      alivePlayers().some(
-        (p) =>
-          Math.hypot(
-            p.position.x - enemy.position.x,
-            p.position.y - enemy.position.y,
-          ) <= ENEMY_RING_ATTACK.aggroRange,
-      );
-    const attack = stepFireCooldown(
-      enemy.attackCooldown,
-      dtSeconds,
-      inRange,
-      1 / ENEMY_RING_ATTACK.intervalSeconds,
-    );
-    if (attack.fired) {
-      for (const direction of ringDirections(ENEMY_RING_ATTACK.bullets)) {
-        projectiles.push({
-          id: nextId++,
-          owner: "enemy",
-          ownerId: enemy.id,
-          position: { ...enemy.position },
-          direction,
-          speed: ENEMY_RING_ATTACK.speed,
-          remaining: ENEMY_RING_ATTACK.range,
-          damage: ENEMY_RING_ATTACK.damage,
-          size: ENEMY_RING_ATTACK.size,
-        });
-      }
+    const action = enemyAct(enemy, alivePlayers(), walls, dtSeconds);
+    for (const { direction, spec } of action.bullets) {
+      projectiles.push({
+        id: nextId++,
+        owner: "enemy",
+        ownerId: enemy.id,
+        position: { ...action.enemy.position },
+        direction,
+        speed: spec.speed,
+        remaining: spec.range,
+        damage: spec.damage,
+        size: spec.size,
+      });
+    }
+    if (action.bullets.length > 0) {
       events.push({
         type: "enemyAttack",
         enemyId: enemy.id,
-        bullets: ENEMY_RING_ATTACK.bullets,
+        bullets: action.bullets.length,
       });
     }
-    return { ...enemy, attackCooldown: attack.remaining };
+    if (action.contact) {
+      const { playerId, damage } = action.contact;
+      players = players.map((pl) =>
+        pl.id === playerId
+          ? damagePlayer(pl, enemy.id, damage, pl.position, events)
+          : pl,
+      );
+    }
+    return action.enemy;
   });
 
   // 3. Projectiles. Targets are rebuilt per projectile so anything defeated
@@ -302,19 +318,11 @@ export function stepWorld(
     } else if (outcome.kind === "blocked") {
       events.push({ type: "blocked", position: outcome.position });
     } else if (outcome.kind === "hit" && p.owner === "enemy") {
-      players = players.map((pl) => {
-        if (pl.id !== outcome.targetId) return pl;
-        const { hp, died } = applyDamage(pl.hp, p.damage);
-        events.push({
-          type: "playerHit",
-          playerId: pl.id,
-          enemyId: p.ownerId,
-          damage: p.damage,
-          position: outcome.position,
-        });
-        if (died) events.push({ type: "playerDied", playerId: pl.id });
-        return { ...pl, hp };
-      });
+      players = players.map((pl) =>
+        pl.id === outcome.targetId
+          ? damagePlayer(pl, p.ownerId, p.damage, outcome.position, events)
+          : pl,
+      );
     } else if (outcome.kind === "hit") {
       const i = enemies.findIndex((e) => e.id === outcome.targetId);
       const target = enemies[i];
@@ -338,15 +346,19 @@ export function stepWorld(
     }
   }
 
-  // 4. Enemy respawn timers.
-  enemies = enemies.map((enemy) => {
-    const result = stepRespawn(enemy, dtSeconds);
-    if (result.respawned) events.push({ type: "respawned", enemyId: enemy.id });
-    return result.enemy;
-  });
+  // 4. Enemy respawn timers; the permanently dead are dropped.
+  enemies = enemies
+    .filter((enemy) => isAlive(enemy) || enemy.respawnSeconds !== null)
+    .map((enemy) => {
+      const result = stepRespawn(enemy, dtSeconds);
+      if (result.respawned)
+        events.push({ type: "respawned", enemyId: enemy.id });
+      return result.enemy;
+    });
 
   return {
     state: {
+      ...state,
       players,
       enemies,
       projectiles: surviving,
@@ -354,6 +366,37 @@ export function stepWorld(
     },
     events,
   };
+}
+
+/** Always-on regeneration (D-056); the dead do not regenerate. */
+function regenerate(player: PlayerState, dtSeconds: number): PlayerState {
+  if (!isPlayerAlive(player) || player.hp >= player.maxHp) return player;
+  const hp = Math.min(
+    player.maxHp,
+    player.hp + PLAYER_REGEN.hpPerSecond * dtSeconds,
+  );
+  return { ...player, hp };
+}
+
+/** Applies an enemy's hit to a player, recording playerHit (and playerDied on the killing blow). */
+function damagePlayer(
+  player: PlayerState,
+  enemyId: number,
+  damage: number,
+  position: Vec2,
+  events: SimEvent[],
+): PlayerState {
+  if (!isPlayerAlive(player)) return player;
+  const { hp, died } = applyDamage(player.hp, damage);
+  events.push({
+    type: "playerHit",
+    playerId: player.id,
+    enemyId,
+    damage,
+    position,
+  });
+  if (died) events.push({ type: "playerDied", playerId: player.id });
+  return { ...player, hp };
 }
 
 /**

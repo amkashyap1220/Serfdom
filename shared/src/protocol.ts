@@ -1,4 +1,5 @@
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
+import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import {
   RUN_RESULTS,
@@ -22,8 +23,9 @@ import {
  * v4 (6a): menu → queue → dungeon run → results. - playAgain;
  *          + queue / leaveQueue / exitDungeon (client) and
  *          queueStatus / runStarted / runEnded (server).
+ * v5 (6b): snapshot enemies carry their kind; snapshots list closed doors.
  */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Largest client → server message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 1024;
@@ -72,6 +74,7 @@ export interface SnapshotPlayer {
 
 export interface SnapshotEnemy {
   id: number;
+  kind: EnemyKind;
   x: number;
   y: number;
   size: number;
@@ -125,6 +128,8 @@ export type ServerMessage =
       players: SnapshotPlayer[];
       enemies: SnapshotEnemy[];
       projectiles: SnapshotProjectile[];
+      /** Ids of doors still closed in this run's dungeon (they block movement and shots). */
+      closedDoors: string[];
     };
 
 export type ParseResult<T> =
@@ -268,10 +273,20 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "players",
           "enemies",
           "projectiles",
+          "closedDoors",
         ])
       ) {
         return fail("snapshot: unexpected fields");
       }
+      if (
+        !Array.isArray(obj.closedDoors) ||
+        !obj.closedDoors.every(
+          (d) => typeof d === "string" && d.length > 0 && d.length <= 64,
+        )
+      ) {
+        return fail("snapshot: closedDoors must be door ids");
+      }
+      const closedDoors = obj.closedDoors as string[];
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -287,6 +302,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           players,
           enemies,
           projectiles,
+          closedDoors: [...closedDoors],
         },
       };
     }
@@ -378,10 +394,20 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
 function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["id", "x", "y", "size", "hp", "maxHp", "respawnIn"])
+    !hasExactKeys(v, [
+      "id",
+      "kind",
+      "x",
+      "y",
+      "size",
+      "hp",
+      "maxHp",
+      "respawnIn",
+    ])
   ) {
     return null;
   }
+  if (!isEnemyKind(v.kind)) return null;
   if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
     return null;
   }
@@ -395,6 +421,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
   }
   return {
     id: v.id,
+    kind: v.kind,
     x: v.x,
     y: v.y,
     size: v.size,

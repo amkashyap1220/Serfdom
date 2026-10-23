@@ -306,6 +306,7 @@ describe("snapshot messages", () => {
   };
   const enemy = {
     id: 1,
+    kind: "dummy" as const,
     x: 1300,
     y: 1100,
     size: 16,
@@ -335,6 +336,7 @@ describe("snapshot messages", () => {
       ],
       enemies: [enemy],
       projectiles: [shot],
+      closedDoors: ["tunnel-camp"],
     };
     expect(parseServerMessage(encodeMessage(msg))).toEqual({
       ok: true,
@@ -351,6 +353,7 @@ describe("snapshot messages", () => {
           players: p,
           enemies: e,
           projectiles: pr,
+          closedDoors: [],
         }),
       ).ok;
     expect(snap([player])).toBe(true);
@@ -359,8 +362,28 @@ describe("snapshot messages", () => {
     expect(snap([{ ...player, ack: -2 }])).toBe(false);
     expect(snap([{ ...player, hp: -5 }])).toBe(false);
     expect(snap([], [{ ...enemy, hp: "1" }])).toBe(false);
+    expect(snap([], [{ ...enemy, kind: "dragon" }])).toBe(false);
+    expect(snap([], [{ ...enemy, kind: undefined }])).toBe(false);
     expect(snap([], [], [{ ...shot, owner: "boss" }])).toBe(false);
     expect(snap([], [], [{ ...shot, damage: 9999 }])).toBe(false);
+  });
+
+  it("rejects closedDoors that are not a list of door ids", () => {
+    const base = {
+      type: "snapshot",
+      tick: 1,
+      players: [],
+      enemies: [],
+      projectiles: [],
+    };
+    const ok = (closedDoors: unknown) =>
+      parseServerMessage(JSON.stringify({ ...base, closedDoors })).ok;
+    expect(ok(["a", "b"])).toBe(true);
+    expect(ok("a")).toBe(false);
+    expect(ok([1])).toBe(false);
+    expect(ok([""])).toBe(false);
+    expect(ok(["x".repeat(65)])).toBe(false);
+    expect(parseServerMessage(JSON.stringify(base)).ok).toBe(false);
   });
 
   it("roundCoord keeps two decimals", () => {

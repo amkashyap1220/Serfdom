@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ENEMY_RING_ATTACK, PLAYER_HEALTH } from "./combat-config.ts";
+import {
+  ENEMY_RING_ATTACK,
+  PLAYER_HEALTH,
+  PLAYER_REGEN,
+} from "./combat-config.ts";
 import { ringDirections } from "./enemy.ts";
 import { applyDamage } from "./health.ts";
 import { TICK_SECONDS } from "./movement-config.ts";
@@ -117,15 +121,20 @@ describe("enemy ring attack", () => {
     expect(count(runWorld(s, 121).events, "enemyAttack")).toBe(2);
   });
 
-  it("hits the player in its path for 20", () => {
+  it("hits the player in its path for the ring's damage", () => {
     const s = withPlayers([{ x: 100, y: 0 }], [[1, { x: 0, y: 0 }]]);
-    const { state, events } = runWorld(s, 60);
-    expect(events).toContainEqual(
-      expect.objectContaining({ type: "playerHit", playerId: 1, damage: 20 }),
-    );
-    expect(findPlayer(state, 1)?.hp).toBe(
-      PLAYER_HEALTH.maxHp - ENEMY_RING_ATTACK.damage,
-    );
+    const ticks = 60;
+    const { state, events } = runWorld(s, ticks);
+    const hitAt = events.findIndex((e) => e.type === "playerHit");
+    expect(events[hitAt]).toMatchObject({
+      type: "playerHit",
+      playerId: 1,
+      damage: ENEMY_RING_ATTACK.damage,
+    });
+    // Down by the hit, then regenerating since (D-056).
+    const hp = findPlayer(state, 1)!.hp;
+    expect(hp).toBeLessThan(PLAYER_HEALTH.maxHp);
+    expect(hp).toBeGreaterThan(PLAYER_HEALTH.maxHp - ENEMY_RING_ATTACK.damage);
   });
 
   it("hits whichever player stands in a bullet's path", () => {
@@ -138,13 +147,16 @@ describe("enemy ring attack", () => {
       ],
     );
     const { state } = runWorld(s, 60);
-    expect(findPlayer(state, 2)?.hp).toBe(180);
+    expect(findPlayer(state, 2)!.hp).toBeLessThan(PLAYER_HEALTH.maxHp);
+    expect(findPlayer(state, 1)?.hp).toBe(PLAYER_HEALTH.maxHp);
   });
 
   it("is stopped by walls", () => {
     const s = withPlayers([{ x: 100, y: 0 }], [[1, { x: 0, y: 0 }]]);
     const wall = { x: 40, y: -50, width: 10, height: 100 };
-    expect(findPlayer(runWorld(s, 60, [wall]).state, 1)?.hp).toBe(200);
+    expect(findPlayer(runWorld(s, 60, [wall]).state, 1)?.hp).toBe(
+      PLAYER_HEALTH.maxHp,
+    );
   });
 });
 
@@ -164,7 +176,7 @@ describe("player hurtbox is 15×15, smaller than the 16×16 sprite (D-038)", () 
           direction: { x: -1, y: 0 },
           speed: ENEMY_RING_ATTACK.speed,
           remaining: 200,
-          damage: 20,
+          damage: ENEMY_RING_ATTACK.damage,
           size: ENEMY_RING_ATTACK.size,
         },
       ],
@@ -178,6 +190,37 @@ describe("player hurtbox is 15×15, smaller than the 16×16 sprite (D-038)", () 
 
   it("misses at 10.6 px, which a full 16×16 box (edge 11.0) would still hit", () => {
     expect(hitAtOffset(10.6)).toBe(false);
+  });
+});
+
+describe("health regeneration (D-056)", () => {
+  it("regenerates the base rate per second, always on, capped at max HP", () => {
+    let s = withPlayers([], [[1, { x: 0, y: 0 }]]);
+    s = { ...s, players: s.players.map((p) => ({ ...p, hp: 10 })) };
+    const oneSecond = runWorld(s, 60).state;
+    expect(findPlayer(oneSecond, 1)!.hp).toBeCloseTo(
+      10 + PLAYER_REGEN.hpPerSecond,
+      9,
+    );
+    // Full from 10 HP after 20 s at 0.5/s, and never above max.
+    const long = runWorld(s, 60 * 30).state;
+    expect(findPlayer(long, 1)?.hp).toBe(PLAYER_HEALTH.maxHp);
+  });
+
+  it("keeps regenerating while under fire", () => {
+    // Standing in ring lines: hits keep coming, but HP still rises between them.
+    const s = withPlayers([{ x: 100, y: 0 }], [[1, { x: 0, y: 0 }]]);
+    const afterHit = runWorld(s, 50).state;
+    const later = runWorld(afterHit, 30).state;
+    expect(findPlayer(later, 1)!.hp).toBeGreaterThan(
+      findPlayer(afterHit, 1)!.hp,
+    );
+  });
+
+  it("does not bring the dead back", () => {
+    let s = withPlayers([], [[1, { x: 0, y: 0 }]]);
+    s = { ...s, players: s.players.map((p) => ({ ...p, hp: 0 })) };
+    expect(findPlayer(runWorld(s, 600).state, 1)?.hp).toBe(0);
   });
 });
 
@@ -201,8 +244,10 @@ describe("death (D-046 prototype)", () => {
       ],
     );
 
+  // Each ring costs 2 HP and regen gives 1 back over its 2 s, so a 20 HP
+  // Serf lasts about 19 rings; allow plenty.
   function untilDeath(s: SimState): SimState {
-    for (let i = 0; i < RING_TICKS * 12; i++) {
+    for (let i = 0; i < RING_TICKS * 40; i++) {
       const r = stepWorld(s, [], TICK_SECONDS);
       s = r.state;
       if (r.events.some((e) => e.type === "playerDied" && e.playerId === 1)) {
@@ -212,7 +257,7 @@ describe("death (D-046 prototype)", () => {
     throw new Error("player 1 never died");
   }
 
-  it("dies after 10 hits of 20 (200 HP) and stays dead (no auto respawn)", () => {
+  it("dies from repeated hits despite regen, and stays dead (no auto respawn)", () => {
     const dead = untilDeath(close());
     expect(findPlayer(dead, 1)?.hp).toBe(0);
     expect(findPlayer(runWorld(dead, 600).state, 1)?.hp).toBe(0);

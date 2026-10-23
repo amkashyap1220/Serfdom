@@ -39,7 +39,7 @@ export class PlayerPredictor {
   private me: PlayerState;
   private pending: PendingInput[] = [];
   private nextSeq = 0;
-  private readonly walls: readonly Rect[];
+  private walls: readonly Rect[];
   /** Distance the last reconciliation moved the player (0 = prediction was exact). */
   lastCorrection = 0;
 
@@ -56,6 +56,11 @@ export class PlayerPredictor {
 
   get position(): Vec2 {
     return this.me.position;
+  }
+
+  /** Walls to collide with from now on (closed doors open during a run). */
+  setWalls(walls: readonly Rect[]): void {
+    this.walls = walls;
   }
 
   get pendingCount(): number {
@@ -101,6 +106,7 @@ export class PlayerPredictor {
       enemies: [],
       projectiles: [],
       nextProjectileId: 1,
+      nextEnemyId: 1,
     };
     const r = applyPlayerInput(solo, from.id, input, this.walls, TICK_SECONDS);
     return {

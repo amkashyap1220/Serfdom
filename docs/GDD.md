@@ -183,6 +183,8 @@ Prior meanings:
 
 These names and roles are prior design material; confirm any change against the latest decisions. Exact formulas, caps, class growth, and potion effects remain unresolved.
 
+Confirmed starting values: a level-1 Serf has **20 HP** (D-055) and regenerates **0.5 HP/s**, always on (D-056). Dungeon difficulty is balanced for a fresh level-1 Serf (D-054).
+
 ## 7. Death and account persistence
 
 ### Confirmed direction

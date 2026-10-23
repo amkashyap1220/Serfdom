@@ -1,9 +1,17 @@
+import {
+  ENEMY_STATS,
+  FIRST_ATTACK_DELAY,
+  type EnemyKind,
+} from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
 import { rescaleHp, scaledMaxHp } from "./party-scaling.ts";
 
 export interface EnemyState {
   id: number;
+  kind: EnemyKind;
+  /** Dungeon room it belongs to (counts toward clearing that room), or null. */
+  roomId: string | null;
   position: Vec2;
   /** Square hit box size. */
   size: number;
@@ -20,6 +28,31 @@ export interface EnemyState {
   respawnSeconds: number | null;
   /** Seconds until its next attack is allowed. */
   attackCooldown: number;
+}
+
+/** A fresh enemy of `kind` at full (solo) HP. */
+export function newEnemy(
+  id: number,
+  kind: EnemyKind,
+  position: Vec2,
+  roomId: string | null,
+  respawnSeconds: number | null,
+): EnemyState {
+  const { maxHp, size } = ENEMY_STATS[kind];
+  return {
+    id,
+    kind,
+    roomId,
+    position: { ...position },
+    size,
+    hp: maxHp,
+    maxHp,
+    baseMaxHp: maxHp,
+    scaledFor: 1,
+    respawnIn: 0,
+    respawnSeconds,
+    attackCooldown: FIRST_ATTACK_DELAY[kind],
+  };
 }
 
 export function isAlive(enemy: EnemyState): boolean {

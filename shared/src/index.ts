@@ -19,6 +19,7 @@ export {
   DUMMY_ENEMY,
   ENEMY_RING_ATTACK,
   PLAYER_HEALTH,
+  PLAYER_REGEN,
   PLAYER_WEAPON,
 } from "./combat-config.ts";
 export { applyDamage } from "./health.ts";
@@ -43,8 +44,19 @@ export {
   type PointerState,
 } from "./weapon.ts";
 export {
+  DUMMY,
+  ENEMY_KINDS,
+  ENEMY_STATS,
+  GRUNT,
+  isEnemyKind,
+  SLINGER,
+  type EnemyKind,
+} from "./enemy-config.ts";
+export { enemyAct, overlaps, toward, type AiTarget } from "./enemy-ai.ts";
+export {
   damageEnemy,
   isAlive,
+  newEnemy,
   ringDirections,
   scaleEnemyForParty,
   stepRespawn,
@@ -54,11 +66,34 @@ export {
   dungeonInfo,
   DUNGEONS,
   isDungeonId,
+  LISTED_DUNGEONS,
   MAX_PARTY_SIZE,
   type DungeonId,
   type DungeonInfo,
-  type DungeonLayout,
 } from "./dungeons.ts";
+export {
+  contains,
+  roomAt,
+  validateLayout,
+  wallsAroundRooms,
+  WALL_THICKNESS,
+  type DoorDef,
+  type DungeonLayout,
+  type EnemySpawnDef,
+  type RoomDef,
+} from "./dungeon-layout.ts";
+export {
+  blockingWalls,
+  closedDoorIds,
+  isRunComplete,
+  newRunProgress,
+  stepRooms,
+  type RoomEvent,
+  type RoomProgress,
+  type RoomStatus,
+  type RunProgress,
+} from "./dungeon-run.ts";
+export { GOBLIN_WARRENS } from "./goblin-warrens.ts";
 export {
   newRunStats,
   recordRunEvents,
@@ -75,8 +110,10 @@ export {
   isPlayerAlive,
   newPlayer,
   removePlayer,
+  spawnEnemies,
   stepSim,
   stepWorld,
+  type EnemySpawn,
   type PlayerInput,
   type PlayerState,
   type SimEvent,

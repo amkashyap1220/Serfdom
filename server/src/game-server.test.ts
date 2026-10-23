@@ -1,7 +1,9 @@
 import {
   encodeMessage,
   MAX_MESSAGE_BYTES,
+  ENEMY_RING_ATTACK,
   MAX_PARTY_SIZE,
+  PLAYER_HEALTH,
   parseServerMessage,
   PROTOCOL_VERSION,
   type ServerMessage,
@@ -249,7 +251,8 @@ const input = (
     fire: { trigger: aim !== null, aim },
   });
 
-const GW = "goblin-warrens";
+/** The one-room debug map with its dummy (deterministic test fixture). */
+const GW = "training";
 const ids = (from: number, count: number) =>
   Array.from({ length: count }, (_, i) => from + i);
 const queue = encodeMessage({ type: "queue", dungeon: GW });
@@ -349,7 +352,13 @@ describe("menu and queue (6a)", () => {
     });
     const snap = await nextOfType(client, "snapshot");
     expect(snap.players).toEqual([
-      expect.objectContaining({ id: 1, x: 1000, y: 1000, ack: -1, hp: 200 }),
+      expect.objectContaining({
+        id: 1,
+        x: 1000,
+        y: 1000,
+        ack: -1,
+        hp: PLAYER_HEALTH.maxHp,
+      }),
     ]);
   });
 
@@ -457,7 +466,7 @@ describe("menu and queue (6a)", () => {
     // The joiner starts fresh at the spawn; enemies rescale for two.
     expect(playerOf(2)).toMatchObject({
       position: { x: 1000, y: 1000 },
-      hp: 200,
+      hp: PLAYER_HEALTH.maxHp,
     });
     server.tick();
     expect(dummy().maxHp).toBe(875);
@@ -647,7 +656,11 @@ describe("shared combat on the server (5b)", () => {
     let snap = await nextOfType(client!, "snapshot");
     while (snap.projectiles.length === 0)
       snap = await nextOfType(client!, "snapshot");
-    expect(snap.players[0]).toMatchObject({ id: 1, hp: 200, maxHp: 200 });
+    expect(snap.players[0]).toMatchObject({
+      id: 1,
+      hp: PLAYER_HEALTH.maxHp,
+      maxHp: PLAYER_HEALTH.maxHp,
+    });
     expect(snap.players[0]!.cooldown).toBeGreaterThan(0);
     expect(snap.enemies[0]).toMatchObject({
       id: 1,
@@ -681,12 +694,12 @@ describe("shared combat on the server (5b)", () => {
 describe("how runs end (6a)", () => {
   it("death ends the run at once with server-counted stats; survivors keep going (D-050)", async () => {
     const [a, b] = await inRun(2);
-    // 20 HP, standing directly west of the dummy: the next ring kills.
-    placePlayer(1, { x: 1250, y: 1100 }, 20);
+    // 1 HP (plus a little regen), directly west of the dummy: the next ring kills.
+    placePlayer(1, { x: 1250, y: 1100 }, 1);
     for (let t = 0; t < 120 && server.instanceOf(1); t++) server.tick();
     const ended = await nextOfType(a!, "runEnded");
     expect(ended).toMatchObject({ dungeon: GW, result: "died" });
-    expect(ended.stats.damageTaken).toBe(20);
+    expect(ended.stats.damageTaken).toBe(ENEMY_RING_ATTACK.damage);
     expect(ended.stats.seconds).toBeGreaterThan(0);
     // Player 2 is still in the run, and the dummy rescales for one player.
     server.tick();
@@ -742,7 +755,7 @@ describe("how runs end (6a)", () => {
     // A fresh run: back at the spawn with full HP, accepting seq 0 again.
     expect(playerOf(1)).toMatchObject({
       position: { x: 1000, y: 1000 },
-      hp: 200,
+      hp: PLAYER_HEALTH.maxHp,
     });
     await drive(a!, 1, 0, 1, null);
     expect(server.instanceOf(1)?.snapshotPlayers()[0]?.ack).toBe(0);
