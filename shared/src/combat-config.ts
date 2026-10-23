@@ -27,8 +27,6 @@ export const PLAYER_HEALTH = {
   maxHp: 200,
   /** Square box enemy projectiles can hit: 15×15, ½ px inset per side of the 16×16 sprite. */
   hurtboxSize: 15,
-  /** PROTOTYPE ONLY, not the final permadeath rule: seconds until respawn at the start. */
-  respawnSeconds: 2,
 } as const;
 
 /** Prototype enemy attack: a ring burst (user-chosen pattern and values, 2026-10-22). */

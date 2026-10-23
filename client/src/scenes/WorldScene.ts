@@ -6,6 +6,9 @@ import {
   TEST_WALLS,
   TEST_WORLD,
   isPlayerAlive,
+  addPlayer,
+  findPlayer,
+  type PlayerState,
   consumeFixedSteps,
   createSimState,
   DUMMY_ENEMY,
@@ -60,6 +63,7 @@ const COLORS = {
 
 export interface WorldDebugState {
   sim: SimState;
+  local: PlayerState;
   net: NetSync;
   remotesVisible: number;
   /** Position actually drawn and centered on (whole world pixels). */
@@ -86,8 +90,16 @@ interface Totals {
 
 const STILL: Vec2 = { x: 0, y: 0 };
 
+/** Id of this browser's player in its local sim. */
+const LOCAL_PLAYER_ID = 1;
+
 function withPlayerPosition(state: SimState, position: Vec2): SimState {
-  return { ...state, player: { ...state.player, position: { ...position } } };
+  return {
+    ...state,
+    players: state.players.map((p) =>
+      p.id === LOCAL_PLAYER_ID ? { ...p, position: { ...position } } : p,
+    ),
+  };
 }
 
 const NO_KEYS: KeyState = {
@@ -95,6 +107,7 @@ const NO_KEYS: KeyState = {
   rotate: { left: false, right: false, reset: false },
   toggleFireMode: false,
   ability: false,
+  playAgain: false,
 };
 
 /**
@@ -119,7 +132,11 @@ export class WorldScene extends Phaser.Scene {
     screen: null,
     leftDown: false,
   });
-  private sim: SimState = createSimState(PLAYER_START, DUMMY_POSITIONS);
+  private sim: SimState = addPlayer(
+    createSimState(DUMMY_POSITIONS),
+    LOCAL_PLAYER_ID,
+    PLAYER_START,
+  );
   private lastKeys: KeyState = NO_KEYS;
   private lastPointer: PointerInput = { screen: null, leftDown: false };
   private lastPointerWorld: Vec2 | null = null;
@@ -173,6 +190,7 @@ export class WorldScene extends Phaser.Scene {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#ffffff",
+        align: "center",
         backgroundColor: "#000000aa",
         padding: { x: 8, y: 4 },
       })
@@ -233,7 +251,7 @@ export class WorldScene extends Phaser.Scene {
       // given no movement of its own. Offline: local movement as before.
       const online = this.net.online;
       if (online) {
-        const alive = isPlayerAlive(this.sim.player);
+        const alive = isPlayerAlive(this.localPlayer());
         if (alive) this.net.tick(move);
         this.sim = withPlayerPosition(this.sim, this.net.predictor.position);
       }
@@ -241,30 +259,45 @@ export class WorldScene extends Phaser.Scene {
       const fire = resolveFireIntent(
         this.fireMode,
         { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
-        this.sim.player.position,
+        this.localPlayer().position,
         aimTargets(this.sim),
         PLAYER_WEAPON.range,
       );
       const result = stepSim(
         this.sim,
-        { move: online ? STILL : move, fire },
+        new Map([[LOCAL_PLAYER_ID, { move: online ? STILL : move, fire }]]),
         TEST_WALLS,
         TICK_SECONDS,
       );
-      // PROVISIONAL: online, the prototype respawn restores HP in place;
-      // only the server may move the player, so its teleport is ignored.
       this.sim = online
         ? withPlayerPosition(result.state, this.net.predictor.position)
         : result.state;
       events.push(...result.events);
     }
     this.countEvents(events);
+    // D-046 prototype: a dead player is at the placeholder "main menu";
+    // Enter plays again with a fresh state. (Online in 5a the server still
+    // owns position, so the fresh player starts where they are.)
+    if (this.lastKeys.playAgain && !isPlayerAlive(this.localPlayer())) {
+      const spawn = this.net.online
+        ? this.net.predictor.position
+        : PLAYER_START;
+      this.sim = addPlayer(this.sim, LOCAL_PLAYER_ID, spawn);
+    }
     this.syncView(events, time);
+  }
+
+  /** The player this browser controls (always present in the local sim). */
+  private localPlayer(): PlayerState {
+    const p = findPlayer(this.sim, LOCAL_PLAYER_ID);
+    if (!p) throw new Error("local player missing from sim");
+    return p;
   }
 
   getDebugState(): WorldDebugState {
     return {
       sim: this.sim,
+      local: this.localPlayer(),
       net: this.net,
       remotesVisible: this.remotes.count,
       renderPosition: this.renderPosition(),
@@ -302,7 +335,7 @@ export class WorldScene extends Phaser.Scene {
     if (events.some((e) => e.type === "playerHit")) {
       this.playerFlashUntil = nowMs + PLAYER_HIT_FLASH_MS;
     }
-    const alive = isPlayerAlive(this.sim.player);
+    const alive = isPlayerAlive(this.localPlayer());
     this.player
       .setPosition(x, y)
       .setRotation(-this.viewRotation)
@@ -310,12 +343,11 @@ export class WorldScene extends Phaser.Scene {
       .setTexture(
         nowMs < this.playerFlashUntil ? PLAYER_HIT_TEXTURE : PLAYER_TEXTURE,
       );
-    // PROTOTYPE ONLY: not the final permadeath rules.
+    // PROTOTYPE ONLY (D-046): placeholder for the real menu/stash and
+    // permadeath rules of later phases.
     this.deathText
       .setVisible(!alive)
-      .setText(
-        `You died — prototype respawn in ${this.sim.player.respawnIn.toFixed(1)}s`,
-      );
+      .setText("You died\nMain menu (placeholder)\nPress Enter to play again");
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
     this.combat.sync(this.sim, events, this.viewRotation, nowMs);
     this.remotes.sync(
@@ -325,7 +357,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private renderPosition(): Vec2 {
-    const p = this.sim.player.position;
+    const p = this.localPlayer().position;
     return { x: Math.round(p.x), y: Math.round(p.y) };
   }
 

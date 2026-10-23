@@ -74,6 +74,8 @@ Shared movement (Phase 4b): with two **separate windows** side by side (browsers
 
 Network delay (Phase 4c, D-042 target < 100 ms excluding network travel): Claude measures with two visible Chrome windows driven over the DevTools protocol (script kept outside the repo): (1) **steady lag** — while A walks at 150 px/s, distance between A's own position and where B draws A, divided by speed; (2) **first movement** — key press in A until B's drawing of A changes; (3) **path wobble** — dense samples of B's drawing of A over 1 s fitted to a straight line; (4) A's `Pending / correction` while moving. Latest results (localhost): steady lag 53–60 ms median, worst 70 ms; wobble ≈ 0.3 px; 0 corrections. By eye: the other window's square should trail only slightly and move evenly.
 
+Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a centered message reads "You died / Main menu (placeholder) / Press Enter to play again"; there is no automatic respawn. Enter returns with 200/200 HP (offline: at the start; online in 5a: where the server has you). The dummy is not reset. Party HP scaling (D-045) is covered by shared tests; it only becomes visible once combat is on the server (5b).
+
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests

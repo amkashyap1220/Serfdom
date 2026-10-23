@@ -9,6 +9,8 @@ export interface KeyState {
   toggleFireMode: boolean;
   /** Space held (ability, D-035; no effect yet). */
   ability: boolean;
+  /** Enter pressed this frame (play again from the placeholder menu, D-046). */
+  playAgain: boolean;
 }
 
 export interface PointerInput {
@@ -30,7 +32,8 @@ export function createKeyReader(scene: Phaser.Scene): () => KeyState {
   if (!keyboard) {
     throw new Error("Keyboard input is not available in this scene");
   }
-  const { W, A, S, D, Q, E, Z, T, SPACE } = Phaser.Input.Keyboard.KeyCodes;
+  const { W, A, S, D, Q, E, Z, T, SPACE, ENTER } =
+    Phaser.Input.Keyboard.KeyCodes;
   const key = (code: number) => keyboard.addKey(code);
   const up = key(W);
   const left = key(A);
@@ -41,6 +44,7 @@ export function createKeyReader(scene: Phaser.Scene): () => KeyState {
   const resetView = key(Z);
   const fireMode = key(T);
   const ability = key(SPACE);
+  const playAgain = key(ENTER);
 
   return () => ({
     move: {
@@ -57,6 +61,7 @@ export function createKeyReader(scene: Phaser.Scene): () => KeyState {
     // JustDown is true once per press, so holding T does not cycle repeatedly.
     toggleFireMode: Phaser.Input.Keyboard.JustDown(fireMode),
     ability: ability.isDown,
+    playAgain: Phaser.Input.Keyboard.JustDown(playAgain),
   });
 }
 

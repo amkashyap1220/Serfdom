@@ -46,19 +46,32 @@ export {
   damageEnemy,
   isAlive,
   ringDirections,
+  scaleEnemyForParty,
   stepRespawn,
   type EnemyState,
 } from "./enemy.ts";
 export {
+  addPlayer,
   aimTargets,
+  applyPlayerInput,
   createSimState,
+  findPlayer,
   isPlayerAlive,
+  newPlayer,
+  removePlayer,
   stepSim,
+  stepWorld,
+  type PlayerInput,
   type PlayerState,
   type SimEvent,
   type SimState,
-  type TickInput,
 } from "./sim.ts";
+export {
+  EXTRA_PLAYER_HP_FACTOR,
+  partyHpMultiplier,
+  rescaleHp,
+  scaledMaxHp,
+} from "./party-scaling.ts";
 export {
   encodeMessage,
   MAX_MESSAGE_BYTES,

@@ -134,3 +134,13 @@ Keep this concise and update it after each meaningful milestone.
 - Phase 4 acceptance: two clients connect ✅; each sees the other ✅; invalid messages rejected safely ✅ (server tests: malformed, unknown, binary, oversized, over-length direction, position-as-input, replayed seq, flood, protocol mismatch, hello timeout); disconnect cleans up ✅; server owns presence and positions ✅. Not yet tested: separate devices / a real network.
 - User manual test: delay acceptable; **very slight stuttering** of other players noticed and accepted for now ("it won't be perfectly smooth"). Known issue to revisit if it becomes noticeable in combat: likely snapshot-arrival jitter against the 50 ms buffer and whole-pixel rounding. Phase 4 complete.
 - Next step: Phase 5 — shared combat and enemies (needs decisions on how combat moves to the server).
+
+### Phase 5a — Multiplayer combat rules in shared/ — 2026-10-22
+
+- Decisions: D-043 (server decides hits; own shots predicted; fire rides in inputs), D-044 (enemy bullets vs server position; clients draw bullets at their current position), D-045 (HP × (1 + 0.75 × (players − 1)), fraction kept; PROVISIONAL), D-046 (death → placeholder menu, survivors continue). T-019 auto-respawn superseded.
+- Shared: `sim.ts` rewritten for N players with per-input player timeline (`applyPlayerInput`) and per-tick world (`stepWorld`); `party-scaling.ts`; enemies carry `baseMaxHp`/`scaledFor`; projectiles carry `ownerId`; hits/defeats credited to the shooter. 138 shared tests.
+- Client: uses the multiplayer state for its own player (id 1); auto-respawn replaced by the placeholder menu (Enter = play again).
+- Test-only fixes: two new tests had wrong geometry (a grazing shot; a survivor standing on a ring line), and one compared absolute HP where the rule keeps the HP _fraction_.
+- Checks: `npm run check` passed (138 shared, 31 server, 29 client). Live (visible Chrome on the user's servers): combat works, died after exactly 10 hits, stayed at the menu (no auto-respawn), Enter restored 200/200; no console errors.
+- User manual test passed. Slice 5a complete.
+- Next step: 5b (server runs combat, snapshots carry enemies/projectiles/HP, client predicts own shots).

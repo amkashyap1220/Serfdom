@@ -1,5 +1,6 @@
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
+import { rescaleHp, scaledMaxHp } from "./party-scaling.ts";
 
 export interface EnemyState {
   id: number;
@@ -7,7 +8,12 @@ export interface EnemyState {
   /** Square hit box size. */
   size: number;
   hp: number;
+  /** Current max HP, after party scaling. */
   maxHp: number;
+  /** Solo (1-player) max HP before party scaling. */
+  baseMaxHp: number;
+  /** Party size `maxHp` is currently scaled for. */
+  scaledFor: number;
   /** Seconds until it comes back; 0 while alive. */
   respawnIn: number;
   /** Seconds until its next attack is allowed. */
@@ -47,6 +53,22 @@ export function stepRespawn(
   return {
     enemy: { ...enemy, hp: enemy.maxHp, respawnIn: 0, attackCooldown: 0 },
     respawned: true,
+  };
+}
+
+/** Rescales max HP for a new party size, keeping the current HP fraction (D-045). */
+export function scaleEnemyForParty(
+  enemy: EnemyState,
+  players: number,
+): EnemyState {
+  const n = Math.max(1, players);
+  if (enemy.scaledFor === n) return enemy;
+  const maxHp = scaledMaxHp(enemy.baseMaxHp, n);
+  return {
+    ...enemy,
+    maxHp,
+    hp: rescaleHp(enemy.hp, enemy.maxHp, maxHp),
+    scaledFor: n,
   };
 }
 

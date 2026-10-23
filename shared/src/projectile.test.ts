@@ -5,6 +5,7 @@ function shot(overrides: Partial<Projectile> = {}): Projectile {
   return {
     id: 1,
     owner: "player",
+    ownerId: 1,
     position: { x: 0, y: 0 },
     direction: { x: 1, y: 0 },
     speed: 400,

@@ -80,6 +80,7 @@ function reportLive(game: Phaser.Game): void {
   const scene = worldScene(game);
   const {
     sim,
+    local,
     renderPosition,
     keys,
     pointer,
@@ -90,7 +91,7 @@ function reportLive(game: Phaser.Game): void {
     net,
     remotesVisible,
   } = scene.getDebugState();
-  const position = sim.player.position;
+  const position = local.position;
   const camera = scene.cameras.main;
   // Where the player is drawn inside the canvas (CSS pixels): the camera
   // rotates and zooms the world around its midpoint, which sits at the
@@ -164,9 +165,9 @@ function reportLive(game: Phaser.Game): void {
     ],
     [
       "Player HP",
-      sim.player.hp > 0
-        ? `${sim.player.hp}/${sim.player.maxHp}`
-        : `dead (respawn ${sim.player.respawnIn.toFixed(1)}s)`,
+      local.hp > 0
+        ? `${local.hp}/${local.maxHp}`
+        : "dead (Enter to play again)",
     ],
     ["Hits taken / deaths", `${totals.playerHits} / ${totals.deaths}`],
     ["Dummy HP", enemies],
