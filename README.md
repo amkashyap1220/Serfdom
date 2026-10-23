@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phases 0–4 are complete (setup, client skeleton, movement/camera, single-player combat prototype, authoritative multiplayer foundation): browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
+Phases 0–4 are complete (setup, client skeleton, movement/camera, single-player combat prototype, authoritative multiplayer foundation), and Phase 5 (shared combat) is in progress — the server now runs combat for everyone (5b): browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
 
 ## Development setup
 

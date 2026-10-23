@@ -10,35 +10,75 @@ import type { Vec2 } from "./geometry.ts";
  *
  * v1 (4a): hello / welcome / playerJoined / playerLeft / error.
  * v2 (4b): + input (client) and snapshot (server).
+ * v3 (5b): input carries fire intent; + playAgain; snapshots carry player
+ *          HP and fire cooldown, enemies, and projectiles.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Largest client → server message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 1024;
 
-/** Largest server → client message the client accepts (snapshots grow with player count). */
+/** Largest server → client message the client accepts (snapshots grow with players and projectiles). */
 export const MAX_SERVER_MESSAGE_BYTES = 65536;
 
-/** Slack when checking that a direction is at most unit length (JSON round-trips lose a little precision). */
+/** Slack for unit-length checks (JSON round-trips lose a little precision). */
 const UNIT_SLACK = 1e-6;
+
+/** Fire intent for one tick: whether to fire and a unit aim direction (null = no valid aim). */
+export interface FireInput {
+  trigger: boolean;
+  aim: Vec2 | null;
+}
 
 /** Client → server. */
 export type ClientMessage =
   | { type: "hello"; protocol: number }
   /**
-   * One simulation tick of movement intent. `seq` increases by one per
-   * input; `move` is a unit world direction or (0, 0). The client never
-   * says where it is, only where it wants to go.
+   * One tick of intent. `seq` increases by one per input; `move` is a unit
+   * world direction or (0, 0); `fire` says whether to shoot and where. The
+   * client never says where it is or what it hit, only what it wants to do.
    */
-  | { type: "input"; seq: number; move: Vec2 };
+  | { type: "input"; seq: number; move: Vec2; fire: FireInput }
+  /** Leave the placeholder death menu and start fresh (D-046). */
+  | { type: "playAgain" };
 
 /** One player's authoritative state in a snapshot. */
 export interface SnapshotPlayer {
   id: number;
+  /** Exact (not rounded): client prediction must match the server bit for bit. */
   x: number;
   y: number;
-  /** Last input seq the server has applied for this player (-1 if none yet). */
+  /** Last input seq the server has processed for this player (-1 if none yet). */
   ack: number;
+  hp: number;
+  maxHp: number;
+  /** Seconds until this player may fire again (needed to predict own shots exactly). */
+  cooldown: number;
+}
+
+export interface SnapshotEnemy {
+  id: number;
+  x: number;
+  y: number;
+  size: number;
+  hp: number;
+  maxHp: number;
+  respawnIn: number;
+}
+
+export interface SnapshotProjectile {
+  id: number;
+  owner: "player" | "enemy";
+  /** Id of the player or enemy that fired it. */
+  by: number;
+  /** Rounded to 0.01 px: only used for drawing. */
+  x: number;
+  y: number;
+  /** Unit direction of travel. */
+  dx: number;
+  dy: number;
+  speed: number;
+  size: number;
 }
 
 /** Server → client. */
@@ -47,7 +87,13 @@ export type ServerMessage =
   | { type: "playerJoined"; playerId: number }
   | { type: "playerLeft"; playerId: number }
   | { type: "error"; reason: string }
-  | { type: "snapshot"; tick: number; players: SnapshotPlayer[] };
+  | {
+      type: "snapshot";
+      tick: number;
+      players: SnapshotPlayer[];
+      enemies: SnapshotEnemy[];
+      projectiles: SnapshotProjectile[];
+    };
 
 export type ParseResult<T> =
   { ok: true; message: T } | { ok: false; error: string };
@@ -65,7 +111,7 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       }
       return { ok: true, message: { type: "hello", protocol: obj.protocol } };
     case "input": {
-      if (!hasExactKeys(obj, ["type", "seq", "move"])) {
+      if (!hasExactKeys(obj, ["type", "seq", "move", "fire"])) {
         return fail("input: unexpected fields");
       }
       if (!isNonNegativeInt(obj.seq)) {
@@ -76,8 +122,18 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       if (Math.hypot(move.x, move.y) > 1 + UNIT_SLACK) {
         return fail("input: move must have length <= 1");
       }
-      return { ok: true, message: { type: "input", seq: obj.seq, move } };
+      const fire = parseFire(obj.fire);
+      if (typeof fire === "string") return fail(`input: ${fire}`);
+      return {
+        ok: true,
+        message: { type: "input", seq: obj.seq, move, fire },
+      };
     }
+    case "playAgain":
+      if (!hasExactKeys(obj, ["type"])) {
+        return fail("playAgain: unexpected fields");
+      }
+      return { ok: true, message: { type: "playAgain" } };
     default:
       return fail(`unknown message type ${describe(obj.type)}`);
   }
@@ -119,22 +175,33 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       }
       return { ok: true, message: { type: "error", reason: obj.reason } };
     case "snapshot": {
-      if (!hasExactKeys(obj, ["type", "tick", "players"])) {
+      if (
+        !hasExactKeys(obj, [
+          "type",
+          "tick",
+          "players",
+          "enemies",
+          "projectiles",
+        ])
+      ) {
         return fail("snapshot: unexpected fields");
       }
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
-      if (!Array.isArray(obj.players)) {
-        return fail("snapshot: players must be an array");
-      }
-      const players: SnapshotPlayer[] = [];
-      for (const p of obj.players) {
-        const player = parseSnapshotPlayer(p);
-        if (!player) return fail("snapshot: bad player entry");
-        players.push(player);
-      }
+      const players = parseList(obj.players, parseSnapshotPlayer);
+      if (!players) return fail("snapshot: bad player entry");
+      const enemies = parseList(obj.enemies, parseSnapshotEnemy);
+      if (!enemies) return fail("snapshot: bad enemy entry");
+      const projectiles = parseList(obj.projectiles, parseSnapshotProjectile);
+      if (!projectiles) return fail("snapshot: bad projectile entry");
       return {
         ok: true,
-        message: { type: "snapshot", tick: obj.tick, players },
+        message: {
+          type: "snapshot",
+          tick: obj.tick,
+          players,
+          enemies,
+          projectiles,
+        },
       };
     }
     default:
@@ -146,8 +213,41 @@ export function encodeMessage(message: ClientMessage | ServerMessage): string {
   return JSON.stringify(message);
 }
 
+/** Rounds to 0.01 for projectile positions in snapshots (drawing only). */
+export function roundCoord(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+function parseFire(v: unknown): FireInput | string {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["trigger", "aim"])) {
+    return "fire must be {trigger, aim}";
+  }
+  if (typeof v.trigger !== "boolean") return "fire.trigger must be a boolean";
+  if (v.aim === null) return { trigger: v.trigger, aim: null };
+  const aim = parseVec2(v.aim);
+  if (!aim) return "fire.aim must be null or {x, y} numbers";
+  if (Math.abs(Math.hypot(aim.x, aim.y) - 1) > UNIT_SLACK) {
+    return "fire.aim must be a unit vector";
+  }
+  return { trigger: v.trigger, aim };
+}
+
+function parseList<T>(v: unknown, item: (x: unknown) => T | null): T[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: T[] = [];
+  for (const x of v) {
+    const parsed = item(x);
+    if (parsed === null) return null;
+    out.push(parsed);
+  }
+  return out;
+}
+
 function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
-  if (!isPlainObject(v) || !hasExactKeys(v, ["id", "x", "y", "ack"])) {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["id", "x", "y", "ack", "hp", "maxHp", "cooldown"])
+  ) {
     return null;
   }
   if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
@@ -160,7 +260,87 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
   )) {
     return null;
   }
-  return { id: v.id, x: v.x, y: v.y, ack: v.ack };
+  if (
+    !isNonNegative(v.hp) ||
+    !isNonNegative(v.maxHp) ||
+    !isNonNegative(v.cooldown)
+  ) {
+    return null;
+  }
+  return {
+    id: v.id,
+    x: v.x,
+    y: v.y,
+    ack: v.ack,
+    hp: v.hp,
+    maxHp: v.maxHp,
+    cooldown: v.cooldown,
+  };
+}
+
+function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["id", "x", "y", "size", "hp", "maxHp", "respawnIn"])
+  ) {
+    return null;
+  }
+  if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
+    return null;
+  }
+  if (
+    !isNonNegative(v.size) ||
+    !isNonNegative(v.hp) ||
+    !isNonNegative(v.maxHp) ||
+    !isNonNegative(v.respawnIn)
+  ) {
+    return null;
+  }
+  return {
+    id: v.id,
+    x: v.x,
+    y: v.y,
+    size: v.size,
+    hp: v.hp,
+    maxHp: v.maxHp,
+    respawnIn: v.respawnIn,
+  };
+}
+
+function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, [
+      "id",
+      "owner",
+      "by",
+      "x",
+      "y",
+      "dx",
+      "dy",
+      "speed",
+      "size",
+    ])
+  ) {
+    return null;
+  }
+  if (!isPlayerId(v.id) || (v.owner !== "player" && v.owner !== "enemy")) {
+    return null;
+  }
+  if (!isNonNegativeInt(v.by)) return null;
+  for (const n of [v.x, v.y, v.dx, v.dy]) if (!isFiniteNumber(n)) return null;
+  if (!isNonNegative(v.speed) || !isNonNegative(v.size)) return null;
+  return {
+    id: v.id,
+    owner: v.owner,
+    by: v.by as number,
+    x: v.x as number,
+    y: v.y as number,
+    dx: v.dx as number,
+    dy: v.dy as number,
+    speed: v.speed,
+    size: v.size,
+  };
 }
 
 function parseVec2(v: unknown): Vec2 | null {
@@ -204,6 +384,10 @@ function hasExactKeys(
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
+}
+
+function isNonNegative(v: unknown): v is number {
+  return isFiniteNumber(v) && v >= 0;
 }
 
 function isNonNegativeInt(v: unknown): v is number {

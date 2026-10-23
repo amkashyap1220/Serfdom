@@ -144,3 +144,13 @@ Keep this concise and update it after each meaningful milestone.
 - Checks: `npm run check` passed (138 shared, 31 server, 29 client). Live (visible Chrome on the user's servers): combat works, died after exactly 10 hits, stayed at the menu (no auto-respawn), Enter restored 200/200; no console errors.
 - User manual test passed. Slice 5a complete.
 - Next step: 5b (server runs combat, snapshots carry enemies/projectiles/HP, client predicts own shots).
+
+### Phase 5b — Server runs combat for everyone — 2026-10-22
+
+- Protocol v3 (fire intent in inputs, playAgain, full combat snapshots) with 30 new protocol tests, incl. a rejected "claimed hit".
+- Server: `input-queue.ts` (renamed from player-movement; same credit/backlog rule, now picks inputs for the shared sim), `GameServer` owns a `SimState`. 38 server tests: shared dummy HP across clients, D-045 scaling, fire-rate cheat at 2× rate capped, death + ignored inputs + playAgain, playAgain rejected while alive, disconnect removal, snapshot contents/size.
+- Client: `PlayerPredictor` (movement + shot prediction via the shared rule; parity test proves identical results to the server over 40 inputs), `LocalShots`, `NetSync` view model (extrapolated server projectiles), `CombatView` on a view model with HP-drop flashes, HUD combat/bandwidth rows. 33 client tests.
+- Caught during work: predictor would have kept a stale guest id after reconnect (fixed); a fire-rate test first tripped the flood limit instead (a different safeguard; test adjusted); shell-quoting mangled one inline edit (fixed by editing directly).
+- Checks: `npm run check` passed (144 shared, 38 server, 33 client). Live, two visible windows + the user's two open tabs on the user's servers: 4 players → dummy 1625 (3.25×); both windows identical dummy HP in every sample; own-shot correction 0.00 px; death → menu, other window stopped drawing the dead player, dummy rescaled to 1250 keeping the fraction; Enter → (1000, 1000) 200/200; no console errors. Hit confirmation delay 17–22 ms median (n = 38). Snapshots 430 B idle → ~2.2 KB / ~130 KB/s mid-fight (T-027).
+- User manual test passed (all 5 steps; shots feel instant, hits prompt, dodging fair). Slice 5b complete.
+- Next step: 5c (review Phase 5 acceptance: simultaneous attacks, tampering, two-client manual test doc).

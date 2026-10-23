@@ -1,10 +1,6 @@
 import * as Phaser from "phaser";
-import {
-  isAlive,
-  rotateVec,
-  type SimEvent,
-  type SimState,
-} from "@serfdom/shared";
+import { rotateVec } from "@serfdom/shared";
+import type { CombatViewModel } from "../combat-view-model";
 
 const ENEMY_TEXTURE = "enemy-placeholder";
 const ENEMY_FLASH_TEXTURE = "enemy-placeholder-flash";
@@ -24,11 +20,14 @@ interface EnemySprite {
   image: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   flashUntil: number;
+  /** HP last frame, to detect hits from any source (local sim or server). */
+  lastHp: number;
 }
 
 /**
- * Draws combat state (enemies, HP labels, projectiles) from the simulation.
- * Holds no game rules: everything it shows comes from SimState and events.
+ * Draws combat state (enemies, HP labels, projectiles) from a view model
+ * built either from the local offline sim or from server snapshots. Holds
+ * no game rules. A hit flash plays whenever an enemy's HP drops.
  */
 export class CombatView {
   private readonly enemies = new Map<number, EnemySprite>();
@@ -62,24 +61,14 @@ export class CombatView {
    * like the player, so they stay upright on screen; labels sit "above" the
    * enemy on screen whatever the view rotation.
    */
-  sync(
-    state: SimState,
-    events: readonly SimEvent[],
-    viewRotation: number,
-    nowMs: number,
-  ): void {
-    for (const e of events) {
-      if (e.type === "hit") {
-        const sprite = this.enemies.get(e.enemyId);
-        if (sprite) sprite.flashUntil = nowMs + HIT_FLASH_MS;
-      }
-    }
-
-    for (const enemy of state.enemies) {
-      const sprite = this.enemySprite(enemy.id);
-      const x = Math.round(enemy.position.x);
-      const y = Math.round(enemy.position.y);
-      const alive = isAlive(enemy);
+  sync(view: CombatViewModel, viewRotation: number, nowMs: number): void {
+    for (const enemy of view.enemies) {
+      const sprite = this.enemySprite(enemy.id, enemy.hp);
+      if (enemy.hp < sprite.lastHp) sprite.flashUntil = nowMs + HIT_FLASH_MS;
+      sprite.lastHp = enemy.hp;
+      const x = Math.round(enemy.x);
+      const y = Math.round(enemy.y);
+      const alive = enemy.hp > 0;
       sprite.image
         .setVisible(alive)
         .setPosition(x, y)
@@ -103,18 +92,18 @@ export class CombatView {
     }
 
     const g = this.projectiles.clear();
-    for (const p of state.projectiles) {
+    for (const p of view.projectiles) {
       g.fillStyle(p.owner === "enemy" ? COLORS.enemyBullet : COLORS.playerShot);
       g.fillRect(
-        Math.round(p.position.x - p.size / 2),
-        Math.round(p.position.y - p.size / 2),
+        Math.round(p.x - p.size / 2),
+        Math.round(p.y - p.size / 2),
         p.size,
         p.size,
       );
     }
   }
 
-  private enemySprite(id: number): EnemySprite {
+  private enemySprite(id: number, hp: number): EnemySprite {
     let sprite = this.enemies.get(id);
     if (!sprite) {
       const image = this.scene.add.image(0, 0, ENEMY_TEXTURE);
@@ -126,7 +115,7 @@ export class CombatView {
         })
         .setOrigin(0.5, 1);
       this.layer.add([image, label]);
-      sprite = { image, label, flashUntil: 0 };
+      sprite = { image, label, flashUntil: 0, lastHp: hp };
       this.enemies.set(id, sprite);
     }
     return sprite;

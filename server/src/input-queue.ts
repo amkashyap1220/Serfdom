@@ -1,10 +1,4 @@
-import {
-  PLAYER_BODY,
-  PLAYER_SPEED,
-  stepMovement,
-  type Rect,
-  type Vec2,
-} from "@serfdom/shared";
+import type { PlayerInput, Vec2 } from "@serfdom/shared";
 
 /**
  * Most inputs a player may have waiting after a tick. Anything older is
@@ -22,21 +16,20 @@ export const MAX_INPUT_BACKLOG = 1;
  * many); applying an input spends one. After a hiccup (a tick with no input
  * followed by two at once) the server can apply both and keep up, yet over
  * any stretch of time a player can never be applied more than
- * (ticks elapsed + MAX_MOVE_CREDIT) inputs — i.e. never faster than
- * PLAYER_SPEED, however many messages they send.
+ * (ticks elapsed + MAX_MOVE_CREDIT) inputs — so never faster movement or
+ * fire rate than allowed, however many messages they send.
  */
 export const MAX_MOVE_CREDIT = 4;
 
 /**
- * Server-side movement state for one connected player (T-023). The server
- * never accepts a position from a client: it queues movement *intents* and
- * applies them with the shared movement rule.
+ * Per-player queue of intents (T-023, D-043). The server never accepts a
+ * position or a hit from a client; it decides here which of the player's
+ * inputs to apply this tick, then runs them through the shared sim.
  *
- * Mutated in place: this is per-session server state, owned by GameServer.
+ * Mutated in place: per-session server state, owned by GameServer.
  */
-export interface PlayerMovement {
-  position: Vec2;
-  queue: { seq: number; move: Vec2 }[];
+export interface InputQueue {
+  pending: { seq: number; input: PlayerInput }[];
   /** Highest seq received (accepted or dropped); -1 before the first input. */
   lastReceivedSeq: number;
   /**
@@ -53,14 +46,8 @@ export type QueueResult =
   | { kind: "dropped" }
   | { kind: "rejected"; reason: string };
 
-export function newPlayerMovement(spawn: Vec2): PlayerMovement {
-  return {
-    position: { ...spawn },
-    queue: [],
-    lastReceivedSeq: -1,
-    ack: -1,
-    credit: 0,
-  };
+export function newInputQueue(): InputQueue {
+  return { pending: [], lastReceivedSeq: -1, ack: -1, credit: 0 };
 }
 
 /**
@@ -69,52 +56,53 @@ export function newPlayerMovement(spawn: Vec2): PlayerMovement {
  * still counts as received.
  */
 export function queueInput(
-  pm: PlayerMovement,
+  q: InputQueue,
   seq: number,
-  move: Vec2,
+  input: PlayerInput,
   maxQueued: number,
 ): QueueResult {
-  if (seq <= pm.lastReceivedSeq) {
+  if (seq <= q.lastReceivedSeq) {
     return { kind: "rejected", reason: "input seq must increase" };
   }
-  pm.lastReceivedSeq = seq;
-  if (pm.queue.length >= maxQueued) return { kind: "dropped" };
-  pm.queue.push({ seq, move: clampToUnit(move) });
+  q.lastReceivedSeq = seq;
+  if (q.pending.length >= maxQueued) return { kind: "dropped" };
+  q.pending.push({
+    seq,
+    input: {
+      move: clampToUnit(input.move),
+      fire: {
+        trigger: input.fire.trigger,
+        aim: input.fire.aim ? normalize(input.fire.aim) : null,
+      },
+    },
+  });
   return { kind: "queued" };
 }
 
 /**
- * One server tick for one player: earn a move credit, apply queued inputs
- * while credit lasts, then drop any backlog beyond MAX_INPUT_BACKLOG.
- * With no input queued the player stands still (no extrapolation).
+ * One server tick for one player: earn a credit, take queued inputs while
+ * credit lasts (oldest first), then drop any backlog beyond
+ * MAX_INPUT_BACKLOG. Returns the inputs to apply, in order. With nothing
+ * queued the player simply does nothing this tick (no extrapolation).
  */
-export function applyInputsForTick(
-  pm: PlayerMovement,
-  walls: readonly Rect[],
-  dtSeconds: number,
-): { applied: number; dropped: number } {
-  pm.credit = Math.min(pm.credit + 1, MAX_MOVE_CREDIT);
-  let applied = 0;
-  while (pm.credit >= 1 && pm.queue.length > 0) {
-    const input = pm.queue.shift()!;
-    pm.position = stepMovement(
-      pm.position,
-      input.move,
-      PLAYER_BODY,
-      walls,
-      dtSeconds,
-      PLAYER_SPEED,
-    );
-    pm.ack = input.seq;
-    pm.credit -= 1;
-    applied++;
+export function takeInputsForTick(q: InputQueue): {
+  apply: PlayerInput[];
+  dropped: number;
+} {
+  q.credit = Math.min(q.credit + 1, MAX_MOVE_CREDIT);
+  const apply: PlayerInput[] = [];
+  while (q.credit >= 1 && q.pending.length > 0) {
+    const next = q.pending.shift()!;
+    apply.push(next.input);
+    q.ack = next.seq;
+    q.credit -= 1;
   }
   let dropped = 0;
-  while (pm.queue.length > MAX_INPUT_BACKLOG) {
-    pm.ack = pm.queue.shift()!.seq;
+  while (q.pending.length > MAX_INPUT_BACKLOG) {
+    q.ack = q.pending.shift()!.seq;
     dropped++;
   }
-  return { applied, dropped };
+  return { apply, dropped };
 }
 
 /**
@@ -125,4 +113,10 @@ export function applyInputsForTick(
 export function clampToUnit(v: Vec2): Vec2 {
   const len = Math.hypot(v.x, v.y);
   return len > 1 ? { x: v.x / len, y: v.y / len } : { x: v.x, y: v.y };
+}
+
+/** Exactly unit length (the parser already checked it is within 1e-6 of 1). */
+function normalize(v: Vec2): Vec2 {
+  const len = Math.hypot(v.x, v.y);
+  return { x: v.x / len, y: v.y / len };
 }

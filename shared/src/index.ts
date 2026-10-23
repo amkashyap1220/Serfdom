@@ -82,7 +82,11 @@ export {
   type ClientMessage,
   type ParseResult,
   type ServerMessage,
+  roundCoord,
+  type FireInput,
+  type SnapshotEnemy,
   type SnapshotPlayer,
+  type SnapshotProjectile,
 } from "./protocol.ts";
 export {
   DUMMY_POSITIONS,

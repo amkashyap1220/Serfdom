@@ -2,8 +2,8 @@ import {
   encodeMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
+  type PlayerInput,
   type ServerMessage,
-  type Vec2,
 } from "@serfdom/shared";
 
 /** Default dev server; override with VITE_SERVER_URL (see .env.example). */
@@ -28,7 +28,11 @@ export type SnapshotMessage = Extract<ServerMessage, { type: "snapshot" }>;
 
 export interface ConnectionHandlers {
   /** A validated snapshot arrived; `receivedAtMs` is performance.now() at arrival. */
-  onSnapshot?: (snapshot: SnapshotMessage, receivedAtMs: number) => void;
+  onSnapshot?: (
+    snapshot: SnapshotMessage,
+    receivedAtMs: number,
+    bytes: number,
+  ) => void;
   /** The connection dropped (it will retry automatically). */
   onDisconnect?: () => void;
 }
@@ -68,11 +72,19 @@ export class Connection {
     return this.state;
   }
 
-  /** Sends one tick of movement intent; does nothing unless connected. */
-  sendInput(seq: number, move: Vec2): void {
+  /** Sends one tick of intent (movement + fire); does nothing unless connected. */
+  sendInput(seq: number, input: PlayerInput): void {
     if (this.state.status.kind !== "connected") return;
     if (this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(encodeMessage({ type: "input", seq, move }));
+    this.socket.send(
+      encodeMessage({ type: "input", seq, move: input.move, fire: input.fire }),
+    );
+  }
+
+  /** Asks the server for a fresh start after dying (D-046). */
+  sendPlayAgain(): void {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(encodeMessage({ type: "playAgain" }));
   }
 
   private open(): void {
@@ -93,7 +105,7 @@ export class Connection {
         console.warn(`[net] ignoring invalid server message: ${parsed.error}`);
         return;
       }
-      this.handle(parsed.message);
+      this.handle(parsed.message, event.data.length);
     });
     socket.addEventListener("close", (event) => {
       if (this.socket !== socket) return;
@@ -113,7 +125,7 @@ export class Connection {
     });
   }
 
-  private handle(msg: ServerMessage): void {
+  private handle(msg: ServerMessage, bytes: number): void {
     switch (msg.type) {
       case "welcome":
         this.state = {
@@ -142,7 +154,7 @@ export class Connection {
         console.warn(`[net] server error: ${msg.reason}`);
         break;
       case "snapshot":
-        this.handlers.onSnapshot?.(msg, performance.now());
+        this.handlers.onSnapshot?.(msg, performance.now(), bytes);
         break;
     }
   }

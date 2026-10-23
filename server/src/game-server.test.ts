@@ -233,8 +233,18 @@ async function until(cond: () => boolean): Promise<void> {
   expect(cond()).toBe(true);
 }
 
-const input = (seq: number, x: number, y: number) =>
-  JSON.stringify({ type: "input", seq, move: { x, y } });
+const input = (
+  seq: number,
+  x: number,
+  y: number,
+  aim: { x: number; y: number } | null = null,
+) =>
+  JSON.stringify({
+    type: "input",
+    seq,
+    move: { x, y },
+    fire: { trigger: aim !== null, aim },
+  });
 
 describe("authoritative movement (4b)", () => {
   it("moves a player only by its inputs, one per tick, and acks them", async () => {
@@ -337,3 +347,148 @@ describe("real-time loop", () => {
 async function serverHasPlayers(ids: number[]): Promise<void> {
   await until(() => server.playerIds.join() === ids.join());
 }
+
+/** Moves a joined player to `at` in the authoritative sim (test setup only). */
+function placePlayer(
+  id: number,
+  at: { x: number; y: number },
+  hp?: number,
+): void {
+  const s = server.state;
+  server.setStateForTest({
+    ...s,
+    players: s.players.map((p) =>
+      p.id === id ? { ...p, position: { ...at }, hp: hp ?? p.hp } : p,
+    ),
+  });
+}
+
+/** Sends one input per tick for `ticks` ticks, waiting for each to arrive. */
+async function drive(
+  client: TestClient,
+  id: number,
+  firstSeq: number,
+  ticks: number,
+  aim: { x: number; y: number } | null,
+): Promise<void> {
+  for (let i = 0; i < ticks; i++) {
+    client.send(input(firstSeq + i, 0, 0, aim));
+    await until(() => server.queuedInputs(id) >= 1);
+    server.tick();
+  }
+}
+
+const dummy = () => server.state.enemies[0]!;
+
+describe("shared combat on the server (5b)", () => {
+  it("a player's shots damage the shared dummy, and everyone sees the same HP", async () => {
+    const a = await joined();
+    const b = await joined();
+    // Dummy at (1300, 1100); put player 1 100 px to its left.
+    placePlayer(1, { x: 1200, y: 1100 });
+    await drive(a.client, 1, 0, 60, { x: 1, y: 0 });
+    const hp = dummy().hp;
+    expect(hp).toBeLessThan(dummy().maxHp);
+    server.tick();
+    const snapA = await nextOfType(a.client, "snapshot");
+    let snapB = await nextOfType(b.client, "snapshot");
+    while (snapB.tick < snapA.tick)
+      snapB = await nextOfType(b.client, "snapshot");
+    expect(snapA.enemies[0]?.hp).toBe(snapB.enemies[0]?.hp);
+  });
+
+  it("scales the dummy's HP for two living players (D-045)", async () => {
+    await joined();
+    await joined();
+    server.tick();
+    expect(dummy().maxHp).toBe(875);
+  });
+
+  it("cannot be tricked into a faster fire rate by sending extra inputs", async () => {
+    const { client } = await joined();
+    placePlayer(1, { x: 1200, y: 1100 });
+    let seq = 0;
+    // Twice the honest rate (2 inputs per tick = 120/s). Not 5 per tick:
+    // that would trip the 180 messages/s flood limit, a different safeguard.
+    for (let t = 0; t < 60; t++) {
+      for (let i = 0; i < 2; i++)
+        client.send(input(seq++, 0, 0, { x: 1, y: 0 }));
+      await until(() => server.queuedInputs(1) >= 1);
+      server.tick();
+    }
+    for (let t = 0; t < 30; t++) server.tick(); // let shots land
+    // At most (60 ticks + 4 credit) inputs applied → at most 5 shots at 4/s.
+    const damage = dummy().maxHp - dummy().hp;
+    expect(damage).toBeLessThanOrEqual(5 * 25);
+    expect(damage).toBeGreaterThan(0);
+  });
+
+  it("snapshots carry players' HP and cooldown, enemies, and projectiles", async () => {
+    const { client } = await joined();
+    placePlayer(1, { x: 1200, y: 1100 });
+    await drive(client, 1, 0, 2, { x: 1, y: 0 });
+    const snap = await nextOfType(client, "snapshot");
+    expect(snap.players[0]).toMatchObject({ id: 1, hp: 200, maxHp: 200 });
+    expect(snap.players[0]!.cooldown).toBeGreaterThan(0);
+    expect(snap.enemies[0]).toMatchObject({
+      id: 1,
+      x: 1300,
+      y: 1100,
+      size: 16,
+    });
+    expect(
+      snap.projectiles.some((p) => p.owner === "player" && p.by === 1),
+    ).toBe(true);
+    expect(server.lastSnapshotBytes).toBeGreaterThan(0);
+    expect(server.lastSnapshotBytes).toBeLessThan(65536);
+  });
+
+  it("kills a player, ignores their inputs while dead, and resets them on playAgain", async () => {
+    const { client } = await joined();
+    // 20 HP, standing directly west of the dummy: the next ring kills.
+    placePlayer(1, { x: 1250, y: 1100 }, 20);
+    for (let t = 0; t < 60 && server.state.players[0]!.hp > 0; t++)
+      server.tick();
+    expect(server.state.players[0]?.hp).toBe(0);
+    const deadAt = { ...server.state.players[0]!.position };
+    client.send(input(0, -1, 0));
+    await until(() => server.queuedInputs(1) >= 1);
+    server.tick();
+    expect(server.state.players[0]?.position).toEqual(deadAt);
+
+    client.send(JSON.stringify({ type: "playAgain" }));
+    await until(() => server.state.players[0]!.hp === 200);
+    expect(server.state.players[0]?.position).toEqual({ x: 1000, y: 1000 });
+  });
+
+  it("rejects playAgain while alive", async () => {
+    const { client } = await joined();
+    client.send(JSON.stringify({ type: "playAgain" }));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "playAgain is only allowed when dead",
+    );
+  });
+
+  it("rejects an input claiming a hit", async () => {
+    const { client } = await joined();
+    client.send(
+      JSON.stringify({
+        type: "input",
+        seq: 0,
+        move: { x: 0, y: 0 },
+        fire: { trigger: true, aim: { x: 1, y: 0 }, hit: 1 },
+      }),
+    );
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "input: fire must be {trigger, aim}",
+    );
+  });
+
+  it("removes a disconnected player from the simulation", async () => {
+    await joined();
+    const b = await joined();
+    b.client.socket.close();
+    await until(() => server.state.players.length === 1);
+    expect(server.state.players[0]?.id).toBe(1);
+  });
+});

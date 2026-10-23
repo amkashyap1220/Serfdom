@@ -1,61 +1,150 @@
-import { PLAYER_SPEED, TICK_SECONDS } from "@serfdom/shared";
+import {
+  addPlayer,
+  applyPlayerInput,
+  createSimState,
+  PLAYER_SPEED,
+  TICK_SECONDS,
+  type PlayerInput,
+  type SimState,
+  type SnapshotPlayer,
+} from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
 import { INTERPOLATION_DELAY_MS, RemoteInterpolator } from "./interpolation";
-import { MovementPredictor } from "./prediction";
+import { LocalShots } from "./local-shots";
+import { PlayerPredictor } from "./prediction";
 
-const RIGHT = { x: 1, y: 0 };
 const STEP = PLAYER_SPEED * TICK_SECONDS; // 2.5 px per tick
+const MOVE_RIGHT: PlayerInput = {
+  move: { x: 1, y: 0 },
+  fire: { trigger: false, aim: null },
+};
+const SHOOT_UP: PlayerInput = {
+  move: { x: 0, y: 0 },
+  fire: { trigger: true, aim: { x: 0, y: -1 } },
+};
 
-describe("MovementPredictor", () => {
+/** A snapshot entry for player 1 as the server would send it. */
+function server(
+  x: number,
+  ack: number,
+  extra: Partial<SnapshotPlayer> = {},
+): SnapshotPlayer {
+  return { id: 1, x, y: 0, ack, hp: 200, maxHp: 200, cooldown: 0, ...extra };
+}
+
+function predictor(walls = []) {
+  const p = new PlayerPredictor(1, { x: 0, y: 0 }, walls);
+  p.reset(server(0, -1));
+  return p;
+}
+
+describe("PlayerPredictor", () => {
   it("moves immediately and numbers inputs from 0", () => {
-    const p = new MovementPredictor({ x: 0, y: 0 }, []);
-    expect(p.predict(RIGHT).seq).toBe(0);
-    expect(p.predict(RIGHT).seq).toBe(1);
+    const p = predictor();
+    expect(p.predict(MOVE_RIGHT).seq).toBe(0);
+    expect(p.predict(MOVE_RIGHT).seq).toBe(1);
     expect(p.position.x).toBeCloseTo(2 * STEP, 9);
     expect(p.pendingCount).toBe(2);
   });
 
   it("does not visibly move when the server agrees (zero correction)", () => {
-    const p = new MovementPredictor({ x: 0, y: 0 }, []);
-    for (let i = 0; i < 10; i++) p.predict(RIGHT);
-    // Server has applied inputs 0..5; it reports where that left us.
-    p.reconcile({ x: 6 * STEP, y: 0 }, 5);
+    const p = predictor();
+    for (let i = 0; i < 10; i++) p.predict(MOVE_RIGHT);
+    p.reconcile(server(6 * STEP, 5));
     expect(p.position.x).toBeCloseTo(10 * STEP, 9);
     expect(p.lastCorrection).toBeCloseTo(0, 9);
     expect(p.pendingCount).toBe(4);
   });
 
   it("snaps to the server and replays pending inputs when they disagree", () => {
-    const p = new MovementPredictor({ x: 0, y: 0 }, []);
-    for (let i = 0; i < 10; i++) p.predict(RIGHT);
-    // Server dropped some inputs: after #5 it has us at only 2 steps.
-    p.reconcile({ x: 2 * STEP, y: 0 }, 5);
-    expect(p.position.x).toBeCloseTo(6 * STEP, 9); // 2 + 4 replayed
+    const p = predictor();
+    for (let i = 0; i < 10; i++) p.predict(MOVE_RIGHT);
+    p.reconcile(server(2 * STEP, 5));
+    expect(p.position.x).toBeCloseTo(6 * STEP, 9);
     expect(p.lastCorrection).toBeCloseTo(4 * STEP, 9);
   });
 
-  it("replays through the same walls as the server", () => {
-    const wall = { x: 20, y: -50, width: 10, height: 100 };
-    const p = new MovementPredictor({ x: 0, y: 0 }, [wall]);
-    for (let i = 0; i < 20; i++) p.predict(RIGHT);
-    expect(p.position.x).toBe(12); // stopped flush by the wall
-    p.reconcile({ x: 0, y: 0 }, -1); // server applied nothing yet
-    expect(p.position.x).toBe(12);
+  it("predicts shots with the fire-rate rule: immediately, then every 15 ticks", () => {
+    const p = predictor();
+    const fired: number[] = [];
+    for (let i = 0; i < 31; i++) if (p.predict(SHOOT_UP).shot) fired.push(i);
+    expect(fired).toEqual([0, 15, 30]);
+  });
+
+  it("predicts exactly the shots and positions the server computes for the same inputs", () => {
+    // Same inputs through the predictor and through the server's rule.
+    const inputs: PlayerInput[] = Array.from({ length: 40 }, (_, i) => ({
+      move: { x: Math.SQRT1_2, y: i % 2 ? Math.SQRT1_2 : -Math.SQRT1_2 },
+      fire: { trigger: true, aim: { x: 0.6, y: 0.8 } },
+    }));
+    const p = predictor();
+    let sim: SimState = addPlayer(createSimState([]), 1, { x: 0, y: 0 });
+    for (const input of inputs) {
+      const local = p.predict(input);
+      const before = sim.projectiles.length;
+      sim = applyPlayerInput(sim, 1, input, [], TICK_SECONDS).state;
+      const serverShot = sim.projectiles[before] ?? null;
+      expect(local.shot?.position ?? null).toEqual(
+        serverShot?.position ?? null,
+      );
+      expect(p.position).toEqual(sim.players[0]!.position);
+    }
+  });
+
+  it("does not re-fire shots while replaying", () => {
+    const p = predictor();
+    p.predict(SHOOT_UP); // fires (seq 0)
+    p.predict(SHOOT_UP);
+    // Reconciling replays seq 1; there is no way for it to return a shot.
+    p.reconcile(server(0, 0, { cooldown: 0.25 - TICK_SECONDS }));
+    expect(p.pendingCount).toBe(1);
+  });
+
+  it("uses server HP: a dead player's predicted inputs do nothing", () => {
+    const p = predictor();
+    p.reconcile(server(0, -1, { hp: 0 }));
+    p.predict(MOVE_RIGHT);
+    expect(p.position.x).toBe(0);
+    expect(p.predict(SHOOT_UP).shot).toBeNull();
   });
 
   it("caps unacknowledged inputs if the server stops answering", () => {
-    const p = new MovementPredictor({ x: 0, y: 0 }, []);
-    for (let i = 0; i < 500; i++) p.predict({ x: 0, y: 0 });
+    const p = predictor();
+    for (let i = 0; i < 500; i++) p.predict(MOVE_RIGHT);
     expect(p.pendingCount).toBe(120);
   });
+});
 
-  it("reset clears pending inputs but keeps seq numbers increasing", () => {
-    const p = new MovementPredictor({ x: 0, y: 0 }, []);
-    p.predict(RIGHT);
-    p.reset({ x: 500, y: 500 });
-    expect(p.position).toEqual({ x: 500, y: 500 });
-    expect(p.pendingCount).toBe(0);
-    expect(p.predict(RIGHT).seq).toBe(1);
+describe("LocalShots", () => {
+  const shot = {
+    id: 1,
+    owner: "player" as const,
+    ownerId: 1,
+    position: { x: 0, y: 0 },
+    direction: { x: 1, y: 0 },
+    speed: 400,
+    remaining: 300,
+    damage: 25,
+    size: 4,
+  };
+
+  it("flies straight and expires at max range", () => {
+    const s = new LocalShots();
+    s.add(shot);
+    s.step(0.25, [], []);
+    expect(s.list[0]?.position.x).toBe(100);
+    for (let i = 0; i < 10; i++) s.step(0.25, [], []);
+    expect(s.list).toHaveLength(0);
+  });
+
+  it("vanishes on hitting an enemy box or a wall (visual only)", () => {
+    const s = new LocalShots();
+    s.add(shot);
+    s.step(1, [], [{ id: 1, box: { x: 50, y: -8, width: 16, height: 16 } }]);
+    expect(s.list).toHaveLength(0);
+    s.add(shot);
+    s.step(1, [{ x: 30, y: -50, width: 5, height: 100 }], []);
+    expect(s.list).toHaveLength(0);
   });
 });
 

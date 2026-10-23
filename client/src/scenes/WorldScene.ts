@@ -1,26 +1,26 @@
 import * as Phaser from "phaser";
 import {
-  aimTargets,
-  DUMMY_POSITIONS,
-  PLAYER_START,
-  TEST_WALLS,
-  TEST_WORLD,
-  isPlayerAlive,
   addPlayer,
-  findPlayer,
-  type PlayerState,
+  aimTargets,
   consumeFixedSteps,
   createSimState,
   DUMMY_ENEMY,
+  DUMMY_POSITIONS,
+  findPlayer,
   MAX_FRAME_SECONDS,
   NO_INPUT,
   nextFireMode,
+  PLAYER_START,
   PLAYER_WEAPON,
   resolveFireIntent,
   stepSim,
+  TEST_WALLS,
+  TEST_WORLD,
   TICK_SECONDS,
   worldDirectionFromInput,
+  type AimTarget,
   type FireMode,
+  type PlayerState,
   type SimEvent,
   type SimState,
   type Vec2,
@@ -30,14 +30,15 @@ import {
   screenToWorld,
   stepViewRotation,
 } from "../camera-math";
+import { viewFromSim, type CombatViewModel } from "../combat-view-model";
 import {
   createKeyReader,
   createPointerReader,
   type KeyState,
   type PointerInput,
 } from "../input";
-import { GRID, PLAYER_SPRITE_SIZE } from "../render-config";
 import { NetSync } from "../net-sync";
+import { GRID, PLAYER_SPRITE_SIZE } from "../render-config";
 import { CombatView, makeSquareTexture } from "./CombatView";
 import { RemotePlayersView } from "./RemotePlayersView";
 
@@ -61,10 +62,19 @@ const COLORS = {
   viewportCenter: 0x5bc0de,
 } as const;
 
+/** What the scene knows about the player this browser controls. */
+export interface LocalView {
+  position: Vec2;
+  hp: number;
+  maxHp: number;
+}
+
 export interface WorldDebugState {
-  sim: SimState;
-  local: PlayerState;
+  online: boolean;
+  local: LocalView;
   net: NetSync;
+  /** What is being drawn right now (from the offline sim or the server). */
+  view: CombatViewModel;
   remotesVisible: number;
   /** Position actually drawn and centered on (whole world pixels). */
   renderPosition: Vec2;
@@ -75,7 +85,7 @@ export interface WorldDebugState {
   /** Camera rotation in radians, [0, 2π). */
   viewRotation: number;
   fireMode: FireMode;
-  /** Running totals since load, for the HUD. */
+  /** Running totals since load, for the HUD (hits/blocked: offline only). */
   totals: Totals;
 }
 
@@ -88,19 +98,8 @@ interface Totals {
   deaths: number;
 }
 
-const STILL: Vec2 = { x: 0, y: 0 };
-
-/** Id of this browser's player in its local sim. */
+/** Id of this browser's player in its local offline sim. */
 const LOCAL_PLAYER_ID = 1;
-
-function withPlayerPosition(state: SimState, position: Vec2): SimState {
-  return {
-    ...state,
-    players: state.players.map((p) =>
-      p.id === LOCAL_PLAYER_ID ? { ...p, position: { ...position } } : p,
-    ),
-  };
-}
 
 const NO_KEYS: KeyState = {
   move: NO_INPUT,
@@ -112,10 +111,13 @@ const NO_KEYS: KeyState = {
 
 /**
  * Debug scene: test map, WASD movement with walls, player-centered camera
- * with Q/E rotation, and the Phase 3b shooting prototype against a dummy.
+ * with Q/E rotation, and the combat prototype against a dummy.
  *
- * All rules run in the shared simulation (stepSim); this scene only gathers
- * input, advances fixed ticks, and draws the result.
+ * Two modes, one renderer:
+ * - **Online** (Phase 5b): the server runs combat (D-043). This scene sends
+ *   intents through NetSync, predicts its own movement and shots, and draws
+ *   enemies, HP, and other projectiles from snapshots.
+ * - **Offline**: the same shared rules run locally for one player.
  *
  * Two cameras: the main camera draws the world layer and rotates; a second,
  * never-rotating "overlay" camera draws screen-fixed debug marks. A single
@@ -126,12 +128,13 @@ export class WorldScene extends Phaser.Scene {
   private world!: Phaser.GameObjects.Layer;
   private combat!: CombatView;
   private remotes!: RemotePlayersView;
-  private readonly net = new NetSync(PLAYER_START, TEST_WALLS);
+  private readonly net = new NetSync(TEST_WALLS);
   private readKeys: () => KeyState = () => NO_KEYS;
   private readPointer: () => PointerInput = () => ({
     screen: null,
     leftDown: false,
   });
+  /** Offline-only simulation. */
   private sim: SimState = addPlayer(
     createSimState(DUMMY_POSITIONS),
     LOCAL_PLAYER_ID,
@@ -152,6 +155,8 @@ export class WorldScene extends Phaser.Scene {
     deaths: 0,
   };
   private playerFlashUntil = 0;
+  private lastLocalHp = 0;
+  private lastView: CombatViewModel = { enemies: [], projectiles: [] };
   private deathText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -171,17 +176,17 @@ export class WorldScene extends Phaser.Scene {
       COLORS.player,
       COLORS.playerMark,
     );
-    this.player = this.add.image(
-      PLAYER_START.x,
-      PLAYER_START.y,
-      PLAYER_TEXTURE,
-    );
     makeSquareTexture(
       this,
       PLAYER_HIT_TEXTURE,
       PLAYER_SPRITE_SIZE,
       COLORS.playerHit,
       COLORS.playerMark,
+    );
+    this.player = this.add.image(
+      PLAYER_START.x,
+      PLAYER_START.y,
+      PLAYER_TEXTURE,
     );
     this.world.add(this.player);
     const overlay = this.drawScreenOverlay();
@@ -205,7 +210,8 @@ export class WorldScene extends Phaser.Scene {
     this.cameras
       .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
       .ignore(this.world);
-    this.syncView([], 0);
+    this.lastLocalHp = this.localView().hp;
+    this.syncView(0);
   }
 
   update(time: number, deltaMs: number): void {
@@ -244,61 +250,32 @@ export class WorldScene extends Phaser.Scene {
     );
     const move = worldDirectionFromInput(this.lastKeys.move, this.viewRotation);
 
+    const online = this.net.online;
     const events: SimEvent[] = [];
     for (let i = 0; i < steps; i++) {
-      // Online (T-023): movement is predicted locally and confirmed by the
-      // server; the local combat sim (T-024) just uses that position and is
-      // given no movement of its own. Offline: local movement as before.
-      const online = this.net.online;
       if (online) {
-        const alive = isPlayerAlive(this.localPlayer());
-        if (alive) this.net.tick(move);
-        this.sim = withPlayerPosition(this.sim, this.net.predictor.position);
+        this.onlineTick(move);
+      } else {
+        events.push(...this.offlineTick(move));
       }
-      // Re-resolved every tick: auto aim follows the closest living enemy.
-      const fire = resolveFireIntent(
-        this.fireMode,
-        { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
-        this.localPlayer().position,
-        aimTargets(this.sim),
-        PLAYER_WEAPON.range,
-      );
-      const result = stepSim(
-        this.sim,
-        new Map([[LOCAL_PLAYER_ID, { move: online ? STILL : move, fire }]]),
-        TEST_WALLS,
-        TICK_SECONDS,
-      );
-      this.sim = online
-        ? withPlayerPosition(result.state, this.net.predictor.position)
-        : result.state;
-      events.push(...result.events);
     }
     this.countEvents(events);
-    // D-046 prototype: a dead player is at the placeholder "main menu";
-    // Enter plays again with a fresh state. (Online in 5a the server still
-    // owns position, so the fresh player starts where they are.)
-    if (this.lastKeys.playAgain && !isPlayerAlive(this.localPlayer())) {
-      const spawn = this.net.online
-        ? this.net.predictor.position
-        : PLAYER_START;
-      this.sim = addPlayer(this.sim, LOCAL_PLAYER_ID, spawn);
-    }
-    this.syncView(events, time);
-  }
 
-  /** The player this browser controls (always present in the local sim). */
-  private localPlayer(): PlayerState {
-    const p = findPlayer(this.sim, LOCAL_PLAYER_ID);
-    if (!p) throw new Error("local player missing from sim");
-    return p;
+    // D-046 prototype: a dead player is at the placeholder "main menu";
+    // Enter plays again with a fresh state at the start.
+    if (this.lastKeys.playAgain && this.localView().hp <= 0) {
+      if (online) this.net.playAgain();
+      else this.sim = addPlayer(this.sim, LOCAL_PLAYER_ID, PLAYER_START);
+    }
+    this.syncView(time);
   }
 
   getDebugState(): WorldDebugState {
     return {
-      sim: this.sim,
-      local: this.localPlayer(),
+      online: this.net.online,
+      local: this.localView(),
       net: this.net,
+      view: this.lastView,
       remotesVisible: this.remotes.count,
       renderPosition: this.renderPosition(),
       keys: this.lastKeys,
@@ -308,6 +285,71 @@ export class WorldScene extends Phaser.Scene {
       fireMode: this.fireMode,
       totals: { ...this.totals },
     };
+  }
+
+  /**
+   * One tick online: predict our own movement and shots and send the
+   * intent; the server decides everything consequential (D-043).
+   */
+  private onlineTick(move: Vec2): void {
+    const self = this.net.selfState;
+    if (!self || self.hp > 0) {
+      const targets: AimTarget[] = this.net.enemies
+        .filter((e) => e.hp > 0)
+        .map((e) => ({ id: e.id, position: { x: e.x, y: e.y } }));
+      const fire = this.resolveFire(this.net.position, targets);
+      const fired = this.net.tick({ move, fire });
+      if (fired) this.totals.shots++;
+    }
+    this.net.stepLocalShots();
+  }
+
+  /** One tick offline: the shared rules run locally for our one player. */
+  private offlineTick(move: Vec2): SimEvent[] {
+    const fire = this.resolveFire(
+      this.localPlayer().position,
+      aimTargets(this.sim),
+    );
+    const result = stepSim(
+      this.sim,
+      new Map([[LOCAL_PLAYER_ID, { move, fire }]]),
+      TEST_WALLS,
+      TICK_SECONDS,
+    );
+    this.sim = result.state;
+    return result.events;
+  }
+
+  /** Re-resolved every tick: auto aim follows the closest living enemy. */
+  private resolveFire(from: Vec2, targets: readonly AimTarget[]) {
+    return resolveFireIntent(
+      this.fireMode,
+      { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
+      from,
+      targets,
+      PLAYER_WEAPON.range,
+    );
+  }
+
+  /** The offline sim's player (always present there). */
+  private localPlayer(): PlayerState {
+    const p = findPlayer(this.sim, LOCAL_PLAYER_ID);
+    if (!p) throw new Error("local player missing from sim");
+    return p;
+  }
+
+  /** Our position (predicted online) and HP (from the server online). */
+  private localView(): LocalView {
+    if (this.net.online) {
+      const self = this.net.selfState;
+      return {
+        position: this.net.position,
+        hp: self?.hp ?? 0,
+        maxHp: self?.maxHp ?? 0,
+      };
+    }
+    const p = this.localPlayer();
+    return { position: p.position, hp: p.hp, maxHp: p.maxHp };
   }
 
   private countEvents(events: readonly SimEvent[]): void {
@@ -330,12 +372,18 @@ export class WorldScene extends Phaser.Scene {
    * sprite is counter-rotated so it stays upright and pixel-aligned on screen
    * (PROVISIONAL: characters upright, world rotates).
    */
-  private syncView(events: readonly SimEvent[], nowMs: number): void {
-    const { x, y } = this.renderPosition();
-    if (events.some((e) => e.type === "playerHit")) {
+  private syncView(nowMs: number): void {
+    const local = this.localView();
+    // Flash on any HP drop, whether the local sim or the server caused it.
+    if (local.hp < this.lastLocalHp) {
       this.playerFlashUntil = nowMs + PLAYER_HIT_FLASH_MS;
+      if (this.net.online) this.totals.playerHits++;
+      if (this.net.online && local.hp <= 0) this.totals.deaths++;
     }
-    const alive = isPlayerAlive(this.localPlayer());
+    this.lastLocalHp = local.hp;
+
+    const { x, y } = this.renderPosition();
+    const alive = local.hp > 0;
     this.player
       .setPosition(x, y)
       .setRotation(-this.viewRotation)
@@ -349,7 +397,11 @@ export class WorldScene extends Phaser.Scene {
       .setVisible(!alive)
       .setText("You died\nMain menu (placeholder)\nPress Enter to play again");
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
-    this.combat.sync(this.sim, events, this.viewRotation, nowMs);
+
+    this.lastView = this.net.online
+      ? this.net.viewModel(performance.now())
+      : viewFromSim(this.sim);
+    this.combat.sync(this.lastView, this.viewRotation, nowMs);
     this.remotes.sync(
       this.net.remotePositions(performance.now()),
       this.viewRotation,
@@ -357,7 +409,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private renderPosition(): Vec2 {
-    const p = this.localPlayer().position;
+    const p = this.localView().position;
     return { x: Math.round(p.x), y: Math.round(p.y) };
   }
 

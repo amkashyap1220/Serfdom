@@ -1,24 +1,34 @@
 import {
+  addPlayer,
+  applyPlayerInput,
   consumeFixedSteps,
+  createSimState,
+  DUMMY_POSITIONS,
   encodeMessage,
+  findPlayer,
+  isPlayerAlive,
   MAX_FRAME_SECONDS,
   MAX_MESSAGE_BYTES,
   parseClientMessage,
   PLAYER_START,
   PROTOCOL_VERSION,
+  removePlayer,
+  roundCoord,
+  stepWorld,
   TEST_WALLS,
   TICK_SECONDS,
   type ServerMessage,
+  type SimState,
   type SnapshotPlayer,
 } from "@serfdom/shared";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
-import { consoleLogger, type Logger } from "./log.ts";
 import {
-  applyInputsForTick,
-  newPlayerMovement,
+  newInputQueue,
   queueInput,
-  type PlayerMovement,
-} from "./player-movement.ts";
+  takeInputsForTick,
+  type InputQueue,
+} from "./input-queue.ts";
+import { consoleLogger, type Logger } from "./log.ts";
 import { MessageRateLimiter } from "./rate-limit.ts";
 
 export interface GameServerOptions {
@@ -49,18 +59,19 @@ interface Session {
   helloTimer: ReturnType<typeof setTimeout> | undefined;
   rate: MessageRateLimiter;
   /** Present once joined. */
-  movement: PlayerMovement | null;
+  inputs: InputQueue | null;
 }
 
 /**
- * Authoritative game server (Phase 4).
+ * Authoritative game server.
  *
- * 4a: accepts connections, hands out guest ids (T-022), tracks who is online.
- * 4b: owns every player's position (T-023). Clients send movement intent;
- * the server applies at most one input per player per 60 Hz tick with the
- * shared movement rule and walls, and broadcasts snapshots every tick.
- * 4c: tuned for the D-042 delay target (60 Hz snapshots, bounded input
- * backlog with a catch-up allowance; see player-movement.ts).
+ * Phase 4: connections, guest ids, presence (4a); server-owned movement with
+ * snapshots (4b); tuned for the D-042 delay target (4c).
+ * Phase 5b: owns the whole combat simulation (D-043): every player, the
+ * dummy, and every projectile live in one shared `SimState`. Each tick it
+ * applies each player's queued inputs (movement + fire) through the shared
+ * rules, advances the world once, and broadcasts a snapshot. Clients only
+ * ever send intents; HP, hits, and defeats are decided here.
  *
  * Every incoming message is validated (T-021). Bad messages get an error
  * reply; repeated bad messages, floods, oversized messages, a wrong protocol
@@ -78,6 +89,9 @@ export class GameServer {
   private nextPlayerId = 1;
   private tickCount = 0;
   private loop: ReturnType<typeof setInterval> | undefined;
+  private sim: SimState = createSimState(DUMMY_POSITIONS);
+  /** Size in bytes of the most recent snapshot (diagnostics). */
+  lastSnapshotBytes = 0;
 
   private constructor(wss: WebSocketServer, options: GameServerOptions) {
     this.wss = wss;
@@ -119,16 +133,26 @@ export class GameServer {
       .filter((id): id is number => id !== null);
   }
 
-  /** Authoritative positions, for tests and diagnostics. */
+  /** The authoritative simulation (tests and diagnostics). */
+  get state(): SimState {
+    return this.sim;
+  }
+
+  /** Authoritative player state as sent in snapshots. */
   get players(): SnapshotPlayer[] {
     const out: SnapshotPlayer[] = [];
     for (const s of this.sessions.values()) {
-      if (s.id === null || !s.movement) continue;
+      if (s.id === null || !s.inputs) continue;
+      const p = findPlayer(this.sim, s.id);
+      if (!p) continue;
       out.push({
-        id: s.id,
-        x: s.movement.position.x,
-        y: s.movement.position.y,
-        ack: s.movement.ack,
+        id: p.id,
+        x: p.position.x,
+        y: p.position.y,
+        ack: s.inputs.ack,
+        hp: p.hp,
+        maxHp: p.maxHp,
+        cooldown: p.fireCooldown,
       });
     }
     return out;
@@ -137,31 +161,49 @@ export class GameServer {
   /** Number of inputs waiting to be applied for a player (tests and diagnostics). */
   queuedInputs(playerId: number): number {
     for (const s of this.sessions.values()) {
-      if (s.id === playerId) return s.movement?.queue.length ?? 0;
+      if (s.id === playerId) return s.inputs?.pending.length ?? 0;
     }
     return 0;
+  }
+
+  /** Replaces the simulation (tests only, e.g. to set up a near-death player). */
+  setStateForTest(state: SimState): void {
+    this.sim = state;
   }
 
   /** Advances the simulation one fixed tick (called by the loop, or directly by tests). */
   tick(): void {
     for (const [socket, session] of this.sessions) {
-      if (!session.movement) continue;
+      if (session.id === null || !session.inputs) continue;
+      const { apply } = takeInputsForTick(session.inputs);
       try {
-        applyInputsForTick(session.movement, TEST_WALLS, TICK_SECONDS);
+        for (const input of apply) {
+          this.sim = applyPlayerInput(
+            this.sim,
+            session.id,
+            input,
+            TEST_WALLS,
+            TICK_SECONDS,
+          ).state;
+        }
       } catch (err) {
         // Should be impossible after validation; if it happens, drop only
         // this player rather than crashing the server for everyone.
-        this.log.warn(`${label(session)} movement error: ${String(err)}`);
+        this.log.warn(`${label(session)} input error: ${String(err)}`);
         socket.close(CLOSE_POLICY, "invalid state");
       }
     }
+    const world = stepWorld(this.sim, TEST_WALLS, TICK_SECONDS);
+    this.sim = world.state;
+    for (const e of world.events) {
+      if (e.type === "playerDied") this.log.info(`guest #${e.playerId} died`);
+    }
+
     this.tickCount++;
     if (this.tickCount % this.snapshotEveryTicks === 0) {
-      this.broadcast({
-        type: "snapshot",
-        tick: this.tickCount,
-        players: this.players,
-      });
+      const encoded = encodeMessage(this.snapshot());
+      this.lastSnapshotBytes = Buffer.byteLength(encoded);
+      this.broadcastEncoded(encoded);
     }
   }
 
@@ -171,6 +213,34 @@ export class GameServer {
     return new Promise((resolve, reject) =>
       this.wss.close((err) => (err ? reject(err) : resolve())),
     );
+  }
+
+  private snapshot(): ServerMessage {
+    return {
+      type: "snapshot",
+      tick: this.tickCount,
+      players: this.players,
+      enemies: this.sim.enemies.map((e) => ({
+        id: e.id,
+        x: e.position.x,
+        y: e.position.y,
+        size: e.size,
+        hp: e.hp,
+        maxHp: e.maxHp,
+        respawnIn: e.respawnIn,
+      })),
+      projectiles: this.sim.projectiles.map((p) => ({
+        id: p.id,
+        owner: p.owner,
+        by: p.ownerId,
+        x: roundCoord(p.position.x),
+        y: roundCoord(p.position.y),
+        dx: p.direction.x,
+        dy: p.direction.y,
+        speed: p.speed,
+        size: p.size,
+      })),
+    };
   }
 
   /**
@@ -204,7 +274,7 @@ export class GameServer {
         socket.close(CLOSE_POLICY, "hello timeout");
       }, this.helloTimeoutMs),
       rate: new MessageRateLimiter(this.maxMessagesPerSecond),
-      movement: null,
+      inputs: null,
     };
     this.sessions.set(socket, session);
 
@@ -243,19 +313,35 @@ export class GameServer {
         this.onHello(socket, session, message.protocol);
         return;
       case "input": {
-        if (!session.movement) {
+        if (!session.inputs) {
           this.reject(socket, session, "send hello first");
           return;
         }
         const result = queueInput(
-          session.movement,
+          session.inputs,
           message.seq,
-          message.move,
+          { move: message.move, fire: message.fire },
           this.maxQueuedInputs,
         );
         if (result.kind === "rejected") {
           this.reject(socket, session, result.reason);
         }
+        return;
+      }
+      case "playAgain": {
+        if (session.id === null) {
+          this.reject(socket, session, "send hello first");
+          return;
+        }
+        const player = findPlayer(this.sim, session.id);
+        if (player && isPlayerAlive(player)) {
+          this.reject(socket, session, "playAgain is only allowed when dead");
+          return;
+        }
+        // D-046 prototype: a fresh state at the start; the enemy is not
+        // reset for anyone else.
+        this.sim = addPlayer(this.sim, session.id, PLAYER_START);
+        this.log.info(`${label(session)} plays again`);
         return;
       }
     }
@@ -277,9 +363,10 @@ export class GameServer {
     }
     clearTimeout(session.helloTimer);
     session.id = this.nextPlayerId++;
+    session.inputs = newInputQueue();
     // PROVISIONAL: everyone spawns at the debug start; players do not
     // collide with each other.
-    session.movement = newPlayerMovement(PLAYER_START);
+    this.sim = addPlayer(this.sim, session.id, PLAYER_START);
     this.send(socket, {
       type: "welcome",
       playerId: session.id,
@@ -293,6 +380,7 @@ export class GameServer {
     clearTimeout(session.helloTimer);
     this.sessions.delete(socket);
     if (session.id !== null) {
+      this.sim = removePlayer(this.sim, session.id);
       this.broadcast({ type: "playerLeft", playerId: session.id });
       this.log.info(`${label(session)} left (${this.playerIds.length} online)`);
     }
@@ -317,7 +405,10 @@ export class GameServer {
 
   /** Sends to every joined player, optionally excluding one socket. */
   private broadcast(message: ServerMessage, except?: WebSocket): void {
-    const encoded = encodeMessage(message);
+    this.broadcastEncoded(encodeMessage(message), except);
+  }
+
+  private broadcastEncoded(encoded: string, except?: WebSocket): void {
     for (const [socket, session] of this.sessions) {
       if (
         socket !== except &&

@@ -5,7 +5,9 @@ import {
   parseClientMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
+  roundCoord,
   type ServerMessage,
+  type SnapshotProjectile,
 } from "./protocol.ts";
 
 describe("parseClientMessage", () => {
@@ -111,17 +113,23 @@ describe("parseServerMessage", () => {
   });
 });
 
-describe("input messages (v2)", () => {
-  const input = (seq: unknown, move: unknown) =>
-    JSON.stringify({ type: "input", seq, move });
+const NO_FIRE = { trigger: false, aim: null };
 
-  it("accepts a unit or zero direction", () => {
+describe("input messages", () => {
+  const input = (seq: unknown, move: unknown, fire: unknown = NO_FIRE) =>
+    JSON.stringify({ type: "input", seq, move, fire });
+
+  it("accepts a unit or zero direction with fire intent", () => {
     expect(parseClientMessage(input(0, { x: 0, y: 0 }))).toEqual({
       ok: true,
-      message: { type: "input", seq: 0, move: { x: 0, y: 0 } },
+      message: { type: "input", seq: 0, move: { x: 0, y: 0 }, fire: NO_FIRE },
     });
     const d = Math.SQRT1_2;
-    expect(parseClientMessage(input(41, { x: d, y: -d })).ok).toBe(true);
+    const fire = { trigger: true, aim: { x: 0.6, y: -0.8 } };
+    expect(parseClientMessage(input(41, { x: d, y: -d }, fire))).toEqual({
+      ok: true,
+      message: { type: "input", seq: 41, move: { x: d, y: -d }, fire },
+    });
   });
 
   it.each([
@@ -151,11 +159,6 @@ describe("input messages (v2)", () => {
       "input: move must be {x, y} numbers",
     ],
     [
-      "an array direction",
-      input(1, [1, 0]),
-      "input: move must be {x, y} numbers",
-    ],
-    [
       "a negative seq",
       input(-1, { x: 0, y: 0 }),
       "input: seq must be a non-negative integer",
@@ -166,24 +169,91 @@ describe("input messages (v2)", () => {
       "input: seq must be a non-negative integer",
     ],
     [
-      "a position instead of a direction",
+      "a position instead of an intent",
       JSON.stringify({ type: "input", seq: 1, x: 500, y: 500 }),
       "input: unexpected fields",
+    ],
+    [
+      "missing fire",
+      JSON.stringify({ type: "input", seq: 1, move: { x: 0, y: 0 } }),
+      "input: unexpected fields",
+    ],
+    [
+      "a non-boolean trigger",
+      input(1, { x: 0, y: 0 }, { trigger: 1, aim: null }),
+      "input: fire.trigger must be a boolean",
+    ],
+    [
+      "a non-unit aim",
+      input(1, { x: 0, y: 0 }, { trigger: true, aim: { x: 3, y: 0 } }),
+      "input: fire.aim must be a unit vector",
+    ],
+    [
+      "a zero aim",
+      input(1, { x: 0, y: 0 }, { trigger: true, aim: { x: 0, y: 0 } }),
+      "input: fire.aim must be a unit vector",
+    ],
+    [
+      "a claimed hit",
+      input(1, { x: 0, y: 0 }, { trigger: true, aim: null, hit: 7 }),
+      "input: fire must be {trigger, aim}",
     ],
   ])("rejects %s", (_label, raw, error) => {
     expect(parseClientMessage(raw)).toEqual({ ok: false, error });
   });
+
+  it("accepts playAgain and rejects extra fields on it", () => {
+    expect(parseClientMessage(JSON.stringify({ type: "playAgain" }))).toEqual({
+      ok: true,
+      message: { type: "playAgain" },
+    });
+    expect(
+      parseClientMessage(JSON.stringify({ type: "playAgain", hp: 200 })).ok,
+    ).toBe(false);
+  });
 });
 
-describe("snapshot messages (v2)", () => {
-  it("round-trips a snapshot", () => {
+describe("snapshot messages", () => {
+  const player = {
+    id: 1,
+    x: 1000,
+    y: 1000,
+    ack: -1,
+    hp: 200,
+    maxHp: 200,
+    cooldown: 0,
+  };
+  const enemy = {
+    id: 1,
+    x: 1300,
+    y: 1100,
+    size: 16,
+    hp: 875,
+    maxHp: 875,
+    respawnIn: 0,
+  };
+  const shot: SnapshotProjectile = {
+    id: 5,
+    owner: "player",
+    by: 1,
+    x: 1010.25,
+    y: 1000,
+    dx: 1,
+    dy: 0,
+    speed: 400,
+    size: 4,
+  };
+
+  it("round-trips a full snapshot", () => {
     const msg: ServerMessage = {
       type: "snapshot",
       tick: 120,
       players: [
-        { id: 1, x: 1000, y: 1000, ack: -1 },
-        { id: 2, x: 1012.5, y: 990.25, ack: 57 },
+        player,
+        { ...player, id: 2, x: 1012.5, ack: 57, cooldown: 0.2 },
       ],
+      enemies: [enemy],
+      projectiles: [shot],
     };
     expect(parseServerMessage(encodeMessage(msg))).toEqual({
       ok: true,
@@ -191,15 +261,28 @@ describe("snapshot messages (v2)", () => {
     });
   });
 
-  it("rejects malformed player entries", () => {
-    const bad = (p: unknown) =>
+  it("rejects malformed entries", () => {
+    const snap = (p: unknown[], e: unknown[] = [], pr: unknown[] = []) =>
       parseServerMessage(
-        JSON.stringify({ type: "snapshot", tick: 1, players: [p] }),
+        JSON.stringify({
+          type: "snapshot",
+          tick: 1,
+          players: p,
+          enemies: e,
+          projectiles: pr,
+        }),
       ).ok;
-    expect(bad({ id: 1, x: 0, y: 0 })).toBe(false);
-    expect(bad({ id: 0, x: 0, y: 0, ack: 0 })).toBe(false);
-    expect(bad({ id: 1, x: "0", y: 0, ack: 0 })).toBe(false);
-    expect(bad({ id: 1, x: 0, y: 0, ack: -2 })).toBe(false);
-    expect(bad({ id: 1, x: 0, y: 0, ack: 0, hp: 1 })).toBe(false);
+    expect(snap([player])).toBe(true);
+    expect(snap([{ ...player, cooldown: undefined }])).toBe(false);
+    expect(snap([{ ...player, id: 0 }])).toBe(false);
+    expect(snap([{ ...player, ack: -2 }])).toBe(false);
+    expect(snap([{ ...player, hp: -5 }])).toBe(false);
+    expect(snap([], [{ ...enemy, hp: "1" }])).toBe(false);
+    expect(snap([], [], [{ ...shot, owner: "boss" }])).toBe(false);
+    expect(snap([], [], [{ ...shot, damage: 9999 }])).toBe(false);
+  });
+
+  it("roundCoord keeps two decimals", () => {
+    expect(roundCoord(1234.56789)).toBe(1234.57);
   });
 });

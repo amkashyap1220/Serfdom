@@ -76,6 +76,8 @@ Network delay (Phase 4c, D-042 target < 100 ms excluding network travel): Claude
 
 Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a centered message reads "You died / Main menu (placeholder) / Press Enter to play again"; there is no automatic respawn. Enter returns with 200/200 HP (offline: at the start; online in 5a: where the server has you). The dummy is not reset. Party HP scaling (D-045) is covered by shared tests; it only becomes visible once combat is on the server (5b).
 
+Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→875, 3→1250, 4→1625). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
+
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests

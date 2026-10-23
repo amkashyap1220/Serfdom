@@ -79,7 +79,8 @@ function reportLayout(game: Phaser.Game, logTable: boolean): void {
 function reportLive(game: Phaser.Game): void {
   const scene = worldScene(game);
   const {
-    sim,
+    online,
+    view,
     local,
     renderPosition,
     keys,
@@ -118,7 +119,7 @@ function reportLive(game: Phaser.Game): void {
       keys.ability ? " Space" : "",
       pointer.leftDown ? " LMB" : "",
     ].join("") || "—";
-  const enemies = sim.enemies
+  const enemies = view.enemies
     .map((e) =>
       e.hp > 0 ? `${e.hp}/${e.maxHp}` : `respawn ${e.respawnIn.toFixed(1)}s`,
     )
@@ -133,11 +134,17 @@ function reportLive(game: Phaser.Game): void {
         ? conn.players.map((id) => `#${id}`).join(" ")
         : "—",
     ],
-    ["Movement", net.online ? "server-authoritative" : "local (offline)"],
+    ["Movement + combat", online ? "server-authoritative" : "local (offline)"],
     [
       "Pending / correction",
-      net.online
-        ? `${net.predictor.pendingCount} / ${net.predictor.lastCorrection.toFixed(2)} px`
+      online
+        ? `${net.pendingCount} / ${net.lastCorrection.toFixed(2)} px`
+        : "—",
+    ],
+    [
+      "Snapshot size / rate",
+      online
+        ? `${net.lastSnapshotBytes} B / ${(net.bytesPerSecond / 1024).toFixed(1)} KB/s`
         : "—",
     ],
     ["Other players drawn", String(remotesVisible)],
@@ -173,10 +180,15 @@ function reportLive(game: Phaser.Game): void {
     ["Dummy HP", enemies],
     [
       "In flight (yours/enemy)",
-      `${sim.projectiles.filter((p) => p.owner === "player").length}/${sim.projectiles.filter((p) => p.owner === "enemy").length}`,
+      `${view.projectiles.filter((p) => p.owner === "player").length}/${view.projectiles.filter((p) => p.owner === "enemy").length}`,
     ],
-    ["Shots/hits/blocked", `${totals.shots}/${totals.hits}/${totals.blocked}`],
-    ["Dummy defeats", String(totals.defeats)],
+    [
+      "Shots/hits/blocked",
+      online
+        ? `${totals.shots}/server/server`
+        : `${totals.shots}/${totals.hits}/${totals.blocked}`,
+    ],
+    ["Dummy defeats", online ? "server" : String(totals.defeats)],
   ]);
 }
 
