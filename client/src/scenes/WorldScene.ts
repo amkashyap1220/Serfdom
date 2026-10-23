@@ -8,7 +8,7 @@ import {
   PLAYER_WEAPON,
   resolveFireIntent,
   resolveAbilityTarget,
-  ARCANE_BLAST,
+  ABILITIES,
   TICK_SECONDS,
   worldDirectionFromInput,
   WARLORD,
@@ -292,15 +292,17 @@ export class WorldScene extends Phaser.Scene {
       const fire = this.resolveFire(this.net.position, targets);
       // Space held: where to cast, by the fire mode (D-094); the server
       // decides whether it casts (item, MP, cooldown) and clamps the range.
-      const ability = this.lastKeys.ability
-        ? resolveAbilityTarget(
-            this.fireMode,
-            { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
-            this.net.position,
-            targets,
-            ARCANE_BLAST.range,
-          )
-        : null;
+      const mine = this.net.myAbility;
+      const ability =
+        this.lastKeys.ability && mine
+          ? resolveAbilityTarget(
+              this.fireMode,
+              { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
+              this.net.position,
+              targets,
+              ABILITIES[mine.kind].range,
+            )
+          : null;
       const fired = this.net.tick({ move, fire, ability });
       if (fired) this.totals.shots++;
     }

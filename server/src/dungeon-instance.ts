@@ -31,6 +31,7 @@ import {
   type ServerMessage,
   type SimState,
   type SnapshotBlast,
+  type SnapshotChain,
   type SnapshotPlayer,
   type Loadout,
 } from "@serfdom/shared";
@@ -80,6 +81,8 @@ export class DungeonInstance {
   private sim: SimState;
   /** Blasts landed since the last snapshot (drawing only). */
   private readonly blastsToSend: SnapshotBlast[] = [];
+  /** Chain Lightning paths since the last snapshot (drawing only). */
+  private readonly chainsToSend: SnapshotChain[] = [];
   private rooms: RunProgress;
   private readonly members = new Map<number, Member>();
   /** Everyone who was ever in this run, so nobody rejoins it. */
@@ -209,6 +212,17 @@ export class DungeonInstance {
           const r = applyPlayerInput(this.sim, id, input, walls, TICK_SECONDS);
           this.sim = r.state;
           member.stats = recordRunEvents(member.stats, id, r.events);
+          for (const e of r.events) {
+            if (e.type === "chain") {
+              this.chainsToSend.push({
+                by: e.playerId,
+                points: e.points.map((p) => ({
+                  x: roundCoord(p.x),
+                  y: roundCoord(p.y),
+                })),
+              });
+            }
+          }
         }
       } catch {
         faulted.push(id);
@@ -327,6 +341,7 @@ export class DungeonInstance {
         dy: p.direction.y,
         speed: p.speed,
         size: p.size,
+        ability: p.fromAbility === true,
       })),
       closedDoors: this.closedDoors,
       hazards: this.sim.hazards.map((h) => ({
@@ -338,6 +353,13 @@ export class DungeonInstance {
       portalOpen: this.portalOpen,
       // Each blast goes out in exactly one snapshot.
       blasts: this.blastsToSend.splice(0),
+      chains: this.chainsToSend.splice(0),
+      zones: this.sim.zones.map((z) => ({
+        x: roundCoord(z.at.x),
+        y: roundCoord(z.at.y),
+        radius: z.radius,
+        remaining: roundCoord(z.remaining),
+      })),
     };
   }
 

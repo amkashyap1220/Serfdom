@@ -1,4 +1,9 @@
 import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
+import {
+  ABILITIES,
+  type AbilityKind,
+  type AbilityLoadout,
+} from "./abilities.ts";
 import { isClassId, type ClassId } from "./classes.ts";
 import { STAT_KEYS, type Stats } from "./stats.ts";
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
@@ -46,6 +51,9 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v18 (10b): runStarted carries your ability (kind and tier), so the
+ *          client aims with that ability's reach; snapshots carry Chain
+ *          Lightning paths and Nature's Reach zones (drawing only).
  * v17 (10a): snapshot players carry mp and maxMp; input carries an
  *          optional ability target (Space held, an offset from the player,
  *          clamped by the server); snapshots list the blasts that landed.
@@ -75,7 +83,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 17;
+export const PROTOCOL_VERSION = 18;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -205,6 +213,19 @@ export interface SnapshotBlast {
   radius: number;
 }
 
+export interface SnapshotChain {
+  by: number;
+  /** The caster, then each enemy hit, in order. */
+  points: Vec2[];
+}
+
+export interface SnapshotZone {
+  x: number;
+  y: number;
+  radius: number;
+  remaining: number;
+}
+
 export interface SnapshotHazard {
   x: number;
   y: number;
@@ -225,6 +246,11 @@ export interface SnapshotProjectile {
   dy: number;
   speed: number;
   size: number;
+  /**
+   * From an ability (Volley arrows). The caster's client draws these from
+   * the snapshot; its basic shots it predicts and draws itself.
+   */
+  ability: boolean;
 }
 
 /** Server → client. */
@@ -259,6 +285,8 @@ export type ServerMessage =
       players: number[];
       stats: Stats;
       weaponTier: number | null;
+      /** What your Space casts this run (D-092), or null. */
+      ability: AbilityLoadout | null;
     }
   /** Your run is over; you are back at the menu. */
   | {
@@ -311,6 +339,10 @@ export type ServerMessage =
       portalOpen: boolean;
       /** Ability blasts that landed since the last snapshot (drawing only). */
       blasts: SnapshotBlast[];
+      /** Chain Lightning paths since the last snapshot (drawing only). */
+      chains: SnapshotChain[];
+      /** Nature's Reach patches on the ground now. */
+      zones: SnapshotZone[];
     };
 
 export type ParseResult<T> =
@@ -561,6 +593,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "players",
           "stats",
           "weaponTier",
+          "ability",
         ])
       ) {
         return fail("runStarted: unexpected fields");
@@ -581,6 +614,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       {
         const stats = parseStats(obj.stats);
         if (!stats) return fail("runStarted: bad stats");
+        const ability = parseAbility(obj.ability);
+        if (ability === undefined) return fail("runStarted: bad ability");
         return {
           ok: true,
           message: {
@@ -589,6 +624,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
             players: [...obj.players],
             stats,
             weaponTier: obj.weaponTier as number | null,
+            ability,
           },
         };
       }
@@ -736,12 +772,18 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "hazards",
           "portalOpen",
           "blasts",
+          "chains",
+          "zones",
         ])
       ) {
         return fail("snapshot: unexpected fields");
       }
       const blasts = parseList(obj.blasts, parseSnapshotBlast);
       if (!blasts) return fail("snapshot: bad blast entry");
+      const chains = parseList(obj.chains, parseSnapshotChain);
+      if (!chains) return fail("snapshot: bad chain entry");
+      const zones = parseList(obj.zones, parseSnapshotZone);
+      if (!zones) return fail("snapshot: bad zone entry");
       if (typeof obj.portalOpen !== "boolean") {
         return fail("snapshot: portalOpen must be a boolean");
       }
@@ -775,6 +817,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           hazards,
           portalOpen: obj.portalOpen,
           blasts,
+          chains,
+          zones,
         },
       };
     }
@@ -955,6 +999,17 @@ function parseItem(v: unknown): Item | null {
   return { ...spec, id: id as number, equipped: equipped as EquipSlot | null };
 }
 
+/** null is "no ability"; undefined means malformed. */
+function parseAbility(v: unknown): AbilityLoadout | null | undefined {
+  if (v === null) return null;
+  if (!isPlainObject(v) || !hasExactKeys(v, ["kind", "tier"])) return undefined;
+  if (typeof v.kind !== "string" || !(v.kind in ABILITIES)) return undefined;
+  if (!isNonNegativeInt(v.tier) || (v.tier as number) > MAX_TIER) {
+    return undefined;
+  }
+  return { kind: v.kind as AbilityKind, tier: v.tier as number };
+}
+
 function isEquipSlot(v: unknown): v is EquipSlot {
   return (EQUIP_SLOTS as readonly unknown[]).includes(v);
 }
@@ -1061,6 +1116,34 @@ function parseSnapshotBlast(v: unknown): SnapshotBlast | null {
   return { by: v.by, x: v.x, y: v.y, radius: v.radius };
 }
 
+function parseSnapshotChain(v: unknown): SnapshotChain | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["by", "points"])) return null;
+  if (!isPlayerId(v.by) || !Array.isArray(v.points)) return null;
+  // The caster plus at most 6 hits (5 jumps at T10).
+  if (v.points.length < 2 || v.points.length > 7) return null;
+  const points: Vec2[] = [];
+  for (const p of v.points) {
+    const point = parseVec2(p);
+    if (!point) return null;
+    points.push(point);
+  }
+  return { by: v.by, points };
+}
+
+function parseSnapshotZone(v: unknown): SnapshotZone | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "radius", "remaining"]) ||
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isNonNegative(v.radius) ||
+    !isNonNegative(v.remaining)
+  ) {
+    return null;
+  }
+  return { x: v.x, y: v.y, radius: v.radius, remaining: v.remaining };
+}
+
 function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
   if (
     !isPlainObject(v) ||
@@ -1125,10 +1208,12 @@ function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {
       "dy",
       "speed",
       "size",
+      "ability",
     ])
   ) {
     return null;
   }
+  if (typeof v.ability !== "boolean") return null;
   if (!isPlayerId(v.id) || (v.owner !== "player" && v.owner !== "enemy")) {
     return null;
   }
@@ -1145,6 +1230,7 @@ function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {
     dy: v.dy as number,
     speed: v.speed,
     size: v.size,
+    ability: v.ability,
   };
 }
 

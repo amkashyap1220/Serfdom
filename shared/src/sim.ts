@@ -10,7 +10,7 @@ import {
   stepRespawn,
   type EnemyState,
 } from "./enemy.ts";
-import type { Rect, Vec2 } from "./geometry.ts";
+import { rotateVec, type Rect, type Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
 import { PLAYER_BODY } from "./movement-config.ts";
 import { stepMovement } from "./movement.ts";
@@ -20,9 +20,17 @@ import {
   type Projectile,
 } from "./projectile.ts";
 import {
+  ABILITIES,
   ARCANE_BLAST,
+  CHAIN_LIGHTNING,
+  chainLightningDamage,
+  chainLightningJumps,
+  NATURES_REACH,
+  naturesReachDamage,
   arcaneBlastDamage,
   clampToRange,
+  VOLLEY,
+  volleyArrowDamage,
   type AbilityLoadout,
 } from "./abilities.ts";
 import { weaponDamage } from "./items.ts";
@@ -74,6 +82,8 @@ export interface SimState {
   hazards: readonly Hazard[];
   /** Arcane Blasts cast this tick, resolved by the next world step. */
   blasts: readonly Blast[];
+  /** Nature's Reach patches on the ground (D-097). */
+  zones: readonly Zone[];
 }
 
 /** A warning circle that damages living players inside it when it lands. */
@@ -97,6 +107,169 @@ export interface EnemySpawn {
 }
 
 /** One tick of a player's intent: where to move and whether/where to fire. */
+/** A lingering ability area: hurts every pulse and slows enemies inside. */
+export interface Zone {
+  ownerId: number;
+  at: Vec2;
+  radius: number;
+  /** Seconds left. */
+  remaining: number;
+  /** Seconds until the next pulse of damage. */
+  pulseIn: number;
+  damage: number;
+}
+
+/** What one cast puts into the world. */
+interface Cast {
+  blast?: Blast;
+  zone?: Zone;
+  projectiles?: Omit<Projectile, "id">[];
+  /** Enemies after an instant ability hit them, with its events. */
+  enemies?: EnemyState[];
+  events?: SimEvent[];
+}
+
+/**
+ * The effect of casting `ability` toward `target` (an offset from the
+ * player); null when it cannot be aimed (nothing is spent then). Damage
+ * scales with the item tier (D-095) and the caster's Attack (D-096).
+ */
+function castAbility(
+  ability: AbilityLoadout,
+  ownerId: number,
+  position: Vec2,
+  target: Vec2,
+  combat: PlayerCombat,
+  enemies: readonly EnemyState[],
+): Cast | null {
+  if (ability.kind === "naturesReach") {
+    const offset = clampToRange(target, NATURES_REACH.range);
+    return {
+      zone: {
+        ownerId,
+        at: { x: position.x + offset.x, y: position.y + offset.y },
+        radius: NATURES_REACH.radius,
+        remaining: NATURES_REACH.seconds,
+        // The first pulse lands at once.
+        pulseIn: 0,
+        damage: naturesReachDamage(ability.tier) * combat.attackFactor,
+      },
+    };
+  }
+  if (ability.kind === "chainLightning") {
+    return chainLightning(
+      ability.tier,
+      ownerId,
+      position,
+      target,
+      combat,
+      enemies,
+    );
+  }
+  if (ability.kind === "arcaneBlast") {
+    const offset = clampToRange(target, ARCANE_BLAST.range);
+    return {
+      blast: {
+        ownerId,
+        at: { x: position.x + offset.x, y: position.y + offset.y },
+        radius: ARCANE_BLAST.radius,
+        damage: arcaneBlastDamage(ability.tier) * combat.attackFactor,
+      },
+    };
+  }
+  // Volley (D-097): an even fan around the aim.
+  const length = Math.hypot(target.x, target.y);
+  if (!(length > 1e-9)) return null;
+  const aim = { x: target.x / length, y: target.y / length };
+  const step = (VOLLEY.spreadDegrees * Math.PI) / 180 / (VOLLEY.arrows - 1);
+  const first = -((VOLLEY.arrows - 1) / 2) * step;
+  const damage = volleyArrowDamage(ability.tier) * combat.attackFactor;
+  return {
+    projectiles: Array.from({ length: VOLLEY.arrows }, (_, i) => ({
+      owner: "player" as const,
+      ownerId,
+      position: { ...position },
+      direction: rotateVec(aim, first + i * step),
+      speed: VOLLEY.speed,
+      remaining: VOLLEY.range,
+      damage,
+      size: VOLLEY.size,
+      fromAbility: true,
+    })),
+  };
+}
+
+/**
+ * Chain Lightning (D-097): the first enemy is the one nearest the target
+ * point (within 80 px of it and 250 px of the caster); each jump then goes
+ * to the nearest enemy not hit yet within 120 px of the last, for 80% of
+ * the previous hit. No first enemy: no cast.
+ */
+function chainLightning(
+  tier: number,
+  ownerId: number,
+  position: Vec2,
+  target: Vec2,
+  combat: PlayerCombat,
+  enemies: readonly EnemyState[],
+): Cast | null {
+  const offset = clampToRange(target, CHAIN_LIGHTNING.range);
+  const point = { x: position.x + offset.x, y: position.y + offset.y };
+  const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
+  const nearestTo = (
+    from: Vec2,
+    within: number,
+    hit: Set<number>,
+    also?: (e: EnemyState) => boolean,
+  ) => {
+    let best: EnemyState | null = null;
+    for (const e of enemies) {
+      if (!isAlive(e) || hit.has(e.id) || (also && !also(e))) continue;
+      const d = dist(e.position, from);
+      if (d > within) continue;
+      if (
+        !best ||
+        d < dist(best.position, from) ||
+        (d === dist(best.position, from) && e.id < best.id)
+      )
+        best = e;
+    }
+    return best;
+  };
+  const hit = new Set<number>();
+  let current = nearestTo(
+    point,
+    CHAIN_LIGHTNING.pickRadius,
+    hit,
+    (e) => dist(e.position, position) <= CHAIN_LIGHTNING.range,
+  );
+  if (!current) return null;
+  const updated = [...enemies];
+  const events: SimEvent[] = [];
+  const points: Vec2[] = [{ ...position }];
+  let damage = chainLightningDamage(tier) * combat.attackFactor;
+  for (let n = 0; current && n <= chainLightningJumps(tier); n++) {
+    hit.add(current.id);
+    points.push({ ...current.position });
+    const i = updated.findIndex((e) => e.id === current?.id);
+    const result = damageEnemy(updated[i]!, damage);
+    updated[i] = result.enemy;
+    events.push({
+      type: "hit",
+      enemyId: current.id,
+      playerId: ownerId,
+      damage,
+      position: current.position,
+    });
+    if (result.defeated)
+      events.push({ type: "defeated", enemyId: current.id, playerId: ownerId });
+    damage *= CHAIN_LIGHTNING.falloff;
+    current = nearestTo(current.position, CHAIN_LIGHTNING.jumpRange, hit);
+  }
+  events.push({ type: "chain", playerId: ownerId, points });
+  return { enemies: updated, events };
+}
+
 /** An ability's area hit waiting for the world step (D-096). */
 export interface Blast {
   ownerId: number;
@@ -136,7 +309,9 @@ export type SimEvent =
     }
   | { type: "playerDied"; playerId: number }
   /** An ability landed (drawn by every client). */
-  | { type: "blast"; playerId: number; at: Vec2; radius: number };
+  | { type: "blast"; playerId: number; at: Vec2; radius: number }
+  /** Chain Lightning's path: the caster, then each enemy hit (drawn). */
+  | { type: "chain"; playerId: number; points: Vec2[] };
 
 export function isPlayerAlive(player: PlayerState): boolean {
   return player.hp > 0;
@@ -163,6 +338,7 @@ export function createSimState(
     nextEnemyId: 1,
     hazards: [],
     blasts: [],
+    zones: [],
   };
   return spawnEnemies(
     empty,
@@ -290,24 +466,27 @@ export function applyPlayerInput(
   // target (an offset from the player, clamped to the range here).
   let abilityCooldown = Math.max(0, player.abilityCooldown - dtSeconds);
   let mp = player.mp;
-  let blast: Blast | null = null;
   const target = input.ability ?? null;
+  const ability = player.ability;
+  let cast: Cast | null = null;
   if (
     target &&
-    player.ability?.kind === "arcaneBlast" &&
+    ability &&
     abilityCooldown <= 1e-9 &&
-    mp >= ARCANE_BLAST.mpCost
+    mp >= ABILITIES[ability.kind].mpCost
   ) {
-    const offset = clampToRange(target, ARCANE_BLAST.range);
-    blast = {
-      ownerId: playerId,
-      at: { x: position.x + offset.x, y: position.y + offset.y },
-      radius: ARCANE_BLAST.radius,
-      damage:
-        arcaneBlastDamage(player.ability.tier) * player.combat.attackFactor,
-    };
-    mp -= ARCANE_BLAST.mpCost;
-    abilityCooldown = ARCANE_BLAST.cooldownSeconds;
+    cast = castAbility(
+      ability,
+      playerId,
+      position,
+      target,
+      player.combat,
+      state.enemies,
+    );
+    if (cast) {
+      mp -= ABILITIES[ability.kind].mpCost;
+      abilityCooldown = ABILITIES[ability.kind].cooldownSeconds;
+    }
   }
 
   const updated: PlayerState = {
@@ -320,9 +499,22 @@ export function applyPlayerInput(
   let next: SimState = {
     ...state,
     players: state.players.map((p) => (p.id === playerId ? updated : p)),
-    blasts: blast ? [...state.blasts, blast] : state.blasts,
+    blasts: cast?.blast ? [...state.blasts, cast.blast] : state.blasts,
+    zones: cast?.zone ? [...state.zones, cast.zone] : state.zones,
   };
   const events: SimEvent[] = [];
+  // Chain Lightning hits at once (it needs the enemies where they are now).
+  if (cast?.enemies) next = { ...next, enemies: cast.enemies };
+  events.push(...(cast?.events ?? []));
+  // Ability projectiles (Volley) fly and hit like shots from here on.
+  for (const arrow of cast?.projectiles ?? []) {
+    const id = next.nextProjectileId;
+    next = {
+      ...next,
+      projectiles: [...next.projectiles, { ...arrow, id }],
+      nextProjectileId: id + 1,
+    };
+  }
   if (cooldown.fired && aim) {
     const id = next.nextProjectileId;
     next = {
@@ -373,7 +565,17 @@ export function stepWorld(
   let players = state.players.map((p) => regenerate(p, dtSeconds));
   const alivePlayers = () => players.filter(isPlayerAlive);
   const partySize = alivePlayers().length;
-  let enemies = state.enemies.map((e) => scaleEnemyForParty(e, partySize));
+  // Enemies inside a Nature's Reach move at half speed this tick (D-097).
+  const inZone = (e: EnemyState) =>
+    state.zones.some(
+      (z) =>
+        Math.hypot(e.position.x - z.at.x, e.position.y - z.at.y) <= z.radius,
+    );
+  let enemies = state.enemies.map((e) => {
+    const scaled = scaleEnemyForParty(e, partySize);
+    const slowed = inZone(scaled);
+    return scaled.slowed === slowed ? scaled : { ...scaled, slowed };
+  });
   const projectiles = [...state.projectiles];
   let nextId = state.nextProjectileId;
 
@@ -483,6 +685,40 @@ export function stepWorld(
     }
   }
 
+  // 2d. Nature's Reach: a pulse of damage to every enemy inside, every
+  // 0.5 s while it lasts (D-097); expired patches go.
+  const zones: Zone[] = [];
+  for (const z of state.zones) {
+    let pulseIn = z.pulseIn;
+    if (pulseIn <= 1e-9) {
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (!e || !isAlive(e)) continue;
+        if (
+          Math.hypot(e.position.x - z.at.x, e.position.y - z.at.y) > z.radius
+        ) {
+          continue;
+        }
+        const result = damageEnemy(e, z.damage);
+        enemies[i] = result.enemy;
+        events.push({
+          type: "hit",
+          enemyId: e.id,
+          playerId: z.ownerId,
+          damage: z.damage,
+          position: e.position,
+        });
+        if (result.defeated) {
+          events.push({ type: "defeated", enemyId: e.id, playerId: z.ownerId });
+        }
+      }
+      pulseIn += NATURES_REACH.pulseSeconds;
+    }
+    const remaining = z.remaining - dtSeconds;
+    if (remaining > 1e-9)
+      zones.push({ ...z, remaining, pulseIn: pulseIn - dtSeconds });
+  }
+
   // 3. Projectiles. Targets are rebuilt per projectile so anything defeated
   // earlier in this tick stops absorbing hits.
   const surviving: Projectile[] = [];
@@ -552,6 +788,7 @@ export function stepWorld(
       nextEnemyId,
       hazards,
       blasts: [],
+      zones,
     },
     events,
   };

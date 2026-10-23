@@ -2,6 +2,7 @@ import {
   blockingWalls,
   boxAround,
   combatFor,
+  type AbilityLoadout,
   weaponDamage,
   dungeonInfo,
   SERF_BASE,
@@ -18,7 +19,9 @@ import {
   EMPTY_VIEW,
   type CombatViewModel,
   type ProjectileView,
+  serverProjectilesToDraw,
   type BlastView,
+  type ChainView,
 } from "./combat-view-model";
 import { RemoteInterpolator } from "./interpolation";
 import { LocalShots } from "./local-shots";
@@ -60,6 +63,8 @@ export class NetSync {
   /** Your stats this run, from runStarted (prediction must match the server). */
   private myStats: Stats = SERF_BASE;
   private myWeaponTier: number | null = null;
+  /** What Space casts this run, from runStarted (D-092); null = nothing. */
+  myAbility: AbilityLoadout | null = null;
   private latest: { snapshot: SnapshotMessage; receivedAtMs: number } | null =
     null;
   private self: SnapshotPlayer | null = null;
@@ -67,6 +72,7 @@ export class NetSync {
   private inRun = false;
   /** Blasts the server reported, kept briefly so they can be drawn fading. */
   private blasts: { x: number; y: number; radius: number; atMs: number }[] = [];
+  private chains: { points: { x: number; y: number }[]; atMs: number }[] = [];
   /** Forwarded to the screen flow (set by main.ts). */
   onLobby: (message: LobbyMessage, receivedAtMs: number) => void = () => {};
   onConnected: () => void = () => {};
@@ -89,6 +95,7 @@ export class NetSync {
           this.currentDungeon = message.dungeon;
           this.myStats = message.stats;
           this.myWeaponTier = message.weaponTier;
+          this.myAbility = message.ability;
           // Until the first snapshot says otherwise, every door is closed.
           const layout = dungeonInfo(message.dungeon).layout;
           this.walls = blockingWalls(
@@ -115,6 +122,7 @@ export class NetSync {
     this.remotes.clear();
     this.shots.clear();
     this.blasts = [];
+    this.chains = [];
   }
 
   get online(): boolean {
@@ -202,16 +210,9 @@ export class NetSync {
       MAX_EXTRAPOLATION_S,
     );
     const projectiles: ProjectileView[] = [];
-    for (const p of latest.snapshot.projectiles) {
-      // Our own shots are drawn from local prediction instead.
-      if (p.owner === "player" && p.by === selfId) continue;
-      projectiles.push({
-        owner: p.owner,
-        x: p.x + p.dx * p.speed * age,
-        y: p.y + p.dy * p.speed * age,
-        size: p.size,
-      });
-    }
+    projectiles.push(
+      ...serverProjectilesToDraw(latest.snapshot.projectiles, selfId, age),
+    );
     for (const s of this.shots.list) {
       projectiles.push({
         owner: "player",
@@ -230,7 +231,21 @@ export class NetSync {
       })),
       portalOpen: latest.snapshot.portalOpen,
       blasts: this.blastViews(nowMs),
+      chains: this.chainViews(nowMs),
+      zones: latest.snapshot.zones.map((z) => ({
+        ...z,
+        remaining: Math.max(0, z.remaining - age),
+      })),
     };
+  }
+
+  /** Chain Lightning paths younger than BLAST_SHOW_MS, fading. */
+  private chainViews(nowMs: number): ChainView[] {
+    this.chains = this.chains.filter((c) => nowMs - c.atMs < BLAST_SHOW_MS);
+    return this.chains.map((c) => ({
+      points: c.points,
+      fade: Math.max(0, (nowMs - c.atMs) / BLAST_SHOW_MS),
+    }));
   }
 
   /** Blasts younger than BLAST_SHOW_MS, with how far each has faded. */
@@ -252,6 +267,9 @@ export class NetSync {
     const status = this.connection.snapshot.status;
     if (status.kind !== "connected" || !this.inRun) return;
     this.latest = { snapshot, receivedAtMs };
+    for (const c of snapshot.chains) {
+      this.chains.push({ points: c.points, atMs: receivedAtMs });
+    }
     for (const b of snapshot.blasts) {
       this.blasts.push({
         x: b.x,

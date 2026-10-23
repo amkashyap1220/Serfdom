@@ -127,6 +127,7 @@ export class PlayerPredictor {
       nextEnemyId: 1,
       hazards: [],
       blasts: [],
+      zones: [],
     };
     const r = applyPlayerInput(solo, from.id, input, this.walls, TICK_SECONDS);
     return {

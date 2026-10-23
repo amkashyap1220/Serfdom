@@ -1,5 +1,6 @@
 import {
   GOBLIN_WARRENS,
+  SERF_BASE,
   GRUNT,
   WARLORD,
   PLAYER_HEALTH,
@@ -222,5 +223,64 @@ describe("DungeonInstance in the Goblin Warrens", () => {
       { x: 3600, y: 1000, radius: 32, landsIn: 1 },
     ]);
     expect(snap.enemies.find((e) => e.kind === "warlord")?.alert).toBe(false);
+  });
+});
+
+describe("abilities reach the snapshot (10b)", () => {
+  it("a Chain Lightning cast on the player timeline is sent once, with its path", () => {
+    const r = new DungeonInstance(1, "training", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      loadoutFor: () => ({
+        stats: { ...SERF_BASE, mp: 40 },
+        weaponTier: null,
+        ability: { kind: "chainLightning", tier: 0 },
+      }),
+    });
+    r.tick(); // the dummy spawns on the first tick
+    r.snapshot(0);
+    const s = r.state;
+    r.setStateForTest({
+      ...s,
+      players: s.players.map((p) => ({ ...p, position: { x: 1200, y: 1100 } })),
+    });
+    r.queueInput(1, 0, {
+      move: { x: 0, y: 0 },
+      fire: { trigger: false, aim: null },
+      ability: { x: 100, y: 0 }, // the training dummy at (1300, 1100)
+    });
+    r.tick();
+    const snap = r.snapshot(1) as Extract<ServerMessage, { type: "snapshot" }>;
+    expect(snap.chains).toEqual([
+      {
+        by: 1,
+        points: [
+          { x: 1200, y: 1100 },
+          { x: 1300, y: 1100 },
+        ],
+      },
+    ]);
+    expect((r.snapshot(2) as typeof snap).chains).toEqual([]); // sent once
+  });
+
+  it("a Nature's Reach patch shows in snapshots while it lasts", () => {
+    const r = new DungeonInstance(1, "training", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      loadoutFor: () => ({
+        stats: { ...SERF_BASE, mp: 40 },
+        weaponTier: null,
+        ability: { kind: "naturesReach", tier: 0 },
+      }),
+    });
+    r.queueInput(1, 0, {
+      move: { x: 0, y: 0 },
+      fire: { trigger: false, aim: null },
+      ability: { x: 100, y: 0 },
+    });
+    r.tick();
+    const snap = r.snapshot(1) as Extract<ServerMessage, { type: "snapshot" }>;
+    expect(snap.zones).toHaveLength(1);
+    expect(snap.zones[0]).toMatchObject({ radius: 60 });
   });
 });

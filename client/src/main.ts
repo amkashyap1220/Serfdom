@@ -2,7 +2,7 @@ import * as Phaser from "phaser";
 import type { SerfSummary, ServerMessage } from "@serfdom/shared";
 import {
   ABILITY_NAMES,
-  ARCANE_BLAST,
+  ABILITIES,
   className,
   FIRE_MODE_LABELS,
   itemName,
@@ -46,7 +46,7 @@ function abilityText(serf: SerfSummary | null): string {
   if (!serf) return "—";
   const ability = loadoutOf(serf).ability;
   if (ability) {
-    return `${ABILITY_NAMES[ability.kind]} (T${ability.tier}) · ${ARCANE_BLAST.mpCost} MP`;
+    return `${ABILITY_NAMES[ability.kind]} (T${ability.tier}) · ${ABILITIES[ability.kind].mpCost} MP`;
   }
   const item = serf.items.find((i) => i.equipped === "ability");
   if (item) return `${itemName(item)}: its ability arrives in 10b–10d`;

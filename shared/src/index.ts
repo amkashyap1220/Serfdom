@@ -154,6 +154,8 @@ export {
   type PendingReward,
   type SnapshotEnemy,
   type SnapshotBlast,
+  type SnapshotChain,
+  type SnapshotZone,
   type SnapshotHazard,
   type SnapshotPlayer,
   type SnapshotProjectile,
@@ -165,6 +167,14 @@ export {
   TEST_WORLD,
 } from "./test-world.ts";
 export {
+  ABILITIES,
+  CHAIN_LIGHTNING,
+  NATURES_REACH,
+  naturesReachDamage,
+  chainLightningDamage,
+  chainLightningJumps,
+  VOLLEY,
+  volleyArrowDamage,
   ABILITY_NAMES,
   abilityForItem,
   ARCANE_BLAST,

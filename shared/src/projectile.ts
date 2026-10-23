@@ -16,6 +16,8 @@ export interface Projectile {
   damage: number;
   /** Square hit box size. */
   size: number;
+  /** Fired by an ability (Volley), not a basic shot: clients draw it from the server. */
+  fromAbility?: boolean;
 }
 
 /** Something a projectile can hit: an id and its hit box. */

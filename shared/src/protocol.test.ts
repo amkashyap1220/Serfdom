@@ -313,6 +313,7 @@ describe("menu, queue, and run messages (v4)", () => {
         players: [1, 4],
         stats: { ...SERF_BASE, speed: 14 },
         weaponTier: 2,
+        ability: null,
       },
       {
         type: "runEnded",
@@ -452,11 +453,23 @@ describe("menu, queue, and run messages (v4)", () => {
       players: [1],
       stats: SERF_BASE,
       weaponTier: null,
+      ability: null,
     };
     expect(server(started).ok).toBe(true);
     expect(server({ ...started, weaponTier: 3 }).ok).toBe(true);
     expect(server({ ...started, weaponTier: 11 }).ok).toBe(false);
     expect(server({ ...started, weaponTier: -1 }).ok).toBe(false);
+    // v18: your ability, a known kind with a tier in range.
+    expect(
+      server({ ...started, ability: { kind: "volley", tier: 2 } }).ok,
+    ).toBe(true);
+    expect(
+      server({ ...started, ability: { kind: "fireball", tier: 2 } }).ok,
+    ).toBe(false);
+    expect(
+      server({ ...started, ability: { kind: "volley", tier: 11 } }).ok,
+    ).toBe(false);
+    expect(server({ ...started, ability: undefined }).ok).toBe(false);
     expect(server({ ...started, stats: undefined }).ok).toBe(false);
     expect(server({ ...started, stats: { ...SERF_BASE, speed: -1 } }).ok).toBe(
       false,
@@ -505,6 +518,7 @@ describe("snapshot messages", () => {
     dy: 0,
     speed: 400,
     size: 4,
+    ability: false,
   };
 
   it("round-trips a full snapshot", () => {
@@ -521,6 +535,16 @@ describe("snapshot messages", () => {
       hazards: [{ x: 3700, y: 980, radius: 32, landsIn: 0.4 }],
       portalOpen: false,
       blasts: [{ by: 2, x: 1100.5, y: 990, radius: 40 }],
+      chains: [
+        {
+          by: 2,
+          points: [
+            { x: 1000, y: 1000 },
+            { x: 1080, y: 1010 },
+          ],
+        },
+      ],
+      zones: [{ x: 1200, y: 1000, radius: 60, remaining: 2.5 }],
     };
     expect(parseServerMessage(encodeMessage(msg))).toEqual({
       ok: true,
@@ -541,6 +565,8 @@ describe("snapshot messages", () => {
           hazards: [],
           portalOpen: true,
           blasts: [],
+          chains: [],
+          zones: [],
         }),
       ).ok;
     expect(snap([player])).toBe(true);
@@ -554,6 +580,10 @@ describe("snapshot messages", () => {
     expect(snap([], [{ ...enemy, alert: "yes" }])).toBe(false);
     expect(snap([], [], [{ ...shot, owner: "boss" }])).toBe(false);
     expect(snap([], [], [{ ...shot, damage: 9999 }])).toBe(false);
+    // v18: ability projectiles are flagged so their caster draws them.
+    expect(snap([], [], [{ ...shot, ability: true }])).toBe(true);
+    expect(snap([], [], [{ ...shot, ability: "yes" }])).toBe(false);
+    expect(snap([], [], [{ ...shot, ability: undefined }])).toBe(false);
   });
 
   it("rejects closedDoors that are not a list of door ids", () => {
@@ -566,6 +596,8 @@ describe("snapshot messages", () => {
       hazards: [],
       portalOpen: false,
       blasts: [],
+      chains: [],
+      zones: [],
     };
     const ok = (closedDoors: unknown) =>
       parseServerMessage(JSON.stringify({ ...base, closedDoors })).ok;
@@ -588,6 +620,8 @@ describe("snapshot messages", () => {
       hazards: [],
       portalOpen: false,
       blasts: [],
+      chains: [],
+      zones: [],
     };
     const ok = (extra: object) =>
       parseServerMessage(JSON.stringify({ ...base, ...extra })).ok;
@@ -812,5 +846,37 @@ describe("equipping messages (v16, 9b)", () => {
     expect(client({ type: "unequipItem", serfId: 2, slot: "belt" }).ok).toBe(
       false,
     );
+  });
+});
+
+describe("ability drawing in snapshots (v18, D-097)", () => {
+  const base = {
+    type: "snapshot",
+    tick: 1,
+    players: [],
+    enemies: [],
+    projectiles: [],
+    closedDoors: [],
+    hazards: [],
+    portalOpen: false,
+    blasts: [],
+    chains: [],
+    zones: [],
+  };
+  const ok = (extra: object) =>
+    parseServerMessage(JSON.stringify({ ...base, ...extra })).ok;
+  it("accepts chain paths of 2–7 points and zones; refuses bad ones", () => {
+    const p = { x: 1, y: 2 };
+    expect(ok({ chains: [{ by: 1, points: [p, p] }] })).toBe(true);
+    expect(ok({ chains: [{ by: 1, points: [p] }] })).toBe(false);
+    expect(ok({ chains: [{ by: 1, points: Array(8).fill(p) }] })).toBe(false);
+    expect(ok({ chains: [{ by: 0, points: [p, p] }] })).toBe(false);
+    expect(ok({ zones: [{ x: 1, y: 2, radius: 60, remaining: 3 }] })).toBe(
+      true,
+    );
+    expect(ok({ zones: [{ x: 1, y: 2, radius: -1, remaining: 3 }] })).toBe(
+      false,
+    );
+    expect(ok({ zones: undefined })).toBe(false);
   });
 });

@@ -33,6 +33,8 @@ export interface EnemyState {
   summonerId: number | null;
   /** Per-kind behavior state (enemy-ai.ts). */
   ai: EnemyAi;
+  /** Inside a Nature's Reach this tick: moves at half speed (D-097). Set by the world step. */
+  slowed?: boolean;
 }
 
 /**

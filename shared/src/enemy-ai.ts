@@ -1,4 +1,5 @@
 import { boxAround } from "./collision.ts";
+import { NATURES_REACH } from "./abilities.ts";
 import { ENEMY_RING_ATTACK, PLAYER_HEALTH } from "./combat-config.ts";
 import {
   BRUTE,
@@ -270,7 +271,9 @@ function bruteAct(
         position.y - enemy.position.y,
       );
       // Stops at the end of the charge or when a wall stops it.
-      const blocked = travelled < BRUTE.chargeSpeed * dt * 0.5;
+      // Measured against its (maybe slowed) speed, so a slow is not a wall.
+      const blocked =
+        travelled < BRUTE.chargeSpeed * speedFactor(enemy) * dt * 0.5;
       const timer = ai.timer - dt;
       const done = blocked || timer <= 1e-9;
       return result(
@@ -409,8 +412,13 @@ function move(
     { width: enemy.size, height: enemy.size },
     walls,
     dt,
-    speed,
+    speed * speedFactor(enemy),
   );
+}
+
+/** Movement only: a slowed enemy (Nature's Reach, D-097) moves at half speed. */
+function speedFactor(enemy: EnemyState): number {
+  return enemy.slowed ? NATURES_REACH.slowFactor : 1;
 }
 
 /** Unit vector from `from` to `to`, or (0, 0) if they coincide. */

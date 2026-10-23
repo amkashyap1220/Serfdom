@@ -78,6 +78,18 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Abilities checklist (Phase 10b: Ranger, Sorcerer, Druid)
+
+Restart `npm run dev` (protocol v18) and reload. You need a level-5+ serf of each class (choose the class at level 5; each comes with its T0 ability item worn).
+
+1. **Ranger** (Quiver): hold Space near enemies: 5 **gold** arrows fan out (30°) toward the nearest enemy (Auto aim) or the cursor; up close several arrows hit one target. MP −12; again after 1.2 s.
+2. **Sorcerer** (Scepter): a cyan zigzag strikes the nearest enemy and jumps to up to 3 more enemies within 120 px of each other, each hit weaker. With no enemy within 250 px (or none near the cursor in Auto fire/Manual), nothing happens and no MP is spent. MP −15; 1.5 s.
+3. **Druid** (Totem): a green patch (60 px) appears on the target for 3 s; enemies inside lose HP every half second and walk at half speed (a charging Brute too, without stopping as if it hit a wall). MP −20; 4 s.
+4. HUD **Ability (Space)** shows each class's ability, tier, and MP cost; other classes (Fighter, Barbarian, Rogue, Cleric, Bard, Warlock) still say their ability arrives later.
+5. A Wizard's Arcane Blast still works as in 10a.
+
+Report: pass/fail per step and any exact error text.
+
 ### Abilities checklist (Phase 10a: Wizard Arcane Blast)
 
 Restart `npm run dev` (protocol v17); the server prints `database migrated: 008_ability_grant.sql` once. Reload (Ctrl+Shift+R).

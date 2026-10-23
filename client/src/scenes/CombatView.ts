@@ -33,6 +33,9 @@ const COLORS = {
   hazard: 0xff4d4d,
   // Placeholder colour, not the verified palette.
   blast: 0xb388ff,
+  lightning: 0x9fe8ff,
+  arrow: 0xffd34d,
+  zone: 0x6fcf4f,
 } as const;
 
 interface EnemySprite {
@@ -149,8 +152,28 @@ export class CombatView {
       h.strokeCircle(hz.x, hz.y, hz.radius);
     }
 
-    // Arcane Blast (D-096): a flash that fades as its ring widens.
     const bl = this.blasts.clear();
+    // Nature's Reach (D-097): a green patch, fading as it runs out.
+    for (const z of view.zones) {
+      const life = Math.min(1, z.remaining / 3);
+      bl.fillStyle(COLORS.zone, 0.12 + 0.18 * life);
+      bl.fillCircle(z.x, z.y, z.radius);
+      bl.lineStyle(2, COLORS.zone, 0.4 + 0.5 * life);
+      bl.strokeCircle(z.x, z.y, z.radius);
+    }
+    // Chain Lightning (D-097): a jagged line through every enemy hit.
+    for (const c of view.chains) {
+      bl.lineStyle(2, COLORS.lightning, 1 - c.fade);
+      for (let i = 1; i < c.points.length; i++) {
+        const a = c.points[i - 1]!;
+        const b = c.points[i]!;
+        const mx = (a.x + b.x) / 2 + (i % 2 === 0 ? 6 : -6);
+        const my = (a.y + b.y) / 2 + (i % 2 === 0 ? -6 : 6);
+        bl.lineBetween(a.x, a.y, mx, my);
+        bl.lineBetween(mx, my, b.x, b.y);
+      }
+    }
+    // Arcane Blast (D-096): a flash that fades as its ring widens.
     for (const b of view.blasts) {
       bl.fillStyle(COLORS.blast, 0.5 * (1 - b.fade));
       bl.fillCircle(b.x, b.y, b.radius);
@@ -160,7 +183,13 @@ export class CombatView {
 
     const g = this.projectiles.clear();
     for (const p of view.projectiles) {
-      g.fillStyle(p.owner === "enemy" ? COLORS.enemyBullet : COLORS.playerShot);
+      g.fillStyle(
+        p.owner === "enemy"
+          ? COLORS.enemyBullet
+          : p.ability
+            ? COLORS.arrow
+            : COLORS.playerShot,
+      );
       g.fillRect(
         Math.round(p.x - p.size / 2),
         Math.round(p.y - p.size / 2),

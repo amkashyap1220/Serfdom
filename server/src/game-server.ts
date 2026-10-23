@@ -585,6 +585,7 @@ export class GameServer {
           players: best.playerIds,
           stats: loadout.stats,
           weaponTier: loadout.weaponTier,
+          ability: loadout.ability,
         }),
       );
       this.log.info(`guest #${playerId} joined run #${best.id} in progress`);
@@ -617,6 +618,7 @@ export class GameServer {
           players: [...players],
           stats: this.loadoutOf(id).stats,
           weaponTier: this.loadoutOf(id).weaponTier,
+          ability: this.loadoutOf(id).ability,
         }),
       );
     }

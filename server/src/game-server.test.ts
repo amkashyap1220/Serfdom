@@ -416,6 +416,7 @@ describe("menu and queue (6a)", () => {
       players: [1],
       stats: SERF_BASE,
       weaponTier: null,
+      ability: null,
     });
     const snap = await nextOfType(client, "snapshot");
     expect(snap.players).toEqual([
@@ -532,6 +533,7 @@ describe("menu and queue (6a)", () => {
       players: [1, 2],
       stats: SERF_BASE,
       weaponTier: null,
+      ability: null,
     });
     expect(server.instanceOf(2)).toBe(server.instanceOf(1));
     // The joiner starts fresh at the spawn; enemies rescale for two.

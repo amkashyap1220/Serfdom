@@ -33,6 +33,7 @@ describe("prediction uses your stats (8c-2)", () => {
       nextEnemyId: 1,
       hazards: [],
       blasts: [],
+      zones: [],
     };
     for (let i = 0; i < 60; i++) {
       predictor.predict(RIGHT);
