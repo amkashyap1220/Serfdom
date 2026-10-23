@@ -10,6 +10,9 @@ import type { CombatViewModel } from "../combat-view-model";
 const texture = (kind: EnemyKind) => `enemy-${kind}`;
 const flashTexture = (kind: EnemyKind) => `enemy-${kind}-flash`;
 const alertTexture = (kind: EnemyKind) => `enemy-${kind}-alert`;
+const dazedTexture = (kind: EnemyKind) => `enemy-${kind}-dazed`;
+/** How fast a dazed brute blinks (slower than a telegraph's warning). */
+const DAZED_BLINK_MS = 220;
 /** A slinger that leads its shots (D-109) is drawn lighter. */
 const LEADING_TEXTURE = "enemy-slinger-leads";
 /** How fast a telegraphing enemy blinks. */
@@ -48,6 +51,7 @@ const COLORS = {
   heal: 0x5fe38a,
   zone: 0x6fcf4f,
   leadingSlinger: 0xd7b8ec,
+  dazed: 0x9fc6e8,
   shadow: 0x000000,
   boulder: 0x8c7f6e,
   boulderEdge: 0x4a4238,
@@ -102,6 +106,13 @@ export class CombatView {
         COLORS.alert,
         COLORS.enemyMark,
       );
+      makeSquareTexture(
+        scene,
+        dazedTexture(kind),
+        size,
+        COLORS.dazed,
+        COLORS.enemyMark,
+      );
     }
     makeSquareTexture(
       scene,
@@ -151,9 +162,11 @@ export class CombatView {
             ? flashTexture(enemy.kind)
             : enemy.alert && Math.floor(nowMs / ALERT_BLINK_MS) % 2 === 0
               ? alertTexture(enemy.kind)
-              : enemy.leads
-                ? LEADING_TEXTURE
-                : texture(enemy.kind),
+              : enemy.dazed && Math.floor(nowMs / DAZED_BLINK_MS) % 2 === 0
+                ? dazedTexture(enemy.kind)
+                : enemy.leads
+                  ? LEADING_TEXTURE
+                  : texture(enemy.kind),
         );
 
       const above = rotateVec(

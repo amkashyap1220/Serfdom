@@ -76,6 +76,8 @@ export const BRUTE = {
   recoverSeconds: 2.4,
   /** Per player, at most once per charge (D-111: was 4). */
   chargeDamage: 6,
+  /** Dazed after charging into a wall or obstacle, then it recovers (D-112). */
+  dazeSeconds: 1.5,
 } as const;
 
 /**

@@ -58,11 +58,33 @@ describe("grunt", () => {
     expect(enemy.position.y).toBeCloseTo(0, 9);
   });
 
-  it("is stopped by walls", () => {
+  it("walks round a wall in its way, never through it (D-112)", () => {
     const wall = { x: 20, y: -50, width: 10, height: 100 };
-    const { enemy } = act(grunt(0, 0), [player(1, 300, 0)], 60, [wall]);
-    // Its 14 px body stops flush against the wall at x = 20.
-    expect(enemy.position.x).toBeCloseTo(20 - GRUNT.size / 2, 6);
+    let e = grunt(0, 0);
+    for (let i = 0; i < 60 * 6; i++) {
+      e = enemyAct(e, [player(1, 300, 0)], [wall], TICK_SECONDS).enemy;
+      const half = GRUNT.size / 2;
+      const inside =
+        e.position.x + half > wall.x &&
+        e.position.x - half < wall.x + wall.width &&
+        e.position.y + half > wall.y &&
+        e.position.y - half < wall.y + wall.height;
+      expect(inside).toBe(false);
+    }
+    // Round the end of the wall and on to the player.
+    expect(e.position.x).toBeGreaterThan(250);
+  });
+
+  it("a wall it cannot get round still stops it", () => {
+    // Walls all round: steering finds no way, the body stops at the wall.
+    const box = [
+      { x: 20, y: -500, width: 10, height: 1000 },
+      { x: -500, y: -500, width: 1000, height: 10 },
+      { x: -500, y: 490, width: 1000, height: 10 },
+      { x: -500, y: -500, width: 10, height: 1000 },
+    ];
+    const { enemy } = act(grunt(0, 0), [player(1, 300, 0)], 60 * 3, box);
+    expect(enemy.position.x).toBeLessThanOrEqual(20 - GRUNT.size / 2 + 1e-6);
   });
 
   it("hits on contact, at most once per cooldown", () => {

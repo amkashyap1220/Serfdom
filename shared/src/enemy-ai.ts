@@ -1,4 +1,4 @@
-import { boxAround } from "./collision.ts";
+import { boxAround, segmentHitTime } from "./collision.ts";
 import { NATURES_REACH } from "./abilities.ts";
 import { ENEMY_RING_ATTACK, PLAYER_HEALTH } from "./combat-config.ts";
 import {
@@ -170,7 +170,15 @@ function gruntAct(
   if (!target) return result({ ...enemy, attackCooldown: cooldown });
   const position = move(
     enemy,
-    toward(enemy.position, target.target.position),
+    toward(
+      enemy.position,
+      steerToward(
+        enemy.position,
+        target.target.position,
+        enemy.size / 2,
+        walls,
+      ),
+    ),
     GRUNT.speed,
     walls,
     dt,
@@ -205,17 +213,37 @@ function slingerAct(
     });
   }
   const at = target.target.position;
+  const throwAt = throwPoint(
+    enemy.position,
+    target.target,
+    SLINGER.rock.speed,
+    enemy.leads,
+  );
+  // No throwing into cover (D-112): step sideways until the line is clear.
+  const blocked = lineBlocked(
+    enemy.position,
+    throwAt,
+    SLINGER.rock.size / 2,
+    walls,
+  );
   let direction = NO_MOVE;
-  if (target.distance < SLINGER.minRange)
+  if (blocked) {
+    const ahead = toward(enemy.position, at);
+    const side = enemy.id % 2 === 0 ? 1 : -1;
+    direction = { x: -ahead.y * side, y: ahead.x * side };
+  } else if (target.distance < SLINGER.minRange)
     direction = toward(at, enemy.position);
   else if (target.distance > SLINGER.maxRange)
-    direction = toward(enemy.position, at);
+    direction = toward(
+      enemy.position,
+      steerToward(enemy.position, at, enemy.size / 2, walls),
+    );
   const position = move(enemy, direction, SLINGER.speed, walls, dt);
 
   const attack = stepFireCooldown(
     enemy.attackCooldown,
     dt,
-    target.distance <= SLINGER.throwRange,
+    !blocked && target.distance <= SLINGER.throwRange,
     1 / SLINGER.throwIntervalSeconds,
   );
   const aim = toward(
@@ -257,7 +285,15 @@ function bruteAct(
       }
       const position = move(
         enemy,
-        toward(enemy.position, target.target.position),
+        toward(
+          enemy.position,
+          steerToward(
+            enemy.position,
+            target.target.position,
+            enemy.size / 2,
+            walls,
+          ),
+        ),
         BRUTE.speed,
         walls,
         dt,
@@ -307,17 +343,28 @@ function bruteAct(
       const blocked =
         travelled < BRUTE.chargeSpeed * speedFactor(enemy) * dt * 0.5;
       const timer = ai.timer - dt;
-      const done = blocked || timer <= 1e-9;
-      return result(
-        {
-          ...enemy,
-          position,
-          ai: done
-            ? { ...ai, mode: "recover", timer: BRUTE.recoverSeconds, hit }
-            : { ...ai, timer, hit },
-        },
-        { contacts },
-      );
+      // Slamming into a wall or obstacle dazes it first (D-112).
+      const next = blocked
+        ? { ...ai, mode: "dazed" as const, timer: BRUTE.dazeSeconds, hit }
+        : timer <= 1e-9
+          ? {
+              ...ai,
+              mode: "recover" as const,
+              timer: BRUTE.recoverSeconds,
+              hit,
+            }
+          : { ...ai, timer, hit };
+      return result({ ...enemy, position, ai: next }, { contacts });
+    }
+    case "dazed": {
+      const timer = ai.timer - dt;
+      return result({
+        ...enemy,
+        ai:
+          timer > 1e-9
+            ? { ...ai, timer }
+            : { ...ai, mode: "recover", timer: BRUTE.recoverSeconds },
+      });
     }
     case "recover": {
       const timer = ai.timer - dt;
@@ -422,6 +469,62 @@ function warlordAct(
 export function isTelegraphing(enemy: EnemyState): boolean {
   return enemy.ai.kind === "brute" && enemy.ai.mode === "windup";
 }
+
+/** A brute that charged into a wall, standing dazed (D-112). */
+export function isDazed(enemy: EnemyState): boolean {
+  return enemy.ai.kind === "brute" && enemy.ai.mode === "dazed";
+}
+
+/** Whether a box of half-size `half` moving from `from` to `to` hits any rect. */
+export function lineBlocked(
+  from: Vec2,
+  to: Vec2,
+  half: number,
+  walls: readonly Rect[],
+): boolean {
+  return walls.some((w) => segmentHitTime(from, to, half, w) !== null);
+}
+
+/**
+ * Where to head to reach `to` (D-112): straight there if nothing is in
+ * the way; otherwise the corner of the first thing in the way that makes
+ * the shortest trip round it, just clear of it. Called every step, so the
+ * enemy turns the next corner once the first is reached.
+ */
+export function steerToward(
+  from: Vec2,
+  to: Vec2,
+  half: number,
+  walls: readonly Rect[],
+): Vec2 {
+  let first: { t: number; rect: Rect } | null = null;
+  for (const rect of walls) {
+    const t = segmentHitTime(from, to, half, rect);
+    if (t !== null && (first === null || t < first.t)) first = { t, rect };
+  }
+  if (!first) return to;
+  const r = first.rect;
+  const pad = half + STEER_CLEARANCE;
+  const corners: Vec2[] = [
+    { x: r.x - pad, y: r.y - pad },
+    { x: r.x + r.width + pad, y: r.y - pad },
+    { x: r.x - pad, y: r.y + r.height + pad },
+    { x: r.x + r.width + pad, y: r.y + r.height + pad },
+  ];
+  const trip = (c: Vec2) =>
+    Math.hypot(c.x - from.x, c.y - from.y) + Math.hypot(to.x - c.x, to.y - c.y);
+  // Corners reachable without crossing the obstacle itself, shortest trip first.
+  const open = corners.filter(
+    (c) =>
+      Math.hypot(c.x - from.x, c.y - from.y) > 1 &&
+      segmentHitTime(from, c, half, r) === null,
+  );
+  const pool = open.length > 0 ? open : corners;
+  return pool.reduce((best, c) => (trip(c) < trip(best) ? c : best));
+}
+
+/** How far past an obstacle's corner an enemy aims, beyond its own size. */
+const STEER_CLEARANCE = 6;
 
 function touching(position: Vec2, size: number, player: Vec2): boolean {
   return overlaps(

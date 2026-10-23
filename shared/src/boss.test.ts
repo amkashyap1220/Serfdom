@@ -87,16 +87,31 @@ describe("brute", () => {
     expect(enemy.ai.kind === "brute" && enemy.ai.mode).toBe("recover");
   });
 
-  it("stops charging when it hits a wall", () => {
+  it("a charge into a wall stops it, dazes it for 1.5 s, then it recovers (D-112)", () => {
     const wall = { x: -40, y: -100, width: 10, height: 200 };
     const { enemy, log } = runEnemy(
       ready(100, 0),
       [player(1, -100, 0)],
-      ticks(BRUTE.windupSeconds) + 60,
+      ticks(BRUTE.windupSeconds) + 60 + ticks(BRUTE.dazeSeconds),
       [wall],
     );
     expect(enemy.position.x).toBeCloseTo(-30 + BRUTE.size / 2, 6);
-    expect(log.some((l) => l.mode === "recover")).toBe(true);
+    const modes = log
+      .map((l) => l.mode)
+      .filter((m, i, all) => m !== all[i - 1]);
+    expect(modes).toEqual(["windup", "charge", "dazed", "recover"]);
+    const dazed = log.filter((l) => l.mode === "dazed").length;
+    expect(dazed).toBe(ticks(BRUTE.dazeSeconds));
+  });
+
+  it("a charge that runs its course is not dazed", () => {
+    const { log } = runEnemy(
+      ready(100, 0),
+      [player(1, -100, 0)],
+      ticks(BRUTE.windupSeconds + BRUTE.chargeSeconds) + 10,
+    );
+    expect(log.some((l) => l.mode === "dazed")).toBe(false);
+    expect(log.at(-1)?.mode).toBe("recover");
   });
 });
 

@@ -154,3 +154,59 @@ export function findLeak(layout: DungeonLayout, cell = 8): string | null {
   }
   return null;
 }
+
+/**
+ * Flood fill from the spawn with every door open (D-112): the first open
+ * floor cell of any room that cannot be reached (sealed off by obstacles),
+ * or null if every room's open floor is reachable.
+ */
+export function findSealedFloor(
+  layout: DungeonLayout,
+  cell = 8,
+): string | null {
+  const cols = Math.ceil(layout.world.width / cell);
+  const rows = Math.ceil(layout.world.height / cell);
+  const blocked = new Uint8Array(cols * rows);
+  for (const r of layout.walls) {
+    const c0 = Math.max(0, Math.floor(r.x / cell));
+    const r0 = Math.max(0, Math.floor(r.y / cell));
+    const c1 = Math.min(cols - 1, Math.ceil((r.x + r.width) / cell) - 1);
+    const r1 = Math.min(rows - 1, Math.ceil((r.y + r.height) / cell) - 1);
+    for (let y = r0; y <= r1; y++)
+      for (let x = c0; x <= c1; x++) blocked[y * cols + x] = 1;
+  }
+  const start =
+    Math.floor(layout.spawn.y / cell) * cols +
+    Math.floor(layout.spawn.x / cell);
+  const seen = new Uint8Array(cols * rows);
+  const queue = [start];
+  seen[start] = 1;
+  while (queue.length > 0) {
+    const here = queue.pop()!;
+    for (const next of [here + 1, here - 1, here + cols, here - cols]) {
+      if (next < 0 || next >= cols * rows || seen[next] || blocked[next])
+        continue;
+      seen[next] = 1;
+      queue.push(next);
+    }
+  }
+  for (const room of layout.rooms) {
+    const b = room.bounds;
+    for (
+      let y = Math.ceil(b.y / cell);
+      y < Math.floor((b.y + b.height) / cell);
+      y++
+    ) {
+      for (
+        let x = Math.ceil(b.x / cell);
+        x < Math.floor((b.x + b.width) / cell);
+        x++
+      ) {
+        const i = y * cols + x;
+        if (!blocked[i] && !seen[i])
+          return `${room.id}: sealed floor at ${x * cell},${y * cell}`;
+      }
+    }
+  }
+  return null;
+}

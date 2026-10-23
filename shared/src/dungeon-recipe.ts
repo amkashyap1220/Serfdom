@@ -209,7 +209,7 @@ function tryRecipe(
  * on top of each other.
  */
 export function combineSetups(
-  piece: Pick<RoomPiece, "width" | "height" | "holeWave">,
+  piece: Pick<RoomPiece, "width" | "height" | "holeWave" | "obstacles">,
   a: Waves,
   b: Waves,
 ): EnemySpawnDef[][] {
@@ -229,7 +229,7 @@ export function combineSetups(
 }
 
 function freeSpot(
-  piece: Pick<RoomPiece, "width" | "height">,
+  piece: Pick<RoomPiece, "width" | "height" | "obstacles">,
   placed: readonly EnemySpawnDef[],
   s: EnemySpawnDef,
 ): EnemySpawnDef {
@@ -239,6 +239,13 @@ function freeSpot(
     y - half >= 0 &&
     x + half <= piece.width &&
     y + half <= piece.height &&
+    (piece.obstacles ?? []).every(
+      (o) =>
+        x + half <= o.x ||
+        x - half >= o.x + o.width ||
+        y + half <= o.y ||
+        y - half >= o.y + o.height,
+    ) &&
     placed.every((p) => {
       const gap = (ENEMY_STATS[p.kind].size / 2 + half) * 1.5;
       return Math.abs(p.at.x - x) >= gap || Math.abs(p.at.y - y) >= gap;

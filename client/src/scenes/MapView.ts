@@ -21,6 +21,8 @@ const COLORS = {
   portal: 0x9b7bff,
   portalCore: 0xe8dcff,
   hole: 0x0d0b09,
+  obstacle: 0x8a8378,
+  obstacleEdge: 0xb8b0a2,
   label: "#8a94a6",
 } as const;
 
@@ -95,6 +97,15 @@ export class MapView {
     g.lineStyle(1, COLORS.wallEdge);
     for (const s of wallOutline(layout.walls)) {
       g.lineBetween(s.x1, s.y1, s.x2, s.y2);
+    }
+    // Obstacles (D-112): solid like walls, drawn as lighter stone.
+    for (const room of layout.rooms) {
+      for (const o of room.obstacles ?? []) {
+        g.fillStyle(COLORS.obstacle);
+        g.fillRect(o.x, o.y, o.width, o.height);
+        g.lineStyle(1, COLORS.obstacleEdge);
+        g.strokeRect(o.x + 0.5, o.y + 0.5, o.width - 1, o.height - 1);
+      }
     }
     // Ambush holes (D-109): dark gaps in the wall nearest each hole.
     g.fillStyle(COLORS.hole);

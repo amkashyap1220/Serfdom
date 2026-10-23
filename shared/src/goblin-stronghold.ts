@@ -39,7 +39,7 @@ const newRoom = (
   height: number,
   band: RoomBand,
   waves: Waves,
-  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave"> = {},
+  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave" | "obstacles"> = {},
 ): RecipePiece => ({
   piece: { key, name, width, height, waves, ...traps },
   band,
@@ -55,26 +55,40 @@ const reinforced = ({ piece, band, setups }: RecipePiece): RecipePiece => {
 export const STRONGHOLD_PIECES: readonly RecipePiece[] = [
   ...WARRENS_PIECES.map(reinforced),
   // 1,860: the gate's defenders.
-  newRoom("gatehouse", "Gatehouse", 640, 400, "light", [
+  newRoom(
+    "gatehouse",
+    "Gatehouse",
+    640,
+    400,
+    "light",
     [
-      ...g([
-        [220, 100],
-        [220, 300],
-        [300, 160],
-        [300, 240],
-        [380, 100],
-        [380, 300],
-        [460, 160],
-        [460, 240],
-      ]),
-      ...s([
-        [580, 80],
-        [580, 160],
-        [580, 240],
-        [580, 320],
-      ]),
+      [
+        ...g([
+          [220, 100],
+          [220, 300],
+          [300, 160],
+          [300, 240],
+          [380, 100],
+          [380, 300],
+          [460, 160],
+          [460, 240],
+        ]),
+        ...s([
+          [580, 80],
+          [580, 160],
+          [580, 240],
+          [580, 320],
+        ]),
+      ],
     ],
-  ]),
+    // Two barricades across the room, a gap between them (D-112).
+    {
+      obstacles: [
+        { x: 420, y: 80, width: 24, height: 96 },
+        { x: 420, y: 224, width: 24, height: 96 },
+      ],
+    },
+  ),
   // 3,780: a first wave, then reinforcements from the bunks at the back.
   newRoom(
     "barracks",
@@ -127,6 +141,12 @@ export const STRONGHOLD_PIECES: readonly RecipePiece[] = [
         { x: 560, y: 540 },
       ],
       holeWave: 1,
+      // Three rows of bunks at the back (D-112).
+      obstacles: [
+        { x: 520, y: 120, width: 128, height: 32 },
+        { x: 520, y: 264, width: 128, height: 32 },
+        { x: 520, y: 408, width: 128, height: 32 },
+      ],
     },
   ),
   // 3,910: brutes guarding the racks, slingers behind them.

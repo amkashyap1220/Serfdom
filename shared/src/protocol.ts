@@ -59,6 +59,8 @@ import {
  *          builds the same generated layout from it (T-050, D-104).
  * v22 (12b): snapshot enemies say whether they lead their shots (D-109);
  *          runEnded's killedBy may be a room hazard ("rockfall", D-110).
+ * v23 (12c): snapshot enemies say whether they are dazed (a brute that
+ *          charged into a wall, D-112).
  * v19 (10c): snapshot players list their buffs, enemies say whether
  *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
@@ -93,7 +95,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 23;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -220,6 +222,8 @@ export interface SnapshotEnemy {
   cursed: boolean;
   /** A slinger that aims where you will be (D-109); drawn lighter. */
   leads: boolean;
+  /** A brute dazed after charging into a wall (D-112). */
+  dazed: boolean;
 }
 
 /** An ability's flash on the ground, drawn once. */
@@ -1239,12 +1243,17 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "alert",
       "cursed",
       "leads",
+      "dazed",
     ])
   ) {
     return null;
   }
   if (!isEnemyKind(v.kind) || typeof v.alert !== "boolean") return null;
-  if (typeof v.cursed !== "boolean" || typeof v.leads !== "boolean") {
+  if (
+    typeof v.cursed !== "boolean" ||
+    typeof v.leads !== "boolean" ||
+    typeof v.dazed !== "boolean"
+  ) {
     return null;
   }
   if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
@@ -1270,6 +1279,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     alert: v.alert,
     cursed: v.cursed,
     leads: v.leads,
+    dazed: v.dazed,
   };
 }
 

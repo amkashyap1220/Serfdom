@@ -78,6 +78,18 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Obstacles checklist (Phase 12c, D-112)
+
+Restart `npm run dev` (protocol v23) and reload.
+
+1. **Collapsed passage** (Warrens): three pale stone rubble piles down the middle. You cannot walk or shoot through them; neither can goblins' rocks.
+2. **Guard room**: four pillars. Hide behind one: rocks hit the pillar. Slingers then step sideways to get a clear throw; grunts and brutes walk round the pillars to reach you (they do not stick to the far side).
+3. **Brute daze**: stand behind a pillar while a brute charges (it flashes yellow first). If it slams into the pillar it blinks pale blue for about 1.5 s, then stands a moment more before walking again.
+4. **Stronghold**: the Gatehouse has two barricades with a gap between; the Barracks has rows of bunks at the back, and its reinforcements still come out of the holes behind them.
+5. Doors are never blocked; every part of a room can be reached.
+
+Report: pass/fail per step, seeds, and anywhere a goblin gets stuck on an obstacle.
+
 ### Room mechanics checklist (Phase 12b, D-109)
 
 Pace (D-111): goblins move 20% slower and attack 1.5× less often, but each hit does 1.5× the damage (a grunt touch 3, a rock 3, a brute charge 6, Warlord bullets 3). The screen should feel calmer; each hit should matter more.

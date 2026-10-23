@@ -38,6 +38,8 @@ export interface RoomPiece {
   waves: readonly (readonly EnemySpawnDef[])[];
   /** Boulders fall while it fights (D-110). */
   rockfall?: boolean;
+  /** Solid obstacles on its floor, relative like the spawns (D-112). */
+  obstacles?: readonly Rect[];
   /** Ambush holes and the wave that comes out of them (D-109). */
   holes?: readonly Vec2[];
   holeWave?: number;
@@ -72,6 +74,7 @@ function orient(
   height: number;
   waves: EnemySpawnDef[][];
   holes: Vec2[];
+  obstacles: Rect[];
 } {
   const { width: w, height: h } = piece;
   const map: Record<Side, (p: Vec2) => Vec2> = {
@@ -88,6 +91,17 @@ function orient(
       wave.map((s) => ({ ...s, at: map[entry](s.at) })),
     ),
     holes: (piece.holes ?? []).map((h) => map[entry](h)),
+    obstacles: (piece.obstacles ?? []).map((r) => {
+      // Turn two opposite corners, then take the box between them.
+      const a = map[entry]({ x: r.x, y: r.y });
+      const c = map[entry]({ x: r.x + r.width, y: r.y + r.height });
+      return {
+        x: Math.min(a.x, c.x),
+        y: Math.min(a.y, c.y),
+        width: Math.abs(a.x - c.x),
+        height: Math.abs(a.y - c.y),
+      };
+    }),
   };
 }
 
@@ -243,6 +257,9 @@ export class RoomAssembly {
           waves,
           required,
           ...traps(piece.rockfall === true, o.holes.map(shift), piece.holeWave),
+          ...(o.obstacles.length > 0
+            ? { obstacles: o.obstacles.map((r) => ({ ...r, ...shift(r) })) }
+            : {}),
         },
         used: new Set([OPPOSITE[side]]),
         parent: parentIndex,
@@ -290,6 +307,7 @@ export class RoomAssembly {
         room.holeWave,
         room.rockfall?.damage,
       ),
+      ...(room.obstacles ? { obstacles: room.obstacles.map(moveRect) } : {}),
     }));
     const doors = this.doors.map((d) => ({ ...d, rect: moveRect(d.rect) }));
     return {
@@ -297,7 +315,11 @@ export class RoomAssembly {
         width: maxX + dx + WALL_THICKNESS + WORLD_MARGIN,
         height: maxY + dy + WALL_THICKNESS + WORLD_MARGIN,
       },
-      walls: wallsAroundRooms(rooms, doors),
+      // Obstacles are solid like walls (D-112).
+      walls: [
+        ...wallsAroundRooms(rooms, doors),
+        ...rooms.flatMap((r) => r.obstacles ?? []),
+      ],
       spawn: center(rooms[0]!.bounds),
       rooms,
       doors,

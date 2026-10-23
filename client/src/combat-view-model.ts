@@ -24,6 +24,8 @@ export interface EnemyView {
   cursed: boolean;
   /** A slinger that leads its shots (D-109): drawn lighter. */
   leads: boolean;
+  /** A brute dazed after charging into a wall (D-112): blinks pale blue. */
+  dazed: boolean;
 }
 
 export interface HazardView {

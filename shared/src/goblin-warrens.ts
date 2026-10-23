@@ -291,7 +291,7 @@ const oldPiece = (
 /** Adds traps to a pool entry (the room's shape and setups unchanged). */
 const withTraps = (
   entry: RecipePiece,
-  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave">,
+  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave" | "obstacles">,
   setups: Waves[] = [...entry.setups],
 ): RecipePiece => ({
   ...entry,
@@ -409,34 +409,44 @@ export const WARRENS_PIECES: readonly WarrensPiece[] = [
     ],
     "Goblin den",
   ),
-  newPiece("passage", "Collapsed passage", 640, 240, "light", [
-    [
+  // Rubble piles down the middle (D-112): the slingers throw from behind it.
+  withTraps(
+    newPiece("passage", "Collapsed passage", 640, 240, "light", [
       [
-        ...g([
-          [300, 80],
-          [340, 120],
-          [300, 160],
-        ]),
-        ...s([
-          [590, 70],
-          [590, 170],
-        ]),
+        [
+          ...g([
+            [300, 80],
+            [340, 120],
+            [300, 160],
+          ]),
+          ...s([
+            [590, 70],
+            [590, 170],
+          ]),
+        ],
       ],
-    ],
-    [
       [
-        ...g([
-          [360, 90],
-          [360, 150],
-        ]),
-        ...s([
-          [580, 50],
-          [600, 120],
-          [580, 190],
-        ]),
+        [
+          ...g([
+            [360, 90],
+            [360, 150],
+          ]),
+          ...s([
+            [580, 50],
+            [600, 120],
+            [580, 190],
+          ]),
+        ],
       ],
-    ],
-  ]),
+    ]),
+    {
+      obstacles: [
+        { x: 212, y: 88, width: 48, height: 64 },
+        { x: 400, y: 88, width: 48, height: 64 },
+        { x: 520, y: 88, width: 48, height: 64 },
+      ],
+    },
+  ),
   newPiece("grotto", "Fungus grotto", 480, 480, "light", [
     [
       [
@@ -517,6 +527,13 @@ export const WARRENS_PIECES: readonly WarrensPiece[] = [
     ]),
     {
       rockfall: true,
+      // Four pillars to hide behind (D-112), clear of every setup's spawns.
+      obstacles: [
+        { x: 276, y: 86, width: 48, height: 48 },
+        { x: 276, y: 266, width: 48, height: 48 },
+        { x: 446, y: 126, width: 48, height: 48 },
+        { x: 446, y: 226, width: 48, height: 48 },
+      ],
     },
   ),
   newPiece("kitchen", "Goblin kitchen", 560, 480, "medium", [

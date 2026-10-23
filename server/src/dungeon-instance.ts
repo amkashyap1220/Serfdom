@@ -1,5 +1,6 @@
 import {
   dropBoulders,
+  isDazed,
   rockfallDrops,
   seededRandom,
   type HazardKind,
@@ -370,6 +371,7 @@ export class DungeonInstance {
         alert: isTelegraphing(e),
         cursed: e.curse !== undefined,
         leads: e.leads,
+        dazed: isDazed(e),
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,

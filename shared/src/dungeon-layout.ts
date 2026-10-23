@@ -20,6 +20,9 @@ export interface EnemySpawnDef {
  * `nearRadius` of a player in the room. Each shows its shadow for
  * `warnSeconds`, then lands, hitting everyone within `radius`.
  */
+/** Obstacles keep at least this far from a room's walls, so no doorway is blocked (D-112). */
+export const OBSTACLE_MARGIN = 64;
+
 export const ROCKFALL = {
   /** D-111: was 0.7 s. */
   everySeconds: 1.05,
@@ -45,6 +48,11 @@ export interface RoomDef {
   required: boolean;
   /** A rockfall room and the damage of one boulder (D-110). */
   rockfall?: { damage: number };
+  /**
+   * Obstacles on its floor (D-112): solid like walls (they are also in the
+   * layout's walls), blocking movement and every shot.
+   */
+  obstacles?: readonly Rect[];
   /**
    * Ambush holes (D-109): floor points just inside its walls. Wave
    * `holeWave` does not appear at once: its goblins come out of the holes,
@@ -169,6 +177,8 @@ export function validateLayout(layout: DungeonLayout): string[] {
 
   for (const room of layout.rooms) {
     room.waves.forEach((wave, i) => {
+      // A hole wave comes out beside its holes; its listed spots are unused.
+      if (i === room.holeWave) return;
       for (const s of wave) {
         const box = boxAround(s.at, ENEMY_STATS[s.kind].size);
         const inside =
@@ -190,6 +200,41 @@ export function validateLayout(layout: DungeonLayout): string[] {
   }
 
   for (const room of layout.rooms) {
+    for (const o of room.obstacles ?? []) {
+      const b = room.bounds;
+      const m = OBSTACLE_MARGIN;
+      if (
+        o.x < b.x + m ||
+        o.y < b.y + m ||
+        o.x + o.width > b.x + b.width - m ||
+        o.y + o.height > b.y + b.height - m
+      ) {
+        problems.push(
+          `${room.id}: obstacle at ${o.x},${o.y} is too close to a wall`,
+        );
+      }
+      if (
+        !layout.walls.some(
+          (w) =>
+            w.x === o.x &&
+            w.y === o.y &&
+            w.width === o.width &&
+            w.height === o.height,
+        )
+      ) {
+        problems.push(
+          `${room.id}: obstacle at ${o.x},${o.y} is not solid (missing from the walls)`,
+        );
+      }
+      // Goblins come out side by side beside a hole: keep that clear.
+      for (const hole of room.holes ?? []) {
+        if (overlaps(o, boxAround(hole, 64))) {
+          problems.push(
+            `${room.id}: an obstacle blocks the hole at ${hole.x},${hole.y}`,
+          );
+        }
+      }
+    }
     if (room.holeWave !== undefined) {
       if (!room.holes || room.holes.length === 0) {
         problems.push(`${room.id}: a hole wave but no holes`);

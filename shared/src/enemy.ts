@@ -50,7 +50,8 @@ export type EnemyAi =
   | { kind: "none" }
   | {
       kind: "brute";
-      mode: "walk" | "windup" | "charge" | "recover";
+      /** "dazed": after charging into a wall (D-112), before recovering. */
+      mode: "walk" | "windup" | "charge" | "dazed" | "recover";
       timer: number;
       direction: Vec2;
       /** Players already hit by the current charge. */
