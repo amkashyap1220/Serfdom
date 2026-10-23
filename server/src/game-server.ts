@@ -14,7 +14,7 @@ import {
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { consoleLogger, type Logger } from "./log.ts";
 import {
-  applyNextInput,
+  applyInputsForTick,
   newPlayerMovement,
   queueInput,
   type PlayerMovement,
@@ -30,7 +30,7 @@ export interface GameServerOptions {
   maxInvalidMessages?: number;
   /** Run the 60 Hz simulation on a real clock. Tests turn this off and call tick(). */
   autoTick?: boolean;
-  /** Send a snapshot every N ticks (3 → 20 Hz at 60 Hz). */
+  /** Send a snapshot every N ticks (1 → 60 Hz; chosen for low delay, D-042). */
   snapshotEveryTicks?: number;
   /** Per-player input queue limit; extra inputs are dropped. */
   maxQueuedInputs?: number;
@@ -58,7 +58,9 @@ interface Session {
  * 4a: accepts connections, hands out guest ids (T-022), tracks who is online.
  * 4b: owns every player's position (T-023). Clients send movement intent;
  * the server applies at most one input per player per 60 Hz tick with the
- * shared movement rule and walls, and broadcasts snapshots at 20 Hz.
+ * shared movement rule and walls, and broadcasts snapshots every tick.
+ * 4c: tuned for the D-042 delay target (60 Hz snapshots, bounded input
+ * backlog with a catch-up allowance; see player-movement.ts).
  *
  * Every incoming message is validated (T-021). Bad messages get an error
  * reply; repeated bad messages, floods, oversized messages, a wrong protocol
@@ -82,7 +84,7 @@ export class GameServer {
     this.log = options.log ?? consoleLogger;
     this.helloTimeoutMs = options.helloTimeoutMs ?? 5000;
     this.maxInvalidMessages = options.maxInvalidMessages ?? 5;
-    this.snapshotEveryTicks = options.snapshotEveryTicks ?? 3;
+    this.snapshotEveryTicks = options.snapshotEveryTicks ?? 1;
     this.maxQueuedInputs = options.maxQueuedInputs ?? 30;
     this.maxMessagesPerSecond = options.maxMessagesPerSecond ?? 180;
     wss.on("connection", (socket) => this.onConnection(socket));
@@ -145,7 +147,7 @@ export class GameServer {
     for (const [socket, session] of this.sessions) {
       if (!session.movement) continue;
       try {
-        applyNextInput(session.movement, TEST_WALLS, TICK_SECONDS);
+        applyInputsForTick(session.movement, TEST_WALLS, TICK_SECONDS);
       } catch (err) {
         // Should be impossible after validation; if it happens, drop only
         // this player rather than crashing the server for everyone.

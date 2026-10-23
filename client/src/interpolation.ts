@@ -2,10 +2,11 @@ import type { Vec2 } from "@serfdom/shared";
 
 /**
  * How far behind real time other players are drawn. Snapshots arrive every
- * 50 ms (20 Hz); drawing 100 ms in the past means there are almost always
- * two snapshots to blend between, even with some network jitter.
+ * ~16.7 ms (60 Hz); drawing 50 ms in the past leaves about three snapshots of
+ * cushion against network jitter while staying within the D-042 delay
+ * target (was 100 ms at 20 Hz before tuning in 4c).
  */
-export const INTERPOLATION_DELAY_MS = 100;
+export const INTERPOLATION_DELAY_MS = 50;
 
 interface Frame {
   timeMs: number;

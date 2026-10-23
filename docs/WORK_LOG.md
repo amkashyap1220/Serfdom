@@ -8,7 +8,7 @@ Keep this concise and update it after each meaningful milestone.
 - [x] Phase 1 — Playable local client skeleton
 - [x] Phase 2 — Movement, collision, and camera following
 - [x] Phase 3 — Combat prototype
-- [ ] Phase 4 — Authoritative multiplayer foundation
+- [x] Phase 4 — Authoritative multiplayer foundation
 - [ ] Phase 5 — Shared combat and enemies
 - [ ] Phase 6 — Dungeon vertical slice
 - [ ] Phase 7 — Account and persistent data
@@ -124,3 +124,13 @@ Keep this concise and update it after each meaningful milestone.
 - Known/PROVISIONAL: combat still local per browser (each sees its own dummy); prototype respawn does not teleport online; everyone spawns on the same spot (labels overlap); no player-player collision; latency only tested on localhost.
 - User manual test passed (all steps). Feedback: other players look **slightly delayed but smooth**; the user does not want lag to become an issue. Recorded as open question 16.
 - Next step: 4c — measure and reduce remote-player delay, review Phase 4 acceptance.
+
+### Phase 4c — Delay measurement and tuning; Phase 4 acceptance — 2026-10-22
+
+- User agreed the delay target D-042 (< 100 ms behind, excluding network travel).
+- Measured first (two visible windows): steady lag **110 ms** (103–117), first movement 86 ms, own square ~9 ms.
+- Tuning (T-026): 60 Hz snapshots, 50 ms interpolation, move-credit catch-up + backlog limit. First try with a backlog limit of 2 measured 50 → 70 → 80 ms across runs: the queue ratcheted up because nothing drains it when both sides tick at 60 Hz. Limit 1: **53 / 60 / 60 ms** medians, worst 70 ms, wobble ≈ 0.3 px, 0 own-player corrections.
+- Tests: player-movement tests rewritten for the credit/backlog rule, including "5 inputs every tick for 10 s never exceeds PLAYER_SPEED" and the idle credit cap. `npm run check` passed (128 shared, 31 server, 29 client).
+- Phase 4 acceptance: two clients connect ✅; each sees the other ✅; invalid messages rejected safely ✅ (server tests: malformed, unknown, binary, oversized, over-length direction, position-as-input, replayed seq, flood, protocol mismatch, hello timeout); disconnect cleans up ✅; server owns presence and positions ✅. Not yet tested: separate devices / a real network.
+- User manual test: delay acceptable; **very slight stuttering** of other players noticed and accepted for now ("it won't be perfectly smooth"). Known issue to revisit if it becomes noticeable in combat: likely snapshot-arrival jitter against the 50 ms buffer and whole-pixel rounding. Phase 4 complete.
+- Next step: Phase 5 — shared combat and enemies (needs decisions on how combat moves to the server).

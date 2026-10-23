@@ -237,11 +237,13 @@ const input = (seq: number, x: number, y: number) =>
   JSON.stringify({ type: "input", seq, move: { x, y } });
 
 describe("authoritative movement (4b)", () => {
-  it("moves a player only by queued inputs, one per tick, and acks them", async () => {
+  it("moves a player only by its inputs, one per tick, and acks them", async () => {
     const { client } = await joined();
-    for (let seq = 0; seq < 30; seq++) client.send(input(seq, 1, 0));
-    await until(() => server.queuedInputs(1) === 30);
-    for (let t = 0; t < 30; t++) server.tick();
+    for (let seq = 0; seq < 30; seq++) {
+      client.send(input(seq, 1, 0));
+      await until(() => server.queuedInputs(1) === 1);
+      server.tick();
+    }
     // 30 ticks × 150 px/s × 1/60 s = 75 px.
     expect(server.players[0]?.x).toBeCloseTo(1075, 9);
     expect(server.players[0]?.ack).toBe(29);
@@ -249,13 +251,12 @@ describe("authoritative movement (4b)", () => {
     expect(snap.players[0]).toMatchObject({ id: 1, y: 1000 });
   });
 
-  it("sends snapshots every 3 ticks with every player in them", async () => {
+  it("sends a snapshot every tick with every player in them", async () => {
     const a = await joined();
     await joined();
-    for (let t = 0; t < 2; t++) server.tick();
     server.tick();
     const snap = await nextOfType(a.client, "snapshot");
-    expect(snap.tick).toBe(3);
+    expect(snap.tick).toBe(1);
     expect(snap.players.map((p) => p.id).sort()).toEqual([1, 2]);
   });
 
@@ -296,7 +297,7 @@ describe("authoritative movement (4b)", () => {
     const b = await joined();
     b.client.socket.close();
     await serverHasPlayers([1]);
-    for (let t = 0; t < 3; t++) server.tick();
+    server.tick();
     const snap = await nextOfType(a.client, "snapshot");
     expect(snap.players.map((p) => p.id)).toEqual([1]);
   });
@@ -316,11 +317,17 @@ describe("real-time loop", () => {
       clients.push(c);
       c.send(hello);
       await nextOfType(c, "welcome");
-      for (let seq = 0; seq < 30; seq++) c.send(input(seq, 0, 1));
-      // 30 inputs need 0.5 s of ticks; allow generous slack for CI timing.
-      await new Promise((r) => setTimeout(r, 900));
-      expect(live.players[0]?.y).toBeCloseTo(1075, 6);
-      expect(live.players[0]?.ack).toBe(29);
+      // Send like a real client: one input every 1/60 s for 0.5 s.
+      for (let seq = 0; seq < 30; seq++) {
+        c.send(input(seq, 0, 1));
+        await new Promise((r) => setTimeout(r, 1000 / 60));
+      }
+      await new Promise((r) => setTimeout(r, 200));
+      const p = live.players[0];
+      expect(p?.ack).toBe(29);
+      // Timer jitter may make the server drop a stale input or two, never add any.
+      expect(p?.y).toBeGreaterThan(1075 - 3 * 2.5 - 1e-9);
+      expect(p?.y).toBeLessThanOrEqual(1075 + 1e-9);
     } finally {
       await live.close();
     }

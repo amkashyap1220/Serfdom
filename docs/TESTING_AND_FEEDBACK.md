@@ -72,6 +72,8 @@ Multiplayer presence (Phase 4a): with `npm run dev` running, each tab's HUD show
 
 Shared movement (Phase 4b): with two **separate windows** side by side (browsers pause background tabs, so a hidden tab stops updating), each HUD shows `Movement: server-authoritative`. Other players are blue squares labelled `#id`; the HUD row `Others (world)` lists their positions. Moving in one window moves its blue square in the other within ~0.1 s. `Pending / correction` should stay at a few pending inputs and ~0.00 px correction; a growing correction means client and server disagree. Stopping the server switches back to `local (offline)` movement.
 
+Network delay (Phase 4c, D-042 target < 100 ms excluding network travel): Claude measures with two visible Chrome windows driven over the DevTools protocol (script kept outside the repo): (1) **steady lag** — while A walks at 150 px/s, distance between A's own position and where B draws A, divided by speed; (2) **first movement** — key press in A until B's drawing of A changes; (3) **path wobble** — dense samples of B's drawing of A over 1 s fitted to a straight line; (4) A's `Pending / correction` while moving. Latest results (localhost): steady lag 53–60 ms median, worst 70 ms; wobble ≈ 0.3 px; 0 corrections. By eye: the other window's square should trail only slightly and move evenly.
+
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests
