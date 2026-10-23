@@ -160,3 +160,8 @@ export {
   TEST_WALLS,
   TEST_WORLD,
 } from "./test-world.ts";
+export {
+  isValidRoll,
+  PLACEHOLDER_ROLL_MAX,
+  type PlaceholderReward,
+} from "./reward.ts";

@@ -200,3 +200,12 @@ Keep this concise and update it after each meaningful milestone.
 - Live (visible Chrome, throwaway harness on :8081/:5174 that skipped to the throne and set the Warlord's HP; the user's servers untouched): phase 1 patterns and boss bar; phase 2 "ENRAGED", summoned grunt, a rockfall circle under the player; Warlord dead → portal OPEN with the run still going; walking in → DUNGEON CLEARED with count-up stats, confetti, chest. Fixed: chest rays overlapped the stats; title glow switched to a filter (text-shadow muddied gradient text). No console errors.
 - Not yet verified: a full legitimate clear by a human (difficulty), two players at the portal live.
 - Next step: user plays the full Warrens (6c checklist) and reports; then 6d (placeholder per-player reward roll, tuning to the 5 min solo / 3 min full-party targets, two-client acceptance).
+
+### Phase 6d — Per-player reward rolls, Phase 6 acceptance — 2026-10-22
+
+- Committed 6c as `ceba6db` after the user's checklist passed.
+- Protocol v7; placeholder reward roll per completing player (T-039): server-only randomness, null on death/exit, parser rejects a reward without completion. Slot-machine reel reveal on the chest.
+- Tests: protocol v7 (valid/invalid rewards), instance (three players: one leaves → no reward; two enter the portal → rolls 101 and 102 from an injected sequence), app-state carries the reward. `npm run check`: 198 shared, 68 server, 42 client, build.
+- Live (throwaway harness on :8081/:5174 skipping to the Warlord; the user's servers untouched): reels spun then stopped on 504, matching the server log; two windows in one run each completed independently with their own rolls (633 and 210, matching `completed … (placeholder roll …)` log lines); B kept playing after A left.
+- Phase 6 acceptance: enter, fight, complete, leave ✅; death before completion grants no completion rewards ✅ (no roll, tested); multiplayer players share encounter state ✅ (same enemies/doors/rooms across clients, tested since 6b); individual rewards rolled per qualifying completing player ✅ (placeholder roll, tested). Open: tuning to the D-047 clear times needs real human clear times (bot data is not representative).
+- Next step: user runs the Phase 6 acceptance checklist and reports solo (and if possible party) clear times; Claude tunes enemy numbers / party scaling; then close Phase 6 and preview Phase 7 (accounts and persistent data).

@@ -378,3 +378,57 @@
     transform: rotate(6deg);
   }
 }
+
+/* Reward reel (D-049): digits spin, then lock in one by one. */
+.reel-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.reels {
+  display: flex;
+  gap: 4px;
+}
+
+.reel {
+  display: inline-block;
+  width: 28px;
+  padding: 4px 0;
+  border: 2px solid #6b4a1f;
+  background: #1a1206;
+  color: #f0c419;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.reel.spinning {
+  color: #8a6a2a;
+  filter: blur(0.6px);
+}
+
+.reel.stopped {
+  animation: stat-land 250ms ease-out;
+}
+
+.reel-box.revealed .reels {
+  animation: jackpot 700ms ease-out;
+}
+
+.reel-box.revealed .reel {
+  border-color: #f0c419;
+  box-shadow: 0 0 10px #f0c41988;
+}
+
+@keyframes jackpot {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

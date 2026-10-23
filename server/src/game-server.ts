@@ -6,10 +6,12 @@ import {
   parseClientMessage,
   PROTOCOL_VERSION,
   TICK_RATE,
+  PLACEHOLDER_ROLL_MAX,
   TICK_SECONDS,
   type DungeonId,
   type ServerMessage,
 } from "@serfdom/shared";
+import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import { DungeonInstance, type RunEnd } from "./dungeon-instance.ts";
 import { consoleLogger, type Logger } from "./log.ts";
@@ -35,6 +37,8 @@ export interface GameServerOptions {
   queueWaitSeconds?: number;
   /** A run accepts new players from the queue for this long after it starts (D-052). */
   joinWindowSeconds?: number;
+  /** Reward roll source (tests inject a fixed sequence). Default: crypto randomness. */
+  rollReward?: () => number;
   log?: Logger;
 }
 
@@ -83,6 +87,7 @@ export class GameServer {
   private readonly maxQueuedInputs: number;
   private readonly maxMessagesPerSecond: number;
   private readonly joinWindowTicks: number;
+  private readonly rollReward: () => number;
   private readonly matchmaker: Matchmaker;
   private readonly instances = new Map<number, DungeonInstance>();
   private readonly runOf = new Map<number, DungeonInstance>();
@@ -102,6 +107,9 @@ export class GameServer {
     this.snapshotEveryTicks = options.snapshotEveryTicks ?? 1;
     this.maxQueuedInputs = options.maxQueuedInputs ?? 30;
     this.maxMessagesPerSecond = options.maxMessagesPerSecond ?? 180;
+    // Unpredictable to clients: rolls happen only here, never on a client.
+    this.rollReward =
+      options.rollReward ?? (() => randomInt(1, PLACEHOLDER_ROLL_MAX + 1));
     this.joinWindowTicks = Math.round(
       (options.joinWindowSeconds ?? DEFAULT_JOIN_WINDOW_SECONDS) * TICK_RATE,
     );
@@ -382,6 +390,7 @@ export class GameServer {
       {
         maxQueuedInputs: this.maxQueuedInputs,
         joinWindowTicks: this.joinWindowTicks,
+        rollReward: this.rollReward,
       },
     );
     this.instances.set(instance.id, instance);
@@ -407,10 +416,11 @@ export class GameServer {
         dungeon: instance.dungeon,
         result: end.result,
         stats: end.stats,
+        reward: end.reward,
       }),
     );
     this.log.info(
-      `guest #${end.playerId} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s`,
+      `guest #${end.playerId} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s${end.reward ? ` (placeholder roll ${end.reward.roll})` : ""}`,
     );
   }
 

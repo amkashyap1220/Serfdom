@@ -78,6 +78,19 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→875, 3→1250, 4→1625). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Phase 6 acceptance checklist (two clients)
+
+Run `npm run dev` (restart it if it was running before 6d: protocol v7). Open **two separate windows** at http://localhost:5173/, Ctrl+Shift+R both.
+
+1. **Enter:** press Enter in both within 5 s: both land in the same Goblin Warrens run and see each other.
+2. **Shared encounters:** the same enemies, HP, and doors appear in both windows; a room wakes for both when either player walks in.
+3. **Fight and complete:** clear the rooms and the Warlord together. When the portal opens, walk window A into it: A gets DUNGEON CLEARED while B keeps playing; then walk B in.
+4. **Individual rewards:** after the chest lands, each window's reels stop on its **own** placeholder roll (they will almost always differ). The server terminal logs `guest #N completed run #M after … s (placeholder roll R)` for each, and the numbers match the screens.
+5. **Death = no completion rewards:** in another run, die (or press R) before the portal: the death screen (or menu notice) shows no roll, and the terminal line has no "placeholder roll".
+6. **Leave:** Requeue (Enter) or Menu (Esc) from the completion screen both work.
+
+Report: pass/fail per step, both rolls and the matching terminal lines, your clear times, and any console errors.
+
 ### Goblin Warlord checklist (Phase 6c)
 
 Run `npm run dev` (restart it if it was running before 6c: protocol v6), open http://localhost:5173/, Ctrl+Shift+R. Play the Warrens as in the 6b checklist, plus:
@@ -87,7 +100,7 @@ Run `npm run dev` (restart it if it was running before 6c: protocol v6), open ht
 3. Phase 1: aimed 5-shot fans and rings of orange bullets.
 4. Below half HP the bar turns bright red and says **ENRAGED**: wider 7-shot fans, denser rings, pairs of grunts, and **red warning circles** under you that fill in and hit for 3 if you are still inside after 1.2 s.
 5. When the Warlord dies its grunts vanish, the bar disappears, and a **pulsing violet portal** appears where it stood. HUD `Exit portal: OPEN`. Nothing completes until you walk into it.
-6. Walk into the portal: gold flash, **DUNGEON CLEARED** shakes and shimmers, the stats count up, three waves of confetti, and the chest drops in over spinning light rays.
+6. Walk into the portal: gold flash, **DUNGEON CLEARED** shakes and shimmers, the stats count up, three waves of confetti, the chest drops in over spinning light rays, and (since 6d) the reward reels spin and stop on your placeholder roll.
 7. With two windows: when one player enters the portal, only that player completes; the other keeps playing until they enter it (or die).
 
 Report: whether you beat the Warlord, your clear time, HP at the end, which attacks felt unfair or too easy, and any console errors.

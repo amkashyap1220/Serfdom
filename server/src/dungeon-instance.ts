@@ -23,6 +23,7 @@ import {
   type DungeonId,
   type DungeonLayout,
   type PlayerInput,
+  type PlaceholderReward,
   type RunProgress,
   type RunResult,
   type RunStats,
@@ -48,6 +49,8 @@ export interface RunEnd {
   playerId: number;
   result: RunResult;
   stats: RunStats;
+  /** Rolled for this player alone, on completion only (D-010, T-039). */
+  reward: PlaceholderReward | null;
 }
 
 /**
@@ -75,6 +78,7 @@ export class DungeonInstance {
   private readonly everJoined = new Set<number>();
   private readonly maxQueuedInputs: number;
   private readonly joinWindowTicks: number;
+  private readonly rollReward: () => number;
   /** Ticks this run has been running. */
   private age = 0;
 
@@ -82,13 +86,19 @@ export class DungeonInstance {
     id: number,
     dungeon: DungeonId,
     playerIds: readonly number[],
-    options: { maxQueuedInputs: number; joinWindowTicks: number },
+    options: {
+      maxQueuedInputs: number;
+      joinWindowTicks: number;
+      /** Server-side randomness for reward rolls: returns 1..PLACEHOLDER_ROLL_MAX. */
+      rollReward: () => number;
+    },
   ) {
     this.id = id;
     this.dungeon = dungeon;
     this.layout = dungeonInfo(dungeon).layout;
     this.maxQueuedInputs = options.maxQueuedInputs;
     this.joinWindowTicks = options.joinWindowTicks;
+    this.rollReward = options.rollReward;
     // Enemies come from room waves and stay dead (no respawn).
     this.sim = createSimState([], { respawnSeconds: null });
     this.rooms = newRunProgress(this.layout);
@@ -293,6 +303,8 @@ export class DungeonInstance {
     this.members.delete(playerId);
     // Out of the sim, so enemies rescale for the survivors (D-045).
     this.sim = removePlayer(this.sim, playerId);
-    return { playerId, result, stats: member.stats };
+    // Each completing player gets their own roll; nobody else does.
+    const reward = result === "completed" ? { roll: this.rollReward() } : null;
+    return { playerId, result, stats: member.stats, reward };
   }
 }

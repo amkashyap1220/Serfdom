@@ -1,5 +1,6 @@
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
+import { isValidRoll, type PlaceholderReward } from "./reward.ts";
 import type { Vec2 } from "./geometry.ts";
 import {
   RUN_RESULTS,
@@ -26,8 +27,10 @@ import {
  * v5 (6b): snapshot enemies carry their kind; snapshots list closed doors.
  * v6 (6c): enemies carry an alert (telegraph) flag; snapshots carry
  *          hazards and whether the exit portal is open.
+ * v7 (6d): runEnded carries the server's per-player reward roll
+ *          (placeholder until Phase 9), present only on completion.
  */
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** Largest client → server message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 1024;
@@ -133,6 +136,8 @@ export type ServerMessage =
       dungeon: DungeonId;
       result: RunResult;
       stats: RunStats;
+      /** Rolled by the server for this player only; null unless completed (D-010). */
+      reward: PlaceholderReward | null;
     }
   | {
       type: "snapshot";
@@ -267,7 +272,9 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         },
       };
     case "runEnded": {
-      if (!hasExactKeys(obj, ["type", "dungeon", "result", "stats"])) {
+      if (
+        !hasExactKeys(obj, ["type", "dungeon", "result", "stats", "reward"])
+      ) {
         return fail("runEnded: unexpected fields");
       }
       if (!isDungeonId(obj.dungeon)) return fail("runEnded: bad dungeon");
@@ -275,9 +282,20 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!result) return fail("runEnded: bad result");
       const stats = parseRunStats(obj.stats);
       if (!stats) return fail("runEnded: bad stats");
+      const reward = parseReward(obj.reward);
+      if (reward === undefined) return fail("runEnded: bad reward");
+      if ((reward !== null) !== (result === "completed")) {
+        return fail("runEnded: a reward comes with completion only");
+      }
       return {
         ok: true,
-        message: { type: "runEnded", dungeon: obj.dungeon, result, stats },
+        message: {
+          type: "runEnded",
+          dungeon: obj.dungeon,
+          result,
+          stats,
+          reward,
+        },
       };
     }
     case "snapshot": {
@@ -356,6 +374,13 @@ function parseFire(v: unknown): FireInput | string {
     return "fire.aim must be a unit vector";
   }
   return { trigger: v.trigger, aim };
+}
+
+/** null is a valid "no reward"; undefined means malformed. */
+function parseReward(v: unknown): PlaceholderReward | null | undefined {
+  if (v === null) return null;
+  if (!isPlainObject(v) || !hasExactKeys(v, ["roll"])) return undefined;
+  return isValidRoll(v.roll) ? { roll: v.roll } : undefined;
 }
 
 function parseRunStats(v: unknown): RunStats | null {

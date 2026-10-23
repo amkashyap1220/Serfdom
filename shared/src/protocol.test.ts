@@ -260,7 +260,20 @@ describe("menu, queue, and run messages (v4)", () => {
         startsIn: 3.5,
       },
       { type: "runStarted", dungeon: "goblin-warrens", players: [1, 4] },
-      { type: "runEnded", dungeon: "goblin-warrens", result: "died", stats },
+      {
+        type: "runEnded",
+        dungeon: "goblin-warrens",
+        result: "died",
+        stats,
+        reward: null,
+      },
+      {
+        type: "runEnded",
+        dungeon: "goblin-warrens",
+        result: "completed",
+        stats,
+        reward: { roll: 777 },
+      },
     ];
     for (const m of msgs) {
       expect(parseServerMessage(encodeMessage(m))).toEqual({
@@ -271,7 +284,22 @@ describe("menu, queue, and run messages (v4)", () => {
   });
 
   it("rejects malformed run messages", () => {
-    const ended = { type: "runEnded", dungeon: "goblin-warrens" };
+    const ended = {
+      type: "runEnded",
+      dungeon: "goblin-warrens",
+      reward: null,
+    };
+    const won = { ...ended, result: "completed", stats };
+    expect(server({ ...won, reward: { roll: 5 } }).ok).toBe(true);
+    // A reward only with completion, and only a whole roll in range.
+    expect(server({ ...won, reward: null }).ok).toBe(false);
+    expect(
+      server({ ...ended, result: "died", stats, reward: { roll: 5 } }).ok,
+    ).toBe(false);
+    expect(server({ ...won, reward: { roll: 0 } }).ok).toBe(false);
+    expect(server({ ...won, reward: { roll: 1001 } }).ok).toBe(false);
+    expect(server({ ...won, reward: { roll: 2.5 } }).ok).toBe(false);
+    expect(server({ ...won, reward: { roll: 5, gold: 9999 } }).ok).toBe(false);
     expect(server({ ...ended, result: "won", stats }).ok).toBe(false);
     expect(
       server({ ...ended, result: "died", stats: { ...stats, seconds: -1 } }).ok,

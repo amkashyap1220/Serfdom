@@ -2,6 +2,7 @@ import {
   dungeonInfo,
   LISTED_DUNGEONS,
   MAX_PARTY_SIZE,
+  PLACEHOLDER_ROLL_MAX,
   type DungeonId,
 } from "@serfdom/shared";
 import {
@@ -28,6 +29,11 @@ const CONFETTI_WAVE_GAP_S = 0.8;
 const COUNT_UP_MS = 900;
 const COUNT_UP_STAGGER_MS = 250;
 const COUNT_UP_START_MS = 500;
+/** Slot-machine reveal of the reward roll (D-049): spins after the chest lands, reels stop one by one. */
+const REEL_START_MS = 1400;
+const REEL_FIRST_STOP_MS = 2300;
+const REEL_STOP_GAP_MS = 450;
+const REEL_TICK_MS = 55;
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
 const CONFETTI_COLORS = ["#f0c419", "#5bc0de", "#ff6b6b", "#7ed957", "#ffffff"];
 
@@ -231,7 +237,9 @@ export class ScreenView {
       el("p", "", `${info.name} · ${formatDuration(s.seconds)}`),
       stats,
       chest,
-      el("p", "hint", "Reward chest: rewards arrive in Phase 9."),
+      screen.reward
+        ? rewardReel(screen.reward.roll)
+        : el("p", "hint", "No reward roll."),
       actions,
     );
   }
@@ -310,6 +318,59 @@ function countingStatList(
   };
   requestAnimationFrame(frame);
   return dl;
+}
+
+/**
+ * The chest's slot machine: one reel per digit of the server's roll. The
+ * roll was decided by the server before this screen appeared; the spin is
+ * presentation only. Placeholder until Phase 9 defines real rewards.
+ */
+function rewardReel(roll: number): HTMLElement {
+  const digits = String(roll).padStart(
+    String(PLACEHOLDER_ROLL_MAX).length,
+    "0",
+  );
+  const box = el("div", "reel-box");
+  const reels = el("div", "reels");
+  const cells = [...digits].map(() => {
+    const cell = el("span", "reel", "0");
+    reels.append(cell);
+    return cell;
+  });
+  const label = el("p", "hint", "Rolling…");
+  box.append(reels, label);
+
+  const start = performance.now();
+  const timer = setInterval(() => {
+    if (!box.isConnected && performance.now() - start > 100) {
+      clearInterval(timer);
+      return;
+    }
+    const t = performance.now() - start;
+    if (t < REEL_START_MS) return;
+    let spinning = 0;
+    cells.forEach((cell, i) => {
+      const stopsAt = REEL_FIRST_STOP_MS + i * REEL_STOP_GAP_MS;
+      if (t < stopsAt) {
+        cell.textContent = String(Math.floor(Math.random() * 10));
+        cell.classList.add("spinning");
+        spinning++;
+      } else if (
+        cell.classList.contains("spinning") ||
+        cell.textContent !== digits[i]
+      ) {
+        cell.textContent = digits[i] ?? "0";
+        cell.classList.remove("spinning");
+        cell.classList.add("stopped");
+      }
+    });
+    if (spinning === 0) {
+      clearInterval(timer);
+      box.classList.add("revealed");
+      label.textContent = `Placeholder roll ${roll} / ${PLACEHOLDER_ROLL_MAX}: real rewards arrive in Phase 9.`;
+    }
+  }, REEL_TICK_MS);
+  return box;
 }
 
 function statList(rows: [string, string][]): HTMLElement {

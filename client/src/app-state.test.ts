@@ -60,9 +60,21 @@ describe("screen flow", () => {
       const shown = run(
         { type: "connected" },
         server({ type: "runStarted", dungeon: GW, players: [1] }),
-        server({ type: "runEnded", dungeon: GW, result, stats }),
+        server({
+          type: "runEnded",
+          dungeon: GW,
+          result,
+          stats,
+          reward: result === "completed" ? { roll: 42 } : null,
+        }),
       );
-      expect(shown).toEqual({ kind: "results", result, dungeon: GW, stats });
+      expect(shown).toEqual({
+        kind: "results",
+        result,
+        dungeon: GW,
+        stats,
+        reward: result === "completed" ? { roll: 42 } : null,
+      });
       expect(nextScreen(shown, { type: "dismissResults" })).toMatchObject({
         kind: "menu",
       });
@@ -72,7 +84,13 @@ describe("screen flow", () => {
   it("requeue straight from the completion screen (D-048)", () => {
     const done = run(
       { type: "connected" },
-      server({ type: "runEnded", dungeon: GW, result: "completed", stats }),
+      server({
+        type: "runEnded",
+        dungeon: GW,
+        result: "completed",
+        stats,
+        reward: { roll: 7 },
+      }),
     );
     expect(
       nextScreen(done, { type: "queueRequested", dungeon: GW }),
@@ -83,7 +101,13 @@ describe("screen flow", () => {
     expect(
       run(
         { type: "connected" },
-        server({ type: "runEnded", dungeon: GW, result: "left", stats }),
+        server({
+          type: "runEnded",
+          dungeon: GW,
+          result: "left",
+          stats,
+          reward: null,
+        }),
       ),
     ).toEqual({
       kind: "menu",

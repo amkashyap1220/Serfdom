@@ -1,6 +1,7 @@
 import {
   dungeonInfo,
   type DungeonId,
+  type PlaceholderReward,
   type RunStats,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -29,6 +30,8 @@ export type Screen =
       result: "completed" | "died";
       dungeon: DungeonId;
       stats: RunStats;
+      /** The server's roll for us alone (placeholder until Phase 9); null on death. */
+      reward: PlaceholderReward | null;
     };
 
 export type ScreenEvent =
@@ -106,6 +109,7 @@ function onServerMessage(
         result: msg.result,
         dungeon: msg.dungeon,
         stats: msg.stats,
+        reward: msg.reward,
       };
     default:
       return screen;
