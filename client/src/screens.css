@@ -489,3 +489,53 @@
 .account-bar button {
   padding: 4px 10px;
 }
+
+/* Serfs tab (Phase 7b). */
+.serf-row {
+  display: grid;
+  grid-template-columns: 160px 200px 100px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid #2c3340;
+  background: #0e1014;
+}
+
+.serf-name {
+  color: #ffffff;
+  text-align: left;
+}
+
+.serf-chosen {
+  color: #f0c419;
+}
+
+.serf-form {
+  display: flex;
+  gap: 6px;
+}
+
+.serf-form input {
+  width: 220px;
+  padding: 6px 8px;
+  border: 2px solid #46505f;
+  background: #0e1014;
+  color: #ffffff;
+  font: inherit;
+}
+
+.serf-form input:focus {
+  outline: none;
+  border-color: #f0c419;
+}
+
+.fallen-title {
+  margin-top: 12px !important;
+  color: #c9a0a0;
+}
+
+.screen .fallen {
+  color: #8a7070;
+  font-size: 12px;
+  font-style: italic;
+}

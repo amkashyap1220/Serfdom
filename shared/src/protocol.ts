@@ -2,6 +2,12 @@ import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import { isValidRoll, type PlaceholderReward } from "./reward.ts";
+import {
+  LIFE_STAT_KEYS,
+  SERF_NAME_MAX,
+  type LifeStats,
+  type SerfSummary,
+} from "./serf-rules.ts";
 import type { Vec2 } from "./geometry.ts";
 import {
   RUN_RESULTS,
@@ -30,10 +36,13 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v9 (7b): serfs. Client createSerf / selectSerf; server serfList /
+ *          serfError; runEnded carries killedBy and the serf's life.
+ *          Queueing requires a chosen living serf.
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -73,7 +82,11 @@ export type ClientMessage =
   | { type: "login"; email: string; password: string }
   /** Log back in with the token from an earlier authOk (page reload, reconnect). */
   | { type: "resume"; token: string }
-  | { type: "logout" };
+  | { type: "logout" }
+  /** Create a serf in a free slot (D-061, D-063). */
+  | { type: "createSerf"; name: string }
+  /** Play as this serf (must be one of yours and alive). */
+  | { type: "selectSerf"; serfId: number };
 
 /** One player's authoritative state in a snapshot. */
 export interface SnapshotPlayer {
@@ -156,7 +169,20 @@ export type ServerMessage =
       stats: RunStats;
       /** Rolled by the server for this player only; null unless completed (D-010). */
       reward: PlaceholderReward | null;
+      /** Kind of enemy that landed the killing blow (deaths only). */
+      killedBy: EnemyKind | null;
+      /** The serf's life including this run; on death, its final record. */
+      serf: SerfSummary | null;
     }
+  /** Your serfs (living first, then the fallen) and which one you play as. */
+  | {
+      type: "serfList";
+      slots: number;
+      serfs: SerfSummary[];
+      selectedId: number | null;
+    }
+  /** createSerf/selectSerf refused; `reason` is safe to show. */
+  | { type: "serfError"; reason: string }
   | {
       type: "snapshot";
       tick: number;
@@ -237,6 +263,24 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         message: { type: obj.type, email: obj.email, password: obj.password },
       };
     }
+    case "createSerf":
+      if (!hasExactKeys(obj, ["type", "name"])) {
+        return fail("createSerf: unexpected fields");
+      }
+      // Shape and size only; the name rules are applied by the server.
+      if (typeof obj.name !== "string" || obj.name.length > SERF_NAME_MAX * 4) {
+        return fail("createSerf: name must be a string");
+      }
+      return { ok: true, message: { type: "createSerf", name: obj.name } };
+    case "selectSerf":
+      if (!hasExactKeys(obj, ["type", "serfId"])) {
+        return fail("selectSerf: unexpected fields");
+      }
+      if (!isPlayerId(obj.serfId)) return fail("selectSerf: bad serfId");
+      return {
+        ok: true,
+        message: { type: "selectSerf", serfId: obj.serfId },
+      };
     case "resume":
       if (!hasExactKeys(obj, ["type", "token"])) {
         return fail("resume: unexpected fields");
@@ -344,10 +388,23 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       };
     case "runEnded": {
       if (
-        !hasExactKeys(obj, ["type", "dungeon", "result", "stats", "reward"])
+        !hasExactKeys(obj, [
+          "type",
+          "dungeon",
+          "result",
+          "stats",
+          "reward",
+          "killedBy",
+          "serf",
+        ])
       ) {
         return fail("runEnded: unexpected fields");
       }
+      if (obj.killedBy !== null && !isEnemyKind(obj.killedBy)) {
+        return fail("runEnded: bad killedBy");
+      }
+      const serf = obj.serf === null ? null : parseSerfSummary(obj.serf);
+      if (serf === undefined) return fail("runEnded: bad serf");
       if (!isDungeonId(obj.dungeon)) return fail("runEnded: bad dungeon");
       const result = RUN_RESULTS.find((r) => r === obj.result);
       if (!result) return fail("runEnded: bad result");
@@ -366,9 +423,44 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           result,
           stats,
           reward,
+          killedBy: obj.killedBy,
+          serf,
         },
       };
     }
+    case "serfList": {
+      if (!hasExactKeys(obj, ["type", "slots", "serfs", "selectedId"])) {
+        return fail("serfList: unexpected fields");
+      }
+      if (!isNonNegativeInt(obj.slots)) return fail("serfList: bad slots");
+      if (obj.selectedId !== null && !isPlayerId(obj.selectedId)) {
+        return fail("serfList: bad selectedId");
+      }
+      if (!Array.isArray(obj.serfs)) return fail("serfList: bad serfs");
+      const serfs: SerfSummary[] = [];
+      for (const s of obj.serfs) {
+        const parsed = parseSerfSummary(s);
+        if (!parsed) return fail("serfList: bad serf entry");
+        serfs.push(parsed);
+      }
+      return {
+        ok: true,
+        message: {
+          type: "serfList",
+          slots: obj.slots,
+          serfs,
+          selectedId: obj.selectedId,
+        },
+      };
+    }
+    case "serfError":
+      if (!hasExactKeys(obj, ["type", "reason"])) {
+        return fail("serfError: unexpected fields");
+      }
+      if (typeof obj.reason !== "string") {
+        return fail("serfError: reason must be a string");
+      }
+      return { ok: true, message: { type: "serfError", reason: obj.reason } };
     case "snapshot": {
       if (
         !hasExactKeys(obj, [
@@ -445,6 +537,52 @@ function parseFire(v: unknown): FireInput | string {
     return "fire.aim must be a unit vector";
   }
   return { trigger: v.trigger, aim };
+}
+
+/** undefined means malformed. */
+function parseSerfSummary(v: unknown): SerfSummary | undefined {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["id", "name", "level", "alive", "life", "death"])
+  ) {
+    return undefined;
+  }
+  if (!isPlayerId(v.id) || typeof v.name !== "string") return undefined;
+  if (!isPlayerId(v.level) || typeof v.alive !== "boolean") return undefined;
+  const life = parseLifeStats(v.life);
+  if (!life) return undefined;
+  let death: SerfSummary["death"] = null;
+  if (v.death !== null) {
+    const d = v.death;
+    if (
+      !isPlainObject(d) ||
+      !hasExactKeys(d, ["dungeon", "killedBy"]) ||
+      typeof d.dungeon !== "string" ||
+      (d.killedBy !== null && typeof d.killedBy !== "string")
+    ) {
+      return undefined;
+    }
+    death = { dungeon: d.dungeon, killedBy: d.killedBy };
+  }
+  return {
+    id: v.id,
+    name: v.name,
+    level: v.level,
+    alive: v.alive,
+    life,
+    death,
+  };
+}
+
+function parseLifeStats(v: unknown): LifeStats | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, LIFE_STAT_KEYS)) return null;
+  const life: Partial<LifeStats> = {};
+  for (const key of LIFE_STAT_KEYS) {
+    const n = v[key];
+    if (!isNonNegative(n)) return null;
+    life[key] = n;
+  }
+  return life as LifeStats;
 }
 
 /** null is a valid "no reward"; undefined means malformed. */

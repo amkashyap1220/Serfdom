@@ -29,3 +29,23 @@ export function clearToken(): void {
     // Nothing stored, nothing to clear.
   }
 }
+
+const LAST_SERF = "serfdom.lastSerf";
+
+/** The serf last played on this browser (a convenience, not a secret). */
+export function loadLastSerf(): number | null {
+  try {
+    const v = Number(window.localStorage.getItem(LAST_SERF));
+    return Number.isInteger(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastSerf(serfId: number): void {
+  try {
+    window.localStorage.setItem(LAST_SERF, String(serfId));
+  } catch {
+    // Storage blocked: the player picks their serf each time.
+  }
+}

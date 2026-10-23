@@ -7,6 +7,13 @@ import {
   PASSWORD_MIN,
   passwordProblem,
   LISTED_DUNGEONS,
+  normalizeSerfName,
+  SERF_NAME_MAX,
+  SERF_NAME_MIN,
+  serfNameProblem,
+  suggestSerfName,
+  type SerfSummary,
+  type ServerMessage,
   MAX_PARTY_SIZE,
   PLACEHOLDER_ROLL_MAX,
   type DungeonId,
@@ -17,6 +24,7 @@ import {
   type MenuTab,
   type Screen,
 } from "./app-state";
+import { ENEMY_NAMES } from "./names";
 
 export interface ScreenActions {
   queue(dungeon: DungeonId): void;
@@ -29,6 +37,8 @@ export interface ScreenActions {
     password: string,
   ): void;
   switchLoginMode(): void;
+  createSerf(name: string): void;
+  selectSerf(serfId: number): void;
   logout(): void;
 }
 
@@ -52,7 +62,7 @@ const CONFETTI_COLORS = ["#f0c419", "#5bc0de", "#ff6b6b", "#7ed957", "#ffffff"];
 
 const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
   { tab: "dungeons", label: "Dungeons", comingIn: null },
-  { tab: "serfs", label: "Serfs", comingIn: "Phases 7–8 (characters)" },
+  { tab: "serfs", label: "Serfs", comingIn: null },
   { tab: "stash", label: "Stash", comingIn: "Phase 12 (shared stash)" },
   {
     tab: "leaderboard",
@@ -77,6 +87,10 @@ export class ScreenView {
   private email: string | null = null;
   /** What was typed into the email field, kept across redraws (never the password). */
   private typedEmail = "";
+  /** This account's serfs from the server (null until known). */
+  private serfs: Extract<ServerMessage, { type: "serfList" }> | null = null;
+  private serfError: string | null = null;
+  private typedSerfName = "";
 
   constructor(root: HTMLElement, actions: ScreenActions) {
     this.root = root;
@@ -86,7 +100,26 @@ export class ScreenView {
 
   setAccount(email: string | null): void {
     this.email = email;
+    if (email === null) this.serfs = null;
     this.shown = null; // redraw with the new header
+  }
+
+  setSerfs(list: Extract<ServerMessage, { type: "serfList" }>): void {
+    this.serfs = list;
+    this.serfError = null;
+    this.typedSerfName = "";
+    this.shown = null;
+  }
+
+  setSerfError(reason: string): void {
+    this.serfError = reason;
+    this.shown = null;
+  }
+
+  /** The serf being played, if any. */
+  private get playing(): SerfSummary | null {
+    const list = this.serfs;
+    return list?.serfs.find((s) => s.id === list.selectedId) ?? null;
   }
 
   render(screen: Screen, nowMs: number): void {
@@ -186,13 +219,20 @@ export class ScreenView {
         ? "Create account"
         : "Log in";
     submit.disabled = screen.busy;
-    form.append(email, password, problem, submit);
+    // Registering asks twice, so a typo cannot lock you out of the account.
+    const confirm = input("password", "Confirm password", "new-password");
+    form.append(email, password);
+    if (registering) form.append(confirm);
+    form.append(problem, submit);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const address = normalizeEmail(email.value);
       const local =
         emailProblem(address) ??
-        (registering ? passwordProblem(password.value) : null);
+        (registering ? passwordProblem(password.value) : null) ??
+        (registering && confirm.value !== password.value
+          ? "The passwords don't match."
+          : null);
       if (local) {
         problem.textContent = local;
         return;
@@ -230,13 +270,23 @@ export class ScreenView {
     const current = TABS.find((t) => t.tab === tab);
     if (current?.comingIn) {
       body.append(el("p", "hint", `Coming in ${current.comingIn}.`));
+    } else if (tab === "serfs") {
+      this.buildSerfs(body);
     } else {
+      const playing = this.playing;
+      body.append(
+        playing
+          ? el("p", "", `Playing as ${playing.name} · Level ${playing.level}`)
+          : el("p", "notice", "Choose or create a serf first (Serfs tab)."),
+      );
       for (const d of LISTED_DUNGEONS) {
         const card = el("div", "dungeon-card");
         card.append(
           el("h2", "", d.name),
           el("p", "hint", d.blurb),
-          button("Enter queue (Enter)", () => this.actions.queue(d.id)),
+          playing
+            ? button("Enter queue (Enter)", () => this.actions.queue(d.id))
+            : button("Choose a serf", () => this.actions.openTab("serfs")),
         );
         body.append(card);
       }
@@ -258,35 +308,131 @@ export class ScreenView {
     this.root.append(body);
   }
 
+  /**
+   * Death (D-050, D-062): abrupt, then the serf's whole life. The record is
+   * the server's (saved permanently before it was sent).
+   */
   private buildDeath(screen: Extract<Screen, { kind: "results" }>): void {
-    const name = dungeonInfo(screen.dungeon).name;
-    const s = screen.stats;
-    const ret = button("Return (Enter)", () => this.actions.dismissResults());
+    const place = dungeonInfo(screen.dungeon).name;
+    const serf = screen.serf;
+    const life = serf?.life ?? null;
+    const killer = screen.killedBy ? ENEMY_NAMES[screen.killedBy] : null;
+    const ret = button("Choose a serf (Enter)", () =>
+      this.actions.dismissResults(),
+    );
     ret.classList.add("delayed");
     ret.style.animationDelay = `${DEATH_RETURN_DELAY_MS}ms`;
     this.root.append(
       el("div", "death-flash"),
-      el("h1", "death-title", "YOUR SERF HAS DIED"),
+      el(
+        "h1",
+        "death-title",
+        serf ? `${serf.name.toUpperCase()} HAS DIED` : "YOUR SERF HAS DIED",
+      ),
       el(
         "p",
         "epitaph",
-        `Slain in the ${name} after ${formatDuration(s.seconds)}. Their story ends here.`,
+        `Slain${killer ? ` by ${killer}` : ""} in the ${place}. Their story ends here.`,
       ),
-      statList([
-        ["Time survived", formatDuration(s.seconds)],
-        ["Enemies slain", String(s.enemiesDefeated)],
-        ["Damage dealt", String(s.damageDealt)],
-        ["Shots fired", String(s.shotsFired)],
-        ["Accuracy", accuracy(s)],
-        ["Damage taken", String(s.damageTaken)],
-      ]),
+      el("h2", "", "A life in the Warrens"),
+      life
+        ? statList([
+            ["Dungeons entered", String(life.runs)],
+            ["Dungeons cleared", String(life.clears)],
+            ["Time in dungeons", formatDuration(life.seconds)],
+            ["Enemies slain", String(life.enemiesDefeated)],
+            ["Damage dealt", String(life.damageDealt)],
+            ["Damage taken", String(life.damageTaken)],
+            ["Accuracy", accuracy(life)],
+          ])
+        : statList([["This run", formatDuration(screen.stats.seconds)]]),
       el(
         "p",
         "hint",
-        "Placeholder life record: serfs, levels and lifetime stats arrive in Phases 7–8.",
+        "The dead stay dead. Their record is kept in the Serfs tab.",
       ),
       ret,
     );
+  }
+
+  /**
+   * Serfs tab (Phase 7b): play as a living serf, create one in a free slot
+   * (D-061), and remember the fallen (D-062).
+   */
+  private buildSerfs(body: HTMLElement): void {
+    const list = this.serfs;
+    if (!list) {
+      body.append(el("p", "hint", "Loading your serfs…"));
+      return;
+    }
+    const living = list.serfs.filter((s) => s.alive);
+    const fallen = list.serfs.filter((s) => !s.alive);
+    body.append(el("h2", "", `Your serfs (${living.length}/${list.slots})`));
+    for (const s of living) {
+      const row = el("div", "serf-row");
+      const chosen = s.id === list.selectedId;
+      row.append(
+        el("span", "serf-name", s.name),
+        el(
+          "span",
+          "hint",
+          `Lv ${s.level} · ${s.life.runs} runs · ${s.life.clears} clears`,
+        ),
+        chosen
+          ? el("span", "serf-chosen", "Playing")
+          : button("Play as", () => this.actions.selectSerf(s.id)),
+      );
+      body.append(row);
+    }
+    if (living.length < list.slots) body.append(this.serfForm());
+    if (this.serfError) body.append(el("p", "error", this.serfError));
+    if (fallen.length > 0) {
+      body.append(el("h2", "fallen-title", "In memoriam"));
+      for (const s of fallen) {
+        const killer = s.death?.killedBy
+          ? (ENEMY_NAMES[s.death.killedBy as keyof typeof ENEMY_NAMES] ??
+            s.death.killedBy)
+          : "unknown causes";
+        body.append(
+          el(
+            "p",
+            "fallen",
+            `† ${s.name}: slain by ${killer} after ${s.life.runs} run${s.life.runs === 1 ? "" : "s"}, ${s.life.enemiesDefeated} enemies slain`,
+          ),
+        );
+      }
+    }
+  }
+
+  private serfForm(): HTMLElement {
+    const form = document.createElement("form");
+    form.className = "serf-form";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.placeholder = `New serf's name (${SERF_NAME_MIN}–${SERF_NAME_MAX})`;
+    name.setAttribute("aria-label", "New serf's name");
+    name.maxLength = SERF_NAME_MAX;
+    name.value = this.typedSerfName;
+    name.addEventListener("input", () => (this.typedSerfName = name.value));
+    const suggest = button("Suggest", () => {
+      name.value = suggestSerfName();
+      this.typedSerfName = name.value;
+    });
+    const create = document.createElement("button");
+    create.type = "submit";
+    create.textContent = "Create serf";
+    form.append(name, suggest, create);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const clean = normalizeSerfName(name.value);
+      const problem = serfNameProblem(clean);
+      if (problem) {
+        this.setSerfError(problem);
+        return;
+      }
+      this.actions.createSerf(clean);
+    });
+    return form;
   }
 
   private buildCompletion(screen: Extract<Screen, { kind: "results" }>): void {
@@ -346,7 +492,8 @@ export class ScreenView {
     if (e.key === "Enter") {
       if (screen.kind === "menu" && screen.tab === "dungeons") {
         const first = LISTED_DUNGEONS[0];
-        if (first) this.actions.queue(first.id);
+        if (!this.playing) this.actions.openTab("serfs");
+        else if (first) this.actions.queue(first.id);
       } else if (screen.kind === "results" && screen.result === "completed") {
         this.actions.queue(screen.dungeon);
       } else if (

@@ -149,6 +149,8 @@ describe("screen flow", () => {
           result,
           stats,
           reward: result === "completed" ? { roll: 42 } : null,
+          killedBy: null,
+          serf: null,
         }),
       );
       expect(shown).toEqual({
@@ -157,9 +159,13 @@ describe("screen flow", () => {
         dungeon: GW,
         stats,
         reward: result === "completed" ? { roll: 42 } : null,
+        killedBy: null,
+        serf: null,
       });
+      // After a death you go choose a serf; after a clear, back to dungeons.
       expect(nextScreen(shown, { type: "dismissResults" })).toMatchObject({
         kind: "menu",
+        tab: result === "died" ? "serfs" : "dungeons",
       });
     }
   });
@@ -173,6 +179,8 @@ describe("screen flow", () => {
         result: "completed",
         stats,
         reward: { roll: 7 },
+        killedBy: null,
+        serf: null,
       }),
     );
     expect(
@@ -190,6 +198,8 @@ describe("screen flow", () => {
           result: "left",
           stats,
           reward: null,
+          killedBy: null,
+          serf: null,
         }),
       ),
     ).toEqual({

@@ -78,12 +78,30 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Serfs checklist (Phase 7b)
+
+Restart `npm run dev` (protocol v9); the server terminal prints `database migrated: 002_serfs.sql` once. Reload http://localhost:5173/ (Ctrl+Shift+R) and log in.
+
+1. With no living serf you land on the **Serfs** tab: "Your serfs (0/2)", a name box, **Suggest**, **Create serf**.
+2. Type a name with letters like W, A, S, D, R, T in it (e.g. "Wade Dask"): every letter appears. Try "x!" → an error explains the rule.
+3. **Create serf**: you return to Dungeons with "Playing as <name> · Level 1". Enter queues as before.
+4. Play and press R (or clear the dungeon): back in the Serfs tab, the serf shows 1 run (and 1 clear if you finished).
+5. Die in a run: "<NAME> HAS DIED", "Slain by a Goblin … in the Goblin Warrens", and the serf's lifetime numbers. **Choose a serf (Enter)** goes to the Serfs tab, where the dead serf is under **In memoriam**.
+6. The dead serf cannot be played; its name can be used for a new serf.
+7. Create two living serfs: the create form disappears ("2/2"). **Play as** switches between them.
+8. Reload the page: the serf you last played is selected again automatically.
+9. Try a name another living serf already has (any capitalization, any account): "A living serf already has that name."
+10. Restart `npm run dev` and reload: your serfs, their stats, and the fallen are all still there.
+11. Server terminal: `created serf #N`, `chose serf #N`, `serf #N died for good` lines use numbers only.
+
+Report: pass/fail per step, exact messages for failures, and any console or terminal errors.
+
 ### Accounts checklist (Phase 7a)
 
 Database setup: see README "Database setup". `npm run check` needs PostgreSQL running and `TEST_DATABASE_URL` in `.env`; the server tests wipe and rebuild `serfdom_test`. Restart `npm run dev` (protocol v8; the server now needs `DATABASE_URL`); its terminal should print `database migrated: 001_accounts.sql` once, then `database up to date` on later starts.
 
 1. Open http://localhost:5173/ (Ctrl+Shift+R). You see **Log in** with Email and Password fields.
-2. Click **Create an account**. Try a 5-character password: "Use at least 8 characters." appears and nothing is sent.
+2. Click **Create an account**. Try a 5-character password: "Use at least 8 characters." appears and nothing is sent. Type a different password in **Confirm password**: "The passwords don't match." appears and nothing is sent.
 3. Register with a real-looking email and an 8+ character password: you land on the menu with "Logged in as …" top right.
 4. Reload the page: you are back in the menu without typing anything ("Logging you back in…" flashes).
 5. **Log out**: back to Log in with "Logged out."; reloading stays on Log in.

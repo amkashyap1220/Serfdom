@@ -173,3 +173,15 @@ export {
   PASSWORD_MIN,
   passwordProblem,
 } from "./account-rules.ts";
+export {
+  addRunToLife,
+  newLifeStats,
+  normalizeSerfName,
+  SERF_NAME_MAX,
+  SERF_NAME_MIN,
+  SERF_SLOTS,
+  serfNameProblem,
+  suggestSerfName,
+  type LifeStats,
+  type SerfSummary,
+} from "./serf-rules.ts";

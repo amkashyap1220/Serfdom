@@ -2,6 +2,8 @@ import pg from "pg";
 import { PgAccountRepo } from "./auth/account-repo.ts";
 import { AccountService } from "./auth/account-service.ts";
 import { migrate } from "./db/migrate.ts";
+import { PgSerfRepo } from "./serfs/serf-repo.ts";
+import { SerfService } from "./serfs/serf-service.ts";
 import { GameServer } from "./game-server.ts";
 import { consoleLogger } from "./log.ts";
 
@@ -39,7 +41,8 @@ try {
       : "database up to date",
   );
   const accounts = new AccountService(new PgAccountRepo(pool));
-  const server = await GameServer.start({ port, accounts });
+  const serfs = new SerfService(new PgSerfRepo(pool));
+  const server = await GameServer.start({ port, accounts, serfs });
   consoleLogger.info(
     `Serfdom server listening on ws://localhost:${server.port}`,
   );

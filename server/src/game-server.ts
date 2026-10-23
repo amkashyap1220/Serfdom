@@ -15,6 +15,7 @@ import {
 import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { AccountService, AuthResult } from "./auth/account-service.ts";
+import type { SerfService } from "./serfs/serf-service.ts";
 import { DungeonInstance, type RunEnd } from "./dungeon-instance.ts";
 import { consoleLogger, type Logger } from "./log.ts";
 import { Matchmaker } from "./matchmaking.ts";
@@ -25,6 +26,8 @@ export interface GameServerOptions {
   port: number;
   /** Accounts and logins (Phase 7a). Every player must log in before queueing. */
   accounts: AccountService;
+  /** Serfs (Phase 7b). Queueing needs a chosen living serf. */
+  serfs: SerfService;
   /** Close connections that have not sent a valid hello within this time. */
   helloTimeoutMs?: number;
   /** Close a connection after this many invalid messages. */
@@ -61,6 +64,10 @@ interface Session {
   token: string | null;
   /** A register/login/resume is waiting for the database. */
   authBusy: boolean;
+  /** The living serf this connection plays as, or null (D-062). */
+  serfId: number | null;
+  /** A createSerf/selectSerf is waiting for the database. */
+  serfBusy: boolean;
 }
 
 /** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
@@ -105,6 +112,12 @@ export class GameServer {
   /** One logged-in connection per account. */
   private readonly accountSocket = new Map<number, WebSocket>();
   private readonly accounts: AccountService;
+  private readonly serfs: SerfService;
+  /** Whose serf each player in a run is, fixed when the run starts (for recording it). */
+  private readonly runOwner = new Map<
+    number,
+    { accountId: number; serfId: number }
+  >();
   private nextPlayerId = 1;
   private nextInstanceId = 1;
   private tickCount = 0;
@@ -116,6 +129,7 @@ export class GameServer {
     this.wss = wss;
     this.log = options.log ?? consoleLogger;
     this.accounts = options.accounts;
+    this.serfs = options.serfs;
     this.helloTimeoutMs = options.helloTimeoutMs ?? 5000;
     this.maxInvalidMessages = options.maxInvalidMessages ?? 5;
     this.snapshotEveryTicks = options.snapshotEveryTicks ?? 1;
@@ -203,7 +217,7 @@ export class GameServer {
         this.runOf.delete(id);
         this.socketOf.get(id)?.close(CLOSE_POLICY, "invalid state");
       }
-      for (const end of ended) this.finishRun(instance, end);
+      for (const end of ended) this.finishRun(instance, end, true);
       if (sendSnapshots && !instance.isEmpty) {
         const encoded = encodeMessage(instance.snapshot(this.tickCount));
         this.lastSnapshotBytes = Buffer.byteLength(encoded);
@@ -255,6 +269,8 @@ export class GameServer {
       accountId: null,
       token: null,
       authBusy: false,
+      serfId: null,
+      serfBusy: false,
     };
     this.sessions.set(socket, session);
 
@@ -319,12 +335,20 @@ export class GameServer {
           this.reject(socket, session, "log in first");
           return;
         }
+        if (session.serfId === null) {
+          this.reject(socket, session, "choose a serf first");
+          return;
+        }
         this.onQueue(socket, session, session.id, message.dungeon);
         return;
       case "register":
       case "login":
       case "resume":
         this.onAuth(socket, session, message);
+        return;
+      case "createSerf":
+      case "selectSerf":
+        this.onSerf(socket, session, message);
         return;
       case "logout":
         if (session.accountId === null) return;
@@ -350,7 +374,7 @@ export class GameServer {
         if (session.id === null) return;
         const instance = this.runOf.get(session.id);
         const end = instance?.leave(session.id);
-        if (instance && end) this.finishRun(instance, end);
+        if (instance && end) this.finishRun(instance, end, true);
         return;
       }
     }
@@ -405,6 +429,8 @@ export class GameServer {
         session.accountId = result.accountId;
         session.token = result.token;
         this.accountSocket.set(result.accountId, socket);
+        session.serfId = null;
+        this.sendSerfList(socket);
         this.send(socket, {
           type: "authOk",
           email: result.email,
@@ -433,7 +459,10 @@ export class GameServer {
   private logOut(socket: WebSocket, reason: string): void {
     const session = this.sessions.get(socket);
     if (!session || session.accountId === null) return;
-    if (session.id !== null) this.leaveEverything(session.id, true);
+    // Not notified with runEnded: the client resets on loggedOut, and an
+    // async runEnded arriving after it would show a results screen.
+    if (session.id !== null) this.leaveEverything(session.id, false);
+    session.serfId = null;
     if (this.accountSocket.get(session.accountId) === socket) {
       this.accountSocket.delete(session.accountId);
     }
@@ -449,14 +478,8 @@ export class GameServer {
     if (dungeon) this.sendQueueStatus(dungeon);
     const instance = this.runOf.get(id);
     const end = instance?.leave(id);
-    if (instance && end) {
-      if (notify) {
-        this.finishRun(instance, end);
-      } else {
-        this.runOf.delete(id);
-        this.log.info(`guest #${id} disconnected from run #${instance.id}`);
-      }
-    }
+    // Recorded on the serf either way (as "left").
+    if (instance && end) this.finishRun(instance, end, notify);
   }
 
   private onQueue(
@@ -509,6 +532,7 @@ export class GameServer {
       changed.add(dungeon);
       best.join(playerId);
       this.runOf.set(playerId, best);
+      this.setRunOwner(playerId);
       this.sendEncoded(
         playerId,
         encodeMessage({
@@ -534,7 +558,10 @@ export class GameServer {
       },
     );
     this.instances.set(instance.id, instance);
-    for (const id of players) this.runOf.set(id, instance);
+    for (const id of players) {
+      this.runOf.set(id, instance);
+      this.setRunOwner(id);
+    }
     const encoded = encodeMessage({
       type: "runStarted",
       dungeon,
@@ -547,21 +574,152 @@ export class GameServer {
   }
 
   /** A player's run is over: back to the menu with their stats. */
-  private finishRun(instance: DungeonInstance, end: RunEnd): void {
-    this.runOf.delete(end.playerId);
-    this.sendEncoded(
-      end.playerId,
-      encodeMessage({
-        type: "runEnded",
-        dungeon: instance.dungeon,
-        result: end.result,
-        stats: end.stats,
-        reward: end.reward,
-      }),
-    );
+  /**
+   * A player's run is over: record it on their serf (a death is permanent,
+   * D-062), then, if `notify`, send runEnded with the serf's updated life
+   * and a fresh serf list. The serf is released at once, so a dead serf can
+   * never queue again even while the database write is in flight.
+   */
+  private finishRun(
+    instance: DungeonInstance,
+    end: RunEnd,
+    notify: boolean,
+  ): void {
+    const id = end.playerId;
+    this.runOf.delete(id);
+    const owner = this.runOwner.get(id);
+    this.runOwner.delete(id);
+    const died = end.result === "died";
+    const socket = this.socketOf.get(id);
+    const session = socket ? this.sessions.get(socket) : undefined;
+    if (died && session && session.serfId === owner?.serfId) {
+      session.serfId = null;
+    }
     this.log.info(
-      `guest #${end.playerId} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s${end.reward ? ` (placeholder roll ${end.reward.roll})` : ""}`,
+      `guest #${id} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s${end.reward ? ` (placeholder roll ${end.reward.roll})` : ""}`,
     );
+    const recorded = owner
+      ? this.serfs.recordRun(
+          owner.accountId,
+          owner.serfId,
+          end.result,
+          end.stats,
+          died ? { dungeon: instance.dungeon, killedBy: end.killedBy } : null,
+        )
+      : Promise.resolve(null);
+    recorded
+      .catch((err: unknown) => {
+        this.log.warn(`guest #${id} run not recorded: ${String(err)}`);
+        return null;
+      })
+      .then((serf) => {
+        if (serf && died) this.log.info(`serf #${serf.id} died for good`);
+        if (!notify) return;
+        this.sendEncoded(
+          id,
+          encodeMessage({
+            type: "runEnded",
+            dungeon: instance.dungeon,
+            result: end.result,
+            stats: end.stats,
+            reward: end.reward,
+            killedBy: end.killedBy,
+            serf,
+          }),
+        );
+        const s = this.socketOf.get(id);
+        if (s) this.sendSerfList(s);
+      });
+  }
+
+  private setRunOwner(playerId: number): void {
+    const socket = this.socketOf.get(playerId);
+    const session = socket ? this.sessions.get(socket) : undefined;
+    if (session?.accountId != null && session.serfId !== null) {
+      this.runOwner.set(playerId, {
+        accountId: session.accountId,
+        serfId: session.serfId,
+      });
+    }
+  }
+
+  /**
+   * createSerf / selectSerf (Phase 7b). Only while logged in and not in a
+   * queue or run (the serf is fixed for a run). One request at a time.
+   */
+  private onSerf(
+    socket: WebSocket,
+    session: Session,
+    message: Extract<ClientMessage, { type: "createSerf" | "selectSerf" }>,
+  ): void {
+    const accountId = session.accountId;
+    if (session.id === null || accountId === null) {
+      this.reject(socket, session, "log in first");
+      return;
+    }
+    if (this.runOf.has(session.id) || this.matchmaker.has(session.id)) {
+      this.reject(socket, session, "not while queued or in a run");
+      return;
+    }
+    if (session.serfBusy) {
+      this.reject(socket, session, "busy");
+      return;
+    }
+    session.serfBusy = true;
+    const attempt =
+      message.type === "createSerf"
+        ? this.serfs.create(accountId, message.name)
+        : this.serfs.choose(accountId, message.serfId);
+    attempt
+      .then((result) => {
+        // Logged out (or reconnected) meanwhile: drop the answer.
+        if (!this.sessions.has(socket) || session.accountId !== accountId) {
+          return;
+        }
+        if (!result.ok) {
+          this.send(socket, { type: "serfError", reason: result.reason });
+          return;
+        }
+        // A new serf is played right away.
+        session.serfId = result.serf.id;
+        this.log.info(
+          `${label(session)} ${message.type === "createSerf" ? "created" : "chose"} serf #${result.serf.id}`,
+        );
+        this.sendSerfList(socket);
+      })
+      .catch((err: unknown) => {
+        this.log.warn(
+          `${label(session)} ${message.type} error: ${String(err)}`,
+        );
+        this.send(socket, {
+          type: "serfError",
+          reason: "Server error. Please try again.",
+        });
+      })
+      .finally(() => {
+        session.serfBusy = false;
+      });
+  }
+
+  /** Sends this connection its serfs and which one it plays as. */
+  private sendSerfList(socket: WebSocket): void {
+    const session = this.sessions.get(socket);
+    const accountId = session?.accountId;
+    if (!session || accountId == null) return;
+    this.serfs
+      .list(accountId)
+      .then((serfs) => {
+        if (session.accountId !== accountId) return;
+        this.send(socket, {
+          type: "serfList",
+          slots: this.serfs.slotCount,
+          serfs,
+          selectedId: session.serfId,
+        });
+      })
+      .catch((err: unknown) =>
+        this.log.warn(`${label(session)} serf list error: ${String(err)}`),
+      );
   }
 
   private onHello(socket: WebSocket, session: Session, protocol: number): void {

@@ -266,6 +266,15 @@ describe("menu, queue, and run messages (v4)", () => {
         result: "died",
         stats,
         reward: null,
+        killedBy: "brute",
+        serf: {
+          id: 3,
+          name: "Aldric Mudfoot",
+          level: 1,
+          alive: false,
+          life: { ...stats, runs: 4, clears: 2 },
+          death: { dungeon: "goblin-warrens", killedBy: "brute" },
+        },
       },
       {
         type: "runEnded",
@@ -273,7 +282,11 @@ describe("menu, queue, and run messages (v4)", () => {
         result: "completed",
         stats,
         reward: { roll: 777 },
+        killedBy: null,
+        serf: null,
       },
+      { type: "serfList", slots: 2, serfs: [], selectedId: null },
+      { type: "serfError", reason: "That name is taken." },
     ];
     for (const m of msgs) {
       expect(parseServerMessage(encodeMessage(m))).toEqual({
@@ -288,6 +301,8 @@ describe("menu, queue, and run messages (v4)", () => {
       type: "runEnded",
       dungeon: "goblin-warrens",
       reward: null,
+      killedBy: null,
+      serf: null,
     };
     const won = { ...ended, result: "completed", stats };
     expect(server({ ...won, reward: { roll: 5 } }).ok).toBe(true);
@@ -301,6 +316,12 @@ describe("menu, queue, and run messages (v4)", () => {
     expect(server({ ...won, reward: { roll: 2.5 } }).ok).toBe(false);
     expect(server({ ...won, reward: { roll: 5, gold: 9999 } }).ok).toBe(false);
     expect(server({ ...ended, result: "won", stats }).ok).toBe(false);
+    expect(
+      server({ ...ended, result: "died", stats, killedBy: "dragon" }).ok,
+    ).toBe(false);
+    expect(
+      server({ ...ended, result: "died", stats, serf: { id: 1 } }).ok,
+    ).toBe(false);
     expect(
       server({ ...ended, result: "died", stats: { ...stats, seconds: -1 } }).ok,
     ).toBe(false);
@@ -447,5 +468,53 @@ describe("snapshot messages", () => {
 
   it("roundCoord keeps two decimals", () => {
     expect(roundCoord(1234.56789)).toBe(1234.57);
+  });
+});
+
+describe("serf messages (v9)", () => {
+  const client = (m: unknown) => parseClientMessage(JSON.stringify(m));
+  const server = (m: unknown) => parseServerMessage(JSON.stringify(m));
+  const life = {
+    runs: 1,
+    clears: 0,
+    seconds: 10,
+    shotsFired: 4,
+    shotsHit: 2,
+    damageDealt: 50,
+    enemiesDefeated: 1,
+    damageTaken: 6,
+  };
+
+  it("accepts createSerf and selectSerf with the right shapes only", () => {
+    expect(client({ type: "createSerf", name: "Edda Rye" })).toEqual({
+      ok: true,
+      message: { type: "createSerf", name: "Edda Rye" },
+    });
+    expect(client({ type: "createSerf", name: 5 }).ok).toBe(false);
+    expect(client({ type: "createSerf", name: "x".repeat(65) }).ok).toBe(false);
+    expect(client({ type: "createSerf", name: "Edda", level: 20 }).ok).toBe(
+      false,
+    );
+    expect(client({ type: "selectSerf", serfId: 7 }).ok).toBe(true);
+    expect(client({ type: "selectSerf", serfId: 0 }).ok).toBe(false);
+    expect(client({ type: "selectSerf", serfId: "7" }).ok).toBe(false);
+  });
+
+  it("validates serf lists", () => {
+    const serf = {
+      id: 1,
+      name: "Edda",
+      level: 1,
+      alive: true,
+      life,
+      death: null,
+    };
+    const list = (serfs: unknown[], selectedId: unknown = 1) =>
+      server({ type: "serfList", slots: 2, serfs, selectedId }).ok;
+    expect(list([serf])).toBe(true);
+    expect(list([{ ...serf, life: { ...life, runs: -1 } }])).toBe(false);
+    expect(list([{ ...serf, gold: 5 }])).toBe(false);
+    expect(list([{ ...serf, death: { dungeon: "x" } }])).toBe(false);
+    expect(list([serf], "1")).toBe(false);
   });
 });

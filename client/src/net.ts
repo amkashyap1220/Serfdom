@@ -38,7 +38,9 @@ export type LobbyMessage = Extract<
       | "runEnded"
       | "authOk"
       | "authError"
-      | "loggedOut";
+      | "loggedOut"
+      | "serfList"
+      | "serfError";
   }
 >;
 
@@ -127,6 +129,14 @@ export class Connection {
     this.send({ type: "logout" });
   }
 
+  sendCreateSerf(name: string): void {
+    this.send({ type: "createSerf", name });
+  }
+
+  sendSelectSerf(serfId: number): void {
+    this.send({ type: "selectSerf", serfId });
+  }
+
   /** Sends only once joined; before that there is nothing to say but hello. */
   private send(message: ClientMessage): void {
     if (this.state.status.kind !== "connected") return;
@@ -210,6 +220,8 @@ export class Connection {
       case "authOk":
       case "authError":
       case "loggedOut":
+      case "serfList":
+      case "serfError":
         this.handlers.onLobby?.(msg, performance.now());
         break;
     }

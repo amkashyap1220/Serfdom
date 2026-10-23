@@ -21,6 +21,7 @@ import {
   stepWorld,
   TICK_SECONDS,
   type DungeonId,
+  type EnemyKind,
   type DungeonLayout,
   type PlayerInput,
   type PlaceholderReward,
@@ -51,6 +52,8 @@ export interface RunEnd {
   stats: RunStats;
   /** Rolled for this player alone, on completion only (D-010, T-039). */
   reward: PlaceholderReward | null;
+  /** Kind of the enemy whose hit killed them (deaths only). */
+  killedBy: EnemyKind | null;
 }
 
 /**
@@ -198,8 +201,11 @@ export class DungeonInstance {
     }
     for (const id of faulted) this.end(id, "left");
 
+    // Known before the tick, since a dead enemy may be gone after it.
+    const kinds = new Map(this.sim.enemies.map((e) => [e.id, e.kind]));
     const world = stepWorld(this.sim, walls, TICK_SECONDS);
     this.sim = world.state;
+    for (const e of this.sim.enemies) kinds.set(e.id, e.kind);
     for (const [id, member] of this.members) {
       member.stats = recordRunEvents(member.stats, id, world.events);
       member.stats = {
@@ -211,7 +217,16 @@ export class DungeonInstance {
     const ended: RunEnd[] = [];
     for (const e of world.events) {
       if (e.type !== "playerDied") continue;
-      const end = this.end(e.playerId, "died");
+      // The killing blow is this player's last hit in this tick.
+      let killer: EnemyKind | null = null;
+      for (let i = world.events.length - 1; i >= 0; i--) {
+        const h = world.events[i];
+        if (h?.type === "playerHit" && h.playerId === e.playerId) {
+          killer = kinds.get(h.enemyId) ?? null;
+          break;
+        }
+      }
+      const end = this.end(e.playerId, "died", killer);
       if (end) ended.push(end);
     }
 
@@ -297,7 +312,11 @@ export class DungeonInstance {
     };
   }
 
-  private end(playerId: number, result: RunResult): RunEnd | null {
+  private end(
+    playerId: number,
+    result: RunResult,
+    killedBy: EnemyKind | null = null,
+  ): RunEnd | null {
     const member = this.members.get(playerId);
     if (!member) return null;
     this.members.delete(playerId);
@@ -305,6 +324,6 @@ export class DungeonInstance {
     this.sim = removePlayer(this.sim, playerId);
     // Each completing player gets their own roll; nobody else does.
     const reward = result === "completed" ? { roll: this.rollReward() } : null;
-    return { playerId, result, stats: member.stats, reward };
+    return { playerId, result, stats: member.stats, reward, killedBy };
   }
 }

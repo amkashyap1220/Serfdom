@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import type { ServerMessage } from "@serfdom/shared";
 import { FIRE_MODE_LABELS, rotateVec } from "@serfdom/shared";
 import "./style.css";
 import "./screens.css";
@@ -8,7 +9,13 @@ import {
   type Screen,
   type ScreenEvent,
 } from "./app-state";
-import { clearToken, loadToken, saveToken } from "./auth-store";
+import {
+  clearToken,
+  loadLastSerf,
+  loadToken,
+  saveLastSerf,
+  saveToken,
+} from "./auth-store";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
@@ -65,6 +72,11 @@ game.events.once(Phaser.Core.Events.READY, () => {
     },
     switchLoginMode: () => dispatch({ type: "switchLoginMode" }),
     logout: () => net.connection.sendLogout(),
+    createSerf: (name) => net.connection.sendCreateSerf(name),
+    selectSerf: (serfId) => {
+      saveLastSerf(serfId);
+      net.connection.sendSelectSerf(serfId);
+    },
   });
   // On every (re)connect: log back in with the saved token if there is one.
   const onConnected = () => {
@@ -85,9 +97,39 @@ game.events.once(Phaser.Core.Events.READY, () => {
       view.setAccount(null);
     } else if (message.type === "authError" && screen.kind === "resuming") {
       clearToken();
+    } else if (message.type === "serfList") {
+      view.setSerfs(message);
+      onSerfList(message);
+    } else if (message.type === "serfError") {
+      view.setSerfError(message.reason);
     }
     dispatch({ type: "server", message, nowMs });
   };
+  /**
+   * Convenience after login: play the serf played last time on this
+   * browser (or the only living one). With none, show the Serfs tab; once
+   * one is chosen, go back to the dungeons.
+   */
+  let selected: number | null = null;
+  const onSerfList = (list: Extract<ServerMessage, { type: "serfList" }>) => {
+    const living = list.serfs.filter((s) => s.alive);
+    if (list.selectedId === null) {
+      const last = loadLastSerf();
+      const pick =
+        living.find((s) => s.id === last) ??
+        (living.length === 1 ? living[0] : undefined);
+      if (pick) {
+        net.connection.sendSelectSerf(pick.id);
+      } else if (screen.kind === "menu") {
+        dispatch({ type: "openTab", tab: "serfs" });
+      }
+    } else if (list.selectedId !== selected && screen.kind === "menu") {
+      saveLastSerf(list.selectedId);
+      dispatch({ type: "openTab", tab: "dungeons" });
+    }
+    selected = list.selectedId;
+  };
+
   // The welcome may have arrived before these handlers were attached.
   if (net.connection.snapshot.status.kind === "connected") onConnected();
 

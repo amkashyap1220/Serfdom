@@ -1,6 +1,8 @@
 import {
   dungeonInfo,
   type DungeonId,
+  type EnemyKind,
+  type SerfSummary,
   type PlaceholderReward,
   type RunStats,
   type ServerMessage,
@@ -44,6 +46,10 @@ export type Screen =
       stats: RunStats;
       /** The server's roll for us alone (placeholder until Phase 9); null on death. */
       reward: PlaceholderReward | null;
+      /** What landed the killing blow (deaths). */
+      killedBy: EnemyKind | null;
+      /** The serf's life including this run (its final record on death). */
+      serf: SerfSummary | null;
     };
 
 export type ScreenEvent =
@@ -108,7 +114,11 @@ export function nextScreen(screen: Screen, event: ScreenEvent): Screen {
     case "leaveQueue":
       return screen.kind === "queued" ? MENU : screen;
     case "dismissResults":
-      return screen.kind === "results" ? MENU : screen;
+      if (screen.kind !== "results") return screen;
+      // After a death: choose a new or existing serf (D-050).
+      return screen.result === "died"
+        ? { kind: "menu", tab: "serfs", notice: null }
+        : MENU;
     case "server":
       return onServerMessage(screen, event.message, event.nowMs);
   }
@@ -158,6 +168,8 @@ function onServerMessage(
         dungeon: msg.dungeon,
         stats: msg.stats,
         reward: msg.reward,
+        killedBy: msg.killedBy,
+        serf: msg.serf,
       };
     default:
       return screen;

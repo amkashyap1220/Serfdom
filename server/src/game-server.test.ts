@@ -12,6 +12,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { MemoryAccountRepo } from "./auth/account-repo.ts";
 import { AccountService } from "./auth/account-service.ts";
+import { MemorySerfRepo } from "./serfs/serf-repo.ts";
+import { SerfService } from "./serfs/serf-service.ts";
 import { GameServer } from "./game-server.ts";
 import { silentLogger } from "./log.ts";
 
@@ -76,19 +78,33 @@ function testAccounts(): AccountService {
 let emailSeq = 0;
 const PASSWORD = "correct horse";
 
-/** Registers a fresh account on an already-welcomed connection. */
+/** Registers a fresh account on an already-welcomed connection (no serf yet). */
 async function register(client: TestClient): Promise<string> {
   const email = `player${++emailSeq}@test.example`;
   client.send(encodeMessage({ type: "register", email, password: PASSWORD }));
   const ok = await nextOfType(client, "authOk");
+  await nextOfType(client, "serfList");
   return ok.token;
 }
 
-/** hello → welcome → register → authOk. */
+let serfSeq = 0;
+/** Creates a serf on a logged-in connection; it is played at once. Returns its id. */
+async function createSerf(client: TestClient): Promise<number> {
+  client.send(encodeMessage({ type: "createSerf", name: `Serf${++serfSeq}` }));
+  // Skip lists sent before this one (e.g. the one right after login).
+  for (let i = 0; i < 10; i++) {
+    const list = await nextOfType(client, "serfList");
+    if (list.selectedId !== null) return list.selectedId;
+  }
+  throw new Error("serf not selected");
+}
+
+/** hello → welcome → register → serf: ready to queue. */
 async function helloAndLogin(client: TestClient): Promise<void> {
   client.send(hello);
   await nextOfType(client, "welcome");
   await register(client);
+  await createSerf(client);
 }
 
 /**
@@ -109,6 +125,7 @@ let clients: TestClient[];
 beforeEach(async () => {
   server = await GameServer.start({
     accounts: testAccounts(),
+    serfs: new SerfService(new MemorySerfRepo()),
     port: 0,
     helloTimeoutMs: 200,
     autoTick: false,
@@ -124,8 +141,10 @@ afterEach(async () => {
   await server.close();
 });
 
-/** A connected, welcomed, and (unless `login: false`) logged-in client. */
-async function joined(options: { login?: boolean } = {}): Promise<{
+/** A connected, welcomed client; by default logged in and playing a new serf. */
+async function joined(
+  options: { login?: boolean; serf?: boolean } = {},
+): Promise<{
   client: TestClient;
   welcome: ServerMessage;
 }> {
@@ -133,7 +152,10 @@ async function joined(options: { login?: boolean } = {}): Promise<{
   clients.push(client);
   client.send(hello);
   const welcome = await client.next();
-  if (options.login ?? true) await register(client);
+  if (options.login ?? true) {
+    await register(client);
+    if (options.serf ?? true) await createSerf(client);
+  }
   return { client, welcome };
 }
 
@@ -248,6 +270,7 @@ describe("startup", () => {
       GameServer.start({
         port: server.port,
         accounts: testAccounts(),
+        serfs: new SerfService(new MemorySerfRepo()),
         log: silentLogger,
       }),
     ).rejects.toMatchObject({ code: "EADDRINUSE" });
@@ -400,6 +423,7 @@ describe("menu and queue (6a)", () => {
   it("waits up to the queue time, then starts solo (T-030)", async () => {
     const live = await GameServer.start({
       accounts: testAccounts(),
+      serfs: new SerfService(new MemorySerfRepo()),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 5,
@@ -427,6 +451,7 @@ describe("menu and queue (6a)", () => {
   it("tells everyone waiting when someone else joins the queue", async () => {
     const live = await GameServer.start({
       accounts: testAccounts(),
+      serfs: new SerfService(new MemorySerfRepo()),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 5,
@@ -618,6 +643,7 @@ describe("real-time loop", () => {
   it("processes queued inputs at about 60 ticks per second on its own", async () => {
     const live = await GameServer.start({
       accounts: testAccounts(),
+      serfs: new SerfService(new MemorySerfRepo()),
       port: 0,
       queueWaitSeconds: 0,
       log: silentLogger,
@@ -835,6 +861,11 @@ describe("accounts (7a)", () => {
       token: ok.token,
     });
     again.send(queue);
+    expect((await nextOfType(again, "error")).reason).toBe(
+      "choose a serf first",
+    );
+    await createSerf(again);
+    again.send(queue);
     expect((await nextOfType(again, "queueStatus")).queued).toBe(1);
   });
 
@@ -868,6 +899,7 @@ describe("accounts (7a)", () => {
       password: PASSWORD,
     });
     await nextOfType(first, "authOk");
+    await createSerf(first);
     first.send(queue);
     await nextOfType(first, "queueStatus");
 
@@ -899,10 +931,9 @@ describe("accounts (7a)", () => {
     );
   });
 
-  it("logging out mid-run leaves the run", async () => {
+  it("logging out mid-run leaves the run (no results screen, just loggedOut)", async () => {
     const [c] = await inRun(1);
     send(c!, { type: "logout" });
-    expect((await nextOfType(c!, "runEnded")).result).toBe("left");
     await nextOfType(c!, "loggedOut");
     expect(server.instanceOf(1)).toBeUndefined();
   });
@@ -921,5 +952,102 @@ describe("accounts (7a)", () => {
     expect((await nextOfType(client, "error")).reason).toBe(
       "resume: bad token",
     );
+  });
+});
+
+describe("serfs (7b)", () => {
+  const send = (c: TestClient, m: Parameters<typeof encodeMessage>[0]) =>
+    c.send(encodeMessage(m));
+
+  it("a fresh account has no serfs and cannot queue until it creates one", async () => {
+    const { client } = await joined({ serf: false });
+    client.send(queue);
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "choose a serf first",
+    );
+    send(client, { type: "createSerf", name: "  Edda   Rye " });
+    const list = await nextOfType(client, "serfList");
+    expect(list).toMatchObject({ slots: 2, selectedId: list.serfs[0]?.id });
+    expect(list.serfs).toEqual([
+      expect.objectContaining({ name: "Edda Rye", level: 1, alive: true }),
+    ]);
+    client.send(queue);
+    expect((await nextOfType(client, "queueStatus")).queued).toBe(1);
+  });
+
+  it("refuses bad names, a third living serf, and duplicate living names", async () => {
+    const { client } = await joined({ serf: false });
+    send(client, { type: "createSerf", name: "x!" });
+    expect((await nextOfType(client, "serfError")).reason).toBe(
+      "Use at least 3 characters.",
+    );
+    await createSerf(client);
+    await createSerf(client);
+    send(client, { type: "createSerf", name: "Third One" });
+    expect((await nextOfType(client, "serfError")).reason).toBe(
+      "You already have 2 living serfs.",
+    );
+    const { client: other } = await joined({ serf: false });
+    send(other, { type: "createSerf", name: `serf${serfSeq}` });
+    expect((await nextOfType(other, "serfError")).reason).toBe(
+      "A living serf already has that name.",
+    );
+  });
+
+  it("you can only play your own serf", async () => {
+    await joined(); // creates serf #1 (each test server starts empty)
+    const { client: b } = await joined({ serf: false });
+    send(b, { type: "selectSerf", serfId: 1 });
+    expect((await nextOfType(b, "serfError")).reason).toBe("No such serf.");
+    b.send(queue);
+    expect((await nextOfType(b, "error")).reason).toBe("choose a serf first");
+  });
+
+  it("cannot switch serfs while queued or in a run", async () => {
+    const [c] = await inRun(1);
+    send(c!, { type: "selectSerf", serfId: 1 });
+    expect((await nextOfType(c!, "error")).reason).toBe(
+      "not while queued or in a run",
+    );
+  });
+
+  it("death is permanent: runEnded carries the dead serf and its killer; it cannot be played again", async () => {
+    const [a] = await inRun(1);
+    placePlayer(1, { x: 1250, y: 1100 }, 1);
+    for (let t = 0; t < 120 && server.instanceOf(1); t++) server.tick();
+    const ended = await nextOfType(a!, "runEnded");
+    expect(ended).toMatchObject({
+      result: "died",
+      killedBy: "dummy",
+      serf: { alive: false, death: { dungeon: GW, killedBy: "dummy" } },
+    });
+    expect(ended.serf?.life.runs).toBe(1);
+    const list = await nextOfType(a!, "serfList");
+    expect(list.selectedId).toBeNull();
+    expect(list.serfs[0]).toMatchObject({ alive: false });
+    a!.send(queue);
+    expect((await nextOfType(a!, "error")).reason).toBe("choose a serf first");
+    send(a!, { type: "selectSerf", serfId: list.serfs[0]!.id });
+    expect((await nextOfType(a!, "serfError")).reason).toMatch(/is dead\.$/);
+  });
+
+  it("completing adds a clear to the serf's life; leaving adds a run", async () => {
+    const [a] = await inRun(1);
+    a!.send(encodeMessage({ type: "exitDungeon" }));
+    const left = await nextOfType(a!, "runEnded");
+    expect(left.serf).toMatchObject({
+      alive: true,
+      life: { runs: 1, clears: 0 },
+    });
+    a!.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    await nextOfType(a!, "runStarted");
+    placePlayer(1, { x: 1200, y: 1100 });
+    setDummyHp(1, 25);
+    await drive(a!, 1, 0, 30, { x: 1, y: 0 });
+    const done = await nextOfType(a!, "runEnded");
+    expect(done).toMatchObject({ result: "completed", killedBy: null });
+    expect(done.serf?.life).toMatchObject({ runs: 2, clears: 1 });
   });
 });
