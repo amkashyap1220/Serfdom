@@ -324,3 +324,49 @@ export function isValidItemSpec(v: ItemSpec): boolean {
   if (v.luck !== 0 && v.luck !== 1) return false;
   return v.luck === 0 || v.rolls.length > 0;
 }
+
+/** What a serf fights with: its stats plus gear, and its weapon's tier. */
+export interface Loadout {
+  stats: Stats;
+  /** Tier of the equipped weapon, or null (no weapon: 25 damage). */
+  weaponTier: number | null;
+}
+
+/**
+ * A serf's effective stats (D-083): its rolled stats plus everything it
+ * has equipped, not limited by the class max. A negative roll can lower a
+ * stat, but never below 0 (HP below 1) (T-048).
+ */
+export function loadoutOf(serf: {
+  stats: Stats;
+  items: readonly Item[];
+}): Loadout {
+  const worn = serf.items.filter((i) => i.equipped !== null);
+  const stats = { ...serf.stats };
+  for (const item of worn) {
+    const bonus = itemBonus(item);
+    for (const key of STAT_KEYS) stats[key] += bonus[key];
+  }
+  for (const key of STAT_KEYS) {
+    stats[key] = Math.max(key === "hp" ? 1 : 0, stats[key]);
+  }
+  const weapon = worn.find((i) => i.slot === "weapon");
+  return { stats, weaponTier: weapon ? weapon.tier : null };
+}
+
+/** The worn slots an item can go in: a ring either ring slot, the rest their own. */
+export function slotsFor(slot: ItemSlot): EquipSlot[] {
+  return slot === "ring" ? ["ring1", "ring2"] : [slot];
+}
+
+/**
+ * Per stat, how wearing `next` instead of `current` (null = empty slot)
+ * changes the bonus: what the hover comparison shows (D-086, D-090).
+ */
+export function compareItems(next: ItemSpec, current: ItemSpec | null): Stats {
+  const a = itemBonus(next);
+  const b = current ? itemBonus(current) : zeroStats();
+  const diff = zeroStats();
+  for (const key of STAT_KEYS) diff[key] = a[key] - b[key];
+  return diff;
+}

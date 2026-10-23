@@ -86,6 +86,9 @@ game.events.once(Phaser.Core.Events.READY, () => {
     logout: () => net.connection.sendLogout(),
     createSerf: (name) => net.connection.sendCreateSerf(name),
     sellItem: (itemId) => net.connection.sendSellItem(itemId),
+    equip: (itemId, serfId, slot) =>
+      net.connection.sendEquip(itemId, serfId, slot),
+    unequip: (serfId, slot) => net.connection.sendUnequip(serfId, slot),
     chooseClass: (serfId, classId) =>
       net.connection.sendChooseClass(serfId, classId),
     selectSerf: (serfId) => {
@@ -168,8 +171,13 @@ game.events.once(Phaser.Core.Events.READY, () => {
       ...STAT_KEYS.map(
         (key) => [STAT_LABELS[key], serf ? statText(serf, key) : "—"] as const,
       ),
-      // Reward chests per clear (D-068); items add to it from Phase 9.
-      ["LUCK", serf ? String(luckOf()) : "—"],
+      // Reward chests per clear: 1 + each worn Luck item (D-068).
+      [
+        "LUCK",
+        serf
+          ? String(luckOf(serf.items.filter((i) => i.equipped !== null)))
+          : "—",
+      ],
     ]);
   };
 

@@ -19,6 +19,7 @@ import {
   type HitTarget,
   type Projectile,
 } from "./projectile.ts";
+import { weaponDamage } from "./items.ts";
 import {
   combatFor,
   SERF_BASE,
@@ -163,13 +164,17 @@ export function spawnEnemies(
   return { ...state, enemies: [...state.enemies, ...added], nextEnemyId };
 }
 
-/** A player at full HP; a fresh Serf's stats unless given (D-055, D-078). */
+/**
+ * A player at full HP; a fresh Serf's stats and no weapon unless given
+ * (D-055, D-078, D-083).
+ */
 export function newPlayer(
   id: number,
   spawn: Vec2,
   stats: Stats = SERF_BASE,
+  weaponTier: number | null = null,
 ): PlayerState {
-  const combat = combatFor(stats);
+  const combat = combatFor(stats, weaponDamage(weaponTier));
   return {
     id,
     position: { ...spawn },
@@ -186,9 +191,13 @@ export function addPlayer(
   id: number,
   spawn: Vec2,
   stats: Stats = SERF_BASE,
+  weaponTier: number | null = null,
 ): SimState {
   const others = state.players.filter((p) => p.id !== id);
-  return { ...state, players: [...others, newPlayer(id, spawn, stats)] };
+  return {
+    ...state,
+    players: [...others, newPlayer(id, spawn, stats, weaponTier)],
+  };
 }
 
 /** Removes a player (disconnect). Their projectiles keep flying. */

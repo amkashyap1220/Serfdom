@@ -13,7 +13,8 @@ import {
   type ClientMessage,
   type DungeonId,
   type ServerMessage,
-  type Stats,
+  loadoutOf,
+  type Loadout,
 } from "@serfdom/shared";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { AccountService, AuthResult } from "./auth/account-service.ts";
@@ -76,8 +77,8 @@ interface Session {
   serfNeedsClass: boolean;
   /** Rewards wait for the chosen serf (full stash): it may not queue (D-088). */
   serfBlocked: boolean;
-  /** The chosen serf's stats, kept current at the same moments (D-077). */
-  serfStats: Stats;
+  /** The chosen serf's stats with gear and weapon, kept current at the same moments (D-077, D-083). */
+  serfLoadout: Loadout;
 }
 
 /** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
@@ -279,7 +280,7 @@ export class GameServer {
       serfBusy: false,
       serfNeedsClass: false,
       serfBlocked: false,
-      serfStats: SERF_BASE,
+      serfLoadout: { stats: SERF_BASE, weaponTier: null },
     };
     this.sessions.set(socket, session);
 
@@ -370,6 +371,8 @@ export class GameServer {
         return;
       case "getStash":
       case "sellItem":
+      case "equipItem":
+      case "unequipItem":
         this.onStash(socket, session, message);
         return;
       case "getLeaderboard":
@@ -569,8 +572,8 @@ export class GameServer {
       if (!best) continue;
       this.matchmaker.leave(playerId);
       changed.add(dungeon);
-      const stats = this.statsOf(playerId);
-      best.join(playerId, stats);
+      const loadout = this.loadoutOf(playerId);
+      best.join(playerId, loadout);
       this.runOf.set(playerId, best);
       this.setRunOwner(playerId);
       this.sendEncoded(
@@ -579,7 +582,8 @@ export class GameServer {
           type: "runStarted",
           dungeon,
           players: best.playerIds,
-          stats,
+          stats: loadout.stats,
+          weaponTier: loadout.weaponTier,
         }),
       );
       this.log.info(`guest #${playerId} joined run #${best.id} in progress`);
@@ -595,7 +599,7 @@ export class GameServer {
       {
         maxQueuedInputs: this.maxQueuedInputs,
         joinWindowTicks: this.joinWindowTicks,
-        statsFor: (id) => this.statsOf(id),
+        loadoutFor: (id) => this.loadoutOf(id),
       },
     );
     this.instances.set(instance.id, instance);
@@ -610,7 +614,8 @@ export class GameServer {
           type: "runStarted",
           dungeon,
           players: [...players],
-          stats: this.statsOf(id),
+          stats: this.loadoutOf(id).stats,
+          weaponTier: this.loadoutOf(id).weaponTier,
         }),
       );
     }
@@ -667,7 +672,7 @@ export class GameServer {
         const nowSession = now ? this.sessions.get(now) : undefined;
         if (serf && nowSession && nowSession.serfId === serf.id) {
           nowSession.serfNeedsClass = needsClass(serf);
-          nowSession.serfStats = serf.stats;
+          nowSession.serfLoadout = loadoutOf(serf);
           // A reward that did not fit blocks the next dungeon (D-088).
           if (saved?.loot.some((d) => d.pending)) nowSession.serfBlocked = true;
         }
@@ -703,7 +708,10 @@ export class GameServer {
   private onStash(
     socket: WebSocket,
     session: Session,
-    message: Extract<ClientMessage, { type: "getStash" | "sellItem" }>,
+    message: Extract<
+      ClientMessage,
+      { type: "getStash" | "sellItem" | "equipItem" | "unequipItem" }
+    >,
   ): void {
     const accountId = session.accountId;
     if (accountId === null) {
@@ -718,28 +726,60 @@ export class GameServer {
       this.reject(socket, session, "busy");
       return;
     }
+    // Gear is fixed for a run, like the serf itself.
+    const id = session.id;
+    if (
+      message.type !== "sellItem" &&
+      id !== null &&
+      (this.runOf.has(id) || this.matchmaker.has(id))
+    ) {
+      this.reject(socket, session, "not while queued or in a run");
+      return;
+    }
     session.serfBusy = true;
-    this.serfs
-      .sell(accountId, message.itemId)
-      .then(async (sold) => {
+    const attempt: Promise<
+      { ok: true; price?: number } | { ok: false; reason: string }
+    > =
+      message.type === "sellItem"
+        ? this.serfs.sell(accountId, message.itemId)
+        : message.type === "equipItem"
+          ? this.serfs.equip(
+              accountId,
+              message.serfId,
+              message.itemId,
+              message.slot,
+            )
+          : this.serfs.unequip(accountId, message.serfId, message.slot);
+    attempt
+      .then(async (done) => {
         if (session.accountId !== accountId) return;
-        if (!sold.ok) {
-          this.send(socket, { type: "stashError", reason: sold.reason });
+        if (!done.ok) {
+          this.send(socket, { type: "stashError", reason: done.reason });
           return;
         }
         this.log.info(
-          `${label(session)} sold item #${message.itemId} for ${sold.price} gold`,
+          message.type === "sellItem"
+            ? `${label(session)} sold item #${message.itemId} for ${done.price ?? 0} gold`
+            : message.type === "equipItem"
+              ? `${label(session)} equipped item #${message.itemId} on serf #${message.serfId}`
+              : `${label(session)} unequipped serf #${message.serfId} ${message.slot}`,
         );
+        // The played serf's gear or waiting rewards may have changed.
         if (session.serfId !== null) {
-          session.serfBlocked = await this.serfs.hasPending(
-            accountId,
-            session.serfId,
+          const serfId = session.serfId;
+          const played = (await this.serfs.list(accountId)).find(
+            (x) => x.id === serfId,
           );
+          if (played) session.serfLoadout = loadoutOf(played);
+          session.serfBlocked = await this.serfs.hasPending(accountId, serfId);
         }
         this.sendStash(socket);
+        if (message.type !== "sellItem") this.sendSerfList(socket);
       })
       .catch((err: unknown) => {
-        this.log.warn(`${label(session)} sell error: ${String(err)}`);
+        this.log.warn(
+          `${label(session)} ${message.type} error: ${String(err)}`,
+        );
         this.send(socket, {
           type: "stashError",
           reason: "Server error. Please try again.",
@@ -765,11 +805,11 @@ export class GameServer {
       );
   }
 
-  /** The stats a player's serf fights with (a fresh Serf's if unknown). */
-  private statsOf(playerId: number): Stats {
+  /** What a player's serf fights with (a fresh Serf's if unknown). */
+  private loadoutOf(playerId: number): Loadout {
     const socket = this.socketOf.get(playerId);
     const session = socket ? this.sessions.get(socket) : undefined;
-    return session?.serfStats ?? SERF_BASE;
+    return session?.serfLoadout ?? { stats: SERF_BASE, weaponTier: null };
   }
 
   private setRunOwner(playerId: number): void {
@@ -832,7 +872,7 @@ export class GameServer {
         session.serfId = result.serf.id;
         session.serfBlocked = blocked;
         session.serfNeedsClass = needsClass(result.serf);
-        session.serfStats = result.serf.stats;
+        session.serfLoadout = loadoutOf(result.serf);
         this.log.info(
           message.type === "chooseClass"
             ? `${label(session)} serf #${result.serf.id} became a ${message.classId}`

@@ -1,5 +1,8 @@
 import {
+  loadoutOf,
+  rollsFor,
   STASH_SIZE,
+  type ItemSpec,
   isValidItemSpec,
   newRunStats,
   SERF_BASE,
@@ -337,6 +340,125 @@ describe("reward chests (D-065, D-068, D-080, D-086)", () => {
     expect(await serfs.sell(2, after.items[0]!.id)).toEqual({
       ok: false,
       reason: "No such item in your stash.",
+    });
+  });
+});
+
+describe("equipping (9b, D-081, D-086)", () => {
+  async function withItems(specs: ItemSpec[], classId: "wizard" | null = null) {
+    const repo = new MemorySerfRepo();
+    const serfs = new SerfService(repo);
+    const made = await serfs.create(1, "Ada Gear");
+    if (!made.ok) throw new Error(made.reason);
+    if (classId) {
+      await repo.recordRun(
+        1,
+        made.serf.id,
+        "completed",
+        run,
+        null,
+        totalExpForLevel(5),
+      );
+      await serfs.choose(1, made.serf.id);
+      const chosen = await serfs.chooseClass(1, made.serf.id, classId);
+      if (!chosen.ok) throw new Error(chosen.reason);
+    }
+    const drops =
+      (await repo.addLoot(1, made.serf.id, specs, STASH_SIZE)) ?? [];
+    return { repo, serfs, id: made.serf.id, ids: drops.map((d) => d.item.id) };
+  }
+  const wand = (tier: number): ItemSpec => ({
+    slot: "weapon",
+    type: "wand",
+    tier,
+    rolls: Array.from({ length: rollsFor("weapon", tier) }, () => ({
+      stat: "attack" as const,
+      amount: 1,
+    })),
+    luck: 0,
+  });
+  const luckyRing: ItemSpec = {
+    slot: "ring",
+    type: null,
+    tier: 1,
+    rolls: [{ stat: "hp", amount: 2 }],
+    luck: 1,
+  };
+
+  it("a classless Serf may wear T0 weapons and any accessory, but not T1 weapons", async () => {
+    const { serfs, id, ids } = await withItems([wand(0), wand(1), luckyRing]);
+    expect(await serfs.equip(1, id, ids[0]!, "weapon")).toEqual({ ok: true });
+    expect(await serfs.equip(1, id, ids[1]!, "weapon")).toEqual({
+      ok: false,
+      reason:
+        "Before choosing a class, Ada Gear can only wear T0 weapons and armor.",
+    });
+    expect(await serfs.equip(1, id, ids[2]!, "ring2")).toEqual({ ok: true });
+  });
+
+  it("classes use only their weapons; items go only in their slot", async () => {
+    const bow: ItemSpec = {
+      slot: "weapon",
+      type: "bow",
+      tier: 1,
+      rolls: [{ stat: "hp", amount: 1 }],
+      luck: 0,
+    };
+    const { serfs, id, ids } = await withItems(
+      [wand(1), bow, luckyRing],
+      "wizard",
+    );
+    expect(await serfs.equip(1, id, ids[0]!, "weapon")).toEqual({ ok: true });
+    expect(await serfs.equip(1, id, ids[1]!, "weapon")).toEqual({
+      ok: false,
+      reason: "A Wizard cannot use a T1 Bow.",
+    });
+    expect(await serfs.equip(1, id, ids[2]!, "cape")).toEqual({
+      ok: false,
+      reason: "A T1 Ring does not go there.",
+    });
+    expect(await serfs.equip(1, id, 999, "cape")).toEqual({
+      ok: false,
+      reason: "No such item in your stash.",
+    });
+  });
+
+  it("an equipped +1 Luck item gives a second chest; gear counts in the loadout", async () => {
+    const { serfs, id, ids } = await withItems([luckyRing, wand(0)]);
+    await serfs.equip(1, id, ids[0]!, "ring1");
+    await serfs.equip(1, id, ids[1]!, "weapon");
+    const r = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(r?.loot).toHaveLength(2); // Luck 1 + 1 (D-068)
+    const loadout = loadoutOf(r!.serf);
+    expect(loadout.weaponTier).toBe(0);
+    expect(loadout.stats.hp).toBe(r!.serf.stats.hp + 2);
+  });
+
+  it("unequipping needs room in the stash", async () => {
+    const { repo, serfs, id, ids } = await withItems([luckyRing]);
+    await serfs.equip(1, id, ids[0]!, "ring1");
+    const cape: ItemSpec = {
+      slot: "cape",
+      type: null,
+      tier: 0,
+      rolls: [{ stat: "hp", amount: 1 }],
+      luck: 0,
+    };
+    await repo.addLoot(1, id, Array(STASH_SIZE).fill(cape), STASH_SIZE);
+    expect(await serfs.unequip(1, id, "ring1")).toEqual({
+      ok: false,
+      reason: "Your stash is full: sell something first.",
+    });
+    expect(await serfs.unequip(1, id, "cape")).toEqual({
+      ok: false,
+      reason: "Nothing is worn there.",
     });
   });
 });

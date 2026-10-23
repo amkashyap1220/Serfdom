@@ -4,6 +4,10 @@ import {
   serfNameProblem,
   addStats,
   STASH_SIZE,
+  canEquip,
+  itemName,
+  slotsFor,
+  type EquipSlot,
   luckOf,
   rollItem,
   type LootDrop,
@@ -177,6 +181,66 @@ export class SerfService {
     return sold
       ? { ok: true, price: sold.price }
       : { ok: false, reason: "No such item in your stash." };
+  }
+
+  /**
+   * Puts a stash or pending item on one of the account's living serfs
+   * (D-086): the slot must fit the item, and the serf's class must be
+   * able to use it (D-081). What it replaces goes to the stash, or waits
+   * when the stash is full. Reasons are safe to show.
+   */
+  async equip(
+    accountId: number,
+    serfId: number,
+    itemId: number,
+    slot: EquipSlot,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const serf = await this.repo.find(accountId, serfId);
+    if (!serf) return { ok: false, reason: "No such serf." };
+    if (!serf.alive) return { ok: false, reason: `${serf.name} is dead.` };
+    const stash = await this.repo.stash(accountId);
+    const item = [...stash.items, ...stash.pending.map((p) => p.item)].find(
+      (i) => i.id === itemId,
+    );
+    if (!item) return { ok: false, reason: "No such item in your stash." };
+    if (!slotsFor(item.slot).includes(slot)) {
+      return { ok: false, reason: `A ${itemName(item)} does not go there.` };
+    }
+    if (!canEquip(item, serf.classId)) {
+      return {
+        ok: false,
+        reason: serf.classId
+          ? `A ${className(serf.classId)} cannot use a ${itemName(item)}.`
+          : `Before choosing a class, ${serf.name} can only wear T0 weapons and armor.`,
+      };
+    }
+    const done = await this.repo.equip(
+      accountId,
+      serfId,
+      itemId,
+      slot,
+      STASH_SIZE,
+    );
+    return done
+      ? { ok: true }
+      : { ok: false, reason: "Could not equip that. Please try again." };
+  }
+
+  /** Takes a worn item off into the stash, if it has room. */
+  async unequip(
+    accountId: number,
+    serfId: number,
+    slot: EquipSlot,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const done = await this.repo.unequip(accountId, serfId, slot, STASH_SIZE);
+    if (done === "ok") return { ok: true };
+    return {
+      ok: false,
+      reason:
+        done === "full"
+          ? "Your stash is full: sell something first."
+          : "Nothing is worn there.",
+    };
   }
 
   /** Rewards wait for this serf: it may not start a dungeon (D-088). */

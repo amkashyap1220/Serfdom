@@ -8,6 +8,12 @@ import {
   passwordProblem,
   CLASS_CHOICE_LEVEL,
   CLASS_IDS,
+  canEquip,
+  compareItems,
+  EQUIP_SLOTS,
+  loadoutOf,
+  slotsFor,
+  type EquipSlot,
   luckOf,
   STAT_KEYS,
   STAT_LABELS,
@@ -37,7 +43,6 @@ import {
   itemName,
   weaponDamage,
   type ItemSpec,
-  type LootDrop,
   type DungeonId,
 } from "@serfdom/shared";
 import {
@@ -62,6 +67,8 @@ export interface ScreenActions {
   createSerf(name: string): void;
   selectSerf(serfId: number): void;
   sellItem(itemId: number): void;
+  equip(itemId: number, serfId: number, slot: EquipSlot): void;
+  unequip(serfId: number, slot: EquipSlot): void;
   chooseClass(serfId: number, classId: ClassId): void;
   logout(): void;
 }
@@ -133,13 +140,34 @@ export class ScreenView {
     this.serfError = null;
     this.typedSerfName = "";
     this.pickedClass = null;
-    this.shown = null;
+    this.redraw();
   }
 
   setStash(stash: Extract<ServerMessage, { type: "stash" }>): void {
     this.stash = stash;
     this.stashError = null;
-    this.shown = null;
+    this.redraw();
+  }
+
+  /**
+   * Shows new serf/stash data. On the completion screen only the reward
+   * cards change (rebuilding would replay the celebration); elsewhere the
+   * screen is rebuilt.
+   */
+  private redraw(): void {
+    if (this.shown?.kind === "results" && this.lootRefresh) {
+      this.lootRefresh();
+    } else {
+      this.shown = null;
+    }
+  }
+
+  /** Updates the completion screen's reward cards in place (set while it shows). */
+  private lootRefresh: (() => void) | null = null;
+
+  /** A serf as the server last sent it (fresher than a results snapshot). */
+  private serfById(id: number): SerfSummary | null {
+    return this.serfs?.serfs.find((s) => s.id === id) ?? null;
   }
 
   setStashError(reason: string): void {
@@ -184,6 +212,7 @@ export class ScreenView {
 
   private rebuild(screen: Screen): void {
     this.root.replaceChildren();
+    this.lootRefresh = null;
     this.countdown = null;
     this.root.className = `screen screen-${screen.kind}`;
     this.root.hidden = screen.kind === "inRun";
@@ -548,6 +577,8 @@ export class ScreenView {
       return;
     }
     if (this.stashError) body.append(el("p", "error", this.stashError));
+    const playing = this.playing;
+    if (playing) body.append(this.gearPanel(playing));
     if (stash.pending.length > 0) {
       body.append(
         el("h2", "error", `Waiting for room (${stash.pending.length})`),
@@ -578,19 +609,154 @@ export class ScreenView {
     body.append(
       this.itemGrid(
         stash.items,
-        stash.pending.length > 0 ? "item-grid short" : "item-grid",
+        stash.pending.length > 0 || playing ? "item-grid short" : "item-grid",
       ),
     );
   }
 
   private itemGrid(items: readonly Item[], className: string): HTMLElement {
     const grid = el("div", className);
+    const playing = this.playing;
     for (const item of items) {
       const card = itemCard(item);
+      if (playing) card.append(this.equipControls(item, playing));
       card.append(sellButton(item, () => this.actions.sellItem(item.id)));
       grid.append(card);
     }
     return grid;
+  }
+
+  /** The serf's 10 slots (D-082), each with what it wears and Unequip. */
+  private gearPanel(serf: SerfSummary): HTMLElement {
+    const panel = el("div", "gear");
+    panel.append(el("h2", "", `${serf.name}'s gear`));
+    const grid = el("div", "gear-grid");
+    for (const slot of EQUIP_SLOTS) {
+      const worn = serf.items.find((i) => i.equipped === slot);
+      const cell = el("div", worn ? "gear-slot filled" : "gear-slot");
+      cell.append(el("span", "gear-label", SLOT_LABELS[slot]));
+      if (worn) {
+        cell.append(itemCard(worn));
+        cell.append(
+          button("Unequip", () => this.actions.unequip(serf.id, slot)),
+        );
+      } else {
+        cell.append(
+          el("span", "hint", slot === "ability" ? "Phase 10" : "empty"),
+        );
+      }
+      grid.append(cell);
+    }
+    panel.append(grid);
+    return panel;
+  }
+
+  /**
+   * Equip buttons for an item on a serf, each with the comparison against
+   * what it would replace, shown when the item is hovered (D-086, D-090).
+   * Rings go to a free ring slot, or offer both when both are taken.
+   */
+  private equipControls(
+    item: ItemSpec & { id: number },
+    serf: SerfSummary,
+  ): HTMLElement {
+    const box = el("div", "equip");
+    if (!canEquip(item, serf.classId)) {
+      box.append(
+        el(
+          "span",
+          "hint",
+          serf.classId
+            ? `A ${className(serf.classId)} cannot use this`
+            : "Needs a class (only T0 weapons and armor before level 5)",
+        ),
+      );
+      return box;
+    }
+    for (const { slot, current } of equipTargets(item, serf)) {
+      const label =
+        slotsFor(item.slot).length > 1 && current
+          ? `Equip on ${serf.name} (${SLOT_LABELS[slot]})`
+          : `Equip on ${serf.name}`;
+      box.append(
+        button(label, () => this.actions.equip(item.id, serf.id, slot)),
+        compareBox(item, current),
+      );
+    }
+    return box;
+  }
+
+  /**
+   * The completion screen's chests (D-049, D-080, D-086): one card per
+   * chest, each opening in turn to show the item the server rolled. Each
+   * says where its item is now (stash, waiting, worn, sold) and offers
+   * Equip now for the serf that cleared, and Sell when it is waiting.
+   */
+  private lootReveal(
+    screen: Extract<Screen, { kind: "results" }>,
+  ): HTMLElement {
+    const loot = screen.loot;
+    const box = el("div", "loot");
+    if (loot.length === 0) return box;
+    box.append(
+      el(
+        "p",
+        "hint",
+        `${loot.length} chest${loot.length === 1 ? "" : "s"} (Luck ${loot.length})`,
+      ),
+    );
+    const row = el("div", "loot-row");
+    const statuses: (() => void)[] = [];
+    loot.forEach((drop, i) => {
+      const card = itemCard(drop.item);
+      card.classList.add("loot-card");
+      card.style.animationDelay = `${LOOT_FIRST_MS + i * LOOT_GAP_MS}ms`;
+      const status = el("div", "loot-status");
+      card.append(status);
+      const update = () => {
+        status.replaceChildren();
+        const serf = screen.serf
+          ? (this.serfById(screen.serf.id) ?? screen.serf)
+          : null;
+        const worn = serf?.items.some((it) => it.id === drop.item.id) ?? false;
+        const inStash = this.stash
+          ? this.stash.items.some((it) => it.id === drop.item.id)
+          : !drop.pending;
+        const waiting = this.stash
+          ? this.stash.pending.some((p) => p.item.id === drop.item.id)
+          : drop.pending;
+        card.classList.toggle("waiting", waiting);
+        if (worn) {
+          status.append(el("span", "roll-good", `Equipped on ${serf?.name}`));
+          return;
+        }
+        if (!inStash && !waiting) {
+          status.append(el("span", "item-where", "Sold"));
+          return;
+        }
+        status.append(
+          waiting
+            ? el(
+                "span",
+                "error",
+                "Stash full: sell this or something in the stash",
+              )
+            : el("span", "item-where", "→ Stash"),
+        );
+        if (serf?.alive) status.append(this.equipControls(drop.item, serf));
+        if (waiting) {
+          status.append(
+            sellButton(drop.item, () => this.actions.sellItem(drop.item.id)),
+          );
+        }
+      };
+      update();
+      statuses.push(update);
+      row.append(card);
+    });
+    this.lootRefresh = () => statuses.forEach((u) => u());
+    box.append(row);
+    return box;
   }
 
   /** Lifetime EXP leaderboard (GDD §12): living and dead, serf names only. */
@@ -710,7 +876,7 @@ export class ScreenView {
       expGain(screen.serf, screen.expGained, screen.dungeon, screen.statGains),
       stats,
       chest,
-      lootReveal(screen.loot, (id) => this.actions.sellItem(id)),
+      this.lootReveal(screen),
       actions,
     );
   }
@@ -818,44 +984,6 @@ function countingStatList(
   };
   requestAnimationFrame(frame);
   return dl;
-}
-
-/**
- * The chests (D-049, D-080): one card per chest, each opening in turn to
- * show the item the server rolled before this screen appeared. Lost items
- * (full bag) say so.
- */
-function lootReveal(
-  loot: readonly LootDrop[],
-  sell: (itemId: number) => void,
-): HTMLElement {
-  const box = el("div", "loot");
-  if (loot.length === 0) return box;
-  box.append(
-    el(
-      "p",
-      "hint",
-      `${loot.length} chest${loot.length === 1 ? "" : "s"} (Luck ${loot.length})`,
-    ),
-  );
-  const row = el("div", "loot-row");
-  loot.forEach((drop, i) => {
-    const card = itemCard(drop.item);
-    card.classList.add("loot-card");
-    card.style.animationDelay = `${LOOT_FIRST_MS + i * LOOT_GAP_MS}ms`;
-    if (drop.pending) {
-      card.classList.add("waiting");
-      card.append(
-        el("span", "error", "Stash full: sell this or something in the stash"),
-        sellButton(drop.item, () => sell(drop.item.id)),
-      );
-    } else {
-      card.append(el("span", "item-where", "→ Stash"));
-    }
-    row.append(card);
-  });
-  box.append(row);
-  return box;
 }
 
 /** An item's name (coloured by tier), what it gives, and its rolls. */
@@ -983,12 +1111,92 @@ export function statLine(serf: SerfSummary): string {
   ].join(" · ");
 }
 
-/** One stat: "37", or "37/60" once the serf has a class max. */
+/**
+ * One stat with gear: "18 (+3)", or "18/60 (+3)" once the serf has a
+ * class max (the max limits leveling and potions, not gear, D-083).
+ */
 export function statText(serf: SerfSummary, key: StatKey): string {
-  const value = serf.stats[key];
-  return serf.classId
+  const value = loadoutOf(serf).stats[key];
+  const gear = value - serf.stats[key];
+  const shown = serf.classId
     ? `${value}/${statMax(serf.classId, key)}`
     : String(value);
+  return gear === 0
+    ? shown
+    : `${shown} (${gear > 0 ? "+" : "−"}${Math.abs(gear)})`;
+}
+
+/** Display names of the 10 worn slots (D-082). */
+const SLOT_LABELS: Record<EquipSlot, string> = {
+  weapon: "Weapon",
+  ability: "Ability item",
+  head: "Head",
+  chest: "Chest",
+  legs: "Legs",
+  gloves: "Gloves",
+  ring1: "Ring 1",
+  ring2: "Ring 2",
+  necklace: "Necklace",
+  cape: "Cape",
+};
+
+/** Where an item could go on a serf, and what it would replace there. */
+function equipTargets(
+  item: ItemSpec,
+  serf: SerfSummary,
+): { slot: EquipSlot; current: Item | null }[] {
+  const worn = (slot: EquipSlot) =>
+    serf.items.find((i) => i.equipped === slot) ?? null;
+  const slots = slotsFor(item.slot);
+  const free = slots.find((slot) => worn(slot) === null);
+  if (slots.length > 1 && free) return [{ slot: free, current: null }];
+  return slots.map((slot) => ({ slot, current: worn(slot) }));
+}
+
+/** "vs T0 Ring: +2 SPD −1 HP" (and damage for weapons), shown on hover. */
+function compareBox(next: ItemSpec, current: Item | null): HTMLElement {
+  const box = el("div", "compare");
+  box.append(
+    el("span", "hint", current ? `vs ${itemName(current)}` : "vs empty slot"),
+  );
+  const diff = compareItems(next, current);
+  const line = el("span", "compare-line");
+  if (next.slot === "weapon") {
+    const d =
+      weaponDamage(next.tier) - weaponDamage(current ? current.tier : null);
+    if (d !== 0)
+      line.append(
+        el(
+          "span",
+          d > 0 ? "roll-good" : "roll-bad",
+          `${d > 0 ? "+" : "−"}${Math.abs(d)} damage`,
+        ),
+      );
+  }
+  for (const key of STAT_KEYS) {
+    const d = diff[key];
+    if (d !== 0)
+      line.append(
+        el(
+          "span",
+          d > 0 ? "roll-good" : "roll-bad",
+          `${d > 0 ? "+" : "−"}${Math.abs(d)} ${STAT_LABELS[key]}`,
+        ),
+      );
+  }
+  const luck = next.luck - (current?.luck ?? 0);
+  if (luck !== 0)
+    line.append(
+      el(
+        "span",
+        luck > 0 ? "item-luck" : "roll-bad",
+        `${luck > 0 ? "+" : "−"}1 LUCK`,
+      ),
+    );
+  if (line.childElementCount === 0)
+    line.append(el("span", "hint", "no change"));
+  box.append(line);
+  return box;
 }
 
 function statList(rows: [string, string][]): HTMLElement {

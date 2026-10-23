@@ -5,6 +5,7 @@ import {
   type ClassId,
   type ClientMessage,
   type DungeonId,
+  type EquipSlot,
   type PlayerInput,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -143,6 +144,14 @@ export class Connection {
 
   sendSellItem(itemId: number): void {
     this.send({ type: "sellItem", itemId });
+  }
+
+  sendEquip(itemId: number, serfId: number, slot: EquipSlot): void {
+    this.send({ type: "equipItem", itemId, serfId, slot });
+  }
+
+  sendUnequip(serfId: number, slot: EquipSlot): void {
+    this.send({ type: "unequipItem", serfId, slot });
   }
 
   sendGetLeaderboard(): void {

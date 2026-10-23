@@ -275,6 +275,7 @@ describe("menu, queue, and run messages (v4)", () => {
         dungeon: "goblin-warrens",
         players: [1, 4],
         stats: { ...SERF_BASE, speed: 14 },
+        weaponTier: 2,
       },
       {
         type: "runEnded",
@@ -413,8 +414,12 @@ describe("menu, queue, and run messages (v4)", () => {
       dungeon: "goblin-warrens",
       players: [1],
       stats: SERF_BASE,
+      weaponTier: null,
     };
     expect(server(started).ok).toBe(true);
+    expect(server({ ...started, weaponTier: 3 }).ok).toBe(true);
+    expect(server({ ...started, weaponTier: 11 }).ok).toBe(false);
+    expect(server({ ...started, weaponTier: -1 }).ok).toBe(false);
     expect(server({ ...started, stats: undefined }).ok).toBe(false);
     expect(server({ ...started, stats: { ...SERF_BASE, speed: -1 } }).ok).toBe(
       false,
@@ -731,5 +736,38 @@ describe("stash messages (v15, D-085–D-088)", () => {
     });
     expect(client({ type: "sellItem", itemId: 0 }).ok).toBe(false);
     expect(client({ type: "sellItem", itemId: 9, price: 9999 }).ok).toBe(false);
+  });
+});
+
+describe("equipping messages (v16, 9b)", () => {
+  const client = (m: unknown) => parseClientMessage(JSON.stringify(m));
+  it("accepts equipItem and unequipItem only with real slots and ids", () => {
+    expect(
+      client({ type: "equipItem", itemId: 4, serfId: 2, slot: "ring2" }),
+    ).toEqual({
+      ok: true,
+      message: { type: "equipItem", itemId: 4, serfId: 2, slot: "ring2" },
+    });
+    expect(
+      client({ type: "equipItem", itemId: 4, serfId: 2, slot: "ring" }).ok,
+    ).toBe(false);
+    expect(
+      client({ type: "equipItem", itemId: 0, serfId: 2, slot: "cape" }).ok,
+    ).toBe(false);
+    expect(
+      client({
+        type: "equipItem",
+        itemId: 4,
+        serfId: 2,
+        slot: "cape",
+        force: true,
+      }).ok,
+    ).toBe(false);
+    expect(client({ type: "unequipItem", serfId: 2, slot: "weapon" }).ok).toBe(
+      true,
+    );
+    expect(client({ type: "unequipItem", serfId: 2, slot: "belt" }).ok).toBe(
+      false,
+    );
   });
 });

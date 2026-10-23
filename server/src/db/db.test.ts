@@ -518,6 +518,69 @@ function serfContract(
       expect(await repo.addLoot(a, serf.id, [RING], 16)).toBeNull();
     });
 
+    it("equips from the stash or pending; what it replaces goes to the stash or waits (9b)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Gear`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      const [r1, r2] = (await repo.addLoot(a, serf.id, [RING, RING], 2)) ?? [];
+      expect(await repo.equip(a, serf.id, r1!.item.id, "ring1", 2)).toEqual({
+        replacedPending: false,
+      });
+      let worn = (await repo.find(a, serf.id))?.items;
+      expect(worn).toEqual([{ ...r1!.item, equipped: "ring1" }]);
+      expect((await repo.stash(a)).items.map((i) => i.id)).toEqual([
+        r2!.item.id,
+      ]);
+      // Swap: r2 replaces r1, which goes back to the stash.
+      expect(await repo.equip(a, serf.id, r2!.item.id, "ring1", 2)).toEqual({
+        replacedPending: false,
+      });
+      worn = (await repo.find(a, serf.id))?.items;
+      expect(worn?.map((i) => i.id)).toEqual([r2!.item.id]);
+      expect((await repo.stash(a)).items.map((i) => i.id)).toEqual([
+        r1!.item.id,
+      ]);
+      // Worn items cannot be equipped again or sold.
+      expect(await repo.equip(a, serf.id, r2!.item.id, "ring2", 2)).toBeNull();
+      expect(await repo.sell(a, r2!.item.id, 2)).toBeNull();
+      // Unequip: into the stash while it has room.
+      expect(await repo.unequip(a, serf.id, "ring1", 2)).toBe("ok");
+      expect(await repo.unequip(a, serf.id, "ring1", 2)).toBeNull();
+      expect((await repo.stash(a)).items).toHaveLength(2);
+      expect(await repo.equip(a, serf.id, r1!.item.id, "ring2", 2)).toEqual({
+        replacedPending: false,
+      });
+      // Stash 1/1 full: unequip refused; equipping a pending item over a
+      // worn one sends the old one to pending.
+      expect(await repo.unequip(a, serf.id, "ring2", 1)).toBe("full");
+      const [waiting] = (await repo.addLoot(a, serf.id, [RING], 1)) ?? [];
+      expect(waiting?.pending).toBe(true);
+      expect(
+        await repo.equip(a, serf.id, waiting!.item.id, "ring2", 1),
+      ).toEqual({ replacedPending: true });
+      expect((await repo.stash(a)).pending.map((p) => p.item.id)).toEqual([
+        r1!.item.id,
+      ]);
+      // Not someone else's.
+      const b = await account();
+      expect(await repo.equip(b, serf.id, r2!.item.id, "ring1", 2)).toBeNull();
+      expect(await repo.unequip(b, serf.id, "ring2", 2)).toBeNull();
+      // Death: what it wore is gone; the stash stays.
+      await repo.recordRun(
+        a,
+        serf.id,
+        "died",
+        run,
+        { dungeon: "x", killedBy: null },
+        0,
+      );
+      const after = await repo.stash(a);
+      expect(after.items.map((i) => i.id)).toEqual([r2!.item.id]);
+      expect(after.pending).toHaveLength(1);
+      expect(await repo.equip(a, serf.id, r2!.item.id, "ring1", 20)).toBeNull();
+    });
+
     it("another account's serf does not exist for you", async () => {
       const { repo, account } = await make();
       const a = await account();

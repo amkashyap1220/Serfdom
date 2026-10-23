@@ -15,8 +15,13 @@ import {
   sellPrice,
   weaponDamage,
   type ItemSpec,
+  compareItems,
+  loadoutOf,
+  slotsFor,
+  type EquipSlot,
+  type Item,
 } from "./items.ts";
-import { zeroStats } from "./stats.ts";
+import { combatFor, SERF_BASE, zeroStats } from "./stats.ts";
 
 /** A seeded generator, so a failure can be reproduced. */
 function seeded(seed: number): () => number {
@@ -270,5 +275,98 @@ describe("item values (D-087, D-090)", () => {
     expect(itemValue(at(1))).toBe(20);
     for (let tier = 0; tier <= 10; tier++)
       expect(sellPrice(at(tier))).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("gear on a serf (9b, D-083, T-048)", () => {
+  const worn = (spec: ItemSpec, slot: EquipSlot): Item => ({
+    ...spec,
+    id: 1,
+    equipped: slot,
+  });
+  const plate: ItemSpec = {
+    slot: "chest",
+    type: "plate",
+    tier: 2,
+    rolls: [{ stat: "speed", amount: -2 }],
+    luck: 0,
+  };
+  const bow: ItemSpec = {
+    slot: "weapon",
+    type: "bow",
+    tier: 2,
+    rolls: [{ stat: "attack", amount: 3 }],
+    luck: 1,
+  };
+
+  it("adds worn gear to the serf's stats and takes the weapon's tier; the stash does not count", () => {
+    const serf = {
+      stats: { ...SERF_BASE },
+      items: [
+        worn(plate, "chest"),
+        worn(bow, "weapon"),
+        { ...bow, id: 9, equipped: null },
+      ],
+    };
+    const l = loadoutOf(serf);
+    expect(l.stats).toEqual({ ...SERF_BASE, defense: 3, speed: 8, attack: 13 });
+    expect(l.weaponTier).toBe(2);
+    expect(loadoutOf({ stats: SERF_BASE, items: [] })).toEqual({
+      stats: SERF_BASE,
+      weaponTier: null,
+    });
+  });
+
+  it("negative rolls never take a stat below 0, or HP below 1", () => {
+    const awful: ItemSpec = {
+      slot: "ring",
+      type: null,
+      tier: 9,
+      rolls: [
+        { stat: "defense", amount: -10 },
+        { stat: "hp", amount: -30 },
+        { stat: "speed", amount: -10 },
+        { stat: "mp", amount: -30 },
+        { stat: "wisdom", amount: -10 },
+      ],
+      luck: 0,
+    };
+    const l = loadoutOf({ stats: SERF_BASE, items: [worn(awful, "ring1")] });
+    expect(l.stats.defense).toBe(0);
+    expect(l.stats.hp).toBe(1);
+    expect(l.stats.speed).toBe(0);
+  });
+
+  it("the weapon sets shot damage: no weapon 25, a T2 bow 35 (at ATK 10)", () => {
+    expect(combatFor(SERF_BASE).shotDamage).toBe(25);
+    expect(combatFor(SERF_BASE, weaponDamage(2)).shotDamage).toBe(35);
+  });
+
+  it("rings fit either ring slot; everything else its own", () => {
+    expect(slotsFor("ring")).toEqual(["ring1", "ring2"]);
+    expect(slotsFor("cape")).toEqual(["cape"]);
+    expect(slotsFor("weapon")).toEqual(["weapon"]);
+  });
+
+  it("compares a new item with what is worn: per stat up and down", () => {
+    const cloth: ItemSpec = {
+      slot: "chest",
+      type: "cloth",
+      tier: 1,
+      rolls: [{ stat: "wisdom", amount: 2 }],
+      luck: 0,
+    };
+    expect(compareItems(cloth, plate)).toEqual({
+      ...zeroStats(),
+      defense: -3,
+      speed: 2,
+      mp: 4,
+      wisdom: 2,
+    });
+    expect(compareItems(cloth, null)).toEqual({
+      ...zeroStats(),
+      mp: 4,
+      wisdom: 2,
+    });
   });
 });

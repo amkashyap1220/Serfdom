@@ -412,6 +412,7 @@ describe("menu and queue (6a)", () => {
       dungeon: GW,
       players: [1],
       stats: SERF_BASE,
+      weaponTier: null,
     });
     const snap = await nextOfType(client, "snapshot");
     expect(snap.players).toEqual([
@@ -527,6 +528,7 @@ describe("menu and queue (6a)", () => {
       dungeon: GW,
       players: [1, 2],
       stats: SERF_BASE,
+      weaponTier: null,
     });
     expect(server.instanceOf(2)).toBe(server.instanceOf(1));
     // The joiner starts fresh at the spawn; enemies rescale for two.
@@ -1261,6 +1263,61 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     client.send(encodeMessage({ type: "sellItem", itemId: 424242 }));
     expect((await nextOfType(client, "stashError")).reason).toBe(
       "No such item in your stash.",
+    );
+  });
+});
+
+describe("equipping over the network (9b)", () => {
+  it("equips a stash item, the next run fights with it, and not while queued", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const { client } = await joined();
+    const serfId = 1; // the first serf in a fresh repo
+    const ring = {
+      slot: "ring" as const,
+      type: null,
+      tier: 1,
+      rolls: [{ stat: "speed" as const, amount: 2 }],
+      luck: 0,
+    };
+    const [drop] = (await repo.addLoot(1, serfId, [ring], STASH_SIZE)) ?? [];
+
+    client.send(
+      encodeMessage({
+        type: "equipItem",
+        itemId: drop!.item.id,
+        serfId,
+        slot: "ring1",
+      }),
+    );
+    let serfs = await nextOfType(client, "serfList");
+    while (serfs.serfs[0]?.items.length === 0)
+      serfs = await nextOfType(client, "serfList");
+    expect(serfs.serfs[0]?.items).toEqual([
+      { ...drop!.item, equipped: "ring1" },
+    ]);
+
+    client.send(queue);
+    await until(() => server.isQueued(1));
+    client.send(encodeMessage({ type: "unequipItem", serfId, slot: "ring1" }));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "not while queued or in a run",
+    );
+    server.tick();
+    const started = await nextOfType(client, "runStarted");
+    expect(started.stats.speed).toBe(SERF_BASE.speed + 2);
+    expect(started.weaponTier).toBeNull();
+    const me = server.instanceOf(1)!.state.players.find((p) => p.id === 1)!;
+    expect(me.combat.moveSpeed).toBe(
+      combatFor({ ...SERF_BASE, speed: 12 }).moveSpeed,
     );
   });
 });

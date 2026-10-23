@@ -31,7 +31,7 @@ import {
   type ServerMessage,
   type SimState,
   type SnapshotPlayer,
-  type Stats,
+  type Loadout,
 } from "@serfdom/shared";
 import {
   newInputQueue,
@@ -45,6 +45,9 @@ interface Member {
   inputs: InputQueue;
   stats: RunStats;
 }
+
+/** A fresh Serf with nothing equipped. */
+const FRESH: Loadout = { stats: SERF_BASE, weaponTier: null };
 
 /** One player's run is over; the caller sends them `runEnded` and back to the menu. */
 export interface RunEnd {
@@ -90,8 +93,8 @@ export class DungeonInstance {
     options: {
       maxQueuedInputs: number;
       joinWindowTicks: number;
-      /** Each starting player's serf stats (D-077); a fresh Serf's if absent. */
-      statsFor?: (playerId: number) => Stats;
+      /** Each starting player's loadout (D-077, D-083); a fresh Serf's if absent. */
+      loadoutFor?: (playerId: number) => Loadout;
     },
   ) {
     this.id = id;
@@ -103,7 +106,7 @@ export class DungeonInstance {
     this.sim = createSimState([], { respawnSeconds: null });
     this.rooms = newRunProgress(this.layout);
     for (const playerId of playerIds) {
-      this.join(playerId, options.statsFor?.(playerId) ?? SERF_BASE);
+      this.join(playerId, options.loadoutFor?.(playerId) ?? FRESH);
     }
   }
 
@@ -119,14 +122,20 @@ export class DungeonInstance {
 
   /**
    * Adds a player at the spawn with full HP, simulated with their serf's
-   * stats (D-077). Enemies rescale on the next tick (D-045).
+   * stats and gear (D-077, D-083). Enemies rescale on the next tick (D-045).
    */
-  join(playerId: number, stats: Stats = SERF_BASE): void {
+  join(playerId: number, loadout: Loadout = FRESH): void {
     if (this.everJoined.has(playerId)) {
       throw new Error(`player ${playerId} was already in run ${this.id}`);
     }
     this.everJoined.add(playerId);
-    this.sim = addPlayer(this.sim, playerId, this.layout.spawn, stats);
+    this.sim = addPlayer(
+      this.sim,
+      playerId,
+      this.layout.spawn,
+      loadout.stats,
+      loadout.weaponTier,
+    );
     this.members.set(playerId, {
       inputs: newInputQueue(),
       stats: newRunStats(),

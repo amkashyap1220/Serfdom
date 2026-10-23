@@ -315,3 +315,13 @@ Keep this concise and update it after each meaningful milestone.
 - Next step: user runs the 9a checklist; then 9b (Equip now with the hover comparison, equipping from the stash, gear changes stats, damage, and Luck).
 - User asked why an item was called "Cloth Chest" (chest = the torso slot; it read like a reward chest). Chose per-material armor names (D-091): e.g. T2 Robe, T1 Breastplate, T0 Cap; cards show the material. `itemName` and new `armorTypeName` in shared items.ts; tests for all 12 armor names.
 - User asked to commit 9a and move on (2026-10-23; the 9a checklist result was not reported). Committed and pushed 9a. Next: 9b.
+
+### Phase 9b — equipping — 2026-10-23
+
+- Committed 9a as `26543e2`. Defaults for the small open details recorded as T-048 (ring slot choice, stats never below 0 / HP 1, unequip needs room, no gear changes in a run).
+- Shared `loadoutOf`, `slotsFor`, `compareItems`; weapon damage into `combatFor` and the sim; repo `equip`/`unequip` under the account lock; service rules (slot, class, T0 before a class); server loadout cache, gear lock during runs, protocol v16; client gear panel, Equip buttons with hover comparison, Equip now on rewards (cards update in place), gear-included stats and Luck in the HUD.
+- Caught on the way: a test waited for a serf list `joined()` had already read (fixed the test); live: a full gear panel could overflow the frame, so the stash grid is shorter whenever the gear panel shows.
+- Tests: loadout (gear adds, stash does not, clamping, weapon tier), weapon damage, ring slots, comparison; protocol v16; both stores (equip from stash and pending, swap, worn items cannot be sold or re-equipped, unequip ok/full, replaced item to pending when full, others refused, death removes worn gear only); service (Serf T0 rule, class weapons, slot check, a +1 Luck ring gives 2 chests, unequip needs room); server end to end (equip over the network, runStarted carries the gear-included stats, the sim moves at the new speed, unequip refused while queued). `npm run check`: 277 shared, 156 server, 47 client, build.
+- Live (harness, **test** DB): a T0 Ring dropped with "Equip on Ada Barley"; hover showed "vs empty slot +1 DEF"; Equip now marked it equipped without replaying the celebration; HUD "DEF 1 (+1)"; the Stash tab showed it in Ring 1; Unequip moved it to the stash and DEF went back to 0. Screenshots checked. Not checked live: two-ring choice, weapon damage in a run, Luck 2 chests (covered by tests).
+- Next step: user runs the 9b checklist; then Phase 9 acceptance review (potions wait for the first potion dungeon, D-089).
+- User ran the 9b checklist: all pass (2026-10-23). Committed and pushed 9b. Next: Phase 9 acceptance review.

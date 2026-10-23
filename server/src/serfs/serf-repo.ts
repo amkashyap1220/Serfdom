@@ -122,6 +122,31 @@ export interface SerfRepo {
   ): Promise<{ price: number } | null>;
   /** Whether rewards wait for this serf (it may not start a dungeon, D-088). */
   hasPending(accountId: number, serfId: number): Promise<boolean>;
+  /**
+   * Puts one of the account's stash or pending items on a living serf in
+   * `slot` (the caller has checked the rules). What was worn there goes to
+   * the stash if it has room, else waits as pending for that serf (D-086,
+   * D-087). Null (no change) if the item or serf is not this account's,
+   * the item is worn, or the serf is dead. Atomic per account.
+   */
+  equip(
+    accountId: number,
+    serfId: number,
+    itemId: number,
+    slot: EquipSlot,
+    capacity: number,
+  ): Promise<{ replacedPending: boolean } | null>;
+  /**
+   * Takes what a living serf wears in `slot` off into the stash: "full"
+   * when the stash has no room (nothing changes), null when nothing is
+   * worn there or the serf is not this account's.
+   */
+  unequip(
+    accountId: number,
+    serfId: number,
+    slot: EquipSlot,
+    capacity: number,
+  ): Promise<"ok" | "full" | null>;
 }
 
 export interface Stash {
@@ -473,6 +498,73 @@ export class PgSerfRepo implements SerfRepo {
       [accountId, serfId],
     );
     return (r.rowCount ?? 0) > 0;
+  }
+
+  async equip(
+    accountId: number,
+    serfId: number,
+    itemId: number,
+    slot: EquipSlot,
+    capacity: number,
+  ): Promise<{ replacedPending: boolean } | null> {
+    return this.inAccount(accountId, async (client) => {
+      const serf = await client.query(
+        "select id from serfs where id = $1 and account_id = $2 and died_at is null",
+        [serfId, accountId],
+      );
+      const item = await client.query<{ location: string }>(
+        "select location from items where id = $1 and account_id = $2 and location <> 'equipped'",
+        [itemId, accountId],
+      );
+      const from = item.rows[0]?.location;
+      if (serf.rowCount === 0 || !from) return null;
+      // Room after the new item leaves the stash (if it was there).
+      const room =
+        capacity -
+        (await stashCount(client, accountId)) +
+        (from === "stash" ? 1 : 0);
+      const replaced = await client.query(
+        `update items set location = $4, serf_id = $5, equipped = null
+         where account_id = $1 and serf_id = $2 and location = 'equipped' and equipped = $3
+         returning id`,
+        [
+          accountId,
+          serfId,
+          slot,
+          room > 0 ? "stash" : "pending",
+          room > 0 ? null : serfId,
+        ],
+      );
+      await client.query(
+        "update items set location = 'equipped', serf_id = $2, equipped = $3 where id = $1",
+        [itemId, serfId, slot],
+      );
+      return { replacedPending: (replaced.rowCount ?? 0) > 0 && room <= 0 };
+    });
+  }
+
+  async unequip(
+    accountId: number,
+    serfId: number,
+    slot: EquipSlot,
+    capacity: number,
+  ): Promise<"ok" | "full" | null> {
+    return this.inAccount(accountId, async (client) => {
+      const worn = await client.query<{ id: string }>(
+        `select items.id from items join serfs on serfs.id = items.serf_id
+         where items.account_id = $1 and items.serf_id = $2 and items.location = 'equipped'
+           and items.equipped = $3 and serfs.died_at is null`,
+        [accountId, serfId, slot],
+      );
+      const id = worn.rows[0]?.id;
+      if (!id) return null;
+      if ((await stashCount(client, accountId)) >= capacity) return "full";
+      await client.query(
+        "update items set location = 'stash', serf_id = null, equipped = null where id = $1",
+        [id],
+      );
+      return "ok";
+    });
   }
 
   /**
@@ -886,6 +978,70 @@ export class MemorySerfRepo implements SerfRepo {
         x.serfId === serfId &&
         x.location === "pending",
     );
+  }
+
+  async equip(
+    accountId: number,
+    serfId: number,
+    itemId: number,
+    slot: EquipSlot,
+    capacity: number,
+  ): Promise<{ replacedPending: boolean } | null> {
+    const serf = this.serfs.find(
+      (x) =>
+        x.accountId === accountId && x.summary.id === serfId && x.summary.alive,
+    );
+    const entry = this.items.find(
+      (x) =>
+        x.accountId === accountId &&
+        x.item.id === itemId &&
+        x.location !== "equipped",
+    );
+    if (!serf || !entry) return null;
+    const room =
+      capacity -
+      this.stashOf(accountId).length +
+      (entry.location === "stash" ? 1 : 0);
+    const old = this.items.find(
+      (x) =>
+        x.serfId === serfId &&
+        x.location === "equipped" &&
+        x.item.equipped === slot,
+    );
+    if (old) {
+      old.location = room > 0 ? "stash" : "pending";
+      old.serfId = room > 0 ? null : serfId;
+      old.item = { ...old.item, equipped: null };
+    }
+    entry.location = "equipped";
+    entry.serfId = serfId;
+    entry.item = { ...entry.item, equipped: slot };
+    return { replacedPending: old !== undefined && room <= 0 };
+  }
+
+  async unequip(
+    accountId: number,
+    serfId: number,
+    slot: EquipSlot,
+    capacity: number,
+  ): Promise<"ok" | "full" | null> {
+    const alive = this.serfs.some(
+      (x) =>
+        x.accountId === accountId && x.summary.id === serfId && x.summary.alive,
+    );
+    const worn = this.items.find(
+      (x) =>
+        x.accountId === accountId &&
+        x.serfId === serfId &&
+        x.location === "equipped" &&
+        x.item.equipped === slot,
+    );
+    if (!alive || !worn) return null;
+    if (this.stashOf(accountId).length >= capacity) return "full";
+    worn.location = "stash";
+    worn.serfId = null;
+    worn.item = { ...worn.item, equipped: null };
+    return "ok";
   }
 
   private stashOf(accountId: number) {

@@ -78,6 +78,23 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Equipping checklist (Phase 9b)
+
+Restart `npm run dev` (protocol v16) and reload (Ctrl+Shift+R).
+
+1. Clear the Goblin Warrens until a reward your serf can wear drops (before level 5: any ring, necklace, or cape, or a T0 weapon or armor piece). Its card shows **Equip on <name>**.
+2. Hover the card: a box beside it says **vs empty slot** (or **vs <what you wear>**) with green gains and red losses (weapons also show damage).
+3. Click Equip now: the card says **Equipped on <name>**; the confetti does not restart. The HUD stat shows the gear part, e.g. **DEF 1 (+1)**.
+4. A reward your serf cannot use (e.g. a T1 weapon before level 5) says why instead of offering Equip.
+5. Stash tab: **<name>'s gear** with 10 slots; the worn item has **Unequip**. Unequip it: it moves to the stash and the HUD stat drops back.
+6. Equip a stash item onto a slot that is already filled: the old item goes to the stash. With two rings worn, a third ring offers **Ring 1** and **Ring 2**, each with its own comparison.
+7. Wear a weapon, start a run: shots hit harder (e.g. a T2 weapon at ATK 10 does 35 instead of 25). Wear a +SPD item: you move faster, and HUD "Pending / correction" stays near 0.00 px.
+8. Wear a +1 LUCK item and clear: **2 chests (Luck 2)**.
+9. While queued, try Unequip from another tab or refresh: refused ("not while queued or in a run").
+10. Let a geared serf die: its worn items are gone; the stash and gold are unchanged.
+
+Report: pass/fail per step and any exact error text.
+
 ### Stash, gold, and rewards checklist (Phase 9a)
 
 Restart `npm run dev` (protocol v15); the server prints `database migrated: 007_stash_gold.sql` once (items you got while testing 9a-1 move into your stash). Reload (Ctrl+Shift+R) and log in. The account bar shows **Gold N**.

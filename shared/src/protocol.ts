@@ -6,6 +6,7 @@ import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import {
   EQUIP_SLOTS,
   isValidItemSpec,
+  MAX_TIER,
   type EquipSlot,
   type Item,
   type ItemSpec,
@@ -45,6 +46,9 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v16 (9b): equipping. Client equipItem {itemId, serfId, slot} and
+ *          unequipItem {serfId, slot}; runStarted carries your weapon's
+ *          tier with your (gear-included) stats.
  * v15 (9a): no bag (D-085). Serfs carry only equipped items; rewards
  *          go to the account stash or wait as pending when it is full
  *          (D-086–D-088). Server stash {capacity, gold, items, pending} and
@@ -68,7 +72,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 15;
+export const PROTOCOL_VERSION = 16;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -120,7 +124,11 @@ export type ClientMessage =
   /** Your stash, gold, and pending rewards. */
   | { type: "getStash" }
   /** Sell one of your stash or pending items to the vendor for gold (D-087). */
-  | { type: "sellItem"; itemId: number };
+  | { type: "sellItem"; itemId: number }
+  /** Wear a stash or pending item on one of your serfs (D-086); what it replaces goes to the stash. */
+  | { type: "equipItem"; itemId: number; serfId: number; slot: EquipSlot }
+  /** Take a worn item off into the stash (needs room). */
+  | { type: "unequipItem"; serfId: number; slot: EquipSlot };
 
 /** One reward chest's item and whether it fit in the bag. */
 export interface LootDrop {
@@ -217,12 +225,16 @@ export type ServerMessage =
       startsIn: number;
     }
   /** You are in a run now; snapshots follow. Seq numbers restart at 0. */
-  /** `stats` are yours, as the server simulates you this run (D-077). */
+  /**
+   * `stats` (gear included) and `weaponTier` are yours, as the server
+   * simulates you this run (D-077, D-083).
+   */
   | {
       type: "runStarted";
       dungeon: DungeonId;
       players: number[];
       stats: Stats;
+      weaponTier: number | null;
     }
   /** Your run is over; you are back at the menu. */
   | {
@@ -353,6 +365,33 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       }
       if (!isPlayerId(obj.itemId)) return fail("sellItem: bad itemId");
       return { ok: true, message: { type: "sellItem", itemId: obj.itemId } };
+    case "equipItem":
+      if (!hasExactKeys(obj, ["type", "itemId", "serfId", "slot"])) {
+        return fail("equipItem: unexpected fields");
+      }
+      if (!isPlayerId(obj.itemId) || !isPlayerId(obj.serfId)) {
+        return fail("equipItem: bad id");
+      }
+      if (!isEquipSlot(obj.slot)) return fail("equipItem: bad slot");
+      return {
+        ok: true,
+        message: {
+          type: "equipItem",
+          itemId: obj.itemId,
+          serfId: obj.serfId,
+          slot: obj.slot,
+        },
+      };
+    case "unequipItem":
+      if (!hasExactKeys(obj, ["type", "serfId", "slot"])) {
+        return fail("unequipItem: unexpected fields");
+      }
+      if (!isPlayerId(obj.serfId)) return fail("unequipItem: bad serfId");
+      if (!isEquipSlot(obj.slot)) return fail("unequipItem: bad slot");
+      return {
+        ok: true,
+        message: { type: "unequipItem", serfId: obj.serfId, slot: obj.slot },
+      };
     case "getLeaderboard":
       if (!hasExactKeys(obj, ["type"])) {
         return fail("getLeaderboard: unexpected fields");
@@ -480,8 +519,25 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         },
       };
     case "runStarted":
-      if (!hasExactKeys(obj, ["type", "dungeon", "players", "stats"])) {
+      if (
+        !hasExactKeys(obj, [
+          "type",
+          "dungeon",
+          "players",
+          "stats",
+          "weaponTier",
+        ])
+      ) {
         return fail("runStarted: unexpected fields");
+      }
+      if (
+        obj.weaponTier !== null &&
+        !(
+          isNonNegativeInt(obj.weaponTier) &&
+          (obj.weaponTier as number) <= MAX_TIER
+        )
+      ) {
+        return fail("runStarted: bad weaponTier");
       }
       if (!isDungeonId(obj.dungeon)) return fail("runStarted: bad dungeon");
       if (!Array.isArray(obj.players) || !obj.players.every(isPlayerId)) {
@@ -497,6 +553,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
             dungeon: obj.dungeon,
             players: [...obj.players],
             stats,
+            weaponTier: obj.weaponTier as number | null,
           },
         };
       }
@@ -857,6 +914,10 @@ function parseItem(v: unknown): Item | null {
   const spec = parseItemSpec(rest);
   if (!spec) return null;
   return { ...spec, id: id as number, equipped: equipped as EquipSlot | null };
+}
+
+function isEquipSlot(v: unknown): v is EquipSlot {
+  return (EQUIP_SLOTS as readonly unknown[]).includes(v);
 }
 
 /** An owned item that is not worn (stash, pending, or a fresh drop). */

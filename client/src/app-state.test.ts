@@ -104,6 +104,7 @@ describe("screen flow", () => {
         dungeon: GW,
         players: [1],
         stats: SERF_BASE,
+        weaponTier: null,
       }),
     );
     expect(
@@ -144,6 +145,7 @@ describe("screen flow", () => {
           dungeon: GW,
           players: [1, 2],
           stats: SERF_BASE,
+          weaponTier: null,
         }),
       ),
     ).toEqual({ kind: "inRun", dungeon: GW });
@@ -158,6 +160,7 @@ describe("screen flow", () => {
           dungeon: GW,
           players: [1],
           stats: SERF_BASE,
+          weaponTier: null,
         }),
         server({
           type: "runEnded",
@@ -261,6 +264,7 @@ describe("screen flow", () => {
           dungeon: GW,
           players: [1],
           stats: SERF_BASE,
+          weaponTier: null,
         }),
       ),
     ).toEqual({ kind: "inRun", dungeon: GW });
@@ -274,6 +278,7 @@ describe("screen flow", () => {
         dungeon: GW,
         players: [1],
         stats: SERF_BASE,
+        weaponTier: null,
       }),
     );
     expect(nextScreen(inRun, { type: "openTab", tab: "stash" })).toBe(inRun);

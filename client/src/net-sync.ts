@@ -2,6 +2,7 @@ import {
   blockingWalls,
   boxAround,
   combatFor,
+  weaponDamage,
   dungeonInfo,
   SERF_BASE,
   TICK_SECONDS,
@@ -54,6 +55,7 @@ export class NetSync {
   private currentDungeon: DungeonId | null = null;
   /** Your stats this run, from runStarted (prediction must match the server). */
   private myStats: Stats = SERF_BASE;
+  private myWeaponTier: number | null = null;
   private latest: { snapshot: SnapshotMessage; receivedAtMs: number } | null =
     null;
   private self: SnapshotPlayer | null = null;
@@ -80,6 +82,7 @@ export class NetSync {
           this.resetRun(true);
           this.currentDungeon = message.dungeon;
           this.myStats = message.stats;
+          this.myWeaponTier = message.weaponTier;
           // Until the first snapshot says otherwise, every door is closed.
           const layout = dungeonInfo(message.dungeon).layout;
           this.walls = blockingWalls(
@@ -258,7 +261,7 @@ export class NetSync {
             p.id,
             { x: p.x, y: p.y },
             this.walls,
-            combatFor(this.myStats),
+            combatFor(this.myStats, weaponDamage(this.myWeaponTier)),
           );
           this.predictorId = p.id;
           this.synced = false;
