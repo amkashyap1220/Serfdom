@@ -78,3 +78,31 @@ body {
   /* If the browser scales the canvas (e.g. page zoom), keep pixels blocky. */
   image-rendering: pixelated;
 }
+
+/* HP and MP bars in the HUD (Phase 10a). Placeholder colours. */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0;
+}
+
+.bar {
+  height: 8px;
+  border: 1px solid #46505f;
+  background: #0e1014;
+}
+
+.bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+}
+
+.bar.hp span {
+  background: #d9534f;
+}
+
+.bar.mp span {
+  background: #5b8def;
+}

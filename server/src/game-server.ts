@@ -280,7 +280,7 @@ export class GameServer {
       serfBusy: false,
       serfNeedsClass: false,
       serfBlocked: false,
-      serfLoadout: { stats: SERF_BASE, weaponTier: null },
+      serfLoadout: { stats: SERF_BASE, weaponTier: null, ability: null },
     };
     this.sessions.set(socket, session);
 
@@ -330,6 +330,7 @@ export class GameServer {
         const result = instance.queueInput(session.id, message.seq, {
           move: message.move,
           fire: message.fire,
+          ability: message.ability,
         });
         if (result.kind === "rejected") {
           this.reject(socket, session, result.reason);
@@ -809,7 +810,13 @@ export class GameServer {
   private loadoutOf(playerId: number): Loadout {
     const socket = this.socketOf.get(playerId);
     const session = socket ? this.sessions.get(socket) : undefined;
-    return session?.serfLoadout ?? { stats: SERF_BASE, weaponTier: null };
+    return (
+      session?.serfLoadout ?? {
+        stats: SERF_BASE,
+        weaponTier: null,
+        ability: null,
+      }
+    );
   }
 
   private setRunOwner(playerId: number): void {

@@ -5,6 +5,7 @@ import {
   addStats,
   STASH_SIZE,
   canEquip,
+  CLASS_ABILITY_ITEM,
   itemName,
   slotsFor,
   type EquipSlot,
@@ -88,9 +89,15 @@ export class SerfService {
     // Someone else's serf looks exactly like one that does not exist.
     if (!serf) return { ok: false, reason: "No such serf." };
     if (!serf.alive) return { ok: false, reason: `${serf.name} is dead.` };
-    // Serfs from before Phase 8c (or given EXP by hand) catch up here.
+    // Serfs from before Phase 8c (or given EXP by hand) catch up here,
+    // and classed serfs from before 10a get their ability item.
     const settled = await this.settle(accountId, serfId);
-    return { ok: true, serf: settled?.serf ?? serf };
+    const current = settled?.serf ?? serf;
+    if (current.classId && (await this.grantAbilityItem(accountId, current))) {
+      const fresh = await this.repo.find(accountId, serfId);
+      return { ok: true, serf: fresh ?? current };
+    }
+    return { ok: true, serf: current };
   }
 
   /**
@@ -332,8 +339,29 @@ export class SerfService {
     );
     if (!chosen) return { ok: false, reason: "Could not choose a class." };
     // A serf already past level 5 rolls its class levels now.
-    const after = await this.settle(accountId, serfId);
-    return { ok: true, serf: after?.serf ?? chosen };
+    await this.settle(accountId, serfId);
+    // D-092: the class comes with a T0 ability item, worn at once.
+    const withClass = (await this.repo.find(accountId, serfId)) ?? chosen;
+    await this.grantAbilityItem(accountId, withClass);
+    return {
+      ok: true,
+      serf: (await this.repo.find(accountId, serfId)) ?? withClass,
+    };
+  }
+
+  /** The free T0 ability item for the serf's class, once per serf (D-092). */
+  private grantAbilityItem(
+    accountId: number,
+    serf: SerfSummary,
+  ): Promise<boolean> {
+    if (!serf.classId) return Promise.resolve(false);
+    return this.repo.grantAbilityItem(accountId, serf.id, {
+      slot: "ability",
+      type: CLASS_ABILITY_ITEM[serf.classId],
+      tier: 0,
+      rolls: [],
+      luck: 0,
+    });
   }
 
   /** The lifetime EXP leaderboard: serf names and scores only. */

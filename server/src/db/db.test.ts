@@ -581,6 +581,30 @@ function serfContract(
       expect(await repo.equip(a, serf.id, r2!.item.id, "ring1", 20)).toBeNull();
     });
 
+    it("grants the free ability item once, only to a living classed serf (D-092)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Grant`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      const book = {
+        slot: "ability" as const,
+        type: "spellbook" as const,
+        tier: 0,
+        rolls: [],
+        luck: 0,
+      };
+      expect(await repo.grantAbilityItem(a, serf.id, book)).toBe(false); // no class yet
+      await repo.recordRun(a, serf.id, "completed", run, null, 500);
+      await repo.chooseClass(a, serf.id, "wizard", 500, SERF_BASE, 1);
+      const b = await account();
+      expect(await repo.grantAbilityItem(b, serf.id, book)).toBe(false);
+      expect(await repo.grantAbilityItem(a, serf.id, book)).toBe(true);
+      expect(await repo.grantAbilityItem(a, serf.id, book)).toBe(false);
+      expect((await repo.find(a, serf.id))?.items).toEqual([
+        expect.objectContaining({ ...book, equipped: "ability" }),
+      ]);
+    });
+
     it("another account's serf does not exist for you", async () => {
       const { repo, account } = await make();
       const a = await account();

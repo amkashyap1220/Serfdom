@@ -46,6 +46,9 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v17 (10a): snapshot players carry mp and maxMp; input carries an
+ *          optional ability target (Space held, an offset from the player,
+ *          clamped by the server); snapshots list the blasts that landed.
  * v16 (9b): equipping. Client equipItem {itemId, serfId, slot} and
  *          unequipItem {serfId, slot}; runStarted carries your weapon's
  *          tier with your (gear-included) stats.
@@ -72,7 +75,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 16;
+export const PROTOCOL_VERSION = 17;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -82,6 +85,9 @@ export const MAX_MESSAGE_BYTES = 1024;
 
 /** Largest server → client message the client accepts (snapshots grow with players and projectiles). */
 export const MAX_SERVER_MESSAGE_BYTES = 65536;
+
+/** Longest ability target offset accepted (world px); the sim clamps to range. */
+const MAX_ABILITY_OFFSET = 2000;
 
 /** Slack for unit-length checks (JSON round-trips lose a little precision). */
 const UNIT_SLACK = 1e-6;
@@ -100,7 +106,14 @@ export type ClientMessage =
    * world direction or (0, 0); `fire` says whether to shoot and where. The
    * client never says where it is or what it hit, only what it wants to do.
    */
-  | { type: "input"; seq: number; move: Vec2; fire: FireInput }
+  | {
+      type: "input";
+      seq: number;
+      move: Vec2;
+      fire: FireInput;
+      /** Space held: where to cast, as an offset from the player (D-094); null when not. */
+      ability: Vec2 | null;
+    }
   /** From the menu or a results screen: wait for a run of this dungeon (D-048, D-051). */
   | { type: "queue"; dungeon: DungeonId }
   /** Stop waiting. Harmless if not queued. */
@@ -163,6 +176,9 @@ export interface SnapshotPlayer {
   ack: number;
   hp: number;
   maxHp: number;
+  /** Ability resource (D-093). */
+  mp: number;
+  maxMp: number;
   /** Seconds until this player may fire again (needed to predict own shots exactly). */
   cooldown: number;
 }
@@ -181,6 +197,14 @@ export interface SnapshotEnemy {
 }
 
 /** A warning circle that lands after `landsIn` seconds. */
+export interface SnapshotBlast {
+  /** The caster. */
+  by: number;
+  x: number;
+  y: number;
+  radius: number;
+}
+
 export interface SnapshotHazard {
   x: number;
   y: number;
@@ -285,6 +309,8 @@ export type ServerMessage =
       hazards: SnapshotHazard[];
       /** The exit portal is open: step into it to complete the run (D-057). */
       portalOpen: boolean;
+      /** Ability blasts that landed since the last snapshot (drawing only). */
+      blasts: SnapshotBlast[];
     };
 
 export type ParseResult<T> =
@@ -303,7 +329,7 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       }
       return { ok: true, message: { type: "hello", protocol: obj.protocol } };
     case "input": {
-      if (!hasExactKeys(obj, ["type", "seq", "move", "fire"])) {
+      if (!hasExactKeys(obj, ["type", "seq", "move", "fire", "ability"])) {
         return fail("input: unexpected fields");
       }
       if (!isNonNegativeInt(obj.seq)) {
@@ -316,9 +342,18 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       }
       const fire = parseFire(obj.fire);
       if (typeof fire === "string") return fail(`input: ${fire}`);
+      let ability: Vec2 | null = null;
+      if (obj.ability !== null) {
+        const target = parseVec2(obj.ability);
+        // Any sane length; the sim clamps it to the ability's range.
+        if (!target || Math.hypot(target.x, target.y) > MAX_ABILITY_OFFSET) {
+          return fail("input: ability must be null or a nearby {x, y}");
+        }
+        ability = target;
+      }
       return {
         ok: true,
-        message: { type: "input", seq: obj.seq, move, fire },
+        message: { type: "input", seq: obj.seq, move, fire, ability },
       };
     }
     case "queue":
@@ -700,10 +735,13 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "closedDoors",
           "hazards",
           "portalOpen",
+          "blasts",
         ])
       ) {
         return fail("snapshot: unexpected fields");
       }
+      const blasts = parseList(obj.blasts, parseSnapshotBlast);
+      if (!blasts) return fail("snapshot: bad blast entry");
       if (typeof obj.portalOpen !== "boolean") {
         return fail("snapshot: portalOpen must be a boolean");
       }
@@ -736,6 +774,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           closedDoors: [...closedDoors],
           hazards,
           portalOpen: obj.portalOpen,
+          blasts,
         },
       };
     }
@@ -965,7 +1004,17 @@ function parseList<T>(v: unknown, item: (x: unknown) => T | null): T[] | null {
 function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["id", "x", "y", "ack", "hp", "maxHp", "cooldown"])
+    !hasExactKeys(v, [
+      "id",
+      "x",
+      "y",
+      "ack",
+      "hp",
+      "maxHp",
+      "mp",
+      "maxMp",
+      "cooldown",
+    ])
   ) {
     return null;
   }
@@ -982,6 +1031,8 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
   if (
     !isNonNegative(v.hp) ||
     !isNonNegative(v.maxHp) ||
+    !isNonNegative(v.mp) ||
+    !isNonNegative(v.maxMp) ||
     !isNonNegative(v.cooldown)
   ) {
     return null;
@@ -993,8 +1044,21 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
     ack: v.ack,
     hp: v.hp,
     maxHp: v.maxHp,
+    mp: v.mp,
+    maxMp: v.maxMp,
     cooldown: v.cooldown,
   };
+}
+
+function parseSnapshotBlast(v: unknown): SnapshotBlast | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["by", "x", "y", "radius"])) {
+    return null;
+  }
+  if (!isPlayerId(v.by) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
+    return null;
+  }
+  if (!isNonNegative(v.radius)) return null;
+  return { by: v.by, x: v.x, y: v.y, radius: v.radius };
 }
 
 function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {

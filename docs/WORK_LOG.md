@@ -332,3 +332,13 @@ Keep this concise and update it after each meaningful milestone.
 - Deferred by decision: stat potions (D-089), Shiny items and Artifacts, weapon attack styles.
 - Next step: user confirms closing Phase 9; then orient Phase 10 (classes and abilities).
 - User closed Phase 9 (2026-10-23). Committed and pushed. Next: Phase 10 orientation.
+
+### Phase 10a — ability framework and Wizard Arcane Blast — 2026-10-23
+
+- Phase 10 orientation: checked GDD §4–§6, D-034/D-035, D-082 first; asked four questions together. User: ability from the worn ability item with a T0 one on class choice (D-092), MP + short cooldown (D-093), aim by fire mode (D-094), tiers strengthen the ability (D-095). Draft numbers approved (D-096).
+- Built in two parts. 10a-1: ability items (type per class, 10% of drops, class-only), migration 008 and a once-per-serf grant (on class choice and on select for older serfs), MP in combat (WIS/10 regen), HUD HP/MP bars. 10a-2: `abilities.ts`, casting in the sim (item, MP, cooldown, range clamp), blasts resolved in the world step with the same hit/kill events as shots, protocol v17, client targeting by fire mode and blast drawing.
+- Caught on the way: the server dropped the ability target twice when copying inputs (the input handler and the input queue each rebuilt the input from move and fire only). Found by the end-to-end test (no MP spent); both fixed, with a queue test. Also fixed: my test sent chooseClass while selectSerf was still in flight (correctly refused as busy); old exact-match expectations needed the new fields.
+- Tests: ability items (class-only, names, rolls, 10% of drops, all 10 kinds drop), the grant (once, only living classed serfs, older serfs on select, not again after selling), MP (start full, regen, cap), Arcane Blast (area, damage by tier and ATK, events, 15 MP, 1.5 s cooldown, no MP no cast, 250 px clamp, nothing without the item), protocol v17 (ability target bounds, required field, blasts), queue keeps the target, end to end over the network (MP spent, dummy damaged, blast in a snapshot). `npm run check`: 285 shared, 164 server, 47 client, build.
+- Live (harness, **test** DB): level-5 Wizard got a T0 Spellbook; HUD "Arcane Blast (T0) · 15 MP"; at the Warlord, Space took MP 26 → 12.9, a second cast → 3.7; the Warlord lost HP; the screenshot shows the purple blast circle on it. Not checked live: Auto fire/Manual cursor aiming, two clients seeing each other's blasts.
+- Next step: user runs the 10a checklist; then 10b (Ranger, Sorcerer, Druid), numbers drafted for approval.
+- User ran the 10a checklist (with Aldric Bramble raised to level 9 and 7 test items added to the dev stash on request): all pass (2026-10-23). Committed and pushed 10a. Next: draft 10b numbers.

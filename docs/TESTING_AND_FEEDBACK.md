@@ -78,6 +78,22 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Abilities checklist (Phase 10a: Wizard Arcane Blast)
+
+Restart `npm run dev` (protocol v17); the server prints `database migrated: 008_ability_grant.sql` once. Reload (Ctrl+Shift+R).
+
+1. HUD: under the title, a red HP bar and a blue MP bar (empty outside a run). The Live list has **Player MP** and **Ability (Space)**.
+2. Get a serf to level 5 (psql: `update serfs set exp = 490 where name = '<name>' and died_at is null;`, reload) and choose **Wizard**: the Stash tab's gear panel shows a **T0 Spellbook** in the Ability item slot, and the HUD says **Ability (Space): Arcane Blast (T0) · 15 MP**.
+3. A serf that already had a class before this change gets its class's T0 ability item the first time you play as it (once only: unequip and sell it, then reselect: no second one).
+4. In the Goblin Warrens, Auto aim mode: hold Space near enemies: a purple circle flashes on the nearest one (up to 250 px away) and every enemy inside it loses HP. The MP bar drops by 15; Space does nothing again until 1.5 s pass and MP is back above 15.
+5. Press T for Auto fire or Manual: the blast lands at the mouse cursor (at most 250 px from you).
+6. MP refills over time (WIS ÷ 10 per second: about 1.5 MP/s at WIS 15).
+7. Another class (e.g. Barbarian): the HUD says its ability item's ability "arrives in 10b–10d"; Space does nothing.
+8. A ring, necklace, or cape can't go in the Ability item slot; another class's ability item says your class cannot use it.
+9. Two clients in one run: each sees the other's blasts.
+
+Report: pass/fail per step and any exact error text (browser console and server terminal).
+
 ### Equipping checklist (Phase 9b)
 
 Restart `npm run dev` (protocol v16) and reload (Ctrl+Shift+R).

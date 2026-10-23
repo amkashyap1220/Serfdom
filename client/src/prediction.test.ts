@@ -32,6 +32,7 @@ describe("prediction uses your stats (8c-2)", () => {
       nextProjectileId: 1,
       nextEnemyId: 1,
       hazards: [],
+      blasts: [],
     };
     for (let i = 0; i < 60; i++) {
       predictor.predict(RIGHT);
@@ -48,6 +49,8 @@ describe("prediction uses your stats (8c-2)", () => {
       ack: 29,
       hp: me.hp,
       maxHp: me.maxHp,
+      mp: me.mp,
+      maxMp: me.combat.maxMp,
       cooldown: me.fireCooldown,
     });
     expect(predictor.lastCorrection).toBe(0);

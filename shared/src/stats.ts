@@ -212,10 +212,16 @@ export interface PlayerCombat {
   shotsPerSecond: number;
   /** HP removed per projectile hit. */
   shotDamage: number;
+  /** Attack's damage multiplier, 0.5 + ATK/20 (1 at ATK 10); abilities scale by it too. */
+  attackFactor: number;
   /** Share of each incoming hit that is taken (1 = all of it). */
   damageTakenFactor: number;
   /** HP regenerated per second, always on (D-056). */
   regenPerSecond: number;
+  /** MP for abilities (D-093, D-096). */
+  maxMp: number;
+  /** MP regenerated per second, always on (D-096). */
+  mpRegenPerSecond: number;
 }
 
 /**
@@ -223,7 +229,8 @@ export interface PlayerCombat {
  * 150 × (0.75 + SPD/40) (the bases are PLAYER_WEAPON and PLAYER_SPEED; an
  * equipped weapon replaces the 25, D-083); taken hit × 10/(10 + DEF); regen VIT/20 HP/s.
  * At a fresh Serf's stats (10s, DEF 0) every factor is exactly 1, so a
- * level-1 Serf plays as before (D-054–D-056). MP and WIS: Phase 10.
+ * level-1 Serf plays as before (D-054–D-056). MP is the ability pool and
+ * WIS regenerates it, WIS / 10 MP/s (D-093, D-096).
  */
 export function combatFor(
   stats: Stats,
@@ -235,8 +242,11 @@ export function combatFor(
     shotsPerSecond:
       PLAYER_WEAPON.shotsPerSecond * (0.75 + stats.dexterity / 40),
     shotDamage: weaponDamage * (0.5 + stats.attack / 20),
+    attackFactor: 0.5 + stats.attack / 20,
     damageTakenFactor: 10 / (10 + stats.defense),
     regenPerSecond: stats.vitality / 20,
+    maxMp: stats.mp,
+    mpRegenPerSecond: stats.wisdom / 10,
   };
 }
 

@@ -131,7 +131,7 @@ The launch roster is the **10 classes** below, chosen permanently at level 5 (D-
 | Druid       | Totem        | Nature's Reach creates a targeted damaging or entangling area.                            | The Worldroot Totem: periodically roots enemies and empowers the next hit against them.                 |
 | Sorcerer    | Scepter      | Chain Lightning jumps between enemies.                                                    | Eternity's Conduit: final strike creates a short-lived field that arcs between enemies entering it.     |
 
-Still open: which weapons and armor each class can use (not in these docs), class stat growth, and the exact ability mechanics.
+Confirmed for Phase 10 (D-092–D-095): the ability needs the class's ability item worn (a T0 one comes with the class choice); Space uses it for MP and a short cooldown, Wisdom regenerates MP; aimed abilities follow the fire mode; higher-tier ability items make the ability stronger. Still open: each ability's exact numbers and mechanics (drafted per class for approval).
 
 ## 5. Combat model
 

@@ -641,9 +641,7 @@ export class ScreenView {
           button("Unequip", () => this.actions.unequip(serf.id, slot)),
         );
       } else {
-        cell.append(
-          el("span", "hint", slot === "ability" ? "Phase 10" : "empty"),
-        );
+        cell.append(el("span", "hint", "empty"));
       }
       grid.append(cell);
     }

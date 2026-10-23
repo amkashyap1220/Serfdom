@@ -153,6 +153,7 @@ export {
   type LootDrop,
   type PendingReward,
   type SnapshotEnemy,
+  type SnapshotBlast,
   type SnapshotHazard,
   type SnapshotPlayer,
   type SnapshotProjectile,
@@ -164,6 +165,20 @@ export {
   TEST_WORLD,
 } from "./test-world.ts";
 export {
+  ABILITY_NAMES,
+  abilityForItem,
+  ARCANE_BLAST,
+  arcaneBlastDamage,
+  clampToRange,
+  resolveAbilityTarget,
+  type AbilityKind,
+  type AbilityLoadout,
+} from "./abilities.ts";
+export {
+  ABILITY_ITEM_TYPES,
+  abilityItemClass,
+  CLASS_ABILITY_ITEM,
+  type AbilityItemType,
   ARMOR_SLOTS,
   ARMOR_TYPES,
   armorTypeName,

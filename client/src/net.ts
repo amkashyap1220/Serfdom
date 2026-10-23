@@ -100,7 +100,13 @@ export class Connection {
 
   /** Sends one tick of intent (movement + fire); does nothing unless connected. */
   sendInput(seq: number, input: PlayerInput): void {
-    this.send({ type: "input", seq, move: input.move, fire: input.fire });
+    this.send({
+      type: "input",
+      seq,
+      move: input.move,
+      fire: input.fire,
+      ability: input.ability ?? null,
+    });
   }
 
   /** Waits for a run of this dungeon (D-048). */

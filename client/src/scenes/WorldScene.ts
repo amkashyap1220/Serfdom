@@ -7,6 +7,8 @@ import {
   nextFireMode,
   PLAYER_WEAPON,
   resolveFireIntent,
+  resolveAbilityTarget,
+  ARCANE_BLAST,
   TICK_SECONDS,
   worldDirectionFromInput,
   WARLORD,
@@ -57,6 +59,8 @@ export interface LocalView {
   position: Vec2;
   hp: number;
   maxHp: number;
+  mp: number;
+  maxMp: number;
 }
 
 export interface WorldDebugState {
@@ -286,7 +290,18 @@ export class WorldScene extends Phaser.Scene {
         .filter((e) => e.hp > 0)
         .map((e) => ({ id: e.id, position: { x: e.x, y: e.y } }));
       const fire = this.resolveFire(this.net.position, targets);
-      const fired = this.net.tick({ move, fire });
+      // Space held: where to cast, by the fire mode (D-094); the server
+      // decides whether it casts (item, MP, cooldown) and clamps the range.
+      const ability = this.lastKeys.ability
+        ? resolveAbilityTarget(
+            this.fireMode,
+            { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
+            this.net.position,
+            targets,
+            ARCANE_BLAST.range,
+          )
+        : null;
+      const fired = this.net.tick({ move, fire, ability });
       if (fired) this.totals.shots++;
     }
     this.net.stepLocalShots();
@@ -306,13 +321,21 @@ export class WorldScene extends Phaser.Scene {
   /** Our position (predicted) and HP (from the server); outside a run, the spawn and 0 HP. */
   private localView(): LocalView {
     if (!this.net.online) {
-      return { position: this.currentLayout().spawn, hp: 0, maxHp: 0 };
+      return {
+        position: this.currentLayout().spawn,
+        hp: 0,
+        maxHp: 0,
+        mp: 0,
+        maxMp: 0,
+      };
     }
     const self = this.net.selfState;
     return {
       position: this.net.position,
       hp: self?.hp ?? 0,
       maxHp: self?.maxHp ?? 0,
+      mp: self?.mp ?? 0,
+      maxMp: self?.maxMp ?? 0,
     };
   }
 

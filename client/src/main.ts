@@ -1,8 +1,12 @@
 import * as Phaser from "phaser";
 import type { SerfSummary, ServerMessage } from "@serfdom/shared";
 import {
+  ABILITY_NAMES,
+  ARCANE_BLAST,
   className,
   FIRE_MODE_LABELS,
+  itemName,
+  loadoutOf,
   luckOf,
   rotateVec,
   STAT_KEYS,
@@ -34,6 +38,30 @@ const gameplay = requireElement("gameplay");
 const layoutList = new DebugList(requireElement("hud-layout"));
 const liveList = new DebugList(requireElement("hud-live"));
 const serfList = new DebugList(requireElement("hud-serf"));
+/** The serf being played, as the server last sent it (for the HUD). */
+let playedSerf: SerfSummary | null = null;
+
+/** What Space does for this serf (D-092, D-096). */
+function abilityText(serf: SerfSummary | null): string {
+  if (!serf) return "—";
+  const ability = loadoutOf(serf).ability;
+  if (ability) {
+    return `${ABILITY_NAMES[ability.kind]} (T${ability.tier}) · ${ARCANE_BLAST.mpCost} MP`;
+  }
+  const item = serf.items.find((i) => i.equipped === "ability");
+  if (item) return `${itemName(item)}: its ability arrives in 10b–10d`;
+  return serf.classId
+    ? "none (wear your class ability item)"
+    : "none before a class";
+}
+const hpFill = requireElement("hp-fill");
+const mpFill = requireElement("mp-fill");
+
+/** The HUD's HP and MP bars (D-096): empty outside a run. */
+function setBars(hp: number, maxHp: number, mp: number, maxMp: number): void {
+  hpFill.style.width = `${maxHp > 0 ? (100 * hp) / maxHp : 0}%`;
+  mpFill.style.width = `${maxMp > 0 ? (100 * mp) / maxMp : 0}%`;
+}
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -118,7 +146,9 @@ game.events.once(Phaser.Core.Events.READY, () => {
     } else if (message.type === "serfList") {
       view.setSerfs(message);
       onSerfList(message);
-      showSerf(message.serfs.find((s) => s.id === message.selectedId) ?? null);
+      playedSerf =
+        message.serfs.find((s) => s.id === message.selectedId) ?? null;
+      showSerf(playedSerf);
     } else if (message.type === "stash") {
       view.setStash(message);
       // Rewards waiting for room come first, also right after login (D-088, D-090).
@@ -283,6 +313,7 @@ function reportLive(game: Phaser.Game): void {
     [...byKind].map(([kind, n]) => `${n} ${kind}`).join(", ") || "none";
 
   const conn = net.connection.snapshot;
+  setBars(local.hp, local.maxHp, local.mp, local.maxMp);
   liveList.set([
     ["Server", describeStatus(conn.status)],
     [
@@ -324,11 +355,12 @@ function reportLive(game: Phaser.Game): void {
         : "—",
     ],
     ["Fire mode (T)", FIRE_MODE_LABELS[fireMode]],
-    [
-      "Ability (Space)",
-      keys.ability ? "pressed — not yet defined" : "not yet defined",
-    ],
+    ["Ability (Space)", abilityText(playedSerf)],
     ["Player HP", local.hp > 0 ? `${local.hp.toFixed(1)}/${local.maxHp}` : "—"],
+    [
+      "Player MP",
+      local.maxMp > 0 ? `${local.mp.toFixed(1)}/${local.maxMp}` : "—",
+    ],
     ["Hits taken", String(totals.playerHits)],
     ["Enemies alive", enemies],
     ["Doors closed", online ? String(net.closedDoors.length) : "—"],

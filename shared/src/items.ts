@@ -1,4 +1,5 @@
-import type { ClassId } from "./classes.ts";
+import { CLASSES, type ClassId } from "./classes.ts";
+import { abilityForItem, type AbilityLoadout } from "./abilities.ts";
 import { PLAYER_WEAPON } from "./combat-config.ts";
 import type { DungeonId } from "./dungeons.ts";
 import { STAT_KEYS, zeroStats, type StatKey, type Stats } from "./stats.ts";
@@ -26,9 +27,39 @@ export type WeaponType = (typeof WEAPON_TYPES)[number];
 export const ARMOR_TYPES = ["cloth", "leather", "plate"] as const;
 export type ArmorType = (typeof ARMOR_TYPES)[number];
 
+/** One ability item per class (GDD §4, D-092, D-096). */
+export const ABILITY_ITEM_TYPES = [
+  "shield",
+  "warhorn",
+  "cloak",
+  "quiver",
+  "spellbook",
+  "tome",
+  "instrument",
+  "grimoire",
+  "totem",
+  "scepter",
+] as const;
+export type AbilityItemType = (typeof ABILITY_ITEM_TYPES)[number];
+
+/** Which ability item each class uses; only that class can wear it (D-096). */
+export const CLASS_ABILITY_ITEM: Record<ClassId, AbilityItemType> = {
+  fighter: "shield",
+  barbarian: "warhorn",
+  rogue: "cloak",
+  ranger: "quiver",
+  wizard: "spellbook",
+  cleric: "tome",
+  bard: "instrument",
+  warlock: "grimoire",
+  druid: "totem",
+  sorcerer: "scepter",
+};
+
 /** What an item is. A ring fits either ring slot. */
 export const ITEM_SLOTS = [
   "weapon",
+  "ability",
   "head",
   "chest",
   "legs",
@@ -42,7 +73,7 @@ export type ItemSlot = (typeof ITEM_SLOTS)[number];
 export const ARMOR_SLOTS = ["head", "chest", "legs", "gloves"] as const;
 export type ArmorSlot = (typeof ARMOR_SLOTS)[number];
 
-/** Where a serf wears things (D-082). The ability item slot fills in Phase 10. */
+/** Where a serf wears things (D-082). */
 export const EQUIP_SLOTS = [
   "weapon",
   "ability",
@@ -68,7 +99,9 @@ export const ROLLS_PER_TIER = [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5] as const;
  */
 export function rollsFor(slot: ItemSlot, tier: number): number {
   const count = ROLLS_PER_TIER[tier] ?? 0;
-  return slot === "weapon" || isArmorSlot(slot) ? count : Math.max(1, count);
+  return slot === "weapon" || slot === "ability" || isArmorSlot(slot)
+    ? count
+    : Math.max(1, count);
 }
 export const NEGATIVE_ROLL_CHANCE = 0.2;
 /** Chance of +1 Luck on an item with at least one roll. */
@@ -85,8 +118,8 @@ export interface StatRoll {
 /** An item as rolled: everything but where it is. */
 export interface ItemSpec {
   slot: ItemSlot;
-  /** Weapon or armor type; null for accessories. */
-  type: WeaponType | ArmorType | null;
+  /** Weapon, armor, or ability item type; null for accessories. */
+  type: WeaponType | ArmorType | AbilityItemType | null;
   tier: number;
   rolls: StatRoll[];
   /** 0 or +1 (D-067): never negative, never more than one. */
@@ -133,16 +166,20 @@ interface LootPool {
   slots: readonly (readonly [slot: ItemSlot, weight: number])[];
 }
 
-/** Standard slot weights (D-083): weapon 20%, armor 10% each, accessories 40%. */
+/**
+ * Standard slot weights: ability items 10% (D-096), the D-083 weights
+ * scaled to the other 90% (weapon 18%, armor 9% each, accessories 36%).
+ */
 const SLOT_WEIGHTS = [
-  ["weapon", 20],
-  ["head", 10],
-  ["chest", 10],
-  ["legs", 10],
-  ["gloves", 10],
-  ["ring", 15],
-  ["necklace", 12.5],
-  ["cape", 12.5],
+  ["weapon", 18],
+  ["ability", 10],
+  ["head", 9],
+  ["chest", 9],
+  ["legs", 9],
+  ["gloves", 9],
+  ["ring", 13.5],
+  ["necklace", 11.25],
+  ["cape", 11.25],
 ] as const;
 
 /** Loot pools are specific to the dungeon (D-016). */
@@ -209,9 +246,11 @@ export function rollItem(dungeon: DungeonId, random: () => number): ItemSpec {
   const type =
     slot === "weapon"
       ? pick(WEAPON_TYPES, random)
-      : isArmorSlot(slot)
-        ? pick(ARMOR_TYPES, random)
-        : null;
+      : slot === "ability"
+        ? pick(ABILITY_ITEM_TYPES, random) // any class's (D-096)
+        : isArmorSlot(slot)
+          ? pick(ARMOR_TYPES, random)
+          : null;
   const rolls: StatRoll[] = [];
   for (let i = 0; i < rollsFor(slot, tier); i++) {
     const stat = pick(STAT_KEYS, random);
@@ -244,9 +283,12 @@ export function itemBonus(item: ItemSpec): Stats {
 /**
  * Whether a serf of this class (null = still a Serf) may wear the item:
  * accessories always; weapons and armor by class (D-081), and only T0
- * before a class.
+ * before a class; ability items only by their own class (D-096).
  */
 export function canEquip(item: ItemSpec, classId: ClassId | null): boolean {
+  if (item.slot === "ability") {
+    return classId !== null && CLASS_ABILITY_ITEM[classId] === item.type;
+  }
   if (item.slot === "weapon") {
     if (classId === null) return item.tier === 0;
     return (CLASS_GEAR[classId].weapons as readonly string[]).includes(
@@ -281,10 +323,29 @@ export function itemName(item: ItemSpec): string {
 
 function pieceName(item: ItemSpec): string {
   if (item.slot === "weapon") return capitalize(item.type ?? "weapon");
+  if (item.slot === "ability") return abilityItemName(item.type);
   if (isArmorSlot(item.slot)) {
     return ARMOR_NAMES[item.type as ArmorType][item.slot];
   }
   return ACCESSORY_NAMES[item.slot];
+}
+
+/** "War Horn", "Spellbook", …: the class's item name from GDD §4. */
+function abilityItemName(type: ItemSpec["type"]): string {
+  const owner = (Object.keys(CLASS_ABILITY_ITEM) as ClassId[]).find(
+    (id) => CLASS_ABILITY_ITEM[id] === type,
+  );
+  return owner ? CLASSES[owner].abilityItem : "Ability item";
+}
+
+/** The class an ability item belongs to, or null for other items. */
+export function abilityItemClass(item: ItemSpec): ClassId | null {
+  if (item.slot !== "ability") return null;
+  return (
+    (Object.keys(CLASS_ABILITY_ITEM) as ClassId[]).find(
+      (id) => CLASS_ABILITY_ITEM[id] === item.type,
+    ) ?? null
+  );
 }
 
 /** "Cloth", "Leather", "Plate" for armor; null otherwise. */
@@ -310,9 +371,11 @@ export function isValidItemSpec(v: ItemSpec): boolean {
   const typeOk =
     v.slot === "weapon"
       ? (WEAPON_TYPES as readonly unknown[]).includes(v.type)
-      : isArmorSlot(v.slot)
-        ? (ARMOR_TYPES as readonly unknown[]).includes(v.type)
-        : v.type === null;
+      : v.slot === "ability"
+        ? (ABILITY_ITEM_TYPES as readonly unknown[]).includes(v.type)
+        : isArmorSlot(v.slot)
+          ? (ARMOR_TYPES as readonly unknown[]).includes(v.type)
+          : v.type === null;
   if (!typeOk) return false;
   if (v.rolls.length !== rollsFor(v.slot, v.tier)) return false;
   for (const roll of v.rolls) {
@@ -330,6 +393,8 @@ export interface Loadout {
   stats: Stats;
   /** Tier of the equipped weapon, or null (no weapon: 25 damage). */
   weaponTier: number | null;
+  /** What Space casts, from the worn ability item (D-092); null = nothing. */
+  ability: AbilityLoadout | null;
 }
 
 /**
@@ -351,7 +416,14 @@ export function loadoutOf(serf: {
     stats[key] = Math.max(key === "hp" ? 1 : 0, stats[key]);
   }
   const weapon = worn.find((i) => i.slot === "weapon");
-  return { stats, weaponTier: weapon ? weapon.tier : null };
+  const book = worn.find((i) => i.slot === "ability");
+  return {
+    stats,
+    weaponTier: weapon ? weapon.tier : null,
+    ability: book
+      ? abilityForItem(book.type as AbilityItemType, book.tier)
+      : null,
+  };
 }
 
 /** The worn slots an item can go in: a ring either ring slot, the rest their own. */

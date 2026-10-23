@@ -125,3 +125,20 @@ describe("MessageRateLimiter", () => {
     expect(rl.hit(1000)).toBe(true);
   });
 });
+
+describe("ability targets survive the queue (10a)", () => {
+  it("keeps the cast target with the input", () => {
+    const q = newInputQueue();
+    queueInput(
+      q,
+      0,
+      {
+        move: { x: 0, y: 0 },
+        fire: { trigger: false, aim: null },
+        ability: { x: 100, y: -20 },
+      },
+      30,
+    );
+    expect(takeInputsForTick(q).apply[0]?.ability).toEqual({ x: 100, y: -20 });
+  });
+});

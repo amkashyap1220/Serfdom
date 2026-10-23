@@ -8,6 +8,8 @@ import {
   parseServerMessage,
   PROTOCOL_VERSION,
   SERF_BASE,
+  newRunStats,
+  totalExpForLevel,
   sellPrice,
   STASH_SIZE,
   type ServerMessage,
@@ -311,6 +313,7 @@ const input = (
     seq,
     move: { x, y },
     fire: { trigger: aim !== null, aim },
+    ability: null,
   });
 
 /** The one-room debug map with its dummy (deterministic test fixture). */
@@ -752,6 +755,7 @@ describe("shared combat on the server (5b)", () => {
         seq: 0,
         move: { x: 0, y: 0 },
         fire: { trigger: true, aim: { x: 1, y: 0 }, hit: 1 },
+        ability: null,
       }),
     );
     expect((await nextOfType(client!, "error")).reason).toBe(
@@ -1360,5 +1364,73 @@ describe("equipping over the network (9b)", () => {
     expect(me.combat.moveSpeed).toBe(
       combatFor({ ...SERF_BASE, speed: 12 }).moveSpeed,
     );
+  });
+});
+
+describe("Arcane Blast over the network (10a, D-092–D-096)", () => {
+  it("a Wizard with the free Spellbook casts at the dummy: MP spent, damage dealt, blast sent", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const { client } = await joined();
+    const serfId = 1;
+    await repo.recordRun(
+      1,
+      serfId,
+      "completed",
+      { ...newRunStats(), seconds: 1 },
+      null,
+      totalExpForLevel(5),
+    );
+    client.send(encodeMessage({ type: "selectSerf", serfId }));
+    // One serf request at a time: wait for the select to finish first.
+    let picked = await nextOfType(client, "serfList");
+    while (picked.serfs[0]?.level !== 5)
+      picked = await nextOfType(client, "serfList");
+    client.send(
+      encodeMessage({ type: "chooseClass", serfId, classId: "wizard" }),
+    );
+    let list = await nextOfType(client, "serfList");
+    while (!list.serfs[0]?.items.some((i) => i.type === "spellbook")) {
+      list = await nextOfType(client, "serfList");
+    }
+
+    client.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    await nextOfType(client, "runStarted");
+    placePlayer(1, { x: 1200, y: 1100 }); // the dummy is 100 px east
+    setDummyHp(1, 400);
+    const mpBefore = server.instanceOf(1)!.state.players[0]!.mp;
+    client.send(
+      JSON.stringify({
+        type: "input",
+        seq: 0,
+        move: { x: 0, y: 0 },
+        fire: { trigger: false, aim: null },
+        ability: { x: 100, y: 0 },
+      }),
+    );
+    await until(() => server.queuedInputs(1) >= 1);
+    server.tick();
+    const state = server.instanceOf(1)!.state;
+    expect(state.players[0]!.mp).toBeLessThan(mpBefore - 14); // 15 MP (plus a tick of regen)
+    expect(state.enemies[0]!.hp).toBeLessThan(400);
+    let snap = await nextOfType(client, "snapshot");
+    while (snap.blasts.length === 0)
+      snap = await nextOfType(client, "snapshot");
+    expect(snap.blasts[0]).toMatchObject({
+      by: 1,
+      x: 1300,
+      y: 1100,
+      radius: 40,
+    });
   });
 });

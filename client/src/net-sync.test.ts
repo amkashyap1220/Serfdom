@@ -29,7 +29,18 @@ function server(
   ack: number,
   extra: Partial<SnapshotPlayer> = {},
 ): SnapshotPlayer {
-  return { id: 1, x, y: 0, ack, hp: 200, maxHp: 200, cooldown: 0, ...extra };
+  return {
+    id: 1,
+    x,
+    y: 0,
+    ack,
+    hp: 200,
+    maxHp: 200,
+    mp: 10,
+    maxMp: 10,
+    cooldown: 0,
+    ...extra,
+  };
 }
 
 function predictor(walls = []) {

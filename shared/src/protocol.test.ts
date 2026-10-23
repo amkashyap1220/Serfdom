@@ -127,20 +127,57 @@ describe("parseServerMessage", () => {
 const NO_FIRE = { trigger: false, aim: null };
 
 describe("input messages", () => {
-  const input = (seq: unknown, move: unknown, fire: unknown = NO_FIRE) =>
-    JSON.stringify({ type: "input", seq, move, fire });
+  const input = (
+    seq: unknown,
+    move: unknown,
+    fire: unknown = NO_FIRE,
+    ability: unknown = null,
+  ) => JSON.stringify({ type: "input", seq, move, fire, ability });
 
   it("accepts a unit or zero direction with fire intent", () => {
     expect(parseClientMessage(input(0, { x: 0, y: 0 }))).toEqual({
       ok: true,
-      message: { type: "input", seq: 0, move: { x: 0, y: 0 }, fire: NO_FIRE },
+      message: {
+        type: "input",
+        seq: 0,
+        move: { x: 0, y: 0 },
+        fire: NO_FIRE,
+        ability: null,
+      },
     });
     const d = Math.SQRT1_2;
     const fire = { trigger: true, aim: { x: 0.6, y: -0.8 } };
     expect(parseClientMessage(input(41, { x: d, y: -d }, fire))).toEqual({
       ok: true,
-      message: { type: "input", seq: 41, move: { x: d, y: -d }, fire },
+      message: {
+        type: "input",
+        seq: 41,
+        move: { x: d, y: -d },
+        fire,
+        ability: null,
+      },
     });
+  });
+
+  it("takes an ability target (Space held) as null or a nearby offset (v17)", () => {
+    const ok = (ability: unknown) =>
+      parseClientMessage(input(1, { x: 0, y: 0 }, NO_FIRE, ability)).ok;
+    expect(ok(null)).toBe(true);
+    expect(ok({ x: 120, y: -40 })).toBe(true);
+    expect(ok({ x: 1900, y: 0 })).toBe(true); // the sim clamps it to range
+    expect(ok({ x: 5000, y: 0 })).toBe(false);
+    expect(ok({ x: Number.NaN, y: 0 })).toBe(false);
+    expect(ok(true)).toBe(false);
+    expect(
+      parseClientMessage(
+        JSON.stringify({
+          type: "input",
+          seq: 1,
+          move: { x: 0, y: 0 },
+          fire: NO_FIRE,
+        }),
+      ).ok,
+    ).toBe(false); // the field is required
   });
 
   it.each([
@@ -443,6 +480,8 @@ describe("snapshot messages", () => {
     ack: -1,
     hp: 200,
     maxHp: 200,
+    mp: 12.5,
+    maxMp: 16,
     cooldown: 0,
   };
   const enemy = {
@@ -481,6 +520,7 @@ describe("snapshot messages", () => {
       closedDoors: ["tunnel-camp"],
       hazards: [{ x: 3700, y: 980, radius: 32, landsIn: 0.4 }],
       portalOpen: false,
+      blasts: [{ by: 2, x: 1100.5, y: 990, radius: 40 }],
     };
     expect(parseServerMessage(encodeMessage(msg))).toEqual({
       ok: true,
@@ -500,6 +540,7 @@ describe("snapshot messages", () => {
           closedDoors: [],
           hazards: [],
           portalOpen: true,
+          blasts: [],
         }),
       ).ok;
     expect(snap([player])).toBe(true);
@@ -524,6 +565,7 @@ describe("snapshot messages", () => {
       projectiles: [],
       hazards: [],
       portalOpen: false,
+      blasts: [],
     };
     const ok = (closedDoors: unknown) =>
       parseServerMessage(JSON.stringify({ ...base, closedDoors })).ok;
@@ -545,6 +587,7 @@ describe("snapshot messages", () => {
       closedDoors: [],
       hazards: [],
       portalOpen: false,
+      blasts: [],
     };
     const ok = (extra: object) =>
       parseServerMessage(JSON.stringify({ ...base, ...extra })).ok;

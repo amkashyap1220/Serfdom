@@ -30,6 +30,7 @@ import {
   type RunStats,
   type ServerMessage,
   type SimState,
+  type SnapshotBlast,
   type SnapshotPlayer,
   type Loadout,
 } from "@serfdom/shared";
@@ -47,7 +48,7 @@ interface Member {
 }
 
 /** A fresh Serf with nothing equipped. */
-const FRESH: Loadout = { stats: SERF_BASE, weaponTier: null };
+const FRESH: Loadout = { stats: SERF_BASE, weaponTier: null, ability: null };
 
 /** One player's run is over; the caller sends them `runEnded` and back to the menu. */
 export interface RunEnd {
@@ -77,6 +78,8 @@ export class DungeonInstance {
   readonly dungeon: DungeonId;
   readonly layout: DungeonLayout;
   private sim: SimState;
+  /** Blasts landed since the last snapshot (drawing only). */
+  private readonly blastsToSend: SnapshotBlast[] = [];
   private rooms: RunProgress;
   private readonly members = new Map<number, Member>();
   /** Everyone who was ever in this run, so nobody rejoins it. */
@@ -135,6 +138,7 @@ export class DungeonInstance {
       this.layout.spawn,
       loadout.stats,
       loadout.weaponTier,
+      loadout.ability,
     );
     this.members.set(playerId, {
       inputs: newInputQueue(),
@@ -216,6 +220,16 @@ export class DungeonInstance {
     const kinds = new Map(this.sim.enemies.map((e) => [e.id, e.kind]));
     const world = stepWorld(this.sim, walls, TICK_SECONDS);
     this.sim = world.state;
+    for (const e of world.events) {
+      if (e.type === "blast") {
+        this.blastsToSend.push({
+          by: e.playerId,
+          x: roundCoord(e.at.x),
+          y: roundCoord(e.at.y),
+          radius: e.radius,
+        });
+      }
+    }
     for (const e of this.sim.enemies) kinds.set(e.id, e.kind);
     for (const [id, member] of this.members) {
       member.stats = recordRunEvents(member.stats, id, world.events);
@@ -279,6 +293,8 @@ export class DungeonInstance {
         ack: member.inputs.ack,
         hp: p.hp,
         maxHp: p.maxHp,
+        mp: roundCoord(p.mp),
+        maxMp: p.combat.maxMp,
         cooldown: p.fireCooldown,
       });
     }
@@ -320,6 +336,8 @@ export class DungeonInstance {
         landsIn: h.landsIn,
       })),
       portalOpen: this.portalOpen,
+      // Each blast goes out in exactly one snapshot.
+      blasts: this.blastsToSend.splice(0),
     };
   }
 

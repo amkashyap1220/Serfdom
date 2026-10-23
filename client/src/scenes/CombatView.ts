@@ -31,6 +31,8 @@ const COLORS = {
   enemyBullet: 0xff9f1c,
   alert: 0xffe066,
   hazard: 0xff4d4d,
+  // Placeholder colour, not the verified palette.
+  blast: 0xb388ff,
 } as const;
 
 interface EnemySprite {
@@ -51,6 +53,7 @@ export class CombatView {
   private readonly enemies = new Map<number, EnemySprite>();
   private readonly projectiles: Phaser.GameObjects.Graphics;
   private readonly hazards: Phaser.GameObjects.Graphics;
+  private readonly blasts: Phaser.GameObjects.Graphics;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -83,6 +86,8 @@ export class CombatView {
     // Hazards are drawn under everything else on the world layer.
     this.hazards = scene.add.graphics();
     layer.add(this.hazards);
+    this.blasts = scene.add.graphics();
+    layer.add(this.blasts);
     this.projectiles = scene.add.graphics();
     layer.add(this.projectiles);
   }
@@ -142,6 +147,15 @@ export class CombatView {
       h.fillCircle(hz.x, hz.y, hz.radius * (0.4 + 0.6 * urgency));
       h.lineStyle(2, COLORS.hazard, 0.9);
       h.strokeCircle(hz.x, hz.y, hz.radius);
+    }
+
+    // Arcane Blast (D-096): a flash that fades as its ring widens.
+    const bl = this.blasts.clear();
+    for (const b of view.blasts) {
+      bl.fillStyle(COLORS.blast, 0.5 * (1 - b.fade));
+      bl.fillCircle(b.x, b.y, b.radius);
+      bl.lineStyle(2, COLORS.blast, 1 - b.fade);
+      bl.strokeCircle(b.x, b.y, b.radius * (1 + 0.3 * b.fade));
     }
 
     const g = this.projectiles.clear();

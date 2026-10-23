@@ -18,6 +18,7 @@ import {
   EMPTY_VIEW,
   type CombatViewModel,
   type ProjectileView,
+  type BlastView,
 } from "./combat-view-model";
 import { RemoteInterpolator } from "./interpolation";
 import { LocalShots } from "./local-shots";
@@ -44,6 +45,9 @@ const MAX_EXTRAPOLATION_S = 0.1;
  * screens cover the game until then). Every run starts from scratch: new
  * predictor, seq numbers from 0 (the server makes a new input queue too).
  */
+/** How long a landed blast stays drawn (presentation only). */
+const BLAST_SHOW_MS = 350;
+
 export class NetSync {
   readonly connection: Connection;
   private predictor: PlayerPredictor | null = null;
@@ -61,6 +65,8 @@ export class NetSync {
   private self: SnapshotPlayer | null = null;
   private synced = false;
   private inRun = false;
+  /** Blasts the server reported, kept briefly so they can be drawn fading. */
+  private blasts: { x: number; y: number; radius: number; atMs: number }[] = [];
   /** Forwarded to the screen flow (set by main.ts). */
   onLobby: (message: LobbyMessage, receivedAtMs: number) => void = () => {};
   onConnected: () => void = () => {};
@@ -108,6 +114,7 @@ export class NetSync {
     this.self = null;
     this.remotes.clear();
     this.shots.clear();
+    this.blasts = [];
   }
 
   get online(): boolean {
@@ -222,7 +229,19 @@ export class NetSync {
         landsIn: Math.max(0, h.landsIn - age),
       })),
       portalOpen: latest.snapshot.portalOpen,
+      blasts: this.blastViews(nowMs),
     };
+  }
+
+  /** Blasts younger than BLAST_SHOW_MS, with how far each has faded. */
+  private blastViews(nowMs: number): BlastView[] {
+    this.blasts = this.blasts.filter((b) => nowMs - b.atMs < BLAST_SHOW_MS);
+    return this.blasts.map((b) => ({
+      x: b.x,
+      y: b.y,
+      radius: b.radius,
+      fade: Math.max(0, (nowMs - b.atMs) / BLAST_SHOW_MS),
+    }));
   }
 
   private onSnapshot(
@@ -233,6 +252,14 @@ export class NetSync {
     const status = this.connection.snapshot.status;
     if (status.kind !== "connected" || !this.inRun) return;
     this.latest = { snapshot, receivedAtMs };
+    for (const b of snapshot.blasts) {
+      this.blasts.push({
+        x: b.x,
+        y: b.y,
+        radius: b.radius,
+        atMs: receivedAtMs,
+      });
+    }
     if (this.currentDungeon) {
       // Doors open during a run: predict against what the server says now.
       this.walls = blockingWalls(

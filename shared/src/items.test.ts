@@ -8,6 +8,8 @@ import {
   itemBonus,
   itemName,
   armorTypeName,
+  abilityItemClass,
+  CLASS_ABILITY_ITEM,
   maxRoll,
   rollItem,
   rollsFor,
@@ -56,13 +58,16 @@ describe("item generation (D-080, D-083)", () => {
     expect(items.every((i) => i.tier <= 2)).toBe(true);
   });
 
-  it("slots come at about 20% weapon, 10% each armor piece, 40% accessories", () => {
-    const items = many(20000, 11);
+  it("slots: ability 10%, then weapon 18%, armor 9% each, ring 13.5% (D-096)", () => {
+    const items = many(40000, 11);
     const share = (slot: string) =>
       items.filter((i) => i.slot === slot).length / items.length;
-    expect(share("weapon")).toBeCloseTo(0.2, 1);
-    for (const slot of ARMOR_SLOTS) expect(share(slot)).toBeCloseTo(0.1, 1);
-    expect(share("ring")).toBeCloseTo(0.15, 1);
+    expect(Math.abs(share("ability") - 0.1)).toBeLessThan(0.01);
+    expect(Math.abs(share("weapon") - 0.18)).toBeLessThan(0.01);
+    for (const slot of ARMOR_SLOTS) {
+      expect(Math.abs(share(slot) - 0.09)).toBeLessThan(0.01);
+    }
+    expect(Math.abs(share("ring") - 0.135)).toBeLessThan(0.01);
   });
 
   it("about 20% of rolls are negative and about 5% of rolled items carry Luck", () => {
@@ -314,6 +319,7 @@ describe("gear on a serf (9b, D-083, T-048)", () => {
     expect(loadoutOf({ stats: SERF_BASE, items: [] })).toEqual({
       stats: SERF_BASE,
       weaponTier: null,
+      ability: null,
     });
   });
 
@@ -368,5 +374,40 @@ describe("gear on a serf (9b, D-083, T-048)", () => {
       mp: 4,
       wisdom: 2,
     });
+  });
+});
+
+describe("ability items (D-092, D-096)", () => {
+  const book: ItemSpec = {
+    slot: "ability",
+    type: "spellbook",
+    tier: 0,
+    rolls: [],
+    luck: 0,
+  };
+  it("only their own class can wear them; never a classless Serf", () => {
+    expect(canEquip(book, "wizard")).toBe(true);
+    expect(canEquip(book, "sorcerer")).toBe(false);
+    expect(canEquip(book, null)).toBe(false);
+    for (const id of CLASS_IDS) {
+      expect(canEquip({ ...book, type: CLASS_ABILITY_ITEM[id] }, id)).toBe(
+        true,
+      );
+    }
+  });
+  it("are named after GDD §4 and roll like weapons (T0 none)", () => {
+    expect(itemName(book)).toBe("T0 Spellbook");
+    expect(itemName({ ...book, type: "warhorn" })).toBe("T0 War Horn");
+    expect(abilityItemClass({ ...book, type: "totem" })).toBe("druid");
+    expect(rollsFor("ability", 0)).toBe(0);
+    expect(rollsFor("ability", 3)).toBe(2);
+    expect(isValidItemSpec(book)).toBe(true);
+    expect(isValidItemSpec({ ...book, type: "wand" })).toBe(false);
+    expect(isValidItemSpec({ ...book, type: null })).toBe(false);
+  });
+  it("drop for every class and only go in the ability slot", () => {
+    const books = many(40000, 13).filter((i) => i.slot === "ability");
+    expect(new Set(books.map((b) => b.type)).size).toBe(10);
+    expect(slotsFor("ability")).toEqual(["ability"]);
   });
 });

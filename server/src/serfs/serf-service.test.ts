@@ -475,3 +475,61 @@ describe("equipping (9b, D-081, D-086)", () => {
     });
   });
 });
+
+describe("the free ability item (D-092)", () => {
+  it("choosing a class wears a T0 one at once; it is given only once", async () => {
+    const repo = new MemorySerfRepo();
+    const serfs = new SerfService(repo);
+    const made = await serfs.create(1, "Ada Book");
+    if (!made.ok) throw new Error(made.reason);
+    await repo.recordRun(
+      1,
+      made.serf.id,
+      "completed",
+      run,
+      null,
+      totalExpForLevel(5),
+    );
+    await serfs.choose(1, made.serf.id);
+    const chosen = await serfs.chooseClass(1, made.serf.id, "wizard");
+    if (!chosen.ok) throw new Error(chosen.reason);
+    expect(chosen.serf.items).toEqual([
+      expect.objectContaining({
+        slot: "ability",
+        type: "spellbook",
+        tier: 0,
+        rolls: [],
+        equipped: "ability",
+      }),
+    ]);
+    // Unequip and sell it: selecting the serf again does not give another.
+    expect(await serfs.unequip(1, made.serf.id, "ability")).toEqual({
+      ok: true,
+    });
+    const book = (await serfs.stash(1)).items[0]!;
+    expect(await serfs.sell(1, book.id)).toMatchObject({ ok: true });
+    const again = await serfs.choose(1, made.serf.id);
+    expect(again.ok && again.serf.items).toEqual([]);
+  });
+
+  it("a serf that chose its class before 10a gets one when next played", async () => {
+    const repo = new MemorySerfRepo();
+    const serfs = new SerfService(repo);
+    const made = await serfs.create(1, "Old Wizard");
+    if (!made.ok) throw new Error(made.reason);
+    await repo.recordRun(
+      1,
+      made.serf.id,
+      "completed",
+      run,
+      null,
+      totalExpForLevel(5),
+    );
+    // The class set the old way: straight in the store, no grant.
+    await repo.chooseClass(1, made.serf.id, "druid", 0, SERF_BASE, 1);
+    const picked = await serfs.choose(1, made.serf.id);
+    expect(picked.ok && picked.serf.items.map((i) => i.type)).toEqual([
+      "totem",
+    ]);
+  });
+});

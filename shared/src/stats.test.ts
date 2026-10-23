@@ -135,6 +135,9 @@ describe("combat from stats (D-077, D-078)", () => {
       shotDamage: PLAYER_WEAPON.damage,
       damageTakenFactor: 1,
       regenPerSecond: PLAYER_REGEN.hpPerSecond,
+      maxMp: 10,
+      mpRegenPerSecond: 1, // WIS 10 / 10 (D-096)
+      attackFactor: 1,
     });
   });
 

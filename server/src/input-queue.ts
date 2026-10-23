@@ -74,6 +74,8 @@ export function queueInput(
         trigger: input.fire.trigger,
         aim: input.fire.aim ? normalize(input.fire.aim) : null,
       },
+      // The cast target (D-094); the sim clamps it to the ability range.
+      ability: input.ability ? { ...input.ability } : null,
     },
   });
   return { kind: "queued" };

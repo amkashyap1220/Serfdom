@@ -98,3 +98,96 @@ describe("stats change combat (8c-2, D-077, D-078)", () => {
     expect(findPlayer(world(s, 60).state, 1)!.hp).toBeCloseTo(6.5, 6);
   });
 });
+
+describe("MP (D-093, D-096)", () => {
+  it("starts full at the MP stat and regenerates WIS / 10 per second, capped", () => {
+    let s = playerWith({ mp: 26, wisdom: 20 });
+    expect(findPlayer(s, 1)!.mp).toBe(26);
+    s = { ...s, players: s.players.map((p) => ({ ...p, mp: 5 })) };
+    expect(findPlayer(world(s, 60).state, 1)!.mp).toBeCloseTo(7, 6);
+    expect(findPlayer(world(s, 60 * 30).state, 1)!.mp).toBe(26);
+  });
+});
+
+describe("Arcane Blast (D-092–D-096)", () => {
+  const CAST = (x: number, y: number): PlayerInput => ({
+    move: { x: 0, y: 0 },
+    fire: { trigger: false, aim: null },
+    ability: { x, y },
+  });
+  /** A Wizard at the origin with a tier-`tier` Spellbook, enemies around. */
+  function wizard(
+    enemies: { x: number; y: number }[],
+    stats: Partial<Stats> = {},
+    tier = 0,
+  ) {
+    return addPlayer(
+      createSimState(enemies),
+      1,
+      { x: 0, y: 0 },
+      { ...SERF_BASE, mp: 40, ...stats },
+      null,
+      { kind: "arcaneBlast", tier },
+    );
+  }
+  const hp = (s: SimState) => s.enemies.map((e) => e.hp);
+
+  it("hits every enemy within 40 px of the target, once, for (80 + 20 × tier) × attack", () => {
+    // Dummies at 100 and 130 px east are both within 40 px of x = 115; the
+    // one at 300 px is not.
+    let s = wizard(
+      [
+        { x: 100, y: 0 },
+        { x: 130, y: 0 },
+        { x: 300, y: 0 },
+      ],
+      { attack: 30 },
+      1,
+    );
+    const before = hp(s);
+    s = applyPlayerInput(s, 1, CAST(115, 0), [], TICK_SECONDS).state;
+    expect(s.blasts).toHaveLength(1);
+    const { state, events } = world(s, 1);
+    const damage = (80 + 20) * 2; // ATK 30 → ×2
+    expect(hp(state)).toEqual([
+      before[0]! - damage,
+      before[1]! - damage,
+      before[2],
+    ]);
+    expect(
+      events.filter((e) => e.type === "hit" && e.playerId === 1),
+    ).toHaveLength(2);
+    expect(events.some((e) => e.type === "blast")).toBe(true);
+    expect(state.blasts).toEqual([]);
+  });
+
+  it("costs 15 MP and waits 1.5 s; no cast without MP", () => {
+    let s = wizard([{ x: 100, y: 0 }], { mp: 20 });
+    s = applyPlayerInput(s, 1, CAST(100, 0), [], TICK_SECONDS).state;
+    expect(findPlayer(s, 1)!.mp).toBe(5);
+    s = world(s, 1).state;
+    // Held for the rest of the cooldown: no second blast (and only 5 MP).
+    for (let i = 0; i < 89; i++) {
+      s = applyPlayerInput(s, 1, CAST(100, 0), [], TICK_SECONDS).state;
+      expect(s.blasts).toEqual([]);
+    }
+    s = { ...s, players: s.players.map((p) => ({ ...p, mp: 40 })) };
+    s = applyPlayerInput(s, 1, CAST(100, 0), [], TICK_SECONDS).state;
+    expect(s.blasts).toHaveLength(1); // 1.5 s later, with MP again
+  });
+
+  it("lands at most 250 px away; nothing without the ability item", () => {
+    let s = wizard([]);
+    s = applyPlayerInput(s, 1, CAST(1000, 0), [], TICK_SECONDS).state;
+    expect(s.blasts[0]?.at).toEqual({ x: 250, y: 0 });
+    let plain = addPlayer(
+      createSimState([]),
+      1,
+      { x: 0, y: 0 },
+      { ...SERF_BASE, mp: 40 },
+    );
+    plain = applyPlayerInput(plain, 1, CAST(50, 0), [], TICK_SECONDS).state;
+    expect(plain.blasts).toEqual([]);
+    expect(findPlayer(plain, 1)!.mp).toBe(40);
+  });
+});

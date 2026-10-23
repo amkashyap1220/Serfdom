@@ -32,10 +32,19 @@ export interface ProjectileView {
   size: number;
 }
 
+/** An ability blast shortly after it landed; `fade` runs 0 → 1. */
+export interface BlastView {
+  x: number;
+  y: number;
+  radius: number;
+  fade: number;
+}
+
 export interface CombatViewModel {
   enemies: EnemyView[];
   projectiles: ProjectileView[];
   hazards: HazardView[];
+  blasts: BlastView[];
   portalOpen: boolean;
 }
 
@@ -43,5 +52,6 @@ export const EMPTY_VIEW: CombatViewModel = {
   enemies: [],
   projectiles: [],
   hazards: [],
+  blasts: [],
   portalOpen: false,
 };

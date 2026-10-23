@@ -64,7 +64,10 @@ export class PlayerPredictor {
       fireCooldown: 0,
       hp: 1,
       maxHp: 1,
+      mp: 0,
       combat,
+      ability: null,
+      abilityCooldown: 0,
     };
     this.walls = walls;
   }
@@ -123,6 +126,7 @@ export class PlayerPredictor {
       nextProjectileId: 1,
       nextEnemyId: 1,
       hazards: [],
+      blasts: [],
     };
     const r = applyPlayerInput(solo, from.id, input, this.walls, TICK_SECONDS);
     return {
@@ -139,6 +143,10 @@ function fromSnapshot(p: SnapshotPlayer, combat: PlayerCombat): PlayerState {
     fireCooldown: p.cooldown,
     hp: p.hp,
     maxHp: p.maxHp,
+    mp: p.mp,
     combat,
+    // Casting is the server's alone; prediction only moves and shoots.
+    ability: null,
+    abilityCooldown: 0,
   };
 }

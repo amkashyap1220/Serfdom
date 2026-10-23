@@ -19,6 +19,12 @@ import {
   type HitTarget,
   type Projectile,
 } from "./projectile.ts";
+import {
+  ARCANE_BLAST,
+  arcaneBlastDamage,
+  clampToRange,
+  type AbilityLoadout,
+} from "./abilities.ts";
 import { weaponDamage } from "./items.ts";
 import {
   combatFor,
@@ -48,8 +54,14 @@ export interface PlayerState {
   fireCooldown: number;
   hp: number;
   maxHp: number;
+  /** Ability resource (D-093); full at run start, regenerates with WIS. */
+  mp: number;
   /** From the serf's stats (D-077): speed, fire rate, damage, defense, regen. */
   combat: PlayerCombat;
+  /** What Space casts, from the worn ability item (D-092); null = nothing. */
+  ability: AbilityLoadout | null;
+  /** Seconds until the ability may be cast again. */
+  abilityCooldown: number;
 }
 
 export interface SimState {
@@ -60,6 +72,8 @@ export interface SimState {
   nextEnemyId: number;
   /** Delayed area attacks waiting to land (Warlord rockfall). */
   hazards: readonly Hazard[];
+  /** Arcane Blasts cast this tick, resolved by the next world step. */
+  blasts: readonly Blast[];
 }
 
 /** A warning circle that damages living players inside it when it lands. */
@@ -83,10 +97,20 @@ export interface EnemySpawn {
 }
 
 /** One tick of a player's intent: where to move and whether/where to fire. */
+/** An ability's area hit waiting for the world step (D-096). */
+export interface Blast {
+  ownerId: number;
+  at: Vec2;
+  radius: number;
+  damage: number;
+}
+
 export interface PlayerInput {
   /** Unit world direction or (0, 0); see worldDirectionFromInput. */
   move: Vec2;
   fire: FireIntent;
+  /** Space held: where to cast, as an offset from the player (D-094); none if absent. */
+  ability?: Vec2 | null;
 }
 
 export type SimEvent =
@@ -110,7 +134,9 @@ export type SimEvent =
       damage: number;
       position: Vec2;
     }
-  | { type: "playerDied"; playerId: number };
+  | { type: "playerDied"; playerId: number }
+  /** An ability landed (drawn by every client). */
+  | { type: "blast"; playerId: number; at: Vec2; radius: number };
 
 export function isPlayerAlive(player: PlayerState): boolean {
   return player.hp > 0;
@@ -136,6 +162,7 @@ export function createSimState(
     nextProjectileId: 1,
     nextEnemyId: 1,
     hazards: [],
+    blasts: [],
   };
   return spawnEnemies(
     empty,
@@ -173,6 +200,7 @@ export function newPlayer(
   spawn: Vec2,
   stats: Stats = SERF_BASE,
   weaponTier: number | null = null,
+  ability: AbilityLoadout | null = null,
 ): PlayerState {
   const combat = combatFor(stats, weaponDamage(weaponTier));
   return {
@@ -181,7 +209,10 @@ export function newPlayer(
     fireCooldown: 0,
     hp: combat.maxHp,
     maxHp: combat.maxHp,
+    mp: combat.maxMp,
     combat,
+    ability,
+    abilityCooldown: 0,
   };
 }
 
@@ -192,11 +223,12 @@ export function addPlayer(
   spawn: Vec2,
   stats: Stats = SERF_BASE,
   weaponTier: number | null = null,
+  ability: AbilityLoadout | null = null,
 ): SimState {
   const others = state.players.filter((p) => p.id !== id);
   return {
     ...state,
-    players: [...others, newPlayer(id, spawn, stats, weaponTier)],
+    players: [...others, newPlayer(id, spawn, stats, weaponTier, ability)],
   };
 }
 
@@ -253,14 +285,42 @@ export function applyPlayerInput(
     player.combat.shotsPerSecond,
   );
 
+  // The ability (D-092–D-096): its cooldown runs on the player's own
+  // timeline like the fire cooldown; casting needs the item, MP, and a
+  // target (an offset from the player, clamped to the range here).
+  let abilityCooldown = Math.max(0, player.abilityCooldown - dtSeconds);
+  let mp = player.mp;
+  let blast: Blast | null = null;
+  const target = input.ability ?? null;
+  if (
+    target &&
+    player.ability?.kind === "arcaneBlast" &&
+    abilityCooldown <= 1e-9 &&
+    mp >= ARCANE_BLAST.mpCost
+  ) {
+    const offset = clampToRange(target, ARCANE_BLAST.range);
+    blast = {
+      ownerId: playerId,
+      at: { x: position.x + offset.x, y: position.y + offset.y },
+      radius: ARCANE_BLAST.radius,
+      damage:
+        arcaneBlastDamage(player.ability.tier) * player.combat.attackFactor,
+    };
+    mp -= ARCANE_BLAST.mpCost;
+    abilityCooldown = ARCANE_BLAST.cooldownSeconds;
+  }
+
   const updated: PlayerState = {
     ...player,
     position,
     fireCooldown: cooldown.remaining,
+    mp,
+    abilityCooldown,
   };
   let next: SimState = {
     ...state,
     players: state.players.map((p) => (p.id === playerId ? updated : p)),
+    blasts: blast ? [...state.blasts, blast] : state.blasts,
   };
   const events: SimEvent[] = [];
   if (cooldown.fired && aim) {
@@ -393,6 +453,36 @@ export function stepWorld(
   }
   hazards.push(...newHazards);
 
+  // 2c. Blasts cast since the last step hit every living enemy in their
+  // area once (D-096), credited to the caster like a shot.
+  for (const b of state.blasts) {
+    events.push({
+      type: "blast",
+      playerId: b.ownerId,
+      at: b.at,
+      radius: b.radius,
+    });
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (!e || !isAlive(e)) continue;
+      if (Math.hypot(e.position.x - b.at.x, e.position.y - b.at.y) > b.radius) {
+        continue;
+      }
+      const result = damageEnemy(e, b.damage);
+      enemies[i] = result.enemy;
+      events.push({
+        type: "hit",
+        enemyId: e.id,
+        playerId: b.ownerId,
+        damage: b.damage,
+        position: e.position,
+      });
+      if (result.defeated) {
+        events.push({ type: "defeated", enemyId: e.id, playerId: b.ownerId });
+      }
+    }
+  }
+
   // 3. Projectiles. Targets are rebuilt per projectile so anything defeated
   // earlier in this tick stops absorbing hits.
   const surviving: Projectile[] = [];
@@ -461,19 +551,22 @@ export function stepWorld(
       nextProjectileId: nextId,
       nextEnemyId,
       hazards,
+      blasts: [],
     },
     events,
   };
 }
 
-/** Always-on regeneration (D-056); the dead do not regenerate. */
+/** Always-on HP and MP regeneration (D-056, D-096); the dead do not regenerate. */
 function regenerate(player: PlayerState, dtSeconds: number): PlayerState {
-  if (!isPlayerAlive(player) || player.hp >= player.maxHp) return player;
-  const hp = Math.min(
-    player.maxHp,
-    player.hp + player.combat.regenPerSecond * dtSeconds,
-  );
-  return { ...player, hp };
+  if (!isPlayerAlive(player)) return player;
+  const { combat } = player;
+  if (player.hp >= player.maxHp && player.mp >= combat.maxMp) return player;
+  return {
+    ...player,
+    hp: Math.min(player.maxHp, player.hp + combat.regenPerSecond * dtSeconds),
+    mp: Math.min(combat.maxMp, player.mp + combat.mpRegenPerSecond * dtSeconds),
+  };
 }
 
 /**

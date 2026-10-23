@@ -123,6 +123,17 @@ export interface SerfRepo {
   /** Whether rewards wait for this serf (it may not start a dungeon, D-088). */
   hasPending(accountId: number, serfId: number): Promise<boolean>;
   /**
+   * Once per serf (D-092): if this living, classed serf has not had its
+   * free ability item, puts `item` in its ability slot and marks it given,
+   * in one transaction. False if it was given before (or the serf is not
+   * this account's, dead, or classless).
+   */
+  grantAbilityItem(
+    accountId: number,
+    serfId: number,
+    item: ItemSpec,
+  ): Promise<boolean>;
+  /**
    * Puts one of the account's stash or pending items on a living serf in
    * `slot` (the caller has checked the rules). What was worn there goes to
    * the stash if it has room, else waits as pending for that serf (D-086,
@@ -492,6 +503,40 @@ export class PgSerfRepo implements SerfRepo {
     });
   }
 
+  async grantAbilityItem(
+    accountId: number,
+    serfId: number,
+    item: ItemSpec,
+  ): Promise<boolean> {
+    const granted = await this.inAccount(accountId, async (client) => {
+      const r = await client.query(
+        `update serfs set ability_granted = true
+         where id = $1 and account_id = $2 and died_at is null
+           and class_id is not null and not ability_granted
+         returning id`,
+        [serfId, accountId],
+      );
+      if (r.rowCount === 0) return null;
+      // The ability slot is empty: only the class's own item fits there,
+      // and none existed before the grant (D-096).
+      await client.query(
+        `insert into items (account_id, serf_id, location, equipped, slot, type, tier, rolls, luck)
+         values ($1, $2, 'equipped', 'ability', $3, $4, $5, $6, $7)`,
+        [
+          accountId,
+          serfId,
+          item.slot,
+          item.type,
+          item.tier,
+          JSON.stringify(item.rolls),
+          item.luck,
+        ],
+      );
+      return true;
+    });
+    return granted === true;
+  }
+
   async hasPending(accountId: number, serfId: number): Promise<boolean> {
     const r = await this.pool.query(
       "select 1 from items where account_id = $1 and serf_id = $2 and location = 'pending' limit 1",
@@ -715,6 +760,7 @@ interface MemorySerf {
   accountId: number;
   summary: SerfSummary;
   statsLevel: number;
+  abilityGranted?: boolean;
   createdSeq: number;
   diedSeq: number | null;
 }
@@ -969,6 +1015,34 @@ export class MemorySerfRepo implements SerfRepo {
       }
     }
     return { price };
+  }
+
+  async grantAbilityItem(
+    accountId: number,
+    serfId: number,
+    item: ItemSpec,
+  ): Promise<boolean> {
+    const s = this.serfs.find(
+      (x) =>
+        x.accountId === accountId &&
+        x.summary.id === serfId &&
+        x.summary.alive &&
+        x.summary.classId !== null &&
+        !x.abilityGranted,
+    );
+    if (!s) return false;
+    s.abilityGranted = true;
+    this.items.push({
+      accountId,
+      serfId,
+      location: "equipped",
+      item: {
+        ...structuredClone(item),
+        id: this.nextItemId++,
+        equipped: "ability",
+      },
+    });
+    return true;
   }
 
   async hasPending(accountId: number, serfId: number): Promise<boolean> {
