@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phases 0–5 are complete (setup, client skeleton, movement/camera, combat prototype, authoritative multiplayer, shared server-run combat). Phase 6 (dungeon vertical slice) is in progress: 6a adds the main menu, an open dungeon queue, separate dungeon runs, and death/completion screens; 6b adds the Goblin Warrens map (rooms, doors, waves) with grunts and slingers; 6c adds brutes, the Goblin Warlord boss, the exit portal, and the full completion celebration. Phase 7 (accounts and persistent data) is in progress: 7a adds email + password accounts stored in PostgreSQL; 7b adds serfs (2 slots, names, lifetime stats, permadeath): browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
+Phases 0–5 are complete (setup, client skeleton, movement/camera, combat prototype, authoritative multiplayer, shared server-run combat). Phase 6 (dungeon vertical slice) is in progress: 6a adds the main menu, an open dungeon queue, separate dungeon runs, and death/completion screens; 6b adds the Goblin Warrens map (rooms, doors, waves) with grunts and slingers; 6c adds brutes, the Goblin Warlord boss, the exit portal, and the full completion celebration. Phase 7 (accounts and persistent data) is complete: email + password accounts and serfs (2 slots, names, lifetime stats, permadeath) stored in PostgreSQL: browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
 
 ## Development setup
 
@@ -63,6 +63,24 @@ git --version
 3. Copy `.env.example` to `.env` (git-ignored) and put `DEV_PASSWORD` into `DATABASE_URL` and `TEST_DATABASE_URL`.
 
 The server applies database migrations (`server/migrations/*.sql`) by itself on start. The tests **wipe and rebuild** `serfdom_test` (they refuse to touch a database whose name does not end in `_test`).
+
+#### Changing the database schema
+
+Add a new file `server/migrations/NNN_short_name.sql` (next number, lowercase, underscores) with the SQL. Never edit a migration that has been committed: databases that already ran it would not see the change. The next server start applies it inside a transaction and records it in `schema_migrations`.
+
+#### Resetting your development database
+
+This deletes every account and serf in `serfdom` (not `serfdom_test`). Stop `npm run dev` first, then:
+
+```powershell
+$psql = "C:\Program Files\PostgreSQL\17\bin\psql.exe"
+& $psql -U postgres -c "DROP DATABASE serfdom;"
+& $psql -U postgres -c "CREATE DATABASE serfdom OWNER serfdom;"
+```
+
+The next `npm run dev` recreates the tables.
+
+To look at the data: `& $psql -U serfdom -d serfdom -c "select id, email, created_at from accounts;"` (password hashes and session tokens are not readable by design).
 
 ### Set up a clean clone
 

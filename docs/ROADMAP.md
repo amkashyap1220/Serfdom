@@ -197,6 +197,7 @@ Tasks:
 - Implement progression formulas only after approval.
 - Implement death, equipment loss, account persistence, and any resurrection exception according to confirmed rules.
 - Preserve dead characters' final lifetime EXP on the single lifetime EXP leaderboard.
+- Add the Luck stat (D-065, D-066): a level-1 Serf has 1 Luck; leveling and class choice never change it.
 - Test cap behavior and post-cap EXP.
 
 Acceptance:
@@ -206,6 +207,7 @@ Acceptance:
 - Level 20 is the cap; no further levels or stat gains occur.
 - Lifetime EXP can continue accumulating after cap.
 - Death and rewards match the confirmed rules.
+- A new Serf has 1 Luck, and Luck stays the same through every level and class choice.
 
 ## Phase 9 — Equipment and rewards
 
@@ -216,13 +218,15 @@ Tasks:
 - Confirm equipment slots, weapon/armor categories, and class restrictions.
 - Implement a small representative subset of items.
 - Centralize tier/stat/drop configuration.
-- Implement per-player randomized completion rewards.
+- Implement per-player randomized completion rewards: each completing player rolls one reward chest per point of Luck (D-065, D-068), replacing the Phase 6 single placeholder roll (T-039). Luck counts equipped items only; no cap.
+- Add the Luck item modifier (D-067, D-068): exactly +1, at most one per item, never negative; any item that can roll stats can roll it, Artifacts included.
 - Add tests for drop eligibility, random roll bounds, and inventory ownership.
 
 Acceptance:
 
 - Equipment can be obtained and equipped according to rules.
-- Each completing player receives individual reward rolls.
+- Each completing player receives individual reward chests, one per Luck point (1 for a fresh Serf, +1 per equipped Luck item); carried but unequipped Luck items add nothing.
+- No item can ever have a negative Luck modifier or more than +1 Luck (tested, including generated items).
 - A player dying before completion receives no completion rewards.
 - Invalid or duplicated item ownership is prevented.
 

@@ -121,6 +121,17 @@ Do not finalize the protocol before the first multiplayer milestone. Start small
 
 ## 6. Persistence principles
 
+### Current database (Phase 7)
+
+PostgreSQL 17 (D-059), reached through `pg` with one connection pool per server process. Tables:
+
+- `schema_migrations`: which migration files have run.
+- `accounts`: id, normalized unique email, scrypt `password_hash`, created_at.
+- `sessions`: SHA-256 `token_hash` (the token itself is never stored), account_id (cascade delete), expires_at.
+- `serfs`: id, account_id (cascade delete), name (unique among living, case-insensitive, partial index), level, died_at / death_dungeon / killed_by (set once), lifetime stat columns.
+
+Rules in code: every serf query is scoped by `account_id`; slot-limited creation locks the account row; a run is recorded with one `update … where died_at is null`; all SQL uses parameters (no string-built queries). Not yet done: backups and restore drills (before real players' data matters, Phase 14).
+
 When persistence is introduced:
 
 - Use migrations.

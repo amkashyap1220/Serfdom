@@ -6,7 +6,7 @@ import {
   type AccountRepo,
 } from "../auth/account-repo.ts";
 import { AccountService } from "../auth/account-service.ts";
-import { newRunStats } from "@serfdom/shared";
+import { newRunStats, type ServerMessage } from "@serfdom/shared";
 import {
   MemorySerfRepo,
   PgSerfRepo,
@@ -297,6 +297,135 @@ describe("serfs in PostgreSQL", () => {
       });
     } finally {
       await second.end();
+    }
+  });
+});
+
+describe("Phase 7 acceptance: a real server restart (end to end)", () => {
+  it("accounts, login tokens, and serfs survive; another account cannot take the serf", async () => {
+    const { GameServer } = await import("../game-server.ts");
+    const { AccountService } = await import("../auth/account-service.ts");
+    const { SerfService } = await import("../serfs/serf-service.ts");
+    const { silentLogger } = await import("../log.ts");
+    const { WebSocket } = await import("ws");
+    const { encodeMessage, parseServerMessage, PROTOCOL_VERSION } =
+      await import("@serfdom/shared");
+    const { default: pgModule } = await import("pg");
+    type Msg = ServerMessage;
+
+    const startServer = (p: pg.Pool) =>
+      GameServer.start({
+        port: 0,
+        autoTick: false,
+        queueWaitSeconds: 0,
+        log: silentLogger,
+        accounts: new AccountService(new PgAccountRepo(p), {
+          passwordCost: { log2N: 4, r: 1, p: 1 },
+        }),
+        serfs: new SerfService(new PgSerfRepo(p)),
+      });
+    async function client(port: number) {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      const inbox: Msg[] = [];
+      ws.on("message", (d) => {
+        const parsed = parseServerMessage(d.toString());
+        if (parsed.ok) inbox.push(parsed.message);
+      });
+      await new Promise((r) => ws.once("open", r));
+      const send = (m: Parameters<typeof encodeMessage>[0]) =>
+        ws.send(encodeMessage(m));
+      async function next<T extends Msg["type"]>(
+        type: T,
+        pred: (m: Extract<Msg, { type: T }>) => boolean = () => true,
+      ) {
+        for (let i = 0; i < 400; i++) {
+          const k = inbox.findIndex(
+            (m) => m.type === type && pred(m as Extract<Msg, { type: T }>),
+          );
+          if (k >= 0) return inbox.splice(k, 1)[0] as Extract<Msg, { type: T }>;
+          await new Promise((r) => setTimeout(r, 5));
+        }
+        throw new Error(`no ${type}`);
+      }
+      send({ type: "hello", protocol: PROTOCOL_VERSION });
+      await next("welcome");
+      return { ws, send, next };
+    }
+
+    // Server 1: register, create a serf, play one run (leave with R).
+    const pool1 = new pgModule.Pool({
+      connectionString: process.env.TEST_DATABASE_URL,
+    });
+    const server1 = await startServer(pool1);
+    const a = await client(server1.port);
+    a.send({
+      type: "register",
+      email: "e2e@restart.test",
+      password: "a long password",
+    });
+    const { token } = await a.next("authOk");
+    a.send({ type: "createSerf", name: "Phoenix Rye" });
+    const created = await a.next("serfList", (m) => m.selectedId !== null);
+    const serfId = created.selectedId!;
+    a.send({ type: "queue", dungeon: "training" });
+    await a.next("queueStatus");
+    server1.tick();
+    await a.next("runStarted");
+    a.send({ type: "exitDungeon" });
+    const ended = await a.next("runEnded");
+    expect(ended.serf).toMatchObject({
+      id: serfId,
+      alive: true,
+      life: { runs: 1 },
+    });
+    a.ws.close();
+    await server1.close();
+    await pool1.end();
+
+    // Server 2, a brand-new process state and connection pool on the same database.
+    const pool2 = new pgModule.Pool({
+      connectionString: process.env.TEST_DATABASE_URL,
+    });
+    const server2 = await startServer(pool2);
+    try {
+      const again = await client(server2.port);
+      again.send({ type: "resume", token });
+      expect(await again.next("authOk")).toMatchObject({
+        email: "e2e@restart.test",
+      });
+      const list = await again.next("serfList");
+      expect(list.serfs).toEqual([
+        expect.objectContaining({
+          id: serfId,
+          name: "Phoenix Rye",
+          alive: true,
+          life: expect.objectContaining({ runs: 1 }),
+        }),
+      ]);
+
+      // Another account cannot select (or play, or see) that serf.
+      const b = await client(server2.port);
+      b.send({
+        type: "register",
+        email: "e2e-other@restart.test",
+        password: "a long password",
+      });
+      await b.next("authOk");
+      expect((await b.next("serfList")).serfs).toEqual([]);
+      b.send({ type: "selectSerf", serfId });
+      expect((await b.next("serfError")).reason).toBe("No such serf.");
+      // A client cannot claim results or stats: there is no such message.
+      b.ws.send(
+        JSON.stringify({ type: "recordRun", serfId, result: "completed" }),
+      );
+      expect((await b.next("error")).reason).toBe(
+        'unknown message type "recordRun"',
+      );
+      again.ws.close();
+      b.ws.close();
+    } finally {
+      await server2.close();
+      await pool2.end();
     }
   });
 });

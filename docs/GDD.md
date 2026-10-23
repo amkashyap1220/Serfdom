@@ -169,6 +169,7 @@ Previously proposed stats:
 - Defense
 - Vitality
 - Wisdom
+- Luck (confirmed, D-065)
 
 Prior meanings:
 
@@ -180,6 +181,7 @@ Prior meanings:
 - Defense: incoming damage reduction.
 - Vitality: health regeneration.
 - Wisdom: mana regeneration.
+- Luck (confirmed, D-065–D-068): the number of reward chests a player rolls at the end of a completed dungeon, one chest per Luck point. A level-1 Serf starts with **1 Luck**. Luck never grows with level or class; it only comes from **equipped** items, each carrying **+1 Luck** at most and never negative Luck. Any item that can roll stats can roll Luck, Artifacts included. There is no Luck cap.
 
 These names and roles are prior design material; confirm any change against the latest decisions. Exact formulas, caps, class growth, and potion effects remain unresolved.
 
@@ -254,7 +256,7 @@ Prior draft:
 - Artifacts are a separate special category with unique fixed effects.
 - Item stats may be randomized independently from the fixed Artifact effect.
 - T0 has zero stat rolls; intermediate tiers gain rolls progressively; T10 has five rolls.
-- Stat modifiers may be positive or negative.
+- Stat modifiers may be positive or negative, **except Luck**: an item's Luck modifier is always exactly +1, at most one per item, never negative (D-067).
 - Shiny chance was proposed at 1/2,000, independent of tier and stat rolls.
 - Shiny status does not automatically grant an Artifact effect; Artifacts can also be Shiny.
 - A T10 item with five favorable rolls and Shiny status is a top-end collectible target.
@@ -306,6 +308,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Enemies include melee, ranged, charging/throwing, and tougher roles.
 - Goblin Warlord uses projectile patterns, reinforcements, and limited arena hazards.
 - Rewards may include completion XP, gold, dungeon-specific potions, and equipment, but exact rates need confirmation.
+- Each completing player rolls one reward chest per point of Luck (D-065, D-068): 1 chest for a fresh Serf, +1 for each equipped Luck item, no cap.
 - A character dying before completion receives no completion rewards.
 
 ## 11. Multiplayer and reward rules
@@ -316,7 +319,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Completion should feel rewarding: strong celebratory effects and a slot-machine-like reward chest (D-049). Death is abrupt and tragic: a stats screen about the serf's life, then return to choose a serf and dungeon (D-050).
 - Browser and Steam desktop clients share the same game servers and can play together.
 - Mixed-platform parties can enter the same dungeon instance and fight the same enemies/boss.
-- Every player who completes a dungeon receives their own randomized reward results; rewards are individual rather than a single shared loot roll.
+- Every player who completes a dungeon receives their own randomized reward results; rewards are individual rather than a single shared loot roll. The number of item rolls each player gets equals their own Luck (D-065).
 - A player who dies before completion receives no completion rewards.
 - Enemy HP scales by party size; the exact formula remains unresolved.
 - Solo play should remain viable.
