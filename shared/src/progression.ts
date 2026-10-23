@@ -24,6 +24,8 @@ export interface DungeonExp {
 export const DUNGEON_EXP: Record<DungeonId, DungeonExp> = {
   // GDD §10: aimed primarily at levels 1–9.
   "goblin-warrens": { base: 100, topLevel: 9 },
+  // D-108: aimed at levels 9–12; about 5 clears take a serf from 9 to 12.
+  "goblin-stronghold": { base: 160, topLevel: 12 },
   training: { base: 100, topLevel: 9 },
 };
 

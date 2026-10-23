@@ -1,12 +1,12 @@
+import type { RoomPiece } from "./dungeon-gen.ts";
 import {
-  OPPOSITE,
-  pieceHp,
-  RoomAssembly,
-  type RoomPiece,
-  type Side,
-} from "./dungeon-gen.ts";
+  buildFromRecipe,
+  type DungeonRecipe,
+  type RecipePiece,
+  type RoomBand,
+  type Waves,
+} from "./dungeon-recipe.ts";
 import {
-  validateLayout,
   wallsAroundRooms,
   type DoorDef,
   type DungeonLayout,
@@ -14,7 +14,6 @@ import {
   type RoomDef,
 } from "./dungeon-layout.ts";
 import type { EnemyKind } from "./enemy-config.ts";
-import { pick, randomInt, seededRandom, shuffled } from "./seeded-random.ts";
 
 /*
  * Goblin Warrens v0 (T-029, Phase 6b). PROVISIONAL layout and encounter
@@ -232,7 +231,9 @@ export const GOBLIN_WARRENS: DungeonLayout = {
  * Seed 0 is the handcrafted layout above, kept as a fixed fixture.
  */
 
-export type RoomBand = "light" | "medium" | "heavy";
+export type { RoomBand };
+/** One combat room of the Warrens pool (a recipe piece, D-105). */
+export type WarrensPiece = RecipePiece;
 
 export const WARRENS_RULES = {
   mainPath: ["light", "medium", "medium", "heavy"] as readonly RoomBand[],
@@ -258,18 +259,9 @@ const asPiece = (id: string, name?: string): RoomPiece => {
   };
 };
 
-const ENTRANCE = asPiece("entrance");
-const THRONE = asPiece("throne");
-
-type Waves = readonly (readonly EnemySpawnDef[])[];
-
-/** One combat room of the pool: its band and its enemy setups (D-105). */
-export interface WarrensPiece {
-  piece: RoomPiece;
-  band: RoomBand;
-  /** Each run picks one; all within ±10% of the first one's HP. */
-  setups: readonly Waves[];
-}
+/** The Warrens' first and last rooms, also used by the Stronghold. */
+export const WARRENS_ENTRANCE = asPiece("entrance");
+export const WARRENS_THRONE = asPiece("throne");
 
 /** A new piece (11b): entrance on the west, positions relative to the floor. */
 const newPiece = (
@@ -686,106 +678,16 @@ export const WARRENS_PIECES: readonly WarrensPiece[] = [
   ]),
 ];
 
-const ofBand = (band: RoomBand) =>
-  WARRENS_PIECES.filter((p) => p.band === band);
-
-/** The piece with one of its setups, chosen for this run. */
-const withSetup = (random: () => number, entry: WarrensPiece): RoomPiece => ({
-  ...entry.piece,
-  waves: pick(random, entry.setups),
-});
-
-/** Whole-layout attempts before falling back (never expected; tested). */
-const ATTEMPTS = 50;
+export const WARRENS_RECIPE: DungeonRecipe = {
+  name: "Goblin Warrens",
+  entrance: WARRENS_ENTRANCE,
+  boss: WARRENS_THRONE,
+  pieces: WARRENS_PIECES,
+  ...WARRENS_RULES,
+  fixed: GOBLIN_WARRENS,
+};
 
 /** The Goblin Warrens for `seed`: the same seed always builds the same map. */
 export function buildWarrens(seed: number): DungeonLayout {
-  if (seed === 0) return GOBLIN_WARRENS;
-  const random = seededRandom(seed);
-  for (let i = 0; i < ATTEMPTS; i++) {
-    const layout = tryWarrens(random);
-    if (layout && validateLayout(layout).length === 0) return layout;
-  }
-  return GOBLIN_WARRENS;
-}
-
-/** Combat rooms for the main path, in order, within the HP band. */
-function mainPathPieces(random: () => number): RoomPiece[] {
-  for (let tries = 0; tries < 1000; tries++) {
-    const used = new Set<string>();
-    const chosen = WARRENS_RULES.mainPath.map((band) => {
-      const entry = pick(
-        random,
-        ofBand(band).filter((p) => !used.has(p.piece.key)),
-      );
-      used.add(entry.piece.key);
-      return withSetup(random, entry);
-    });
-    const hp = [...chosen, THRONE].reduce((sum, p) => sum + pieceHp(p), 0);
-    const { min, max } = WARRENS_RULES.requiredHp;
-    if (hp >= min && hp <= max) return chosen;
-  }
-  throw new Error("no Warrens main path fits the HP band: check the pieces");
-}
-
-/** Sides to try for the next main-path room, by weight, never west. */
-function turnOrder(random: () => number, previous: Side | null): Side[] {
-  const pool = (["east", "north", "south"] as const).filter(
-    (s) => previous === null || s !== OPPOSITE[previous],
-  );
-  const order: Side[] = [];
-  const left = [...pool];
-  while (left.length > 0) {
-    const total = left.reduce((n, s) => n + WARRENS_RULES.turnWeights[s], 0);
-    let roll = random() * total;
-    const i = left.findIndex((s) => (roll -= WARRENS_RULES.turnWeights[s]) < 0);
-    order.push(...left.splice(i < 0 ? left.length - 1 : i, 1));
-  }
-  return order;
-}
-
-function tryWarrens(random: () => number): DungeonLayout | null {
-  const build = new RoomAssembly(ENTRANCE, "entrance", random);
-  const ids = new Set(["entrance"]);
-  const uniqueId = (key: string) => {
-    let id = key;
-    for (let n = 2; ids.has(id); n++) id = `${key}-${n}`;
-    ids.add(id);
-    return id;
-  };
-
-  let at = 0;
-  let previous: Side | null = null;
-  const combat: number[] = [];
-  for (const piece of [...mainPathPieces(random), THRONE]) {
-    const id = piece === THRONE ? "throne" : uniqueId(piece.key);
-    let next: number | null = null;
-    for (const side of turnOrder(random, previous)) {
-      next = build.attach(at, side, piece, id, true);
-      if (next !== null) {
-        previous = side;
-        break;
-      }
-    }
-    if (next === null) return null;
-    if (piece !== THRONE) combat.push(next);
-    at = next;
-  }
-  const throne = at;
-
-  const { min, max } = WARRENS_RULES.sideRooms;
-  const sidePool = WARRENS_RULES.sideBands.flatMap(ofBand);
-  const count = randomInt(random, min, max);
-  for (let n = 0; n < count; n++) {
-    const piece = withSetup(random, pick(random, sidePool));
-    const id = uniqueId(piece.key);
-    placing: for (const parent of shuffled(random, combat)) {
-      const sides = build.freeSides(parent).filter((s) => s !== "west");
-      for (const side of shuffled(random, sides)) {
-        if (build.attach(parent, side, piece, id, false) !== null)
-          break placing;
-      }
-    }
-  }
-  return build.finish(throne);
+  return buildFromRecipe(WARRENS_RECIPE, seed);
 }

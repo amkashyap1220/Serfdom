@@ -78,6 +78,19 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Goblin Stronghold checklist (Phase 12a, D-108)
+
+Restart `npm run dev`, reload.
+
+1. The Dungeons tab lists the **Goblin Stronghold** under the Warrens ("Levels 9–12 · 5–7 min · opens after the Warrens").
+2. With a serf that has never completed the Warrens (a new one): the Stronghold shows **Locked: Complete the Goblin Warrens first.** and no queue button.
+3. With a serf that has completed the Warrens at least once: the Stronghold has **Enter queue**. Queue it.
+4. In the run: you start in the **Stronghold gate**; the path passes 6 combat rooms (busier than the Warrens: about twice the goblins) and ends in the **War hall** with the Goblin Warlord (a stand-in until its own boss). Doors, walls, retreat, and the portal work as in the Warrens.
+5. Completing it: about 160 EXP at levels 9–12 (less above 12); the chest drops T2–T4 items, and a T4 can show extra rolls and +1 LUCK.
+6. A serf below level 9 may enter too (any level, D-107); expect it to be hard.
+
+Report: pass/fail per step, the seed of anything odd, your clear time, and how hard it felt for your serf's level.
+
 ### Dungeon entry checklist (Phase 11c, D-107)
 
 Only the Goblin Warrens is listed today, so there is no locked dungeon to see yet.

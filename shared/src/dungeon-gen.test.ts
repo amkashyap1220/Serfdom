@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { pieceHp } from "./dungeon-gen.ts";
-import {
-  contains,
-  validateLayout,
-  type DungeonLayout,
-  type RoomDef,
-} from "./dungeon-layout.ts";
+import { contains, validateLayout, type RoomDef } from "./dungeon-layout.ts";
 import { layoutFor } from "./dungeons.ts";
 import { ENEMY_STATS } from "./enemy-config.ts";
-import type { Rect } from "./geometry.ts";
 import {
   buildWarrens,
   GOBLIN_WARRENS,
@@ -17,42 +11,13 @@ import {
   type RoomBand,
 } from "./goblin-warrens.ts";
 import { seededRandom } from "./seeded-random.ts";
+import { findLeak, mainPath, sideOf, touches } from "./layout-test-helpers.ts";
 
 const SEEDS = Array.from({ length: 2000 }, (_, i) => i + 1);
-
-const touches = (a: Rect, b: Rect) =>
-  a.x <= b.x + b.width &&
-  b.x <= a.x + a.width &&
-  a.y <= b.y + b.height &&
-  b.y <= a.y + a.height;
-
-/** The main path from the entrance to the throne, following its doors. */
-function mainPath(layout: DungeonLayout): RoomDef[] {
-  const byId = new Map(layout.rooms.map((r) => [r.id, r]));
-  const path = [byId.get("entrance")!];
-  for (;;) {
-    const here = path.at(-1)!;
-    const next = layout.doors
-      .filter((d) => d.room === here.id)
-      .flatMap((d) =>
-        layout.rooms.filter((r) => r !== here && touches(r.bounds, d.rect)),
-      )
-      .find((r) => r.required);
-    if (!next) return path;
-    path.push(next);
-  }
-}
 
 const bandOf = (room: RoomDef): RoomBand | undefined =>
   WARRENS_PIECES.find((p) => p.piece.key === room.id.replace(/-\d+$/, ""))
     ?.band;
-
-/** Which side of `parent` the room `child` sits on. */
-function sideOf(parent: Rect, child: Rect): string {
-  if (child.x >= parent.x + parent.width) return "east";
-  if (child.x + child.width <= parent.x) return "west";
-  return child.y < parent.y ? "north" : "south";
-}
 
 describe("seeded random (T-050)", () => {
   it("the same seed gives the same numbers; different seeds differ", () => {
@@ -155,52 +120,8 @@ describe("procedural Goblin Warrens (D-104)", () => {
   });
 
   it("has no gaps in its walls: with every door open, you stay inside rooms and doorways", () => {
-    const CELL = 8;
     for (const seed of SEEDS.slice(0, 100)) {
-      const layout = buildWarrens(seed);
-      const cols = Math.ceil(layout.world.width / CELL);
-      const rows = Math.ceil(layout.world.height / CELL);
-      // Rasterize once: cells touched by a wall block; cells touched by a
-      // room floor or a doorway are allowed.
-      const paint = (rects: readonly Rect[]) => {
-        const grid = new Uint8Array(cols * rows);
-        for (const r of rects) {
-          const c0 = Math.max(0, Math.floor(r.x / CELL));
-          const r0 = Math.max(0, Math.floor(r.y / CELL));
-          const c1 = Math.min(cols - 1, Math.ceil((r.x + r.width) / CELL) - 1);
-          const r1 = Math.min(rows - 1, Math.ceil((r.y + r.height) / CELL) - 1);
-          for (let y = r0; y <= r1; y++)
-            for (let x = c0; x <= c1; x++) grid[y * cols + x] = 1;
-        }
-        return grid;
-      };
-      const blocked = paint(layout.walls);
-      const allowed = paint([
-        ...layout.rooms.map((r) => r.bounds),
-        ...layout.doors.map((d) => d.rect),
-      ]);
-      const startCell =
-        Math.floor(layout.spawn.y / CELL) * cols +
-        Math.floor(layout.spawn.x / CELL);
-      const seen = new Uint8Array(cols * rows);
-      const queue = [startCell];
-      seen[startCell] = 1;
-      let leak: string | null = null;
-      while (queue.length > 0 && !leak) {
-        const cell = queue.pop()!;
-        const c = cell % cols;
-        const r = Math.floor(cell / cols);
-        if (!allowed[cell]) leak = `open floor at ${c * CELL},${r * CELL}`;
-        if (c === 0 || r === 0 || c === cols - 1 || r === rows - 1) {
-          leak = "reached the world edge";
-        }
-        for (const next of [cell + 1, cell - 1, cell + cols, cell - cols]) {
-          if (seen[next] || blocked[next]) continue;
-          seen[next] = 1;
-          queue.push(next);
-        }
-      }
-      expect(leak, `seed ${seed}`).toBeNull();
+      expect(findLeak(buildWarrens(seed)), `seed ${seed}`).toBeNull();
     }
   });
 });

@@ -110,6 +110,7 @@ export {
   buildWarrens,
   GOBLIN_WARRENS,
   WARRENS_PIECES,
+  WARRENS_RECIPE,
   WARRENS_RULES,
   type RoomBand,
   type WarrensPiece,
@@ -121,6 +122,17 @@ export {
   type Side,
 } from "./dungeon-gen.ts";
 export { MAX_SEED, seededRandom } from "./seeded-random.ts";
+export {
+  buildFromRecipe,
+  combineSetups,
+  type DungeonRecipe,
+  type RecipePiece,
+} from "./dungeon-recipe.ts";
+export {
+  buildStronghold,
+  STRONGHOLD_PIECES,
+  STRONGHOLD_RECIPE,
+} from "./goblin-stronghold.ts";
 export {
   newRunStats,
   recordRunEvents,

@@ -289,12 +289,14 @@ Acceptance:
 
 **Goal:** Make the real grind exist (GDD §3: levels 1–20 are quick; the long game is stat potions and rare drops from high-tier dungeons).
 
+Status: in progress. 12a (the Goblin Stronghold, playable with today's goblins and the Warlord as a stand-in boss, D-108) built; 12b shamans and other new goblin roles; 12c the Goblin Warchief; 12d stat potions and the potion rack; 12e the third dungeon.
+
 Tasks:
 
 - Add a second and third dungeon above the Goblin Warrens, each with its own level range, enemies, boss, and loot tiers (designs drafted for the user's approval, one dungeon at a time).
 - New enemy roles and boss mechanics, readable and tested like the Warlord.
 - Stat potions and the account potion rack (D-089, D-075): potion dungeons roll the potion chance once per Luck point; drink at once or send to the rack; potions raise a stat up to the class max.
-- EXP from the new dungeons fits the approved curve (less EXP below a dungeon's range).
+- EXP from the new dungeons fits the approved curve (less EXP above a dungeon's range, D-071).
 
 Acceptance:
 

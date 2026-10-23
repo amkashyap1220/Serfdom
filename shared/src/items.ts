@@ -197,6 +197,15 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
+  // D-108: the first pool with T4, where extra rolls and Luck begin.
+  "goblin-stronghold": {
+    tiers: [
+      [2, 30],
+      [3, 45],
+      [4, 25],
+    ],
+    slots: SLOT_WEIGHTS,
+  },
   training: {
     tiers: [
       [0, 50],

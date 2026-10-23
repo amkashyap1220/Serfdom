@@ -1,4 +1,5 @@
 import type { DungeonLayout } from "./dungeon-layout.ts";
+import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
 import {
   DUMMY_POSITIONS,
@@ -59,6 +60,15 @@ export const DUNGEONS = [
     listed: true,
     layout: GOBLIN_WARRENS,
     generate: buildWarrens,
+  },
+  {
+    // D-108: opens once the serf has completed the Warrens (D-107).
+    id: "goblin-stronghold",
+    name: "Goblin Stronghold",
+    blurb: "Levels 9–12 · 5–7 min · opens after the Warrens",
+    listed: true,
+    layout: buildStronghold(0),
+    generate: buildStronghold,
   },
   {
     id: "training",

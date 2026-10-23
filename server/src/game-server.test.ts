@@ -1152,6 +1152,22 @@ async function clearOnce(c: TestClient, id: number, firstSeq: number) {
   return nextOfType(c, "runEnded");
 }
 
+describe("dungeon entry (D-107, D-108)", () => {
+  it("the Stronghold refuses a serf with no completion, even by a hand-made queue message", async () => {
+    const { client } = await joined();
+    client.send(encodeMessage({ type: "queue", dungeon: "goblin-stronghold" }));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "Complete the Goblin Warrens first.",
+    );
+    expect(server.isQueued(1)).toBe(false);
+    // One completion opens it (in tests the Training Yard stands in for
+    // the Warrens; real players cannot queue for it).
+    await clearOnce(client, 1, 0);
+    client.send(encodeMessage({ type: "queue", dungeon: "goblin-stronghold" }));
+    await until(() => server.isQueued(1));
+  });
+});
+
 describe("EXP and the leaderboard (8a)", () => {
   it("completion gives 100 EXP and level 2; the next clear adds 100 more", async () => {
     const { client } = await joined();

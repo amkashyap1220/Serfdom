@@ -342,6 +342,13 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Potion dungeons (not the Goblin Warrens) roll a stat-potion chance once per Luck point; a won potion is drunk at once by that serf or sent to the potion rack (D-089).
 - A character dying before completion receives no completion rewards.
 
+### Goblin Stronghold
+
+- Second tier of about five (D-108): the goblins' fortified home past the Warrens, aimed at levels 9–12, open once a serf has completed the Warrens (D-107).
+- Procedural like the Warrens: the Stronghold gate, then 6 combat rooms (light, three medium, two heavy), then the War hall; 0–2 optional side rooms. About 6 minutes solo for a level-9 serf.
+- Ordinary goblins in greater numbers; no general buff. Shamans (Phase 12b) strengthen goblins near them. Its own boss, the Goblin Warchief, arrives in 12c; the Warlord stands in until then.
+- Loot T2–T4 (the first T4 drops, so the first extra rolls and Luck items); EXP base 160 up to level 12.
+
 ## 11. Multiplayer and reward rules
 
 - Maximum party size: ten players (D-012; was four).
