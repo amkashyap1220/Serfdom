@@ -209,6 +209,8 @@ Acceptance:
 - Death and rewards match the confirmed rules.
 - A new Serf has 1 Luck, and Luck stays the same through every level and class choice.
 
+Status: **complete** (2026-10-23; user passed every 8a–8d checklist): every acceptance item is met for the rules confirmed so far: levels 1–4 classless and class at 5 (8b), cap and post-cap EXP with no stat gains past 20 (8a, 8c, 8d tests), permadeath with no completion rewards and the final EXP kept on the leaderboard (7b, 8a), Luck 1 that levels and classes never change (8d). Not in Phase 8 because the things they apply to do not exist yet: equipment loss on death, gold, the Resurrection Necklace, and Luck's chest count (Phase 9). Their death rules (open question 5) must be confirmed before Phase 9 implements item loss.
+
 ## Phase 9 — Equipment and rewards
 
 **Goal:** Establish a small equipment loop before expanding the catalogue.

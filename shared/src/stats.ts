@@ -235,3 +235,16 @@ export function combatFor(stats: Stats): PlayerCombat {
     regenPerSecond: stats.vitality / 20,
   };
 }
+
+/** Every serf's Luck before items (D-066): never changed by level or class. */
+export const BASE_LUCK = 1;
+
+/**
+ * Luck (D-065–D-068): the number of reward chests rolled after a completed
+ * dungeon. Base 1, plus each equipped item's Luck (+1 at most per item,
+ * never negative), no cap. Items arrive in Phase 9; until then every
+ * serf has 1.
+ */
+export function luckOf(equipped: readonly { luck: number }[] = []): number {
+  return equipped.reduce((sum, item) => sum + item.luck, BASE_LUCK);
+}

@@ -12,7 +12,7 @@ Keep this concise and update it after each meaningful milestone.
 - [ ] Phase 5 — Shared combat and enemies
 - [ ] Phase 6 — Dungeon vertical slice
 - [ ] Phase 7 — Account and persistent data
-- [ ] Phase 8 — Progression and permadeath
+- [x] Phase 8 — Progression and permadeath
 - [ ] Phase 9 — Equipment and rewards
 - [ ] Phase 10 — Classes and class abilities
 - [ ] Phase 11 — Dungeon variety and procedural assembly
@@ -285,3 +285,11 @@ Keep this concise and update it after each meaningful milestone.
 - Live (throwaway harness, **test** database): a level-20 Barbarian (HP 108, ATK 37, SPD 18, DEF 7) started the Warrens at 108/108 HP, moved 183 px in a ~1.01 s key hold (expected 180 px/s), and prediction correction stayed 0.00 px. Not checked live: two clients with different speeds, how hits and kills feel.
 - Next step: user runs the 8c-2 checklist; then the Phase 8 death rules review and Phase 8 acceptance.
 - User ran the 8c-2 checklist: all pass (2026-10-23). Committed and pushed 8c-2. Next: Phase 8 acceptance review.
+
+### Phase 8d — Luck, and the Phase 8 acceptance review — 2026-10-23
+
+- Committed 8c-2 as `b8615a4`. Reviewed the Phase 8 roadmap against the code: two gaps. (1) Luck (D-065–D-068) was confirmed but not in the code. (2) No test showed that stats stop at level 20.
+- 8d: shared `BASE_LUCK` and `luckOf`; Luck shown in the HUD and the Serfs tab; tests (base 1, +1 per Luck item, no cap, not a rolled stat so levels/classes never change it; a level-20 classed serf's clear adds EXP but zero stats). `npm run check`: 244 shared, 137 server, 47 client, build. Live (harness, **test** DB): HUD "LUCK 1", Serfs tab "… WIS 10 · LUCK 1".
+- Acceptance: met for every confirmed rule (see ROADMAP Phase 8 status). Deferred to Phase 9, where the things exist: equipment loss on death, gold, Resurrection Necklace, and one reward chest per Luck point; open question 5 (death inventory rules) needs the user's answer before item loss is built.
+- Next step: user runs the 8d checklist; then close Phase 8 and orient Phase 9 (equipment and rewards).
+- User ran the 8d checklist: all pass (2026-10-23). Phase 8 closed. Committed and pushed 8d. Next: orient Phase 9.

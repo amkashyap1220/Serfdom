@@ -3,6 +3,7 @@ import type { SerfSummary, ServerMessage } from "@serfdom/shared";
 import {
   className,
   FIRE_MODE_LABELS,
+  luckOf,
   rotateVec,
   STAT_KEYS,
   STAT_LABELS,
@@ -157,6 +158,8 @@ game.events.once(Phaser.Core.Events.READY, () => {
       ...STAT_KEYS.map(
         (key) => [STAT_LABELS[key], serf ? statText(serf, key) : "—"] as const,
       ),
+      // Reward chests per clear (D-068); items add to it from Phase 9.
+      ["LUCK", serf ? String(luckOf()) : "—"],
     ]);
   };
 

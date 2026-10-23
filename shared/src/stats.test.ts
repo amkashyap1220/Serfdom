@@ -4,6 +4,8 @@ import { PLAYER_HEALTH, PLAYER_REGEN, PLAYER_WEAPON } from "./combat-config.ts";
 import { PLAYER_SPEED } from "./movement-config.ts";
 import {
   applyGains,
+  BASE_LUCK,
+  luckOf,
   combatFor,
   classBonus,
   classTier,
@@ -166,5 +168,29 @@ describe("combat from stats (D-077, D-078)", () => {
       top.moveSpeed,
       top.regenPerSecond,
     ]).toEqual([87.5, 9, 337.5, 3]);
+  });
+});
+
+describe("Luck (D-065–D-068)", () => {
+  it("a serf has 1 Luck, plus +1 for each equipped Luck item, no cap", () => {
+    expect(BASE_LUCK).toBe(1);
+    expect(luckOf()).toBe(1);
+    expect(luckOf([{ luck: 1 }, { luck: 0 }, { luck: 1 }])).toBe(3);
+    expect(luckOf(Array.from({ length: 50 }, () => ({ luck: 1 })))).toBe(51);
+  });
+
+  it("is not a rolled stat, so levels and classes never change it", () => {
+    expect(STAT_KEYS as readonly string[]).not.toContain("luck");
+    let stats = { ...SERF_BASE };
+    for (let level = 2; level <= 20; level++) {
+      if (level === 6) stats = applyGains(stats, classBonus("rogue"), "rogue");
+      stats = applyGains(
+        stats,
+        rollLevelGains(stats, level, "rogue", () => 0.99),
+        "rogue",
+      );
+    }
+    expect(Object.keys(stats)).not.toContain("luck");
+    expect(luckOf()).toBe(1);
   });
 });

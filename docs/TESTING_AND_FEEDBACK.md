@@ -78,6 +78,16 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Luck checklist (Phase 8d)
+
+No restart needed beyond the usual reload (Ctrl+Shift+R); the protocol is unchanged (v13).
+
+1. HUD Serf section: a **LUCK 1** row under WIS.
+2. Serfs tab: each serf's stat line ends with "LUCK 1".
+3. A serf at level 5+ with a class, or at level 20: still LUCK 1 (levels and classes never change it, D-066).
+
+Report: pass/fail per step.
+
 ### Stats in combat checklist (Phase 8c-2)
 
 Restart `npm run dev` (protocol v13) and reload (Ctrl+Shift+R). Compare a fresh serf with a leveled one (psql: `update serfs set exp = 4465 where name = '<name>' and died_at is null;`, reload, choose a class if asked: level 20).

@@ -207,6 +207,26 @@ describe("stat rolls on level-up (D-074, D-075)", () => {
     expect(chosen.serf.stats.mp).toBe(before.serf.stats.mp + 2 + 2);
   });
 
+  it("at level 20 a clear still adds EXP but never stats (the cap)", async () => {
+    const { serfs, id } = await lucky(totalExpForLevel(20));
+    await serfs.choose(1, id);
+    const chosen = await serfs.chooseClass(1, id, "ranger");
+    if (!chosen.ok) throw new Error(chosen.reason);
+    expect(chosen.serf.level).toBe(20);
+    const r = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(r?.expGained).toBeGreaterThan(0);
+    expect(r?.serf.exp).toBe(totalExpForLevel(20) + (r?.expGained ?? 0));
+    expect(r?.statGains).toEqual(zeroStats());
+    expect(r?.serf.stats).toEqual(chosen.serf.stats);
+  });
+
   it("dying earns no stat gains", async () => {
     const { serfs, id } = await lucky(totalExpForLevel(2) - 1);
     const death = { dungeon: "goblin-warrens" as const, killedBy: "grunt" };

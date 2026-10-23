@@ -8,6 +8,7 @@ import {
   passwordProblem,
   CLASS_CHOICE_LEVEL,
   CLASS_IDS,
+  luckOf,
   STAT_KEYS,
   STAT_LABELS,
   statMax,
@@ -839,11 +840,13 @@ function expGain(
   return box;
 }
 
-/** "HP 23 · MP 12 · …"; a classed serf shows its maxes (D-075) too. */
+/** "HP 23 · MP 12 · … · LUCK 1"; a classed serf shows its maxes (D-075) too. */
 export function statLine(serf: SerfSummary): string {
-  return STAT_KEYS.map(
-    (key) => `${STAT_LABELS[key]} ${statText(serf, key)}`,
-  ).join(" · ");
+  return [
+    ...STAT_KEYS.map((key) => `${STAT_LABELS[key]} ${statText(serf, key)}`),
+    // No items yet (Phase 9), so every serf has the base Luck (D-066).
+    `LUCK ${luckOf()}`,
+  ].join(" · ");
 }
 
 /** One stat: "37", or "37/60" once the serf has a class max. */
