@@ -10,7 +10,10 @@ import {
   armorTypeName,
   abilityItemClass,
   CLASS_ABILITY_ITEM,
+  accessoryBase,
+  LOOT_POOLS,
   maxRoll,
+  rollFromPool,
   rollItem,
   rollsFor,
   itemValue,
@@ -33,6 +36,20 @@ function seeded(seed: number): () => number {
     return s / 2 ** 32;
   };
 }
+
+/** Items from T4 and up, where extra rolls begin (D-106). */
+const manyHigh = (n: number, seed = 7) => {
+  const random = seeded(seed);
+  const pool = {
+    tiers: [
+      [4, 1],
+      [7, 1],
+      [10, 1],
+    ] as const,
+    slots: LOOT_POOLS["goblin-warrens"].slots,
+  };
+  return Array.from({ length: n }, () => rollFromPool(pool, random));
+};
 
 const many = (n: number, seed = 7) => {
   const random = seeded(seed);
@@ -71,7 +88,7 @@ describe("item generation (D-080, D-083)", () => {
   });
 
   it("about 20% of rolls are negative and about 5% of rolled items carry Luck", () => {
-    const items = many(20000, 3);
+    const items = manyHigh(20000, 3);
     const rolls = items.flatMap((i) => i.rolls);
     expect(rolls.filter((r) => r.amount < 0).length / rolls.length).toBeCloseTo(
       0.2,
@@ -87,27 +104,92 @@ describe("item generation (D-080, D-083)", () => {
   });
 });
 
-describe("no empty drops (D-084)", () => {
-  it("a T0 ring, necklace, or cape has one roll; T0 weapons and armor none", () => {
+describe("base stats and extra rolls (D-106)", () => {
+  it("no item has extra rolls before T4; then 2, 3, 3, 4, 4, 5, 5", () => {
+    for (const slot of [
+      "weapon",
+      "ability",
+      "chest",
+      "ring",
+      "necklace",
+      "cape",
+    ] as const) {
+      expect(
+        Array.from({ length: 11 }, (_, t) => rollsFor(slot, t)),
+        slot,
+      ).toEqual([0, 0, 0, 0, 2, 3, 3, 4, 4, 5, 5]);
+    }
+    expect(many(20000, 5).every((i) => i.rolls.length === 0)).toBe(true);
+  });
+
+  it("an accessory's base is tier + 1, x3 for HP and MP: more every tier", () => {
     expect(
-      ["ring", "necklace", "cape"].map((s) => rollsFor(s as "ring", 0)),
-    ).toEqual([1, 1, 1]);
-    expect(rollsFor("weapon", 0)).toBe(0);
-    expect(rollsFor("chest", 0)).toBe(0);
-    expect(rollsFor("ring", 1)).toBe(1);
-    expect(rollsFor("cape", 10)).toBe(5);
-    const accessories = many(20000, 5).filter((i) => i.type === null);
-    expect(accessories.length).toBeGreaterThan(0);
-    expect(accessories.every((i) => i.rolls.length >= 1)).toBe(true);
+      Array.from({ length: 11 }, (_, t) => accessoryBase("defense", t)),
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(accessoryBase("hp", 0)).toBe(3);
+    expect(accessoryBase("mp", 10)).toBe(33);
+  });
+
+  it("extra rolls are at most +3 (+9 HP and MP) and always below the base", () => {
+    expect(maxRoll("speed")).toBe(3);
+    expect(maxRoll("hp")).toBe(9);
+    for (const stat of ["hp", "attack"] as const) {
+      expect(accessoryBase(stat, 4)).toBeGreaterThan(maxRoll(stat));
+    }
+  });
+
+  it("rings, necklaces, and capes all get a base stat (never Luck) and never roll it", () => {
+    const accessories = [...many(20000, 5), ...manyHigh(20000, 9)].filter((i) =>
+      ["ring", "necklace", "cape"].includes(i.slot),
+    );
+    expect(new Set(accessories.map((i) => i.slot)).size).toBe(3);
+    expect(new Set(accessories.map((i) => i.type)).size).toBe(8);
+    for (const item of accessories) {
+      expect(item.rolls.some((r) => r.stat === item.type)).toBe(false);
+      expect(isValidItemSpec(item)).toBe(true);
+    }
+    for (const item of manyHigh(5000, 11)) {
+      expect(isValidItemSpec(item)).toBe(true);
+    }
+  });
+
+  it("a T5 Ring of Defense gives +6 DEF, plus its rolls", () => {
+    const ring: ItemSpec = {
+      slot: "ring",
+      type: "defense",
+      tier: 5,
+      rolls: [
+        { stat: "speed", amount: 3 },
+        { stat: "hp", amount: -4 },
+        { stat: "wisdom", amount: 1 },
+      ],
+      luck: 0,
+    };
+    expect(itemName(ring)).toBe("T5 Ring of Defense");
+    expect(itemBonus(ring)).toMatchObject({
+      defense: 6,
+      speed: 3,
+      hp: -4,
+      wisdom: 1,
+    });
+    expect(
+      itemName({ ...ring, slot: "cape", type: "hp", tier: 0, rolls: [] }),
+    ).toBe("T0 Cape of HP");
+    expect(
+      itemBonus({ ...ring, slot: "necklace", type: "mp", rolls: [] }).mp,
+    ).toBe(18);
   });
 });
 
 describe("item validation refuses what the server would never roll", () => {
   const ok: ItemSpec = {
     slot: "ring",
-    type: null,
-    tier: 1,
-    rolls: [{ stat: "attack", amount: 2 }],
+    type: "defense",
+    tier: 4,
+    rolls: [
+      { stat: "attack", amount: 2 },
+      { stat: "speed", amount: -1 },
+    ],
     luck: 1,
   };
   it("accepts a real item", () => expect(isValidItemSpec(ok)).toBe(true));
@@ -118,13 +200,35 @@ describe("item validation refuses what the server would never roll", () => {
       "Luck with no rolls",
       { slot: "weapon", type: "bow", tier: 0, rolls: [], luck: 1 },
     ],
-    ["a T0 accessory with no roll", { ...ok, tier: 0, rolls: [], luck: 0 }],
-    ["too many rolls", { ...ok, rolls: [ok.rolls[0]!, ok.rolls[0]!] }],
-    ["a roll too big", { ...ok, rolls: [{ stat: "attack", amount: 3 }] }],
-    ["a zero roll", { ...ok, rolls: [{ stat: "attack", amount: 0 }] }],
-    ["a fractional roll", { ...ok, rolls: [{ stat: "attack", amount: 1.5 }] }],
-    ["an unknown stat", { ...ok, rolls: [{ stat: "luck", amount: 1 }] }],
+    ["too many rolls", { ...ok, rolls: [...ok.rolls, ok.rolls[0]!] }],
+    ["a roll below T4", { ...ok, tier: 3 }],
+    [
+      "a roll above +3",
+      { ...ok, rolls: [ok.rolls[1]!, { stat: "attack", amount: 4 }] },
+    ],
+    [
+      "an HP roll above +9",
+      { ...ok, rolls: [ok.rolls[1]!, { stat: "hp", amount: 10 }] },
+    ],
+    [
+      "a zero roll",
+      { ...ok, rolls: [ok.rolls[1]!, { stat: "attack", amount: 0 }] },
+    ],
+    [
+      "a fractional roll",
+      { ...ok, rolls: [ok.rolls[1]!, { stat: "attack", amount: 1.5 }] },
+    ],
+    [
+      "an unknown stat",
+      { ...ok, rolls: [ok.rolls[1]!, { stat: "luck", amount: 1 }] },
+    ],
+    [
+      "a ring rolling its own base stat",
+      { ...ok, rolls: [ok.rolls[1]!, { stat: "defense", amount: 2 }] },
+    ],
     ["tier 11", { ...ok, tier: 11 }],
+    ["a ring with no base stat", { ...ok, type: null }],
+    ["a Ring of Luck", { ...ok, type: "luck" }],
     ["a type on a ring", { ...ok, type: "plate" }],
     ["a weapon without a type", { ...ok, slot: "weapon", type: null }],
     ["armor with a weapon type", { ...ok, slot: "chest", type: "bow" }],
@@ -132,9 +236,12 @@ describe("item validation refuses what the server would never roll", () => {
     expect(isValidItemSpec(item as ItemSpec)).toBe(false),
   );
   it("HP and MP rolls may be three times bigger", () => {
-    expect(maxRoll("hp", 1)).toBe(6);
+    expect(maxRoll("hp")).toBe(9);
     expect(
-      isValidItemSpec({ ...ok, rolls: [{ stat: "hp", amount: -6 }] }),
+      isValidItemSpec({
+        ...ok,
+        rolls: [ok.rolls[1]!, { stat: "hp", amount: -9 }],
+      }),
     ).toBe(true);
   });
 });
@@ -188,9 +295,9 @@ describe("what items give and who may wear them (D-081, D-083)", () => {
     };
     const ring: ItemSpec = {
       slot: "ring",
-      type: null,
+      type: "hp",
       tier: 2,
-      rolls: [{ stat: "hp", amount: 3 }],
+      rolls: [],
       luck: 0,
     };
     expect(canEquip(wand, "wizard")).toBe(true);
@@ -250,19 +357,19 @@ describe("what items give and who may wear them (D-081, D-083)", () => {
     expect(
       itemName({
         slot: "ring",
-        type: null,
+        type: "hp",
         tier: 0,
-        rolls: [{ stat: "hp", amount: 1 }],
+        rolls: [],
         luck: 0,
       }),
-    ).toBe("T0 Ring");
+    ).toBe("T0 Ring of HP");
   });
 });
 
 describe("item values (D-087, D-090)", () => {
   const at = (tier: number, luck = 0): ItemSpec => ({
     slot: "ring",
-    type: null,
+    type: "defense",
     tier,
     rolls: Array.from({ length: rollsFor("ring", tier) }, () => ({
       stat: "hp" as const,
@@ -395,12 +502,13 @@ describe("ability items (D-092, D-096)", () => {
       );
     }
   });
-  it("are named after GDD §4 and roll like weapons (T0 none)", () => {
+  it("are named after GDD §4 and roll like weapons (none before T4)", () => {
     expect(itemName(book)).toBe("T0 Spellbook");
     expect(itemName({ ...book, type: "warhorn" })).toBe("T0 War Horn");
     expect(abilityItemClass({ ...book, type: "totem" })).toBe("druid");
     expect(rollsFor("ability", 0)).toBe(0);
-    expect(rollsFor("ability", 3)).toBe(2);
+    expect(rollsFor("ability", 3)).toBe(0);
+    expect(rollsFor("ability", 4)).toBe(2);
     expect(isValidItemSpec(book)).toBe(true);
     expect(isValidItemSpec({ ...book, type: "wand" })).toBe(false);
     expect(isValidItemSpec({ ...book, type: null })).toBe(false);

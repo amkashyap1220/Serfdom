@@ -271,6 +271,7 @@ Prior accessories:
 
 - Rings, necklaces, capes.
 - Stat variants based on HP, MP, Attack, Dexterity, Speed, Defense, Vitality, and Wisdom.
+- CONFIRMED (D-106): each ring, necklace, and cape has one of those as its **base stat** ("T5 Ring of Defense"), worth tier + 1 (×3 for HP and MP); never Luck. Any class can wear any of them.
 
 Equipment restrictions and class proficiencies were previously drafted but are not final unless confirmed in the decision log.
 
@@ -281,7 +282,7 @@ Prior draft:
 - Ordinary gear tiers T0–T10.
 - Artifacts are a separate special category with unique fixed effects.
 - Item stats may be randomized independently from the fixed Artifact effect.
-- T0 has zero stat rolls; intermediate tiers gain rolls progressively; T10 has five rolls.
+- Extra stat rolls start at T4 on every item (none at T0–T3), then 2, 3, 3, 4, 4, 5, 5 for T4–T10; each at most +3 (+9 HP and MP), always below an accessory's base (D-106).
 - Stat modifiers may be positive or negative, **except Luck**: an item's Luck modifier is always exactly +1, at most one per item, never negative (D-067).
 - Shiny chance was proposed at 1/2,000, independent of tier and stat rolls.
 - Shiny status does not automatically grant an Artifact effect; Artifacts can also be Shiny.

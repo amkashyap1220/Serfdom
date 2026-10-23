@@ -6,7 +6,13 @@ import {
   type AccountRepo,
 } from "../auth/account-repo.ts";
 import { AccountService } from "../auth/account-service.ts";
-import { newRunStats, SERF_BASE, type ServerMessage } from "@serfdom/shared";
+import { readFile } from "node:fs/promises";
+import {
+  isValidItemSpec,
+  newRunStats,
+  SERF_BASE,
+  type ServerMessage,
+} from "@serfdom/shared";
 import {
   MemorySerfRepo,
   PgSerfRepo,
@@ -39,9 +45,9 @@ describe("items in PostgreSQL", () => {
     if (typeof serf === "string") throw new Error(serf);
     const cape = {
       slot: "cape" as const,
-      type: null,
+      type: "speed" as const,
       tier: 0,
-      rolls: [{ stat: "speed" as const, amount: 1 }],
+      rolls: [],
       luck: 0,
     };
     await repo.addLoot(acc.id, serf.id, [cape], 20);
@@ -74,6 +80,79 @@ describe("migrations", () => {
     ).rows.map((r) => r.name);
     expect(names).toContain("001_accounts.sql");
     expect(await migrate(pool)).toEqual([]);
+  });
+
+  it("009 brings items rolled under the old rules in line with D-106", async () => {
+    const accounts = new PgAccountRepo(pool);
+    const acc = await accounts.createAccount("old-items@b.co", "h");
+    if (acc === "taken") throw new Error("taken");
+    // Old shapes, written directly: accessories had no base stat and a roll
+    // even at T0; rolls came in below T4 and grew with the tier.
+    const old = [
+      ["ring", null, 0, [{ stat: "hp", amount: 1 }], 1],
+      ["cape", null, 2, [{ stat: "speed", amount: 3 }], 0],
+      [
+        "necklace",
+        null,
+        7,
+        [
+          { stat: "attack", amount: 8 },
+          { stat: "hp", amount: -20 },
+          { stat: "defense", amount: 1 },
+          { stat: "mp", amount: 5 },
+        ],
+        1,
+      ],
+      ["weapon", "bow", 2, [{ stat: "dexterity", amount: 3 }], 1],
+      [
+        "chest",
+        "plate",
+        6,
+        [
+          { stat: "vitality", amount: -7 },
+          { stat: "wisdom", amount: 2 },
+          { stat: "hp", amount: 21 },
+        ],
+        0,
+      ],
+    ] as const;
+    for (const [slot, type, tier, rolls, luck] of old) {
+      await pool.query(
+        `insert into items (account_id, location, slot, type, tier, rolls, luck)
+         values ($1, 'stash', $2, $3, $4, $5, $6)`,
+        [acc.id, slot, type, tier, JSON.stringify(rolls), luck],
+      );
+    }
+    const sql = await readFile(
+      new URL("../../migrations/009_accessory_bases.sql", import.meta.url),
+      "utf8",
+    );
+    await pool.query(sql);
+    const stash = await new PgSerfRepo(pool).stash(acc.id);
+    expect(stash.items).toHaveLength(old.length);
+    for (const item of stash.items) {
+      expect(isValidItemSpec(item), JSON.stringify(item)).toBe(true);
+    }
+    const bySlot = Object.fromEntries(stash.items.map((i) => [i.slot, i]));
+    // Below T4: rolls and Luck gone. Accessories gained a base stat.
+    expect(bySlot.ring).toMatchObject({ rolls: [], luck: 0 });
+    expect(bySlot.weapon).toMatchObject({ type: "bow", rolls: [], luck: 0 });
+    // T4 and up: the same rolls, capped at 3 (9 for HP and MP), Luck kept.
+    expect(bySlot.necklace?.rolls).toEqual([
+      { stat: "attack", amount: 3 },
+      { stat: "hp", amount: -9 },
+      { stat: "defense", amount: 1 },
+      { stat: "mp", amount: 5 },
+    ]);
+    expect(bySlot.necklace?.luck).toBe(1);
+    expect(["attack", "hp", "defense", "mp"]).not.toContain(
+      bySlot.necklace?.type,
+    );
+    expect(bySlot.chest?.rolls).toEqual([
+      { stat: "vitality", amount: -3 },
+      { stat: "wisdom", amount: 2 },
+      { stat: "hp", amount: 9 },
+    ]);
   });
 
   it("created the account, serf, and item tables", async () => {
@@ -199,9 +278,12 @@ describe("accounts in PostgreSQL", () => {
 
 const RING = {
   slot: "ring" as const,
-  type: null,
-  tier: 2,
-  rolls: [{ stat: "hp" as const, amount: -7 }],
+  type: "defense" as const,
+  tier: 4,
+  rolls: [
+    { stat: "hp" as const, amount: -7 },
+    { stat: "speed" as const, amount: 1 },
+  ],
   luck: 1,
 };
 
@@ -479,11 +561,11 @@ function serfContract(
       const drops = (await repo.addLoot(a, serf.id, [RING, RING], 1)) ?? [];
       const kept = drops[0]!.item;
       const waiting = drops[1]!.item;
-      // T2 ring with +1 Luck: value 5 × 9 × 1.5 = 67.5, sells for 33.
-      expect(await repo.sell(a, kept.id, 1)).toEqual({ price: 33 });
+      // T4 ring with +1 Luck: value 5 × 25 × 1.5 = 187.5, sells for 93.
+      expect(await repo.sell(a, kept.id, 1)).toEqual({ price: 93 });
       expect(await repo.sell(a, kept.id, 1)).toBeNull(); // only once
       const after = await repo.stash(a);
-      expect(after.gold).toBe(33);
+      expect(after.gold).toBe(93);
       expect(after.items.map((i) => i.id)).toEqual([waiting.id]);
       expect(after.pending).toEqual([]);
       expect(await repo.hasPending(a, serf.id)).toBe(false);
@@ -494,8 +576,8 @@ function serfContract(
       // A pending reward itself can be sold too.
       const more = (await repo.addLoot(a, serf.id, [RING], 1)) ?? [];
       expect(more[0]?.pending).toBe(true);
-      expect(await repo.sell(a, more[0]!.item.id, 1)).toEqual({ price: 33 });
-      expect((await repo.stash(a)).gold).toBe(66);
+      expect(await repo.sell(a, more[0]!.item.id, 1)).toEqual({ price: 93 });
+      expect((await repo.stash(a)).gold).toBe(186);
     });
 
     it("a death keeps the stash, gold, and pending rewards (D-079, D-085)", async () => {

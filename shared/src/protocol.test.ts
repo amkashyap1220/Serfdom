@@ -5,9 +5,12 @@ import type { ItemSpec } from "./items.ts";
 
 const RING: ItemSpec = {
   slot: "ring",
-  type: null,
-  tier: 1,
-  rolls: [{ stat: "attack", amount: 2 }],
+  type: "defense",
+  tier: 4,
+  rolls: [
+    { stat: "attack", amount: 2 },
+    { stat: "speed", amount: -1 },
+  ],
   luck: 1,
 };
 import {

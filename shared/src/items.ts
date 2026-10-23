@@ -9,7 +9,7 @@ import { STAT_KEYS, zeroStats, type StatKey, type Stats } from "./stats.ts";
  * weapons and armor (D-081), one chest is one item (D-080), a serf carries
  * only what it has equipped and loses it on death (D-079, D-085), the rest
  * lives in the account's stash (D-085–D-088), Luck +1 at most and never
- * negative (D-067). The numbers are D-083, D-084, D-090 (approved, tunable). Items are rolled only
+ * negative (D-067). The numbers are D-083, D-090, D-106 (approved, tunable). Items are rolled only
  * by the server; these rules are shared so the client can show and check
  * them, never to create items.
  */
@@ -73,6 +73,10 @@ export type ItemSlot = (typeof ITEM_SLOTS)[number];
 export const ARMOR_SLOTS = ["head", "chest", "legs", "gloves"] as const;
 export type ArmorSlot = (typeof ARMOR_SLOTS)[number];
 
+/** Rings, necklaces, capes: any class wears them (D-081). */
+export const ACCESSORY_SLOTS = ["ring", "necklace", "cape"] as const;
+export type AccessorySlot = (typeof ACCESSORY_SLOTS)[number];
+
 /** Where a serf wears things (D-082). */
 export const EQUIP_SLOTS = [
   "weapon",
@@ -89,19 +93,16 @@ export const EQUIP_SLOTS = [
 export type EquipSlot = (typeof EQUIP_SLOTS)[number];
 
 export const MAX_TIER = 10;
-/** Stat rolls per tier T0–T10 (D-083: T0 none, T10 five). */
-export const ROLLS_PER_TIER = [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5] as const;
-
 /**
- * Rolls an item of this slot and tier has: the tier's count, except that
- * accessories (no base value) always have at least one, so no drop is
- * empty (D-084).
+ * Extra stat rolls per tier T0–T10 (D-106): none before T4, then D-083's
+ * counts, up to five at T10. Every item has a base (damage, armor, an
+ * accessory's stat), so no drop is empty without them.
  */
-export function rollsFor(slot: ItemSlot, tier: number): number {
-  const count = ROLLS_PER_TIER[tier] ?? 0;
-  return slot === "weapon" || slot === "ability" || isArmorSlot(slot)
-    ? count
-    : Math.max(1, count);
+export const ROLLS_PER_TIER = [0, 0, 0, 0, 2, 3, 3, 4, 4, 5, 5] as const;
+
+/** Rolls an item of this tier has (the same for every slot, D-106). */
+export function rollsFor(_slot: ItemSlot, tier: number): number {
+  return ROLLS_PER_TIER[tier] ?? 0;
 }
 export const NEGATIVE_ROLL_CHANCE = 0.2;
 /** Chance of +1 Luck on an item with at least one roll. */
@@ -118,8 +119,12 @@ export interface StatRoll {
 /** An item as rolled: everything but where it is. */
 export interface ItemSpec {
   slot: ItemSlot;
-  /** Weapon, armor, or ability item type; null for accessories. */
-  type: WeaponType | ArmorType | AbilityItemType | null;
+  /**
+   * Weapon, armor, or ability item type; for an accessory, its base stat
+   * ("a Ring of Defense", D-106). Null is never valid; it stays in the
+   * type only because untrusted input is checked by isValidItemSpec.
+   */
+  type: WeaponType | ArmorType | AbilityItemType | StatKey | null;
   tier: number;
   rolls: StatRoll[];
   /** 0 or +1 (D-067): never negative, never more than one. */
@@ -161,7 +166,7 @@ export const CLASS_GEAR: Record<
   sorcerer: { weapons: ["wand", "staff"], armor: "cloth" },
 };
 
-interface LootPool {
+export interface LootPool {
   tiers: readonly (readonly [tier: number, weight: number])[];
   slots: readonly (readonly [slot: ItemSlot, weight: number])[];
 }
@@ -207,9 +212,21 @@ export function weaponDamage(tier: number | null): number {
   return tier === null ? PLAYER_WEAPON.damage : 27 + 4 * tier;
 }
 
-/** Largest size of one roll on an item of `tier` (HP and MP roll ×3). */
-export function maxRoll(stat: StatKey, tier: number): number {
-  return (tier + 1) * (stat === "hp" || stat === "mp" ? 3 : 1);
+/** HP and MP come in bigger numbers: their rolls and bases are ×3. */
+const statScale = (stat: StatKey): number =>
+  stat === "hp" || stat === "mp" ? 3 : 1;
+
+/** Largest size of one extra roll on any item: 3, or 9 for HP and MP (D-106). */
+export function maxRoll(stat: StatKey): number {
+  return 3 * statScale(stat);
+}
+
+/**
+ * An accessory's guaranteed base: tier + 1 (×3 for HP and MP), so every
+ * tier gives more than the last and the base beats any roll (D-106).
+ */
+export function accessoryBase(stat: StatKey, tier: number): number {
+  return (tier + 1) * statScale(stat);
 }
 
 /** A whole number in [min, max] from a random() in [0, 1). */
@@ -240,7 +257,11 @@ function pick<T>(list: readonly T[], random: () => number): T {
 
 /** One chest's item from the dungeon's pool (D-080). Server only. */
 export function rollItem(dungeon: DungeonId, random: () => number): ItemSpec {
-  const pool = LOOT_POOLS[dungeon];
+  return rollFromPool(LOOT_POOLS[dungeon], random);
+}
+
+/** One item from any pool (tests use pools with higher tiers). */
+export function rollFromPool(pool: LootPool, random: () => number): ItemSpec {
   const tier = pickWeighted(pool.tiers, random);
   const slot = pickWeighted(pool.slots, random);
   const type =
@@ -250,11 +271,15 @@ export function rollItem(dungeon: DungeonId, random: () => number): ItemSpec {
         ? pick(ABILITY_ITEM_TYPES, random) // any class's (D-096)
         : isArmorSlot(slot)
           ? pick(ARMOR_TYPES, random)
-          : null;
+          : pick(STAT_KEYS, random); // an accessory's base stat
+  // An accessory's extra rolls are other stats than its base (D-106).
+  const rollable = isAccessorySlot(slot)
+    ? STAT_KEYS.filter((k) => k !== type)
+    : STAT_KEYS;
   const rolls: StatRoll[] = [];
   for (let i = 0; i < rollsFor(slot, tier); i++) {
-    const stat = pick(STAT_KEYS, random);
-    const size = between(1, maxRoll(stat, tier), random);
+    const stat = pick(rollable, random);
+    const size = between(1, maxRoll(stat), random);
     rolls.push({
       stat,
       amount: random() < NEGATIVE_ROLL_CHANCE ? -size : size,
@@ -268,9 +293,20 @@ export function isArmorSlot(slot: ItemSlot): slot is ArmorSlot {
   return (ARMOR_SLOTS as readonly string[]).includes(slot);
 }
 
-/** What an item adds to its wearer's stats: armor base plus its rolls. */
+export function isAccessorySlot(slot: ItemSlot): slot is AccessorySlot {
+  return (ACCESSORY_SLOTS as readonly string[]).includes(slot);
+}
+
+function isStatKey(v: unknown): v is StatKey {
+  return (STAT_KEYS as readonly unknown[]).includes(v);
+}
+
+/** What an item adds to its wearer's stats: its base (armor, accessory) plus its rolls. */
 export function itemBonus(item: ItemSpec): Stats {
   const bonus = zeroStats();
+  if (isAccessorySlot(item.slot) && isStatKey(item.type)) {
+    bonus[item.type] += accessoryBase(item.type, item.tier);
+  }
   if (isArmorSlot(item.slot)) {
     if (item.type === "plate") bonus.defense += 1 + item.tier;
     if (item.type === "leather") bonus.defense += item.tier;
@@ -316,7 +352,19 @@ const ARMOR_NAMES: Record<ArmorType, Record<ArmorSlot, string>> = {
 
 const ACCESSORY_NAMES = { ring: "Ring", necklace: "Necklace", cape: "Cape" };
 
-/** "T1 Wand", "T2 Robe", "T0 Gauntlets", "T0 Ring". */
+/** Accessory names spell out the base stat: "Ring of Defense". */
+const BASE_STAT_NAMES: Record<StatKey, string> = {
+  hp: "HP",
+  mp: "MP",
+  attack: "Attack",
+  dexterity: "Dexterity",
+  speed: "Speed",
+  defense: "Defense",
+  vitality: "Vitality",
+  wisdom: "Wisdom",
+};
+
+/** "T1 Wand", "T2 Robe", "T0 Gauntlets", "T5 Ring of Defense". */
 export function itemName(item: ItemSpec): string {
   return `T${item.tier} ${pieceName(item)}`;
 }
@@ -327,7 +375,8 @@ function pieceName(item: ItemSpec): string {
   if (isArmorSlot(item.slot)) {
     return ARMOR_NAMES[item.type as ArmorType][item.slot];
   }
-  return ACCESSORY_NAMES[item.slot];
+  const base = isStatKey(item.type) ? ` of ${BASE_STAT_NAMES[item.type]}` : "";
+  return `${ACCESSORY_NAMES[item.slot]}${base}`;
 }
 
 /** "War Horn", "Spellbook", …: the class's item name from GDD §4. */
@@ -359,9 +408,10 @@ function capitalize(word: string): string {
 
 /**
  * Whether `v` is an item the server could have rolled: the right type for
- * its slot, a tier in range, exactly that tier's number of rolls, each
- * whole, non-zero, and within the tier's size, and Luck 0 or (with at
- * least one roll) 1. Untrusted input goes through this (D-067).
+ * its slot (an accessory's is its base stat), a tier in range, exactly
+ * that tier's number of rolls, each whole, non-zero, at most +3 (+9 HP and
+ * MP) and, on an accessory, not its base stat, and Luck 0 or (with at
+ * least one roll) 1. Untrusted input goes through this (D-067, D-106).
  */
 export function isValidItemSpec(v: ItemSpec): boolean {
   if (!(ITEM_SLOTS as readonly string[]).includes(v.slot)) return false;
@@ -375,14 +425,15 @@ export function isValidItemSpec(v: ItemSpec): boolean {
         ? (ABILITY_ITEM_TYPES as readonly unknown[]).includes(v.type)
         : isArmorSlot(v.slot)
           ? (ARMOR_TYPES as readonly unknown[]).includes(v.type)
-          : v.type === null;
+          : isStatKey(v.type);
   if (!typeOk) return false;
   if (v.rolls.length !== rollsFor(v.slot, v.tier)) return false;
   for (const roll of v.rolls) {
     if (!(STAT_KEYS as readonly string[]).includes(roll.stat)) return false;
     const size = Math.abs(roll.amount);
     if (!Number.isInteger(roll.amount) || size < 1) return false;
-    if (size > maxRoll(roll.stat, v.tier)) return false;
+    if (size > maxRoll(roll.stat)) return false;
+    if (isAccessorySlot(v.slot) && roll.stat === v.type) return false;
   }
   if (v.luck !== 0 && v.luck !== 1) return false;
   return v.luck === 0 || v.rolls.length > 0;

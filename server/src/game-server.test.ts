@@ -1263,9 +1263,9 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     const serfId = (await clearOnce(client, 1, 0)).serf!.id;
     const cape = {
       slot: "cape" as const,
-      type: null,
+      type: "hp" as const,
       tier: 0,
-      rolls: [{ stat: "hp" as const, amount: 1 }],
+      rolls: [],
       luck: 0,
     };
     // Account 1 (the first registered): the first clear left 1 item; fill the rest.
@@ -1313,9 +1313,9 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     const serfId = await createSerf(client);
     const cape = {
       slot: "cape" as const,
-      type: null,
+      type: "hp" as const,
       tier: 0,
-      rolls: [{ stat: "hp" as const, amount: 1 }],
+      rolls: [],
       luck: 0,
     };
     await repo.addLoot(1, serfId, Array(STASH_SIZE).fill(cape), STASH_SIZE);
@@ -1372,9 +1372,9 @@ describe("equipping over the network (9b)", () => {
     const serfId = 1; // the first serf in a fresh repo
     const ring = {
       slot: "ring" as const,
-      type: null,
+      type: "speed" as const,
       tier: 1,
-      rolls: [{ stat: "speed" as const, amount: 2 }],
+      rolls: [],
       luck: 0,
     };
     const [drop] = (await repo.addLoot(1, serfId, [ring], STASH_SIZE)) ?? [];

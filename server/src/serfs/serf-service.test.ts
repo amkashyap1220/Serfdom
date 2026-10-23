@@ -302,9 +302,9 @@ describe("reward chests (D-065, D-068, D-080, D-086)", () => {
     if (!made.ok) throw new Error(made.reason);
     const cape = {
       slot: "cape" as const,
-      type: null,
+      type: "hp" as const,
       tier: 0,
-      rolls: [{ stat: "hp" as const, amount: 1 }],
+      rolls: [],
       luck: 0,
     };
     await repo.addLoot(
@@ -379,9 +379,12 @@ describe("equipping (9b, D-081, D-086)", () => {
   });
   const luckyRing: ItemSpec = {
     slot: "ring",
-    type: null,
-    tier: 1,
-    rolls: [{ stat: "hp", amount: 2 }],
+    type: "attack",
+    tier: 4,
+    rolls: [
+      { stat: "hp", amount: 2 },
+      { stat: "wisdom", amount: 1 },
+    ],
     luck: 1,
   };
 
@@ -401,7 +404,7 @@ describe("equipping (9b, D-081, D-086)", () => {
       slot: "weapon",
       type: "bow",
       tier: 1,
-      rolls: [{ stat: "hp", amount: 1 }],
+      rolls: [],
       luck: 0,
     };
     const { serfs, id, ids } = await withItems(
@@ -415,7 +418,7 @@ describe("equipping (9b, D-081, D-086)", () => {
     });
     expect(await serfs.equip(1, id, ids[2]!, "cape")).toEqual({
       ok: false,
-      reason: "A T1 Ring does not go there.",
+      reason: "A T4 Ring of Attack does not go there.",
     });
     expect(await serfs.equip(1, id, 999, "cape")).toEqual({
       ok: false,
@@ -459,9 +462,9 @@ describe("equipping (9b, D-081, D-086)", () => {
     await serfs.equip(1, id, ids[0]!, "ring1");
     const cape: ItemSpec = {
       slot: "cape",
-      type: null,
+      type: "hp",
       tier: 0,
-      rolls: [{ stat: "hp", amount: 1 }],
+      rolls: [],
       luck: 0,
     };
     await repo.addLoot(1, id, Array(STASH_SIZE).fill(cape), STASH_SIZE);

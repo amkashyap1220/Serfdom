@@ -78,6 +78,17 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Accessory base stats checklist (D-106)
+
+Restart `npm run dev` (the server applies migration 009 at start; check its log says `database migrated: 009_accessory_bases.sql`) and reload.
+
+1. Open the Stash: every ring, necklace, and cape is named after its base stat ("T0 Ring of Speed", "T1 Cape of HP") and shows its base under the name (+1 SPD, +6 HP …).
+2. Clear the Warrens a few times: new rings, necklaces, and capes show a base; T0 gives +1 (HP/MP +3), T1 +2 (+6), T2 +3 (+9). No item from the Warrens has extra rolls or +1 LUCK any more (those start at T4).
+3. Equip a ring: hover first; the comparison shows its base stat going up. After equipping, the HUD stat (for example DEF) rises by the base.
+4. Any class (and a classless Serf) can equip any ring, necklace, or cape.
+
+Report: pass/fail per step, and the item name and numbers if anything looks wrong.
+
 ### Warrens room pool checklist (Phase 11b)
 
 Restart `npm run dev` and reload (no protocol change). Play several Warrens runs (note each seed).
