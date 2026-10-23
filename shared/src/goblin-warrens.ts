@@ -1,4 +1,12 @@
 import {
+  OPPOSITE,
+  pieceHp,
+  RoomAssembly,
+  type RoomPiece,
+  type Side,
+} from "./dungeon-gen.ts";
+import {
+  validateLayout,
   wallsAroundRooms,
   type DoorDef,
   type DungeonLayout,
@@ -6,6 +14,7 @@ import {
   type RoomDef,
 } from "./dungeon-layout.ts";
 import type { EnemyKind } from "./enemy-config.ts";
+import { pick, randomInt, seededRandom, shuffled } from "./seeded-random.ts";
 
 /*
  * Goblin Warrens v0 (T-029, Phase 6b). PROVISIONAL layout and encounter
@@ -209,3 +218,154 @@ export const GOBLIN_WARRENS: DungeonLayout = {
   doors,
   exitPortal: { x: 3780, y: 1000 },
 };
+
+/*
+ * Procedural Warrens (D-104, Phase 11a). Every run builds its own Warrens
+ * from the rooms above, used as pieces, under these rules:
+ * - Entrance first, the Warlord's throne last (portal where the Warlord
+ *   stands); each door opens when the room before it is cleared.
+ * - Main path: 4 combat rooms ramping light → medium → medium → heavy, with
+ *   12,500–15,000 solo HP required, Warlord included (3–5 min, D-047).
+ * - The path runs east, north, or south; it never turns back west.
+ * - 0–2 optional side rooms (light or medium) branch off combat rooms.
+ * Seed 0 is the handcrafted layout above, kept as a fixed fixture.
+ */
+
+export type RoomBand = "light" | "medium" | "heavy";
+
+export const WARRENS_RULES = {
+  mainPath: ["light", "medium", "medium", "heavy"] as readonly RoomBand[],
+  requiredHp: { min: 12_500, max: 15_000 },
+  sideRooms: { min: 0, max: 2 },
+  sideBands: ["light", "medium"] as readonly RoomBand[],
+  /** Main-path turns: east twice as likely as north or south. */
+  turnWeights: { east: 2, north: 1, south: 1 },
+} as const;
+
+const asPiece = (id: string, name?: string): RoomPiece => {
+  const room = rooms.find((r) => r.id === id);
+  if (!room) throw new RangeError(`no Warrens room ${id}`);
+  const { x, y, width, height } = room.bounds;
+  return {
+    key: id,
+    name: name ?? room.name,
+    width,
+    height,
+    waves: room.waves.map((wave) =>
+      wave.map((s) => ({ kind: s.kind, at: { x: s.at.x - x, y: s.at.y - y } })),
+    ),
+  };
+};
+
+const ENTRANCE = asPiece("entrance");
+const THRONE = asPiece("throne");
+
+/**
+ * The combat pieces and their bands. The Guard room counts as medium
+ * (PROVISIONAL, D-104): with it as heavy no main path reached the HP band.
+ */
+export const WARRENS_PIECES: readonly { piece: RoomPiece; band: RoomBand }[] = [
+  { piece: asPiece("tunnel"), band: "light" },
+  { piece: asPiece("camp"), band: "medium" },
+  { piece: asPiece("den", "Goblin den"), band: "medium" },
+  { piece: asPiece("guard"), band: "medium" },
+  { piece: asPiece("ambush"), band: "heavy" },
+];
+
+const ofBand = (band: RoomBand) =>
+  WARRENS_PIECES.filter((p) => p.band === band).map((p) => p.piece);
+
+/** Whole-layout attempts before falling back (never expected; tested). */
+const ATTEMPTS = 50;
+
+/** The Goblin Warrens for `seed`: the same seed always builds the same map. */
+export function buildWarrens(seed: number): DungeonLayout {
+  if (seed === 0) return GOBLIN_WARRENS;
+  const random = seededRandom(seed);
+  for (let i = 0; i < ATTEMPTS; i++) {
+    const layout = tryWarrens(random);
+    if (layout && validateLayout(layout).length === 0) return layout;
+  }
+  return GOBLIN_WARRENS;
+}
+
+/** Combat rooms for the main path, in order, within the HP band. */
+function mainPathPieces(random: () => number): RoomPiece[] {
+  for (let tries = 0; tries < 1000; tries++) {
+    const used = new Set<string>();
+    const chosen = WARRENS_RULES.mainPath.map((band) => {
+      const piece = pick(
+        random,
+        ofBand(band).filter((p) => !used.has(p.key)),
+      );
+      used.add(piece.key);
+      return piece;
+    });
+    const hp = [...chosen, THRONE].reduce((sum, p) => sum + pieceHp(p), 0);
+    const { min, max } = WARRENS_RULES.requiredHp;
+    if (hp >= min && hp <= max) return chosen;
+  }
+  throw new Error("no Warrens main path fits the HP band: check the pieces");
+}
+
+/** Sides to try for the next main-path room, by weight, never west. */
+function turnOrder(random: () => number, previous: Side | null): Side[] {
+  const pool = (["east", "north", "south"] as const).filter(
+    (s) => previous === null || s !== OPPOSITE[previous],
+  );
+  const order: Side[] = [];
+  const left = [...pool];
+  while (left.length > 0) {
+    const total = left.reduce((n, s) => n + WARRENS_RULES.turnWeights[s], 0);
+    let roll = random() * total;
+    const i = left.findIndex((s) => (roll -= WARRENS_RULES.turnWeights[s]) < 0);
+    order.push(...left.splice(i < 0 ? left.length - 1 : i, 1));
+  }
+  return order;
+}
+
+function tryWarrens(random: () => number): DungeonLayout | null {
+  const build = new RoomAssembly(ENTRANCE, "entrance", random);
+  const ids = new Set(["entrance"]);
+  const uniqueId = (key: string) => {
+    let id = key;
+    for (let n = 2; ids.has(id); n++) id = `${key}-${n}`;
+    ids.add(id);
+    return id;
+  };
+
+  let at = 0;
+  let previous: Side | null = null;
+  const combat: number[] = [];
+  for (const piece of [...mainPathPieces(random), THRONE]) {
+    const id = piece === THRONE ? "throne" : uniqueId(piece.key);
+    let next: number | null = null;
+    for (const side of turnOrder(random, previous)) {
+      next = build.attach(at, side, piece, id, true);
+      if (next !== null) {
+        previous = side;
+        break;
+      }
+    }
+    if (next === null) return null;
+    if (piece !== THRONE) combat.push(next);
+    at = next;
+  }
+  const throne = at;
+
+  const { min, max } = WARRENS_RULES.sideRooms;
+  const sidePool = WARRENS_RULES.sideBands.flatMap(ofBand);
+  const count = randomInt(random, min, max);
+  for (let n = 0; n < count; n++) {
+    const piece = pick(random, sidePool);
+    const id = uniqueId(piece.key);
+    placing: for (const parent of shuffled(random, combat)) {
+      const sides = build.freeSides(parent).filter((s) => s !== "west");
+      for (const side of shuffled(random, sides)) {
+        if (build.attach(parent, side, piece, id, false) !== null)
+          break placing;
+      }
+    }
+  }
+  return build.finish(throne);
+}

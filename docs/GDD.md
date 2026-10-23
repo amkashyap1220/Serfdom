@@ -326,6 +326,8 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 
 ### Goblin Warrens
 
+- Procedural since Phase 11a (D-104): each run assembles its own Warrens from handcrafted rooms (rules in D-104); the original handcrafted map remains as seed 0.
+
 - Introductory dungeon, primarily aimed at levels 1–9.
 - Target first-time clear: 3–5 minutes: about 5 minutes solo, about 3 minutes for a full party (D-047).
 - A full simple level with several encounter rooms, then the boss (D-047).

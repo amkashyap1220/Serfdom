@@ -4,7 +4,7 @@ import {
   blockingWalls,
   closedDoorIds,
   createSimState,
-  dungeonInfo,
+  layoutFor,
   findPlayer,
   isPlayerAlive,
   isTelegraphing,
@@ -79,6 +79,8 @@ export interface RunEnd {
 export class DungeonInstance {
   readonly id: number;
   readonly dungeon: DungeonId;
+  /** Sent with runStarted so every client builds the same layout. */
+  readonly seed: number;
   readonly layout: DungeonLayout;
   private sim: SimState;
   /** Blasts landed since the last snapshot (drawing only). */
@@ -103,11 +105,14 @@ export class DungeonInstance {
       joinWindowTicks: number;
       /** Each starting player's loadout (D-077, D-083); a fresh Serf's if absent. */
       loadoutFor?: (playerId: number) => Loadout;
+      /** This run's layout seed (D-104); 0, the fixed layout, if absent. */
+      seed?: number;
     },
   ) {
     this.id = id;
     this.dungeon = dungeon;
-    this.layout = dungeonInfo(dungeon).layout;
+    this.seed = options.seed ?? 0;
+    this.layout = layoutFor(dungeon, this.seed);
     this.maxQueuedInputs = options.maxQueuedInputs;
     this.joinWindowTicks = options.joinWindowTicks;
     // Enemies come from room waves and stay dead (no respawn).

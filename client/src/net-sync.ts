@@ -1,10 +1,11 @@
 import {
+  layoutFor,
+  type DungeonLayout,
   blockingWalls,
   boxAround,
   combatFor,
   type AbilityLoadout,
   weaponDamage,
-  dungeonInfo,
   SERF_BASE,
   TICK_SECONDS,
   type BlastKind,
@@ -62,6 +63,9 @@ export class NetSync {
   /** Static walls of the current dungeon plus its closed doors. */
   private walls: readonly Rect[] = [];
   private currentDungeon: DungeonId | null = null;
+  /** This run's layout, built from the server's seed (D-104). */
+  private currentLayout: DungeonLayout | null = null;
+  private currentSeed: number | null = null;
   /** Your stats this run, from runStarted (prediction must match the server). */
   private myStats: Stats = SERF_BASE;
   private myWeaponTier: number | null = null;
@@ -101,11 +105,13 @@ export class NetSync {
         if (message.type === "runStarted") {
           this.resetRun(true);
           this.currentDungeon = message.dungeon;
+          this.currentSeed = message.seed;
+          this.currentLayout = layoutFor(message.dungeon, message.seed);
           this.myStats = message.stats;
           this.myWeaponTier = message.weaponTier;
           this.myAbility = message.ability;
           // Until the first snapshot says otherwise, every door is closed.
-          const layout = dungeonInfo(message.dungeon).layout;
+          const layout = this.currentLayout;
           this.walls = blockingWalls(
             layout,
             layout.doors.map((d) => d.id),
@@ -163,6 +169,16 @@ export class NetSync {
   /** The dungeon of the current run, or null outside a run. */
   get dungeon(): DungeonId | null {
     return this.inRun ? this.currentDungeon : null;
+  }
+
+  /** The current run's layout (generated from its seed), or null outside a run. */
+  get layout(): DungeonLayout | null {
+    return this.inRun ? this.currentLayout : null;
+  }
+
+  /** The current run's layout seed, for bug reports (D-104). */
+  get seed(): number | null {
+    return this.inRun ? this.currentSeed : null;
   }
 
   get closedDoors(): readonly string[] {
@@ -310,12 +326,9 @@ export class NetSync {
         atMs: receivedAtMs,
       });
     }
-    if (this.currentDungeon) {
+    if (this.currentLayout) {
       // Doors open during a run: predict against what the server says now.
-      this.walls = blockingWalls(
-        dungeonInfo(this.currentDungeon).layout,
-        snapshot.closedDoors,
-      );
+      this.walls = blockingWalls(this.currentLayout, snapshot.closedDoors);
       this.predictor?.setWalls(this.walls);
     }
     this.lastSnapshotBytes = bytes;

@@ -1,4 +1,5 @@
 import {
+  MAX_SEED,
   consumeFixedSteps,
   encodeMessage,
   MAX_FRAME_SECONDS,
@@ -16,6 +17,7 @@ import {
   loadoutOf,
   type Loadout,
 } from "@serfdom/shared";
+import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { AccountService, AuthResult } from "./auth/account-service.ts";
 import type { SerfService } from "./serfs/serf-service.ts";
@@ -47,6 +49,11 @@ export interface GameServerOptions {
   queueWaitSeconds?: number;
   /** A run accepts new players from the queue for this long after it starts (D-052). */
   joinWindowSeconds?: number;
+  /**
+   * Picks each new run's layout seed (D-104). Default: a random seed from
+   * 1 to MAX_SEED; tests pass () => 0 for the fixed handcrafted Warrens.
+   */
+  dungeonSeed?: () => number;
   log?: Logger;
 }
 
@@ -113,6 +120,7 @@ export class GameServer {
   private readonly maxInvalidMessages: number;
   private readonly snapshotEveryTicks: number;
   private readonly maxQueuedInputs: number;
+  private readonly dungeonSeed: () => number;
   private readonly maxMessagesPerSecond: number;
   private readonly joinWindowTicks: number;
   private readonly matchmaker: Matchmaker;
@@ -144,6 +152,8 @@ export class GameServer {
     this.maxInvalidMessages = options.maxInvalidMessages ?? 5;
     this.snapshotEveryTicks = options.snapshotEveryTicks ?? 1;
     this.maxQueuedInputs = options.maxQueuedInputs ?? 30;
+    this.dungeonSeed =
+      options.dungeonSeed ?? (() => randomInt(1, MAX_SEED + 1));
     this.maxMessagesPerSecond = options.maxMessagesPerSecond ?? 180;
     this.joinWindowTicks = Math.round(
       (options.joinWindowSeconds ?? DEFAULT_JOIN_WINDOW_SECONDS) * TICK_RATE,
@@ -582,6 +592,7 @@ export class GameServer {
         encodeMessage({
           type: "runStarted",
           dungeon,
+          seed: best.seed,
           players: best.playerIds,
           stats: loadout.stats,
           weaponTier: loadout.weaponTier,
@@ -602,6 +613,7 @@ export class GameServer {
         maxQueuedInputs: this.maxQueuedInputs,
         joinWindowTicks: this.joinWindowTicks,
         loadoutFor: (id) => this.loadoutOf(id),
+        seed: this.dungeonSeed(),
       },
     );
     this.instances.set(instance.id, instance);
@@ -615,6 +627,7 @@ export class GameServer {
         encodeMessage({
           type: "runStarted",
           dungeon,
+          seed: instance.seed,
           players: [...players],
           stats: this.loadoutOf(id).stats,
           weaponTier: this.loadoutOf(id).weaponTier,
@@ -623,7 +636,7 @@ export class GameServer {
       );
     }
     this.log.info(
-      `run #${instance.id} started: ${dungeon} with ${players.map((p) => `#${p}`).join(" ")}`,
+      `run #${instance.id} started: ${dungeon} (seed ${instance.seed}) with ${players.map((p) => `#${p}`).join(" ")}`,
     );
   }
 

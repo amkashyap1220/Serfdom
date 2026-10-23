@@ -1,4 +1,5 @@
 import {
+  buildWarrens,
   GOBLIN_WARRENS,
   SERF_BASE,
   GRUNT,
@@ -18,6 +19,24 @@ const run = (players: number[]) =>
 const east = { move: { x: 1, y: 0 }, fire: { trigger: false, aim: null } };
 
 type Snapshot = Extract<ServerMessage, { type: "snapshot" }>;
+
+describe("DungeonInstance layouts (D-104)", () => {
+  it("builds the generated Warrens for its seed; seed 0 is the handcrafted one", () => {
+    const seeded = new DungeonInstance(1, "goblin-warrens", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed: 1234,
+    });
+    const layout = buildWarrens(1234);
+    expect(seeded.seed).toBe(1234);
+    expect([...seeded.closedDoors].sort()).toEqual(
+      layout.doors.map((d) => d.id).sort(),
+    );
+    expect(seeded.state.players[0]?.position).toEqual(layout.spawn);
+    expect(run([1]).seed).toBe(0);
+    expect(run([1]).state.players[0]?.position).toEqual(GW.spawn);
+  });
+});
 
 describe("DungeonInstance in the Goblin Warrens", () => {
   it("starts in the entrance; the first door opens on the first tick", () => {

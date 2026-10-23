@@ -137,6 +137,8 @@ beforeEach(async () => {
     autoTick: false,
     // Runs start on the next tick, so tests decide exactly who is in a party.
     queueWaitSeconds: 0,
+    // Seed 0: the handcrafted Warrens, so positions in these tests hold.
+    dungeonSeed: () => 0,
     log: silentLogger,
   });
   clients = [];
@@ -413,6 +415,7 @@ describe("menu and queue (6a)", () => {
     expect(await client.next()).toEqual({
       type: "runStarted",
       dungeon: GW,
+      seed: 0,
       players: [1],
       stats: SERF_BASE,
       weaponTier: null,
@@ -428,6 +431,44 @@ describe("menu and queue (6a)", () => {
         hp: PLAYER_HEALTH.maxHp,
       }),
     ]);
+  });
+
+  it("sends each run's layout seed to its starters and late joiners (D-104)", async () => {
+    const live = await GameServer.start({
+      accounts: testAccounts(),
+      serfs: new SerfService(new MemorySerfRepo()),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      dungeonSeed: () => 987654,
+      log: silentLogger,
+    });
+    try {
+      const warrens = encodeMessage({
+        type: "queue",
+        dungeon: "goblin-warrens",
+      });
+      const a = await connect(live.port);
+      clients.push(a);
+      await helloAndLogin(a);
+      a.send(warrens);
+      await until(() => live.isQueued(1));
+      live.tick();
+      expect(await nextOfType(a, "runStarted")).toMatchObject({ seed: 987654 });
+      expect(live.instanceOf(1)?.seed).toBe(987654);
+      const b = await connect(live.port);
+      clients.push(b);
+      await helloAndLogin(b);
+      b.send(warrens);
+      await until(() => live.isQueued(2));
+      live.tick();
+      expect(await nextOfType(b, "runStarted")).toMatchObject({
+        seed: 987654,
+        players: [1, 2],
+      });
+    } finally {
+      await live.close();
+    }
   });
 
   it("waits up to the queue time, then starts solo (T-030)", async () => {
@@ -530,6 +571,7 @@ describe("menu and queue (6a)", () => {
     expect(await nextOfType(b, "runStarted")).toEqual({
       type: "runStarted",
       dungeon: GW,
+      seed: 0,
       players: [1, 2],
       stats: SERF_BASE,
       weaponTier: null,

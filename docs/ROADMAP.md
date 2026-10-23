@@ -264,6 +264,8 @@ Status: **complete** (2026-10-23; closed by the user after the 10d checklist pas
 
 **Goal:** Expand from a tiny handcrafted test to reusable room-based dungeons.
 
+Status: in progress. 11a (procedural Warrens, seeds) built; 11b more pieces and encounter variants; 11c entry rules; 11d difficulty loot pools.
+
 Tasks:
 
 - Build a library of handcrafted rooms.

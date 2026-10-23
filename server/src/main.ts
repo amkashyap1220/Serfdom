@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { SERF_SLOTS } from "@serfdom/shared";
+import { MAX_SEED, SERF_SLOTS } from "@serfdom/shared";
 import pg from "pg";
 
 /** A random() in [0, 1) from the OS's secure generator (stat and item rolls). */
@@ -22,6 +22,23 @@ function readPort(): number {
     throw new Error(`PORT must be an integer 1–65535, got "${raw}"`);
   }
   return port;
+}
+
+/**
+ * DUNGEON_SEED (development only): every run uses this layout seed, to
+ * replay a reported layout (0 = the handcrafted Warrens). Unset: random.
+ */
+function readDungeonSeed(): (() => number) | undefined {
+  const raw = process.env.DUNGEON_SEED;
+  if (raw === undefined || raw === "") return undefined;
+  const seed = Number(raw);
+  if (!Number.isInteger(seed) || seed < 0 || seed > MAX_SEED) {
+    throw new Error(
+      `DUNGEON_SEED must be a whole number 0–${MAX_SEED}, got "${raw}"`,
+    );
+  }
+  consoleLogger.info(`DUNGEON_SEED set: every run uses seed ${seed}`);
+  return () => seed;
 }
 
 /** The database is required since Phase 7 (D-059); see .env.example. */
@@ -47,7 +64,12 @@ try {
   );
   const accounts = new AccountService(new PgAccountRepo(pool));
   const serfs = new SerfService(new PgSerfRepo(pool), SERF_SLOTS, cryptoRandom);
-  const server = await GameServer.start({ port, accounts, serfs });
+  const server = await GameServer.start({
+    port,
+    accounts,
+    serfs,
+    dungeonSeed: readDungeonSeed(),
+  });
   consoleLogger.info(
     `Serfdom server listening on ws://localhost:${server.port}`,
   );

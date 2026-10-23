@@ -73,6 +73,7 @@ export {
 } from "./enemy.ts";
 export {
   dungeonInfo,
+  layoutFor,
   DUNGEONS,
   isDungeonId,
   LISTED_DUNGEONS,
@@ -103,7 +104,20 @@ export {
   type RoomStatus,
   type RunProgress,
 } from "./dungeon-run.ts";
-export { GOBLIN_WARRENS } from "./goblin-warrens.ts";
+export {
+  buildWarrens,
+  GOBLIN_WARRENS,
+  WARRENS_PIECES,
+  WARRENS_RULES,
+  type RoomBand,
+} from "./goblin-warrens.ts";
+export {
+  pieceHp,
+  RoomAssembly,
+  type RoomPiece,
+  type Side,
+} from "./dungeon-gen.ts";
+export { MAX_SEED, seededRandom } from "./seeded-random.ts";
 export {
   newRunStats,
   recordRunEvents,

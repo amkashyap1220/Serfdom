@@ -365,6 +365,8 @@ function reportLive(game: Phaser.Game): void {
     ["Enemies alive", enemies],
     ["Doors closed", online ? String(net.closedDoors.length) : "—"],
     ["Exit portal", online ? (view.portalOpen ? "OPEN" : "closed") : "—"],
+    // Report this with any odd layout: it rebuilds the same map (D-104).
+    ["Dungeon seed", net.seed === null ? "—" : String(net.seed)],
     [
       "In flight (yours/enemy)",
       `${view.projectiles.filter((p) => p.owner === "player").length}/${view.projectiles.filter((p) => p.owner === "enemy").length}`,

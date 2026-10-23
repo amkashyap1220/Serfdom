@@ -323,6 +323,7 @@ describe("menu, queue, and run messages (v4)", () => {
       {
         type: "runStarted",
         dungeon: "goblin-warrens",
+        seed: 0,
         players: [1, 4],
         stats: { ...SERF_BASE, speed: 14 },
         weaponTier: 2,
@@ -463,6 +464,7 @@ describe("menu, queue, and run messages (v4)", () => {
     const started = {
       type: "runStarted",
       dungeon: "goblin-warrens",
+      seed: 0,
       players: [1],
       stats: SERF_BASE,
       weaponTier: null,
@@ -483,6 +485,11 @@ describe("menu, queue, and run messages (v4)", () => {
       server({ ...started, ability: { kind: "volley", tier: 11 } }).ok,
     ).toBe(false);
     expect(server({ ...started, ability: undefined }).ok).toBe(false);
+    // v21: the layout seed, an unsigned 32-bit whole number (D-104).
+    expect(server({ ...started, seed: 4294967295 }).ok).toBe(true);
+    for (const seed of [-1, 1.5, 4294967296, "7", null, undefined]) {
+      expect(server({ ...started, seed }).ok).toBe(false);
+    }
     expect(server({ ...started, stats: undefined }).ok).toBe(false);
     expect(server({ ...started, stats: { ...SERF_BASE, speed: -1 } }).ok).toBe(
       false,

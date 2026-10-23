@@ -1,3 +1,4 @@
+import { MAX_SEED } from "./seeded-random.ts";
 import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
 import {
   ABILITIES,
@@ -53,6 +54,8 @@ import {
  *          (placeholder until Phase 9), present only on completion.
  * v20 (10d): Guard and Vanish buffs; heal rings and flashes; optional
  *          `fire.auto` (automatic shots hold fire while vanished).
+ * v21 (11a): runStarted carries the run's dungeon `seed`; every client
+ *          builds the same generated layout from it (T-050, D-104).
  * v19 (10c): snapshot players list their buffs, enemies say whether
  *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
@@ -87,7 +90,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 20;
+export const PROTOCOL_VERSION = 21;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -313,6 +316,8 @@ export type ServerMessage =
   | {
       type: "runStarted";
       dungeon: DungeonId;
+      /** Builds this run's layout with `layoutFor` (0 = the fixed layout). */
+      seed: number;
       players: number[];
       stats: Stats;
       weaponTier: number | null;
@@ -621,6 +626,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         !hasExactKeys(obj, [
           "type",
           "dungeon",
+          "seed",
           "players",
           "stats",
           "weaponTier",
@@ -628,6 +634,9 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         ])
       ) {
         return fail("runStarted: unexpected fields");
+      }
+      if (!isNonNegativeInt(obj.seed) || (obj.seed as number) > MAX_SEED) {
+        return fail("runStarted: seed must be a whole number 0–4294967295");
       }
       if (
         obj.weaponTier !== null &&
@@ -652,6 +661,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           message: {
             type: "runStarted",
             dungeon: obj.dungeon,
+            seed: obj.seed as number,
             players: [...obj.players],
             stats,
             weaponTier: obj.weaponTier as number | null,

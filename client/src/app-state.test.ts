@@ -102,6 +102,7 @@ describe("screen flow", () => {
       server({
         type: "runStarted",
         dungeon: GW,
+        seed: 0,
         players: [1],
         stats: SERF_BASE,
         weaponTier: null,
@@ -144,6 +145,7 @@ describe("screen flow", () => {
         server({
           type: "runStarted",
           dungeon: GW,
+          seed: 0,
           players: [1, 2],
           stats: SERF_BASE,
           weaponTier: null,
@@ -160,6 +162,7 @@ describe("screen flow", () => {
         server({
           type: "runStarted",
           dungeon: GW,
+          seed: 0,
           players: [1],
           stats: SERF_BASE,
           weaponTier: null,
@@ -265,6 +268,7 @@ describe("screen flow", () => {
         server({
           type: "runStarted",
           dungeon: GW,
+          seed: 0,
           players: [1],
           stats: SERF_BASE,
           weaponTier: null,
@@ -280,6 +284,7 @@ describe("screen flow", () => {
       server({
         type: "runStarted",
         dungeon: GW,
+        seed: 0,
         players: [1],
         stats: SERF_BASE,
         weaponTier: null,

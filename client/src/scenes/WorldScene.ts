@@ -425,8 +425,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** The current run's dungeon, or the menu backdrop outside a run. */
   private currentLayout(): DungeonLayout {
-    const id = this.net.dungeon;
-    return id ? dungeonInfo(id).layout : MENU_MAP;
+    return this.net.layout ?? MENU_MAP;
   }
 
   /**

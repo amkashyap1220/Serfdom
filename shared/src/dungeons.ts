@@ -1,5 +1,5 @@
 import type { DungeonLayout } from "./dungeon-layout.ts";
-import { GOBLIN_WARRENS } from "./goblin-warrens.ts";
+import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
 import {
   DUMMY_POSITIONS,
   PLAYER_START,
@@ -17,7 +17,10 @@ export interface DungeonInfo {
   blurb: string;
   /** Shown in the dungeon select menu. Unlisted dungeons are test fixtures. */
   listed: boolean;
+  /** The fixed layout: seed 0, and the whole dungeon if not generated. */
   layout: DungeonLayout;
+  /** Builds the layout for a run's seed (D-104); absent for fixed dungeons. */
+  generate?: (seed: number) => DungeonLayout;
 }
 
 /**
@@ -55,6 +58,7 @@ export const DUNGEONS = [
     blurb: "Levels 1–9 · 3–5 min · the Goblin Warlord awaits",
     listed: true,
     layout: GOBLIN_WARRENS,
+    generate: buildWarrens,
   },
   {
     id: "training",
@@ -72,6 +76,15 @@ export const LISTED_DUNGEONS: readonly (typeof DUNGEONS)[number][] =
 
 export function isDungeonId(v: unknown): v is DungeonId {
   return DUNGEONS.some((d) => d.id === v);
+}
+
+/**
+ * The layout of one run: the server picks the seed and sends it with
+ * runStarted, and every client builds the same map from it (T-050).
+ */
+export function layoutFor(id: DungeonId, seed: number): DungeonLayout {
+  const info: DungeonInfo = dungeonInfo(id);
+  return info.generate ? info.generate(seed) : info.layout;
 }
 
 export function dungeonInfo(id: DungeonId): DungeonInfo {

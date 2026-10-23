@@ -78,6 +78,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Procedural Warrens checklist (Phase 11a)
+
+Restart `npm run dev` (protocol v21) and reload.
+
+1. Queue the Goblin Warrens. HUD **Dungeon seed** shows a number. Note it.
+2. Play through: the map is no longer the old straight line. It starts in the Entrance cave and ends in the Warlord's throne; on the way you pass 4 combat rooms that get harder (Tunnel, then two of Goblin camp / Goblin den / Guard room, then the Ambush hall). The path may turn north or south but never back west.
+3. Doors open as before: each one when the room before it is cleared. 0–2 side rooms may hang off the path; they are optional (the portal opens without them).
+4. Walk into walls and through doorways: no stutter or snapping back (that would mean the browser's map differs from the server's). Watch **Pending / correction**: it should stay near 0.00 px.
+5. Run it again (requeue): a different seed and a different map.
+6. **Replay a seed:** add `DUNGEON_SEED=<the number>` to `.env`, restart `npm run dev`, queue: the same map as step 1. `DUNGEON_SEED=0` gives the old handcrafted Warrens. Remove the line afterwards.
+7. Two clients in one run (or a late joiner within 15 s): both see the same map and seed.
+
+Report: pass/fail per step, the seed of anything that looks wrong (blocked path, room inside a wall, enemy stuck in a wall, a gap to the outside), and a screenshot.
+
 ### Abilities checklist (Phase 10d: Fighter, Rogue, Cleric)
 
 Restart `npm run dev` (protocol v20) and reload. Classes needed: Fighter, Rogue, Cleric (choose at level 5; each comes with its ability item).
