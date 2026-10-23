@@ -165,3 +165,11 @@ export {
   PLACEHOLDER_ROLL_MAX,
   type PlaceholderReward,
 } from "./reward.ts";
+export {
+  EMAIL_MAX,
+  emailProblem,
+  normalizeEmail,
+  PASSWORD_MAX,
+  PASSWORD_MIN,
+  passwordProblem,
+} from "./account-rules.ts";

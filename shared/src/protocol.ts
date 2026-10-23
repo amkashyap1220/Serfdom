@@ -1,3 +1,4 @@
+import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import { isValidRoll, type PlaceholderReward } from "./reward.ts";
@@ -29,8 +30,13 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v8 (7a): accounts. Client register / login / resume / logout; server
+ *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
+
+/** Session tokens are 32 random bytes, base64url: 43 characters. */
+const TOKEN_LENGTH = 43;
 
 /** Largest client → server message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 1024;
@@ -61,7 +67,13 @@ export type ClientMessage =
   /** Stop waiting. Harmless if not queued. */
   | { type: "leaveQueue" }
   /** R: leave the current run at once (D-036). Harmless if not in a run. */
-  | { type: "exitDungeon" };
+  | { type: "exitDungeon" }
+  /** Create an account and log in (D-058). */
+  | { type: "register"; email: string; password: string }
+  | { type: "login"; email: string; password: string }
+  /** Log back in with the token from an earlier authOk (page reload, reconnect). */
+  | { type: "resume"; token: string }
+  | { type: "logout" };
 
 /** One player's authoritative state in a snapshot. */
 export interface SnapshotPlayer {
@@ -119,6 +131,12 @@ export type ServerMessage =
   | { type: "playerJoined"; playerId: number }
   | { type: "playerLeft"; playerId: number }
   | { type: "error"; reason: string }
+  /** Logged in. `token` keeps this login across reloads (store it; never show it). */
+  | { type: "authOk"; email: string; token: string }
+  /** Register/login/resume failed; `reason` is safe to show the player. */
+  | { type: "authError"; reason: string }
+  /** Logged out (by request, or because this account logged in elsewhere). */
+  | { type: "loggedOut"; reason: string }
   /** Sent to everyone waiting for a dungeon whenever its queue changes. */
   | {
       type: "queueStatus";
@@ -194,10 +212,43 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       return { ok: true, message: { type: "queue", dungeon: obj.dungeon } };
     case "leaveQueue":
     case "exitDungeon":
+    case "logout":
       if (!hasExactKeys(obj, ["type"])) {
         return fail(`${obj.type}: unexpected fields`);
       }
       return { ok: true, message: { type: obj.type } };
+    case "register":
+    case "login": {
+      if (!hasExactKeys(obj, ["type", "email", "password"])) {
+        return fail(`${obj.type}: unexpected fields`);
+      }
+      // Only shape and size here; the account rules are applied by the server.
+      if (typeof obj.email !== "string" || obj.email.length > EMAIL_MAX + 16) {
+        return fail(`${obj.type}: email must be a string`);
+      }
+      if (
+        typeof obj.password !== "string" ||
+        obj.password.length > PASSWORD_MAX
+      ) {
+        return fail(`${obj.type}: password must be a string`);
+      }
+      return {
+        ok: true,
+        message: { type: obj.type, email: obj.email, password: obj.password },
+      };
+    }
+    case "resume":
+      if (!hasExactKeys(obj, ["type", "token"])) {
+        return fail("resume: unexpected fields");
+      }
+      if (
+        typeof obj.token !== "string" ||
+        !/^[A-Za-z0-9_-]+$/.test(obj.token) ||
+        obj.token.length !== TOKEN_LENGTH
+      ) {
+        return fail("resume: bad token");
+      }
+      return { ok: true, message: { type: "resume", token: obj.token } };
     default:
       return fail(`unknown message type ${describe(obj.type)}`);
   }
@@ -238,6 +289,26 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         return fail("error: reason must be a string");
       }
       return { ok: true, message: { type: "error", reason: obj.reason } };
+    case "authOk":
+      if (!hasExactKeys(obj, ["type", "email", "token"])) {
+        return fail("authOk: unexpected fields");
+      }
+      if (typeof obj.email !== "string" || typeof obj.token !== "string") {
+        return fail("authOk: email and token must be strings");
+      }
+      return {
+        ok: true,
+        message: { type: "authOk", email: obj.email, token: obj.token },
+      };
+    case "authError":
+    case "loggedOut":
+      if (!hasExactKeys(obj, ["type", "reason"])) {
+        return fail(`${obj.type}: unexpected fields`);
+      }
+      if (typeof obj.reason !== "string") {
+        return fail(`${obj.type}: reason must be a string`);
+      }
+      return { ok: true, message: { type: obj.type, reason: obj.reason } };
     case "queueStatus":
       if (!hasExactKeys(obj, ["type", "dungeon", "queued", "startsIn"])) {
         return fail("queueStatus: unexpected fields");

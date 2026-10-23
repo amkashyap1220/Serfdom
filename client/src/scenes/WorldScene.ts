@@ -127,6 +127,8 @@ export class WorldScene extends Phaser.Scene {
   private viewRotation = 0;
   private fireMode: FireMode = "autoAim";
   private carriedSeconds = 0;
+  /** Whether Phaser reads (and captures) the game keys; null until first set. */
+  private gameKeysActive: boolean | null = null;
   private readonly totals: Totals = { shots: 0, playerHits: 0 };
   private playerFlashUntil = 0;
   private lastLocalHp = 0;
@@ -177,6 +179,8 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
     this.readKeys = createKeyReader(this);
+    // Menus come first, and they need every key for typing.
+    this.setGameKeysActive(false);
     this.readPointer = createPointerReader(this);
 
     // D-033: no camera bounds; the camera always centers the player and
@@ -232,6 +236,26 @@ export class WorldScene extends Phaser.Scene {
     }
     if (this.lastKeys.exitDungeon) this.net.exitDungeon();
     this.syncView(time);
+  }
+
+  /**
+   * Game keys only while playing. Phaser "captures" the keys it binds
+   * (W A S D Q E Z T R Space Enter): it calls preventDefault on them for the
+   * whole page, which stops them from typing into the login form. So outside
+   * a run capture is off and the keys are ignored by the game.
+   */
+  setGameKeysActive(active: boolean): void {
+    const keyboard = this.input.keyboard;
+    if (!keyboard || this.gameKeysActive === active) return;
+    this.gameKeysActive = active;
+    keyboard.enabled = active;
+    if (active) {
+      keyboard.enableGlobalCapture();
+    } else {
+      keyboard.disableGlobalCapture();
+      // Forget keys held while leaving a run, so none stays stuck down.
+      keyboard.resetKeys();
+    }
   }
 
   getDebugState(): WorldDebugState {

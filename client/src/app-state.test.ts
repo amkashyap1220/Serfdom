@@ -18,21 +18,104 @@ const server = (message: ServerMessage, nowMs = 0): ScreenEvent => ({
 const run = (...events: ScreenEvent[]): Screen =>
   events.reduce(nextScreen, INITIAL_SCREEN);
 const stats = { ...newRunStats(), seconds: 42, shotsFired: 10, shotsHit: 7 };
+/** Connected with a saved token, and the server accepted it. */
+const LOGGED_IN: ScreenEvent[] = [
+  { type: "connected", hasToken: true },
+  {
+    type: "server",
+    message: { type: "authOk", email: "a@b.co", token: "t" },
+    nowMs: 0,
+  },
+];
 
 describe("screen flow", () => {
-  it("connecting → menu once connected", () => {
-    expect(run({ type: "connected" })).toEqual({
+  it("connecting → resuming → menu with a saved login", () => {
+    expect(run({ type: "connected", hasToken: true })).toEqual({
+      kind: "resuming",
+    });
+    expect(run(...LOGGED_IN)).toEqual({
       kind: "menu",
       tab: "dungeons",
       notice: null,
     });
   });
 
-  it("menu → queued (at once) → countdown from the server → in the run", () => {
-    const queued = run(
-      { type: "connected" },
-      { type: "queueRequested", dungeon: GW },
+  it("connecting → login screen without a saved login; register → menu", () => {
+    const shown = run({ type: "connected", hasToken: false });
+    expect(shown).toEqual({
+      kind: "login",
+      mode: "login",
+      busy: false,
+      error: null,
+      notice: null,
+    });
+    const register = run(
+      { type: "connected", hasToken: false },
+      { type: "switchLoginMode" },
+      { type: "loginSubmitted" },
     );
+    expect(register).toMatchObject({
+      kind: "login",
+      mode: "register",
+      busy: true,
+    });
+    expect(
+      nextScreen(
+        register,
+        server({ type: "authOk", email: "a@b.co", token: "t" }),
+      ),
+    ).toMatchObject({ kind: "menu" });
+  });
+
+  it("a refused login shows the reason and lets you try again", () => {
+    const refused = run(
+      { type: "connected", hasToken: false },
+      { type: "loginSubmitted" },
+      server({ type: "authError", reason: "Email or password is incorrect." }),
+    );
+    expect(refused).toMatchObject({
+      kind: "login",
+      busy: false,
+      error: "Email or password is incorrect.",
+    });
+  });
+
+  it("an expired saved login falls back to the login screen with the reason", () => {
+    expect(
+      run(
+        { type: "connected", hasToken: true },
+        server({
+          type: "authError",
+          reason: "Your login has expired. Please log in again.",
+        }),
+      ),
+    ).toMatchObject({
+      kind: "login",
+      notice: "Your login has expired. Please log in again.",
+    });
+  });
+
+  it("logged out (or logged in elsewhere) from anywhere → login screen", () => {
+    const inRun = run(
+      ...LOGGED_IN,
+      server({ type: "runStarted", dungeon: GW, players: [1] }),
+    );
+    expect(
+      nextScreen(
+        inRun,
+        server({
+          type: "loggedOut",
+          reason: "This account logged in somewhere else.",
+        }),
+      ),
+    ).toMatchObject({
+      kind: "login",
+      notice: "This account logged in somewhere else.",
+    });
+  });
+
+  it("menu → queued (at once) → countdown from the server → in the run", () => {
+    const queued = run(...LOGGED_IN, { type: "queueRequested", dungeon: GW });
     expect(queued).toEqual({
       kind: "queued",
       dungeon: GW,
@@ -58,7 +141,7 @@ describe("screen flow", () => {
   it("death and completion show results; Return goes back to the menu", () => {
     for (const result of ["died", "completed"] as const) {
       const shown = run(
-        { type: "connected" },
+        ...LOGGED_IN,
         server({ type: "runStarted", dungeon: GW, players: [1] }),
         server({
           type: "runEnded",
@@ -83,7 +166,7 @@ describe("screen flow", () => {
 
   it("requeue straight from the completion screen (D-048)", () => {
     const done = run(
-      { type: "connected" },
+      ...LOGGED_IN,
       server({
         type: "runEnded",
         dungeon: GW,
@@ -100,7 +183,7 @@ describe("screen flow", () => {
   it("R (left) goes straight to the menu with a notice, no results screen", () => {
     expect(
       run(
-        { type: "connected" },
+        ...LOGGED_IN,
         server({
           type: "runEnded",
           dungeon: GW,
@@ -118,7 +201,7 @@ describe("screen flow", () => {
 
   it("ignores a queue status that arrives after leaving the queue", () => {
     const menu = run(
-      { type: "connected" },
+      ...LOGGED_IN,
       { type: "queueRequested", dungeon: GW },
       { type: "leaveQueue" },
     );
@@ -132,7 +215,7 @@ describe("screen flow", () => {
 
   it("the server wins a race: runStarted after leaving still puts us in the run", () => {
     const menu = run(
-      { type: "connected" },
+      ...LOGGED_IN,
       { type: "queueRequested", dungeon: GW },
       { type: "leaveQueue" },
     );
@@ -146,7 +229,7 @@ describe("screen flow", () => {
 
   it("any screen → connecting on disconnect; tabs only switch in the menu", () => {
     const inRun = run(
-      { type: "connected" },
+      ...LOGGED_IN,
       server({ type: "runStarted", dungeon: GW, players: [1] }),
     );
     expect(nextScreen(inRun, { type: "openTab", tab: "stash" })).toBe(inRun);
@@ -154,9 +237,10 @@ describe("screen flow", () => {
       kind: "connecting",
       reason: "x",
     });
-    expect(
-      run({ type: "connected" }, { type: "openTab", tab: "stash" }),
-    ).toMatchObject({ kind: "menu", tab: "stash" });
+    expect(run(...LOGGED_IN, { type: "openTab", tab: "stash" })).toMatchObject({
+      kind: "menu",
+      tab: "stash",
+    });
   });
 });
 

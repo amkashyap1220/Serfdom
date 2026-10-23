@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@serfdom/shared": "0.0.0",
+    "pg": "8.23.1",
     "ws": "8.22.0"
   },
   "devDependencies": {
     "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
     "@types/ws": "8.18.2",
     "vitest": "5.0.5"
   }

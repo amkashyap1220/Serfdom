@@ -8,11 +8,13 @@ import {
   TICK_RATE,
   PLACEHOLDER_ROLL_MAX,
   TICK_SECONDS,
+  type ClientMessage,
   type DungeonId,
   type ServerMessage,
 } from "@serfdom/shared";
 import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
+import type { AccountService, AuthResult } from "./auth/account-service.ts";
 import { DungeonInstance, type RunEnd } from "./dungeon-instance.ts";
 import { consoleLogger, type Logger } from "./log.ts";
 import { Matchmaker } from "./matchmaking.ts";
@@ -21,6 +23,8 @@ import { MessageRateLimiter } from "./rate-limit.ts";
 export interface GameServerOptions {
   /** TCP port; 0 picks a free port (used by tests). */
   port: number;
+  /** Accounts and logins (Phase 7a). Every player must log in before queueing. */
+  accounts: AccountService;
   /** Close connections that have not sent a valid hello within this time. */
   helloTimeoutMs?: number;
   /** Close a connection after this many invalid messages. */
@@ -51,6 +55,12 @@ interface Session {
   invalidMessages: number;
   helloTimer: ReturnType<typeof setTimeout> | undefined;
   rate: MessageRateLimiter;
+  /** Logged-in account, or null (D-058). */
+  accountId: number | null;
+  /** The login token, kept to delete the session on logout. */
+  token: string | null;
+  /** A register/login/resume is waiting for the database. */
+  authBusy: boolean;
 }
 
 /** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
@@ -92,6 +102,9 @@ export class GameServer {
   private readonly instances = new Map<number, DungeonInstance>();
   private readonly runOf = new Map<number, DungeonInstance>();
   private readonly socketOf = new Map<number, WebSocket>();
+  /** One logged-in connection per account. */
+  private readonly accountSocket = new Map<number, WebSocket>();
+  private readonly accounts: AccountService;
   private nextPlayerId = 1;
   private nextInstanceId = 1;
   private tickCount = 0;
@@ -102,6 +115,7 @@ export class GameServer {
   private constructor(wss: WebSocketServer, options: GameServerOptions) {
     this.wss = wss;
     this.log = options.log ?? consoleLogger;
+    this.accounts = options.accounts;
     this.helloTimeoutMs = options.helloTimeoutMs ?? 5000;
     this.maxInvalidMessages = options.maxInvalidMessages ?? 5;
     this.snapshotEveryTicks = options.snapshotEveryTicks ?? 1;
@@ -238,6 +252,9 @@ export class GameServer {
         socket.close(CLOSE_POLICY, "hello timeout");
       }, this.helloTimeoutMs),
       rate: new MessageRateLimiter(this.maxMessagesPerSecond),
+      accountId: null,
+      token: null,
+      authBusy: false,
     };
     this.sessions.set(socket, session);
 
@@ -298,7 +315,27 @@ export class GameServer {
           this.reject(socket, session, "send hello first");
           return;
         }
+        if (session.accountId === null) {
+          this.reject(socket, session, "log in first");
+          return;
+        }
         this.onQueue(socket, session, session.id, message.dungeon);
+        return;
+      case "register":
+      case "login":
+      case "resume":
+        this.onAuth(socket, session, message);
+        return;
+      case "logout":
+        if (session.accountId === null) return;
+        if (session.token) {
+          this.accounts
+            .logout(session.token)
+            .catch((err: unknown) =>
+              this.log.warn(`${label(session)} logout failed: ${String(err)}`),
+            );
+        }
+        this.logOut(socket, "Logged out.");
         return;
       case "leaveQueue": {
         if (session.id === null) return;
@@ -315,6 +352,109 @@ export class GameServer {
         const end = instance?.leave(session.id);
         if (instance && end) this.finishRun(instance, end);
         return;
+      }
+    }
+  }
+
+  /**
+   * Register, login, or resume (D-058). The database answers later, so the
+   * connection is marked busy meanwhile; one attempt at a time. A failed
+   * attempt is not an "invalid message" (players mistype passwords); the
+   * account service throttles guessing instead.
+   */
+  private onAuth(
+    socket: WebSocket,
+    session: Session,
+    message: Extract<ClientMessage, { type: "register" | "login" | "resume" }>,
+  ): void {
+    if (session.id === null) {
+      this.reject(socket, session, "send hello first");
+      return;
+    }
+    if (session.accountId !== null) {
+      this.reject(socket, session, "already logged in");
+      return;
+    }
+    if (session.authBusy) {
+      this.reject(socket, session, "already logging in");
+      return;
+    }
+    session.authBusy = true;
+    let attempt: Promise<AuthResult>;
+    if (message.type === "resume") {
+      attempt = this.accounts.resume(message.token);
+    } else if (message.type === "register") {
+      attempt = this.accounts.register(message.email, message.password);
+    } else {
+      attempt = this.accounts.login(message.email, message.password);
+    }
+    attempt
+      .then((result) => {
+        if (!this.sessions.has(socket)) return; // disconnected meanwhile
+        if (!result.ok) {
+          this.send(socket, { type: "authError", reason: result.reason });
+          this.log.info(`${label(session)} ${message.type} refused`);
+          return;
+        }
+        // One connection per account: the older one is logged out but stays
+        // connected, so it does not reconnect and log itself back in.
+        const previous = this.accountSocket.get(result.accountId);
+        if (previous && previous !== socket) {
+          this.logOut(previous, "This account logged in somewhere else.");
+        }
+        session.accountId = result.accountId;
+        session.token = result.token;
+        this.accountSocket.set(result.accountId, socket);
+        this.send(socket, {
+          type: "authOk",
+          email: result.email,
+          token: result.token,
+        });
+        // Account ids only: emails and tokens never go in the log.
+        this.log.info(
+          `${label(session)} ${message.type} ok: account #${result.accountId}`,
+        );
+      })
+      .catch((err: unknown) => {
+        this.log.warn(
+          `${label(session)} ${message.type} error: ${String(err)}`,
+        );
+        this.send(socket, {
+          type: "authError",
+          reason: "Server error. Please try again.",
+        });
+      })
+      .finally(() => {
+        session.authBusy = false;
+      });
+  }
+
+  /** Back to the login screen: leaves the queue or run, forgets the account. */
+  private logOut(socket: WebSocket, reason: string): void {
+    const session = this.sessions.get(socket);
+    if (!session || session.accountId === null) return;
+    if (session.id !== null) this.leaveEverything(session.id, true);
+    if (this.accountSocket.get(session.accountId) === socket) {
+      this.accountSocket.delete(session.accountId);
+    }
+    this.log.info(`${label(session)} logged out (${reason})`);
+    session.accountId = null;
+    session.token = null;
+    this.send(socket, { type: "loggedOut", reason });
+  }
+
+  /** Takes a player out of the queue and out of any run; `notify` sends them runEnded. */
+  private leaveEverything(id: number, notify: boolean): void {
+    const dungeon = this.matchmaker.leave(id);
+    if (dungeon) this.sendQueueStatus(dungeon);
+    const instance = this.runOf.get(id);
+    const end = instance?.leave(id);
+    if (instance && end) {
+      if (notify) {
+        this.finishRun(instance, end);
+      } else {
+        this.runOf.delete(id);
+        this.log.info(`guest #${id} disconnected from run #${instance.id}`);
       }
     }
   }
@@ -454,16 +594,16 @@ export class GameServer {
   private onClose(socket: WebSocket, session: Session): void {
     clearTimeout(session.helloTimer);
     this.sessions.delete(socket);
+    if (
+      session.accountId !== null &&
+      this.accountSocket.get(session.accountId) === socket
+    ) {
+      this.accountSocket.delete(session.accountId);
+    }
     if (session.id !== null) {
       const id = session.id;
       this.socketOf.delete(id);
-      const dungeon = this.matchmaker.leave(id);
-      if (dungeon) this.sendQueueStatus(dungeon);
-      const instance = this.runOf.get(id);
-      if (instance?.leave(id)) {
-        this.runOf.delete(id);
-        this.log.info(`guest #${id} disconnected from run #${instance.id}`);
-      }
+      this.leaveEverything(id, false);
       this.broadcast({ type: "playerLeft", playerId: session.id });
       this.log.info(`${label(session)} left (${this.playerIds.length} online)`);
     }

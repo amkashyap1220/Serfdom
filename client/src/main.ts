@@ -8,6 +8,7 @@ import {
   type Screen,
   type ScreenEvent,
 } from "./app-state";
+import { clearToken, loadToken, saveToken } from "./auth-store";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
@@ -57,20 +58,44 @@ game.events.once(Phaser.Core.Events.READY, () => {
     },
     dismissResults: () => dispatch({ type: "dismissResults" }),
     openTab: (tab) => dispatch({ type: "openTab", tab }),
+    submitLogin: (mode, email, password) => {
+      if (mode === "register") net.connection.sendRegister(email, password);
+      else net.connection.sendLogin(email, password);
+      dispatch({ type: "loginSubmitted" });
+    },
+    switchLoginMode: () => dispatch({ type: "switchLoginMode" }),
+    logout: () => net.connection.sendLogout(),
   });
-  net.onConnected = () => dispatch({ type: "connected" });
+  // On every (re)connect: log back in with the saved token if there is one.
+  const onConnected = () => {
+    const token = loadToken();
+    if (token) net.connection.sendResume(token);
+    dispatch({ type: "connected", hasToken: token !== null });
+  };
+  net.onConnected = onConnected;
   net.onDisconnect = (reason) => dispatch({ type: "disconnected", reason });
-  net.onLobby = (message, nowMs) =>
+  net.onLobby = (message, nowMs) => {
+    if (message.type === "authOk") {
+      saveToken(message.token);
+      view.setAccount(message.email);
+    } else if (message.type === "loggedOut") {
+      // Also when logged in elsewhere: forget the token here, so the two
+      // browsers do not keep logging each other out.
+      clearToken();
+      view.setAccount(null);
+    } else if (message.type === "authError" && screen.kind === "resuming") {
+      clearToken();
+    }
     dispatch({ type: "server", message, nowMs });
+  };
   // The welcome may have arrived before these handlers were attached.
-  if (net.connection.snapshot.status.kind === "connected") {
-    dispatch({ type: "connected" });
-  }
+  if (net.connection.snapshot.status.kind === "connected") onConnected();
 
   // Wait one frame so the canvas is in the DOM and laid out before measuring.
   requestAnimationFrame(() => {
     reportLayout(game, true);
     game.events.on(Phaser.Core.Events.POST_RENDER, () => {
+      worldScene(game).setGameKeysActive(screen.kind === "inRun");
       view.render(screen, performance.now());
       reportLive(game);
     });

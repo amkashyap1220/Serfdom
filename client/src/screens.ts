@@ -1,5 +1,11 @@
 import {
   dungeonInfo,
+  EMAIL_MAX,
+  emailProblem,
+  normalizeEmail,
+  PASSWORD_MAX,
+  PASSWORD_MIN,
+  passwordProblem,
   LISTED_DUNGEONS,
   MAX_PARTY_SIZE,
   PLACEHOLDER_ROLL_MAX,
@@ -17,6 +23,13 @@ export interface ScreenActions {
   leaveQueue(): void;
   dismissResults(): void;
   openTab(tab: MenuTab): void;
+  submitLogin(
+    mode: "login" | "register",
+    email: string,
+    password: string,
+  ): void;
+  switchLoginMode(): void;
+  logout(): void;
 }
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
@@ -60,11 +73,20 @@ export class ScreenView {
   private shown: Screen | null = null;
   private countdown: HTMLElement | null = null;
   private shownAtMs = 0;
+  /** Email of the logged-in account, shown in the menu. */
+  private email: string | null = null;
+  /** What was typed into the email field, kept across redraws (never the password). */
+  private typedEmail = "";
 
   constructor(root: HTMLElement, actions: ScreenActions) {
     this.root = root;
     this.actions = actions;
     window.addEventListener("keydown", (e) => this.onKey(e));
+  }
+
+  setAccount(email: string | null): void {
+    this.email = email;
+    this.shown = null; // redraw with the new header
   }
 
   render(screen: Screen, nowMs: number): void {
@@ -100,6 +122,15 @@ export class ScreenView {
           ),
         );
         return;
+      case "resuming":
+        this.root.append(
+          el("h1", "title", "SERFDOM"),
+          el("p", "", "Logging you back in…"),
+        );
+        return;
+      case "login":
+        this.buildLogin(screen);
+        return;
       case "menu":
         this.buildMenu(screen.tab, screen.notice);
         return;
@@ -127,6 +158,65 @@ export class ScreenView {
         else this.buildCompletion(screen);
         return;
     }
+  }
+
+  /**
+   * Email + password form (D-058). A real <form>, so Enter submits and
+   * password managers work. Checks the shared rules first for quick
+   * feedback; the server checks again.
+   */
+  private buildLogin(screen: Extract<Screen, { kind: "login" }>): void {
+    const registering = screen.mode === "register";
+    const form = document.createElement("form");
+    form.className = "login-form";
+    const email = input("email", "Email", registering ? "email" : "username");
+    const password = input(
+      "password",
+      `Password (${PASSWORD_MIN}+ characters)`,
+      registering ? "new-password" : "current-password",
+    );
+    email.value = this.typedEmail;
+    email.addEventListener("input", () => (this.typedEmail = email.value));
+    const problem = el("p", "error", screen.error ?? "");
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.textContent = screen.busy
+      ? "Please wait…"
+      : registering
+        ? "Create account"
+        : "Log in";
+    submit.disabled = screen.busy;
+    form.append(email, password, problem, submit);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const address = normalizeEmail(email.value);
+      const local =
+        emailProblem(address) ??
+        (registering ? passwordProblem(password.value) : null);
+      if (local) {
+        problem.textContent = local;
+        return;
+      }
+      this.actions.submitLogin(screen.mode, address, password.value);
+    });
+    const toggle = button(
+      registering ? "I already have an account" : "Create an account",
+      () => this.actions.switchLoginMode(),
+    );
+    toggle.classList.add("link");
+    this.root.append(el("h1", "title", "SERFDOM"));
+    if (screen.notice) this.root.append(el("p", "notice", screen.notice));
+    this.root.append(
+      el("h2", "", registering ? "Create an account" : "Log in"),
+      form,
+      toggle,
+      el(
+        "p",
+        "hint",
+        "No email is sent yet: verification and password reset come before release.",
+      ),
+    );
+    (email.value ? password : email).focus();
   }
 
   private buildMenu(tab: MenuTab, notice: string | null): void {
@@ -158,7 +248,12 @@ export class ScreenView {
         ),
       );
     }
-    this.root.append(el("h1", "title", "SERFDOM"), nav);
+    const account = el("div", "account-bar");
+    account.append(
+      el("span", "", this.email ? `Logged in as ${this.email}` : ""),
+      button("Log out", () => this.actions.logout()),
+    );
+    this.root.append(account, el("h1", "title", "SERFDOM"), nav);
     if (notice) this.root.append(el("p", "notice", notice));
     this.root.append(body);
   }
@@ -274,6 +369,21 @@ function el(tag: string, className: string, text?: string): HTMLElement {
   if (className) e.className = className;
   if (text !== undefined) e.textContent = text;
   return e;
+}
+
+function input(
+  type: "email" | "password",
+  placeholder: string,
+  autocomplete: string,
+): HTMLInputElement {
+  const i = document.createElement("input");
+  i.type = type;
+  i.placeholder = placeholder;
+  i.autocomplete = autocomplete as AutoFill;
+  i.required = true;
+  i.maxLength = type === "email" ? EMAIL_MAX : PASSWORD_MAX;
+  i.setAttribute("aria-label", placeholder);
+  return i;
 }
 
 function button(label: string, onClick: () => void): HTMLButtonElement {

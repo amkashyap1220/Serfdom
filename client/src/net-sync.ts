@@ -81,7 +81,9 @@ export class NetSync {
             layout.doors.map((d) => d.id),
           );
         }
-        if (message.type === "runEnded") this.resetRun(false);
+        if (message.type === "runEnded" || message.type === "loggedOut") {
+          this.resetRun(false);
+        }
         this.onLobby(message, at);
       },
     });

@@ -10,6 +10,8 @@ import {
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
+import { MemoryAccountRepo } from "./auth/account-repo.ts";
+import { AccountService } from "./auth/account-service.ts";
 import { GameServer } from "./game-server.ts";
 import { silentLogger } from "./log.ts";
 
@@ -64,6 +66,31 @@ async function connect(port: number): Promise<TestClient> {
 
 const hello = encodeMessage({ type: "hello", protocol: PROTOCOL_VERSION });
 
+/** Accounts in memory with a cheap password hash, so tests are fast and need no database. */
+function testAccounts(): AccountService {
+  return new AccountService(new MemoryAccountRepo(), {
+    passwordCost: { log2N: 4, r: 1, p: 1 },
+  });
+}
+
+let emailSeq = 0;
+const PASSWORD = "correct horse";
+
+/** Registers a fresh account on an already-welcomed connection. */
+async function register(client: TestClient): Promise<string> {
+  const email = `player${++emailSeq}@test.example`;
+  client.send(encodeMessage({ type: "register", email, password: PASSWORD }));
+  const ok = await nextOfType(client, "authOk");
+  return ok.token;
+}
+
+/** hello → welcome → register → authOk. */
+async function helloAndLogin(client: TestClient): Promise<void> {
+  client.send(hello);
+  await nextOfType(client, "welcome");
+  await register(client);
+}
+
 /**
  * The client can see its socket close slightly before the server has run
  * its own cleanup, so wait (briefly) for the server side instead of
@@ -81,6 +108,7 @@ let clients: TestClient[];
 
 beforeEach(async () => {
   server = await GameServer.start({
+    accounts: testAccounts(),
     port: 0,
     helloTimeoutMs: 200,
     autoTick: false,
@@ -96,14 +124,17 @@ afterEach(async () => {
   await server.close();
 });
 
-async function joined(): Promise<{
+/** A connected, welcomed, and (unless `login: false`) logged-in client. */
+async function joined(options: { login?: boolean } = {}): Promise<{
   client: TestClient;
   welcome: ServerMessage;
 }> {
   const client = await connect(server.port);
   clients.push(client);
   client.send(hello);
-  return { client, welcome: await client.next() };
+  const welcome = await client.next();
+  if (options.login ?? true) await register(client);
+  return { client, welcome };
 }
 
 describe("handshake and presence", () => {
@@ -214,7 +245,11 @@ describe("rejecting bad input", () => {
 describe("startup", () => {
   it("fails clearly when the port is already in use", async () => {
     await expect(
-      GameServer.start({ port: server.port, log: silentLogger }),
+      GameServer.start({
+        port: server.port,
+        accounts: testAccounts(),
+        log: silentLogger,
+      }),
     ).rejects.toMatchObject({ code: "EADDRINUSE" });
   });
 });
@@ -364,6 +399,7 @@ describe("menu and queue (6a)", () => {
 
   it("waits up to the queue time, then starts solo (T-030)", async () => {
     const live = await GameServer.start({
+      accounts: testAccounts(),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 5,
@@ -372,8 +408,7 @@ describe("menu and queue (6a)", () => {
     try {
       const c = await connect(live.port);
       clients.push(c);
-      c.send(hello);
-      await nextOfType(c, "welcome");
+      await helloAndLogin(c);
       c.send(queue);
       expect(await nextOfType(c, "queueStatus")).toMatchObject({
         queued: 1,
@@ -391,6 +426,7 @@ describe("menu and queue (6a)", () => {
 
   it("tells everyone waiting when someone else joins the queue", async () => {
     const live = await GameServer.start({
+      accounts: testAccounts(),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 5,
@@ -400,8 +436,7 @@ describe("menu and queue (6a)", () => {
       const [a, b] = [await connect(live.port), await connect(live.port)];
       clients.push(a, b);
       for (const c of [a, b]) {
-        c.send(hello);
-        await nextOfType(c, "welcome");
+        await helloAndLogin(c);
       }
       a.send(queue);
       await nextOfType(a, "queueStatus");
@@ -582,6 +617,7 @@ describe("authoritative movement (4b)", () => {
 describe("real-time loop", () => {
   it("processes queued inputs at about 60 ticks per second on its own", async () => {
     const live = await GameServer.start({
+      accounts: testAccounts(),
       port: 0,
       queueWaitSeconds: 0,
       log: silentLogger,
@@ -589,8 +625,7 @@ describe("real-time loop", () => {
     try {
       const c = await connect(live.port);
       clients.push(c);
-      c.send(hello);
-      await nextOfType(c, "welcome");
+      await helloAndLogin(c);
       c.send(queue);
       await nextOfType(c, "runStarted");
       // Send like a real client: one input every 1/60 s for 0.5 s.
@@ -767,5 +802,124 @@ describe("how runs end (6a)", () => {
     client.send(encodeMessage({ type: "leaveQueue" }));
     client.send(hello);
     expect((await nextOfType(client, "error")).reason).toBe("already joined");
+  });
+});
+
+describe("accounts (7a)", () => {
+  const send = (c: TestClient, m: Parameters<typeof encodeMessage>[0]) =>
+    c.send(encodeMessage(m));
+
+  it("refuses to queue before logging in", async () => {
+    const { client } = await joined({ login: false });
+    client.send(queue);
+    expect((await nextOfType(client, "error")).reason).toBe("log in first");
+  });
+
+  it("register → authOk with a token; a new connection resumes with it", async () => {
+    const { client } = await joined({ login: false });
+    send(client, {
+      type: "register",
+      email: "Serf@Test.example",
+      password: PASSWORD,
+    });
+    const ok = await nextOfType(client, "authOk");
+    expect(ok.email).toBe("serf@test.example");
+    expect(ok.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    client.socket.close();
+
+    const { client: again } = await joined({ login: false });
+    send(again, { type: "resume", token: ok.token });
+    expect(await nextOfType(again, "authOk")).toEqual({
+      type: "authOk",
+      email: "serf@test.example",
+      token: ok.token,
+    });
+    again.send(queue);
+    expect((await nextOfType(again, "queueStatus")).queued).toBe(1);
+  });
+
+  it("wrong passwords get one message, and are not counted as invalid messages", async () => {
+    const { client } = await joined({ login: false });
+    send(client, {
+      type: "register",
+      email: "x@test.example",
+      password: PASSWORD,
+    });
+    await nextOfType(client, "authOk");
+    const { client: other } = await joined({ login: false });
+    // Six wrong tries: more than the 5 invalid messages that would close a connection.
+    for (let i = 0; i < 6; i++) {
+      send(other, {
+        type: "login",
+        email: "x@test.example",
+        password: "wrong pass",
+      });
+      const err = await nextOfType(other, "authError");
+      expect(err.reason).toMatch(/incorrect|Too many/);
+    }
+    expect(other.socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it("logging in elsewhere logs the older connection out (but keeps it connected)", async () => {
+    const { client: first } = await joined({ login: false });
+    send(first, {
+      type: "register",
+      email: "dup@test.example",
+      password: PASSWORD,
+    });
+    await nextOfType(first, "authOk");
+    first.send(queue);
+    await nextOfType(first, "queueStatus");
+
+    const { client: second } = await joined({ login: false });
+    send(second, {
+      type: "login",
+      email: "dup@test.example",
+      password: PASSWORD,
+    });
+    await nextOfType(second, "authOk");
+    expect(await nextOfType(first, "loggedOut")).toEqual({
+      type: "loggedOut",
+      reason: "This account logged in somewhere else.",
+    });
+    expect(server.isQueued(1)).toBe(false);
+    expect(first.socket.readyState).toBe(WebSocket.OPEN);
+    first.send(queue);
+    expect((await nextOfType(first, "error")).reason).toBe("log in first");
+  });
+
+  it("logout ends the session: the token no longer resumes", async () => {
+    const { client } = await joined({ login: false });
+    const token = await register(client);
+    send(client, { type: "logout" });
+    expect((await nextOfType(client, "loggedOut")).reason).toBe("Logged out.");
+    send(client, { type: "resume", token });
+    expect((await nextOfType(client, "authError")).reason).toBe(
+      "Your login has expired. Please log in again.",
+    );
+  });
+
+  it("logging out mid-run leaves the run", async () => {
+    const [c] = await inRun(1);
+    send(c!, { type: "logout" });
+    expect((await nextOfType(c!, "runEnded")).result).toBe("left");
+    await nextOfType(c!, "loggedOut");
+    expect(server.instanceOf(1)).toBeUndefined();
+  });
+
+  it("rejects logging in twice and malformed tokens", async () => {
+    const { client } = await joined();
+    send(client, {
+      type: "login",
+      email: "a@test.example",
+      password: PASSWORD,
+    });
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "already logged in",
+    );
+    client.send(JSON.stringify({ type: "resume", token: "short" }));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "resume: bad token",
+    );
   });
 });

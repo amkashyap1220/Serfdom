@@ -1,3 +1,7 @@
+import pg from "pg";
+import { PgAccountRepo } from "./auth/account-repo.ts";
+import { AccountService } from "./auth/account-service.ts";
+import { migrate } from "./db/migrate.ts";
 import { GameServer } from "./game-server.ts";
 import { consoleLogger } from "./log.ts";
 
@@ -13,22 +17,45 @@ function readPort(): number {
   return port;
 }
 
+/** The database is required since Phase 7 (D-059); see .env.example. */
+function readDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set: add it to .env in the repo root (see .env.example and docs/TESTING_AND_FEEDBACK.md)",
+    );
+  }
+  return url;
+}
+
+let pool: pg.Pool | undefined;
 try {
   const port = readPort();
-  const server = await GameServer.start({ port });
+  pool = new pg.Pool({ connectionString: readDatabaseUrl() });
+  const applied = await migrate(pool);
+  consoleLogger.info(
+    applied.length > 0
+      ? `database migrated: ${applied.join(", ")}`
+      : "database up to date",
+  );
+  const accounts = new AccountService(new PgAccountRepo(pool));
+  const server = await GameServer.start({ port, accounts });
   consoleLogger.info(
     `Serfdom server listening on ws://localhost:${server.port}`,
   );
 
   const shutdown = (): void => {
     consoleLogger.info("shutting down");
-    server.close().then(
-      () => process.exit(0),
-      (err: unknown) => {
-        consoleLogger.warn(`error during shutdown: ${String(err)}`);
-        process.exit(1);
-      },
-    );
+    server
+      .close()
+      .then(() => pool?.end())
+      .then(
+        () => process.exit(0),
+        (err: unknown) => {
+          consoleLogger.warn(`error during shutdown: ${String(err)}`);
+          process.exit(1);
+        },
+      );
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
@@ -37,6 +64,8 @@ try {
     err instanceof Error && "code" in err && err.code === "EADDRINUSE"
       ? `port already in use; stop the other server or set PORT`
       : String(err);
+  // pg error messages never contain the password from DATABASE_URL.
   consoleLogger.warn(`server failed to start: ${message}`);
+  await pool?.end().catch(() => {});
   process.exit(1);
 }

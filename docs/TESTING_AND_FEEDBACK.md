@@ -78,6 +78,24 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Accounts checklist (Phase 7a)
+
+Database setup: see README "Database setup". `npm run check` needs PostgreSQL running and `TEST_DATABASE_URL` in `.env`; the server tests wipe and rebuild `serfdom_test`. Restart `npm run dev` (protocol v8; the server now needs `DATABASE_URL`); its terminal should print `database migrated: 001_accounts.sql` once, then `database up to date` on later starts.
+
+1. Open http://localhost:5173/ (Ctrl+Shift+R). You see **Log in** with Email and Password fields.
+2. Click **Create an account**. Try a 5-character password: "Use at least 8 characters." appears and nothing is sent.
+3. Register with a real-looking email and an 8+ character password: you land on the menu with "Logged in as …" top right.
+4. Reload the page: you are back in the menu without typing anything ("Logging you back in…" flashes).
+5. **Log out**: back to Log in with "Logged out."; reloading stays on Log in.
+6. Log in with a wrong password: "Email or password is incorrect." (the email you typed stays). Five wrong tries: "Too many failed attempts. Try again in 10 minutes."
+7. Try registering the same email again: "An account with that email already exists." (Different capitalization counts as the same email.)
+8. Log in with the right password, queue, play: everything from Phase 6 still works.
+9. Two browsers (e.g. Chrome and Edge, or a private window): log in to the same account in both. The first shows "This account logged in somewhere else." and stays on Log in.
+10. Restart `npm run dev` (Ctrl+C, then again) and reload: you are still logged in (the login survived the restart).
+11. Server terminal: login lines show `account #N`, never your email or password.
+
+Report: pass/fail per step, the exact message for any failure, and any console or terminal errors.
+
 ### Phase 6 acceptance checklist (two clients)
 
 Run `npm run dev` (restart it if it was running before 6d: protocol v7). Open **two separate windows** at http://localhost:5173/, Ctrl+Shift+R both.

@@ -28,10 +28,18 @@ export interface NetState {
 
 export type SnapshotMessage = Extract<ServerMessage, { type: "snapshot" }>;
 
-/** Messages about the menu, queue, and runs (everything but snapshots and presence). */
+/** Messages about accounts, the menu, queue, and runs (everything but snapshots and presence). */
 export type LobbyMessage = Extract<
   ServerMessage,
-  { type: "queueStatus" | "runStarted" | "runEnded" }
+  {
+    type:
+      | "queueStatus"
+      | "runStarted"
+      | "runEnded"
+      | "authOk"
+      | "authError"
+      | "loggedOut";
+  }
 >;
 
 export interface ConnectionHandlers {
@@ -100,6 +108,23 @@ export class Connection {
   /** R: leave the current run at once (D-036). */
   sendExitDungeon(): void {
     this.send({ type: "exitDungeon" });
+  }
+
+  sendRegister(email: string, password: string): void {
+    this.send({ type: "register", email, password });
+  }
+
+  sendLogin(email: string, password: string): void {
+    this.send({ type: "login", email, password });
+  }
+
+  /** Log back in with a saved token (reload, reconnect). */
+  sendResume(token: string): void {
+    this.send({ type: "resume", token });
+  }
+
+  sendLogout(): void {
+    this.send({ type: "logout" });
   }
 
   /** Sends only once joined; before that there is nothing to say but hello. */
@@ -182,6 +207,9 @@ export class Connection {
       case "queueStatus":
       case "runStarted":
       case "runEnded":
+      case "authOk":
+      case "authError":
+      case "loggedOut":
         this.handlers.onLobby?.(msg, performance.now());
         break;
     }

@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phases 0–5 are complete (setup, client skeleton, movement/camera, combat prototype, authoritative multiplayer, shared server-run combat). Phase 6 (dungeon vertical slice) is in progress: 6a adds the main menu, an open dungeon queue, separate dungeon runs, and death/completion screens; 6b adds the Goblin Warrens map (rooms, doors, waves) with grunts and slingers; 6c adds brutes, the Goblin Warlord boss, the exit portal, and the full completion celebration: browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
+Phases 0–5 are complete (setup, client skeleton, movement/camera, combat prototype, authoritative multiplayer, shared server-run combat). Phase 6 (dungeon vertical slice) is in progress: 6a adds the main menu, an open dungeon queue, separate dungeon runs, and death/completion screens; 6b adds the Goblin Warrens map (rooms, doors, waves) with grunts and slingers; 6c adds brutes, the Goblin Warlord boss, the exit portal, and the full completion celebration. Phase 7 (accounts and persistent data) is in progress: 7a adds email + password accounts stored in PostgreSQL: browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
 
 ## Development setup
 
@@ -38,6 +38,31 @@ node --version   # v24.x.x
 npm --version
 git --version
 ```
+
+- **PostgreSQL 17** (since Phase 7, D-059): the game server stores accounts in it.
+
+#### Database setup (once per machine)
+
+1. Install (Windows; pick your own admin password and keep it safe):
+
+   ```powershell
+   winget install -e --id PostgreSQL.PostgreSQL.17 --override "--mode unattended --superpassword CHOOSE_A_PASSWORD --serverport 5432"
+   ```
+
+   `Get-Service postgresql*` should then show `postgresql-x64-17` **Running**.
+
+2. Create the game's database user and two databases (each command asks for the admin password; pick a second password for the game):
+
+   ```powershell
+   $psql = "C:\Program Files\PostgreSQL\17\bin\psql.exe"
+   & $psql -U postgres -c "CREATE ROLE serfdom LOGIN PASSWORD 'DEV_PASSWORD';"
+   & $psql -U postgres -c "CREATE DATABASE serfdom OWNER serfdom;"
+   & $psql -U postgres -c "CREATE DATABASE serfdom_test OWNER serfdom;"
+   ```
+
+3. Copy `.env.example` to `.env` (git-ignored) and put `DEV_PASSWORD` into `DATABASE_URL` and `TEST_DATABASE_URL`.
+
+The server applies database migrations (`server/migrations/*.sql`) by itself on start. The tests **wipe and rebuild** `serfdom_test` (they refuse to touch a database whose name does not end in `_test`).
 
 ### Set up a clean clone
 
@@ -83,6 +108,9 @@ shared/   pure game rules and protocol, used by client AND server (@serfdom/shar
 server/   authoritative game server (@serfdom/server): Node 24 + ws, no build step
   src/main.ts            entry point (PORT env, default 8080)
   src/game-server.ts     connections, guest ids, presence, 60 Hz tick, snapshots
+  migrations/            numbered SQL files, applied in order on start
+  src/db/migrate.ts      migration runner
+  src/auth/              accounts: password hashing, sessions, login throttle
   src/input-queue.ts     per-player input queue (move-credit rule)
   src/matchmaking.ts     open dungeon queue (who starts a run together)
   src/dungeon-instance.ts one dungeon run: its own simulation, members, stats

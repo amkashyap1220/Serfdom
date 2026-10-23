@@ -15,6 +15,18 @@ export type MenuTab = "dungeons" | "serfs" | "stash" | "leaderboard";
  */
 export type Screen =
   | { kind: "connecting"; reason: string | null }
+  /** Logging back in with a saved token. */
+  | { kind: "resuming" }
+  | {
+      kind: "login";
+      mode: "login" | "register";
+      /** Waiting for the server's answer. */
+      busy: boolean;
+      /** Why the last attempt failed. */
+      error: string | null;
+      /** Why we are here (logged out, logged in elsewhere, expired). */
+      notice: string | null;
+    }
   | { kind: "menu"; tab: MenuTab; notice: string | null }
   | {
       kind: "queued";
@@ -35,7 +47,10 @@ export type Screen =
     };
 
 export type ScreenEvent =
-  | { type: "connected" }
+  /** The server said welcome. `hasToken`: a saved login will be resumed. */
+  | { type: "connected"; hasToken: boolean }
+  | { type: "loginSubmitted" }
+  | { type: "switchLoginMode" }
   | { type: "disconnected"; reason: string }
   | { type: "server"; message: ServerMessage; nowMs: number }
   | { type: "openTab"; tab: MenuTab }
@@ -49,11 +64,32 @@ export const INITIAL_SCREEN: Screen = { kind: "connecting", reason: null };
 
 const MENU: Screen = { kind: "menu", tab: "dungeons", notice: null };
 
+const login = (notice: string | null = null): Screen => ({
+  kind: "login",
+  mode: "login",
+  busy: false,
+  error: null,
+  notice,
+});
+
 /** Pure: the next screen after an event. Returns the same object when nothing changes. */
 export function nextScreen(screen: Screen, event: ScreenEvent): Screen {
   switch (event.type) {
     case "connected":
-      return screen.kind === "connecting" ? MENU : screen;
+      if (screen.kind !== "connecting") return screen;
+      return event.hasToken ? { kind: "resuming" } : login();
+    case "loginSubmitted":
+      return screen.kind === "login"
+        ? { ...screen, busy: true, error: null }
+        : screen;
+    case "switchLoginMode":
+      return screen.kind === "login"
+        ? {
+            ...screen,
+            mode: screen.mode === "login" ? "register" : "login",
+            error: null,
+          }
+        : screen;
     case "disconnected":
       return { kind: "connecting", reason: event.reason };
     case "openTab":
@@ -84,6 +120,18 @@ function onServerMessage(
   nowMs: number,
 ): Screen {
   switch (msg.type) {
+    case "authOk":
+      return screen.kind === "login" || screen.kind === "resuming"
+        ? MENU
+        : screen;
+    case "authError":
+      if (screen.kind === "resuming") return login(msg.reason);
+      if (screen.kind === "login") {
+        return { ...screen, busy: false, error: msg.reason };
+      }
+      return screen;
+    case "loggedOut":
+      return login(msg.reason);
     case "queueStatus":
       // Ignore a late status after we left the queue or the run began.
       if (screen.kind !== "queued" || screen.dungeon !== msg.dungeon) {
