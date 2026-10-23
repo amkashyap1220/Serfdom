@@ -78,6 +78,23 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→875, 3→1250, 4→1625). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Two-client combat checklist (Phase 5)
+
+Run `npm run dev`, open **two separate windows** side by side at http://localhost:5173/ (not tabs: browsers pause background tabs), reload both with Ctrl+Shift+R.
+
+1. Both HUDs: `Movement + combat: server-authoritative`; each sees the other as a blue square.
+2. Dummy max HP matches the number of living players (1→500, 2→875, 3→1250, 4→1625, D-045).
+3. Fight from window A only: both windows show the same dummy HP at every moment; B sees A's cyan shots.
+4. Fight from both windows at once: damage adds up; when the dummy dies both windows show `respawn …s`; it returns at full (scaled) HP after 3 s.
+5. Your own shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands; `Pending / correction` stays ~0–1 / 0.00 px.
+6. Stand in a ring's path in one window: it flashes red and loses 20 HP per hit; the other window is unaffected.
+7. Die in A (T twice for Manual, stand left of the dummy): placeholder menu in A; B stops drawing A; dummy max HP rescales down keeping its HP fraction; B keeps fighting normally.
+8. Enter in A: A returns at (1000, 1000) with 200 HP and B sees A again.
+9. Close A: B's `Online` list drops A and the dummy rescales.
+10. Consoles: no red errors in either window; server terminal shows join / died / plays again / left lines with guest ids only.
+
+Report: pass/fail per step, HUD values for any failure, and the exact console or terminal text.
+
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests

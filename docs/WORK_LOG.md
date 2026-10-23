@@ -154,3 +154,11 @@ Keep this concise and update it after each meaningful milestone.
 - Checks: `npm run check` passed (144 shared, 38 server, 33 client). Live, two visible windows + the user's two open tabs on the user's servers: 4 players → dummy 1625 (3.25×); both windows identical dummy HP in every sample; own-shot correction 0.00 px; death → menu, other window stopped drawing the dead player, dummy rescaled to 1250 keeping the fraction; Enter → (1000, 1000) 200/200; no console errors. Hit confirmation delay 17–22 ms median (n = 38). Snapshots 430 B idle → ~2.2 KB / ~130 KB/s mid-fight (T-027).
 - User manual test passed (all 5 steps; shots feel instant, hits prompt, dodging fair). Slice 5b complete.
 - Next step: 5c (review Phase 5 acceptance: simultaneous attacks, tampering, two-client manual test doc).
+
+### Phase 5c — Simultaneous attacks, two-client checklist, Phase 5 acceptance — 2026-10-22
+
+- Added `shared/src/simultaneous.test.ts` (5 tests): same-tick hits both count; shared killing blow credited to exactly one player (lower projectile id); identical results for identical inputs; tie credit follows input order; 4-player burst never drops HP below 0 or double-counts a defeat. Recorded T-028.
+- First run failed 3 tests because my setup set HP before party scaling rescaled it (rule working as designed); fixed the setup to set HP already scaled.
+- Added the two-client combat checklist to TESTING_AND_FEEDBACK.md.
+- Phase 5 acceptance: both clients see consistent enemy health and defeat ✅ (live + server tests); client tampering cannot award damage or rewards ✅ (intent-only protocol, claimed hits rejected, fire/move rate capped, server-side range/cooldown/eligibility); combat tests pass ✅ (`npm run check`: 149 shared, 38 server, 33 client); manual two-client steps documented ✅.
+- Next step: user runs the checklist (optional, 5b already user-tested); then Phase 6 — dungeon vertical slice (needs design decisions first).
