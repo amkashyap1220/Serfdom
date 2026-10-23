@@ -151,6 +151,7 @@ describe("screen flow", () => {
           reward: result === "completed" ? { roll: 42 } : null,
           killedBy: null,
           serf: null,
+          expGained: 0,
         }),
       );
       expect(shown).toEqual({
@@ -161,6 +162,7 @@ describe("screen flow", () => {
         reward: result === "completed" ? { roll: 42 } : null,
         killedBy: null,
         serf: null,
+        expGained: 0,
       });
       // After a death you go choose a serf; after a clear, back to dungeons.
       expect(nextScreen(shown, { type: "dismissResults" })).toMatchObject({
@@ -181,6 +183,7 @@ describe("screen flow", () => {
         reward: { roll: 7 },
         killedBy: null,
         serf: null,
+        expGained: 0,
       }),
     );
     expect(
@@ -200,6 +203,7 @@ describe("screen flow", () => {
           reward: null,
           killedBy: null,
           serf: null,
+          expGained: 0,
         }),
       ),
     ).toEqual({

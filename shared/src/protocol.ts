@@ -36,13 +36,15 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v10 (8a): serfs carry lifetime EXP; runEnded carries expGained;
+ *          client getLeaderboard, server leaderboard.
  * v9 (7b): serfs. Client createSerf / selectSerf; server serfList /
  *          serfError; runEnded carries killedBy and the serf's life.
  *          Queueing requires a chosen living serf.
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -86,7 +88,17 @@ export type ClientMessage =
   /** Create a serf in a free slot (D-061, D-063). */
   | { type: "createSerf"; name: string }
   /** Play as this serf (must be one of yours and alive). */
-  | { type: "selectSerf"; serfId: number };
+  | { type: "selectSerf"; serfId: number }
+  /** The lifetime EXP leaderboard (GDD §12). */
+  | { type: "getLeaderboard" };
+
+export interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  level: number;
+  exp: number;
+  alive: boolean;
+}
 
 /** One player's authoritative state in a snapshot. */
 export interface SnapshotPlayer {
@@ -173,7 +185,11 @@ export type ServerMessage =
       killedBy: EnemyKind | null;
       /** The serf's life including this run; on death, its final record. */
       serf: SerfSummary | null;
+      /** EXP this run earned (completion only, D-069). */
+      expGained: number;
     }
+  /** Top serfs by lifetime EXP, living and dead. Names only: no account data. */
+  | { type: "leaderboard"; entries: LeaderboardEntry[] }
   /** Your serfs (living first, then the fallen) and which one you play as. */
   | {
       type: "serfList";
@@ -263,6 +279,11 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         message: { type: obj.type, email: obj.email, password: obj.password },
       };
     }
+    case "getLeaderboard":
+      if (!hasExactKeys(obj, ["type"])) {
+        return fail("getLeaderboard: unexpected fields");
+      }
+      return { ok: true, message: { type: "getLeaderboard" } };
     case "createSerf":
       if (!hasExactKeys(obj, ["type", "name"])) {
         return fail("createSerf: unexpected fields");
@@ -396,6 +417,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "reward",
           "killedBy",
           "serf",
+          "expGained",
         ])
       ) {
         return fail("runEnded: unexpected fields");
@@ -405,9 +427,15 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       }
       const serf = obj.serf === null ? null : parseSerfSummary(obj.serf);
       if (serf === undefined) return fail("runEnded: bad serf");
+      if (!isNonNegativeInt(obj.expGained)) {
+        return fail("runEnded: bad expGained");
+      }
       if (!isDungeonId(obj.dungeon)) return fail("runEnded: bad dungeon");
       const result = RUN_RESULTS.find((r) => r === obj.result);
       if (!result) return fail("runEnded: bad result");
+      if (result !== "completed" && obj.expGained !== 0) {
+        return fail("runEnded: EXP comes with completion only");
+      }
       const stats = parseRunStats(obj.stats);
       if (!stats) return fail("runEnded: bad stats");
       const reward = parseReward(obj.reward);
@@ -425,8 +453,17 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           reward,
           killedBy: obj.killedBy,
           serf,
+          expGained: obj.expGained,
         },
       };
+    }
+    case "leaderboard": {
+      if (!hasExactKeys(obj, ["type", "entries"])) {
+        return fail("leaderboard: unexpected fields");
+      }
+      const entries = parseList(obj.entries, parseLeaderboardEntry);
+      if (!entries) return fail("leaderboard: bad entry");
+      return { ok: true, message: { type: "leaderboard", entries } };
     }
     case "serfList": {
       if (!hasExactKeys(obj, ["type", "slots", "serfs", "selectedId"])) {
@@ -543,12 +580,13 @@ function parseFire(v: unknown): FireInput | string {
 function parseSerfSummary(v: unknown): SerfSummary | undefined {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["id", "name", "level", "alive", "life", "death"])
+    !hasExactKeys(v, ["id", "name", "level", "exp", "alive", "life", "death"])
   ) {
     return undefined;
   }
   if (!isPlayerId(v.id) || typeof v.name !== "string") return undefined;
   if (!isPlayerId(v.level) || typeof v.alive !== "boolean") return undefined;
+  if (!isNonNegativeInt(v.exp)) return undefined;
   const life = parseLifeStats(v.life);
   if (!life) return undefined;
   let death: SerfSummary["death"] = null;
@@ -568,9 +606,29 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
     id: v.id,
     name: v.name,
     level: v.level,
+    exp: v.exp,
     alive: v.alive,
     life,
     death,
+  };
+}
+
+function parseLeaderboardEntry(v: unknown): LeaderboardEntry | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["rank", "name", "level", "exp", "alive"])
+  ) {
+    return null;
+  }
+  if (!isPlayerId(v.rank) || typeof v.name !== "string") return null;
+  if (!isPlayerId(v.level) || !isNonNegativeInt(v.exp)) return null;
+  if (typeof v.alive !== "boolean") return null;
+  return {
+    rank: v.rank,
+    name: v.name,
+    level: v.level,
+    exp: v.exp,
+    alive: v.alive,
   };
 }
 

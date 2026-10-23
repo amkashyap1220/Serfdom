@@ -1,6 +1,8 @@
 import {
   addRunToLife,
+  levelForExp,
   newLifeStats,
+  type LeaderboardEntry,
   type LifeStats,
   type RunResult,
   type RunStats,
@@ -39,6 +41,7 @@ export interface SerfRepo {
    * Adds a finished run to a living serf and, if `death` is given, kills it
    * for good. Null (and no change) if the serf is not this account's or is
    * already dead, so a run can never be recorded twice onto a corpse.
+   * `expGained` is added to lifetime EXP in the same statement.
    */
   recordRun(
     accountId: number,
@@ -46,7 +49,10 @@ export interface SerfRepo {
     result: RunResult,
     run: RunStats,
     death: Death | null,
+    expGained: number,
   ): Promise<SerfSummary | null>;
+  /** All serfs, living and dead, by lifetime EXP (ties: older serf first). */
+  leaderboard(limit: number): Promise<LeaderboardEntry[]>;
 }
 
 const UNIQUE_VIOLATION = "23505";
@@ -54,7 +60,7 @@ const UNIQUE_VIOLATION = "23505";
 interface SerfRow {
   id: string;
   name: string;
-  level: number;
+  exp: string;
   died_at: Date | null;
   death_dungeon: string | null;
   killed_by: string | null;
@@ -70,10 +76,12 @@ interface SerfRow {
 
 function fromRow(r: SerfRow): SerfSummary {
   const alive = r.died_at === null;
+  const exp = Number(r.exp);
   return {
     id: Number(r.id),
     name: r.name,
-    level: r.level,
+    level: levelForExp(exp),
+    exp,
     alive,
     life: {
       runs: r.runs,
@@ -163,6 +171,7 @@ export class PgSerfRepo implements SerfRepo {
     result: RunResult,
     run: RunStats,
     death: Death | null,
+    expGained: number,
   ): Promise<SerfSummary | null> {
     // One statement: the "still alive" check and the update cannot be
     // separated by another write.
@@ -178,7 +187,8 @@ export class PgSerfRepo implements SerfRepo {
          damage_taken = damage_taken + $9,
          died_at = case when $10::boolean then now() else null end,
          death_dungeon = $11,
-         killed_by = $12
+         killed_by = $12,
+         exp = exp + $13
        where id = $1 and account_id = $2 and died_at is null
        returning *`,
       [
@@ -194,11 +204,34 @@ export class PgSerfRepo implements SerfRepo {
         death !== null,
         death?.dungeon ?? null,
         death?.killedBy ?? null,
+        expGained,
       ],
     );
     const row = r.rows[0];
     return row ? fromRow(row) : null;
   }
+
+  async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
+    const r = await this.pool.query<{
+      name: string;
+      exp: string;
+      died_at: Date | null;
+    }>("select name, exp, died_at from serfs order by exp desc, id limit $1", [
+      limit,
+    ]);
+    return r.rows.map((row, i) =>
+      toEntry(i, row.name, Number(row.exp), row.died_at === null),
+    );
+  }
+}
+
+function toEntry(
+  index: number,
+  name: string,
+  exp: number,
+  alive: boolean,
+): LeaderboardEntry {
+  return { rank: index + 1, name, level: levelForExp(exp), exp, alive };
 }
 
 function isPgError(err: unknown): err is { code: string } {
@@ -250,6 +283,7 @@ export class MemorySerfRepo implements SerfRepo {
       id: this.serfs.length + 1,
       name,
       level: 1,
+      exp: 0,
       alive: true,
       life: newLifeStats(),
       death: null,
@@ -276,6 +310,7 @@ export class MemorySerfRepo implements SerfRepo {
     result: RunResult,
     run: RunStats,
     death: Death | null,
+    expGained: number,
   ): Promise<SerfSummary | null> {
     const s = this.serfs.find(
       (x) =>
@@ -287,13 +322,27 @@ export class MemorySerfRepo implements SerfRepo {
       damageDealt: Math.round(run.damageDealt),
       damageTaken: Math.round(run.damageTaken),
     });
+    const exp = s.summary.exp + expGained;
     s.summary = {
       ...s.summary,
+      exp,
+      level: levelForExp(exp),
       life,
       alive: death === null,
       death,
     };
     if (death) s.diedSeq = ++this.seq;
     return structuredClone(s.summary);
+  }
+
+  async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
+    return [...this.serfs]
+      .sort(
+        (a, b) => b.summary.exp - a.summary.exp || a.summary.id - b.summary.id,
+      )
+      .slice(0, limit)
+      .map((s, i) =>
+        toEntry(i, s.summary.name, s.summary.exp, s.summary.alive),
+      );
   }
 }

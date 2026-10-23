@@ -200,17 +200,31 @@ function serfContract(
       const a = await account();
       const serf = await repo.create(a, `${name}Hilda`, 1);
       if (typeof serf === "string") throw new Error(serf);
-      const after = await repo.recordRun(a, serf.id, "completed", run, null);
+      const after = await repo.recordRun(
+        a,
+        serf.id,
+        "completed",
+        run,
+        null,
+        100,
+      );
+      expect(after).toMatchObject({ exp: 100, level: 2 });
       expect(after?.life).toMatchObject({
         runs: 1,
         clears: 1,
         seconds: 30,
         enemiesDefeated: 2,
       });
-      const dead = await repo.recordRun(a, serf.id, "died", run, {
-        dungeon: "goblin-warrens",
-        killedBy: "brute",
-      });
+      const dead = await repo.recordRun(
+        a,
+        serf.id,
+        "died",
+        run,
+        { dungeon: "goblin-warrens", killedBy: "brute" },
+        0,
+      );
+      // The dead keep their final EXP (GDD §7).
+      expect(dead).toMatchObject({ exp: 100, level: 2 });
       expect(dead).toMatchObject({
         alive: false,
         death: { dungeon: "goblin-warrens", killedBy: "brute" },
@@ -218,7 +232,7 @@ function serfContract(
       expect(dead?.life).toMatchObject({ runs: 2, clears: 1, seconds: 60 });
       // A corpse takes no more runs and cannot die twice.
       expect(
-        await repo.recordRun(a, serf.id, "completed", run, null),
+        await repo.recordRun(a, serf.id, "completed", run, null, 100),
       ).toBeNull();
       // Its slot and its name are free again; the dead stay listed after the living.
       const heir = await repo.create(a, `${name}hilda`, 1);
@@ -229,6 +243,32 @@ function serfContract(
       ]);
     });
 
+    it("ranks every serf, living and dead, by lifetime EXP with names only", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const top = await repo.create(a, `${name}Top`, 2);
+      if (typeof top === "string") throw new Error(top);
+      await repo.recordRun(a, top.id, "completed", run, null, 1_000_000);
+      await repo.recordRun(
+        a,
+        top.id,
+        "died",
+        run,
+        { dungeon: "x", killedBy: null },
+        0,
+      );
+      const board = await repo.leaderboard(3);
+      expect(board[0]).toEqual({
+        rank: 1,
+        name: `${name}Top`,
+        level: 20,
+        exp: 1_000_000,
+        alive: false,
+      });
+      expect(board.length).toBeLessThanOrEqual(3);
+      expect(board.map((e) => e.rank)).toEqual(board.map((_, i) => i + 1));
+    });
+
     it("another account's serf does not exist for you", async () => {
       const { repo, account } = await make();
       const a = await account();
@@ -237,10 +277,17 @@ function serfContract(
       if (typeof serf === "string") throw new Error(serf);
       expect(await repo.find(b, serf.id)).toBeNull();
       expect(
-        await repo.recordRun(b, serf.id, "died", run, {
-          dungeon: "x",
-          killedBy: null,
-        }),
+        await repo.recordRun(
+          b,
+          serf.id,
+          "died",
+          run,
+          {
+            dungeon: "x",
+            killedBy: null,
+          },
+          0,
+        ),
       ).toBeNull();
       expect((await repo.find(a, serf.id))?.alive).toBe(true);
       expect(await repo.list(b)).toEqual([]);
@@ -282,10 +329,17 @@ describe("serfs in PostgreSQL", () => {
     if (a === "taken") throw new Error("taken");
     const serf = await new PgSerfRepo(pool).create(a.id, "Wulfric", 2);
     if (typeof serf === "string") throw new Error(serf);
-    await new PgSerfRepo(pool).recordRun(a.id, serf.id, "died", newRunStats(), {
-      dungeon: "goblin-warrens",
-      killedBy: "slinger",
-    });
+    await new PgSerfRepo(pool).recordRun(
+      a.id,
+      serf.id,
+      "died",
+      newRunStats(),
+      {
+        dungeon: "goblin-warrens",
+        killedBy: "slinger",
+      },
+      0,
+    );
     const { default: pgModule } = await import("pg");
     const second = new pgModule.Pool({
       connectionString: process.env.TEST_DATABASE_URL,

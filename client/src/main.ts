@@ -64,7 +64,10 @@ game.events.once(Phaser.Core.Events.READY, () => {
       dispatch({ type: "leaveQueue" });
     },
     dismissResults: () => dispatch({ type: "dismissResults" }),
-    openTab: (tab) => dispatch({ type: "openTab", tab }),
+    openTab: (tab) => {
+      if (tab === "leaderboard") net.connection.sendGetLeaderboard();
+      dispatch({ type: "openTab", tab });
+    },
     submitLogin: (mode, email, password) => {
       if (mode === "register") net.connection.sendRegister(email, password);
       else net.connection.sendLogin(email, password);
@@ -100,6 +103,8 @@ game.events.once(Phaser.Core.Events.READY, () => {
     } else if (message.type === "serfList") {
       view.setSerfs(message);
       onSerfList(message);
+    } else if (message.type === "leaderboard") {
+      view.setLeaderboard(message.entries);
     } else if (message.type === "serfError") {
       view.setSerfError(message.reason);
     }

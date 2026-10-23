@@ -350,6 +350,22 @@ export class GameServer {
       case "selectSerf":
         this.onSerf(socket, session, message);
         return;
+      case "getLeaderboard":
+        if (session.accountId === null) {
+          this.reject(socket, session, "log in first");
+          return;
+        }
+        this.serfs
+          .leaderboard()
+          .then((entries) =>
+            this.send(socket, { type: "leaderboard", entries }),
+          )
+          .catch((err: unknown) =>
+            this.log.warn(
+              `${label(session)} leaderboard error: ${String(err)}`,
+            ),
+          );
+        return;
       case "logout":
         if (session.accountId === null) return;
         if (session.token) {
@@ -602,6 +618,7 @@ export class GameServer {
       ? this.serfs.recordRun(
           owner.accountId,
           owner.serfId,
+          instance.dungeon,
           end.result,
           end.stats,
           died ? { dungeon: instance.dungeon, killedBy: end.killedBy } : null,
@@ -612,7 +629,8 @@ export class GameServer {
         this.log.warn(`guest #${id} run not recorded: ${String(err)}`);
         return null;
       })
-      .then((serf) => {
+      .then((saved) => {
+        const serf = saved?.serf ?? null;
         if (serf && died) this.log.info(`serf #${serf.id} died for good`);
         if (!notify) return;
         this.sendEncoded(
@@ -625,6 +643,8 @@ export class GameServer {
             reward: end.reward,
             killedBy: end.killedBy,
             serf,
+            // Only what was actually saved counts.
+            expGained: saved?.expGained ?? 0,
           }),
         );
         const s = this.socketOf.get(id);

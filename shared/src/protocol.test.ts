@@ -267,10 +267,12 @@ describe("menu, queue, and run messages (v4)", () => {
         stats,
         reward: null,
         killedBy: "brute",
+        expGained: 0,
         serf: {
           id: 3,
           name: "Aldric Mudfoot",
           level: 1,
+          exp: 400,
           alive: false,
           life: { ...stats, runs: 4, clears: 2 },
           death: { dungeon: "goblin-warrens", killedBy: "brute" },
@@ -284,6 +286,7 @@ describe("menu, queue, and run messages (v4)", () => {
         reward: { roll: 777 },
         killedBy: null,
         serf: null,
+        expGained: 100,
       },
       { type: "serfList", slots: 2, serfs: [], selectedId: null },
       { type: "serfError", reason: "That name is taken." },
@@ -303,8 +306,15 @@ describe("menu, queue, and run messages (v4)", () => {
       reward: null,
       killedBy: null,
       serf: null,
+      expGained: 0,
     };
-    const won = { ...ended, result: "completed", stats };
+    const won = { ...ended, result: "completed", stats, expGained: 100 };
+    // EXP only with completion (D-069), and only whole non-negative amounts.
+    expect(server({ ...ended, result: "died", stats, expGained: 100 }).ok).toBe(
+      false,
+    );
+    expect(server({ ...won, expGained: -5 }).ok).toBe(false);
+    expect(server({ ...won, expGained: 2.5 }).ok).toBe(false);
     expect(server({ ...won, reward: { roll: 5 } }).ok).toBe(true);
     // A reward only with completion, and only a whole roll in range.
     expect(server({ ...won, reward: null }).ok).toBe(false);
@@ -505,6 +515,7 @@ describe("serf messages (v9)", () => {
       id: 1,
       name: "Edda",
       level: 1,
+      exp: 0,
       alive: true,
       life,
       death: null,
@@ -516,5 +527,31 @@ describe("serf messages (v9)", () => {
     expect(list([{ ...serf, gold: 5 }])).toBe(false);
     expect(list([{ ...serf, death: { dungeon: "x" } }])).toBe(false);
     expect(list([serf], "1")).toBe(false);
+  });
+});
+
+describe("leaderboard messages (v10)", () => {
+  it("round-trips a leaderboard and rejects account data in it", () => {
+    const entry = { rank: 1, name: "Edda", level: 9, exp: 1500, alive: false };
+    expect(
+      parseServerMessage(
+        JSON.stringify({ type: "leaderboard", entries: [entry] }),
+      ),
+    ).toEqual({ ok: true, message: { type: "leaderboard", entries: [entry] } });
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: "leaderboard",
+          entries: [{ ...entry, email: "a@b.co" }],
+        }),
+      ).ok,
+    ).toBe(false);
+    expect(
+      parseClientMessage(JSON.stringify({ type: "getLeaderboard" })).ok,
+    ).toBe(true);
+    expect(
+      parseClientMessage(JSON.stringify({ type: "getLeaderboard", top: 9999 }))
+        .ok,
+    ).toBe(false);
   });
 });

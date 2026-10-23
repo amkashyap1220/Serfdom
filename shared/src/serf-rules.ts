@@ -73,7 +73,10 @@ export function addRunToLife(
 export interface SerfSummary {
   id: number;
   name: string;
+  /** Derived from `exp` (progression.ts); never stored on its own. */
   level: number;
+  /** Lifetime EXP (keeps counting past the level cap; the leaderboard score). */
+  exp: number;
   alive: boolean;
   life: LifeStats;
   /** Where and to what it died (dead serfs only). */

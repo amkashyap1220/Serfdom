@@ -104,7 +104,8 @@ The exact hexadecimal RGB palette entries and permitted color variants should be
 - Lifetime EXP continues to be tracked after the level cap and feeds a single lifetime EXP leaderboard.
 - A dead character retains its final lifetime EXP score on the leaderboard.
 - The Goblin Warrens is aimed primarily at levels 1–9, but access is based on dungeon eligibility rather than a blanket rule that only those levels may enter.
-- Dungeon EXP is awarded on successful completion; a character that dies before completion receives no completion rewards.
+- Dungeon EXP is awarded on successful completion; a character that dies before completion receives no completion rewards. EXP comes only from completion (D-069); the pace is fast (D-070).
+- A dungeon gives less EXP to serfs above its level range (D-071): grinding only the Goblin Warrens reaches level 20 in about 75 clears (the first clear gives exactly one level, no later clear more than one), while progressing through harder dungeons reaches it in about 5 dungeons. Levels 1–20 are meant to be fast and easy; the real grind is stat potions and rare item drops from high-tier dungeons. PROVISIONAL numbers (T-045): each level costs 100 + 15 × (level − 1) EXP (level 20 at 4,465); the Goblin Warrens gives 100 EXP through level 9, then 10% less per level above 9.
 
 ### Design details still to resolve
 

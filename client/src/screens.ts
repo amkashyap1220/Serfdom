@@ -6,8 +6,11 @@ import {
   PASSWORD_MAX,
   PASSWORD_MIN,
   passwordProblem,
+  DUNGEON_EXP,
   LISTED_DUNGEONS,
+  levelProgress,
   normalizeSerfName,
+  type LeaderboardEntry,
   SERF_NAME_MAX,
   SERF_NAME_MIN,
   serfNameProblem,
@@ -64,11 +67,7 @@ const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
   { tab: "dungeons", label: "Dungeons", comingIn: null },
   { tab: "serfs", label: "Serfs", comingIn: null },
   { tab: "stash", label: "Stash", comingIn: "Phase 12 (shared stash)" },
-  {
-    tab: "leaderboard",
-    label: "Leaderboard",
-    comingIn: "Phase 8 (lifetime EXP)",
-  },
+  { tab: "leaderboard", label: "Leaderboard", comingIn: null },
 ];
 
 /**
@@ -90,6 +89,7 @@ export class ScreenView {
   /** This account's serfs from the server (null until known). */
   private serfs: Extract<ServerMessage, { type: "serfList" }> | null = null;
   private serfError: string | null = null;
+  private leaderboard: LeaderboardEntry[] | null = null;
   private typedSerfName = "";
 
   constructor(root: HTMLElement, actions: ScreenActions) {
@@ -108,6 +108,11 @@ export class ScreenView {
     this.serfs = list;
     this.serfError = null;
     this.typedSerfName = "";
+    this.shown = null;
+  }
+
+  setLeaderboard(entries: LeaderboardEntry[]): void {
+    this.leaderboard = entries;
     this.shown = null;
   }
 
@@ -270,13 +275,19 @@ export class ScreenView {
     const current = TABS.find((t) => t.tab === tab);
     if (current?.comingIn) {
       body.append(el("p", "hint", `Coming in ${current.comingIn}.`));
+    } else if (tab === "leaderboard") {
+      this.buildLeaderboard(body);
     } else if (tab === "serfs") {
       this.buildSerfs(body);
     } else {
       const playing = this.playing;
       body.append(
         playing
-          ? el("p", "", `Playing as ${playing.name} · Level ${playing.level}`)
+          ? el(
+              "p",
+              "",
+              `Playing as ${playing.name} · Level ${playing.level} · ${playing.exp} EXP`,
+            )
           : el("p", "notice", "Choose or create a serf first (Serfs tab)."),
       );
       for (const d of LISTED_DUNGEONS) {
@@ -337,6 +348,8 @@ export class ScreenView {
       el("h2", "", "A life in the Warrens"),
       life
         ? statList([
+            ["Level reached", String(serf?.level ?? 1)],
+            ["Lifetime EXP", String(serf?.exp ?? 0)],
             ["Dungeons entered", String(life.runs)],
             ["Dungeons cleared", String(life.clears)],
             ["Time in dungeons", formatDuration(life.seconds)],
@@ -376,7 +389,7 @@ export class ScreenView {
         el(
           "span",
           "hint",
-          `Lv ${s.level} · ${s.life.runs} runs · ${s.life.clears} clears`,
+          `Lv ${s.level} · ${s.exp} EXP · ${s.life.clears}/${s.life.runs} clears`,
         ),
         chosen
           ? el("span", "serf-chosen", "Playing")
@@ -402,6 +415,39 @@ export class ScreenView {
         );
       }
     }
+  }
+
+  /** Lifetime EXP leaderboard (GDD §12): living and dead, serf names only. */
+  private buildLeaderboard(body: HTMLElement): void {
+    body.append(el("h2", "", "Lifetime EXP"));
+    const entries = this.leaderboard;
+    if (!entries) {
+      body.append(el("p", "hint", "Loading…"));
+      return;
+    }
+    if (entries.length === 0) {
+      body.append(el("p", "hint", "No serf has earned EXP yet."));
+      return;
+    }
+    const table = el("div", "leaderboard");
+    for (const e of entries) {
+      const row = el("div", e.alive ? "lb-row" : "lb-row dead");
+      row.append(
+        el("span", "lb-rank", `#${e.rank}`),
+        el("span", "lb-name", e.alive ? e.name : `† ${e.name}`),
+        el("span", "", `Lv ${e.level}`),
+        el("span", "lb-exp", `${e.exp} EXP`),
+      );
+      table.append(row);
+    }
+    body.append(
+      table,
+      el(
+        "p",
+        "hint",
+        "The fallen keep their final score. † marks a dead serf.",
+      ),
+    );
   }
 
   private serfForm(): HTMLElement {
@@ -476,6 +522,7 @@ export class ScreenView {
       confetti,
       el("h1", "cleared-title", "DUNGEON CLEARED"),
       el("p", "", `${info.name} · ${formatDuration(s.seconds)}`),
+      expGain(screen.serf, screen.expGained, screen.dungeon),
       stats,
       chest,
       screen.reward
@@ -627,6 +674,62 @@ function rewardReel(roll: number): HTMLElement {
       label.textContent = `Placeholder roll ${roll} / ${PLACEHOLDER_ROLL_MAX}: real rewards arrive in Phase 9.`;
     }
   }, REEL_TICK_MS);
+  return box;
+}
+
+/**
+ * "+100 EXP" with a bar filling from the old EXP to the new, and a
+ * LEVEL UP burst when a level was gained (D-049: maximum celebration).
+ */
+function expGain(
+  serf: SerfSummary | null,
+  gained: number,
+  dungeon: DungeonId,
+): HTMLElement {
+  const box = el("div", "exp-gain");
+  if (!serf || gained <= 0) return box;
+  const { base, topLevel } = DUNGEON_EXP[dungeon];
+  const before = levelProgress(serf.exp - gained);
+  const after = levelProgress(serf.exp);
+  const leveled = after.level > before.level;
+  const bar = el("div", "exp-bar");
+  const fill = el("div", "exp-fill");
+  const fraction = (p: { into: number; needed: number }) =>
+    p.needed === 0 ? 1 : p.into / p.needed;
+  // Start where the serf was; after the stats count up, fill to where it is.
+  fill.style.width = `${(leveled ? 0 : fraction(before)) * 100}%`;
+  setTimeout(() => (fill.style.width = `${fraction(after) * 100}%`), 900);
+  bar.append(fill);
+  box.append(
+    el("p", "exp-plus", `+${gained} EXP`),
+    bar,
+    el(
+      "p",
+      "hint",
+      after.needed === 0
+        ? `Level ${after.level} (max) · ${serf.exp} lifetime EXP`
+        : `Level ${after.level} · ${after.into}/${after.needed} to level ${after.level + 1}`,
+    ),
+  );
+  if (gained < base) {
+    // D-071: say why, so a smaller number does not look like a bug.
+    box.append(
+      el(
+        "p",
+        "hint",
+        `Reduced EXP: this dungeon is aimed at levels up to ${topLevel}.`,
+      ),
+    );
+  }
+  if (leveled) {
+    const up = el("p", "level-up", `LEVEL UP! Level ${after.level}`);
+    box.append(up);
+    if (before.level < 2 && after.level >= 2) {
+      box.append(
+        el("p", "hint", "Class choice unlocks at level 2: coming in Phase 8b."),
+      );
+    }
+  }
   return box;
 }
 

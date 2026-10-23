@@ -40,7 +40,8 @@ export type LobbyMessage = Extract<
       | "authError"
       | "loggedOut"
       | "serfList"
-      | "serfError";
+      | "serfError"
+      | "leaderboard";
   }
 >;
 
@@ -133,6 +134,10 @@ export class Connection {
     this.send({ type: "createSerf", name });
   }
 
+  sendGetLeaderboard(): void {
+    this.send({ type: "getLeaderboard" });
+  }
+
   sendSelectSerf(serfId: number): void {
     this.send({ type: "selectSerf", serfId });
   }
@@ -222,6 +227,7 @@ export class Connection {
       case "loggedOut":
       case "serfList":
       case "serfError":
+      case "leaderboard":
         this.handlers.onLobby?.(msg, performance.now());
         break;
     }

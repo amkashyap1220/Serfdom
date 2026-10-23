@@ -149,6 +149,7 @@ export {
   type ServerMessage,
   roundCoord,
   type FireInput,
+  type LeaderboardEntry,
   type SnapshotEnemy,
   type SnapshotHazard,
   type SnapshotPlayer,
@@ -185,3 +186,13 @@ export {
   type LifeStats,
   type SerfSummary,
 } from "./serf-rules.ts";
+export {
+  clearExp,
+  DUNGEON_EXP,
+  EXP_FALLOFF_PER_LEVEL,
+  expToNextLevel,
+  levelForExp,
+  levelProgress,
+  MAX_LEVEL,
+  totalExpForLevel,
+} from "./progression.ts";

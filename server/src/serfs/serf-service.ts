@@ -2,11 +2,17 @@ import {
   normalizeSerfName,
   SERF_SLOTS,
   serfNameProblem,
+  clearExp,
+  type DungeonId,
+  type LeaderboardEntry,
   type RunResult,
   type RunStats,
   type SerfSummary,
 } from "@serfdom/shared";
 import type { Death, SerfRepo } from "./serf-repo.ts";
+
+/** PROVISIONAL: how many serfs the leaderboard shows. */
+export const LEADERBOARD_SIZE = 20;
 
 export type SerfResult =
   { ok: true; serf: SerfSummary } | { ok: false; reason: string };
@@ -60,13 +66,39 @@ export class SerfService {
     return { ok: true, serf };
   }
 
-  recordRun(
+  /**
+   * Records a finished run on the serf and awards its EXP: only on
+   * completion (D-069), scaled down when the serf is above the dungeon's
+   * level range (D-071). Null if the serf is missing or already dead.
+   */
+  async recordRun(
     accountId: number,
     serfId: number,
+    dungeon: DungeonId,
     result: RunResult,
     run: RunStats,
     death: Death | null,
-  ): Promise<SerfSummary | null> {
-    return this.repo.recordRun(accountId, serfId, result, run, death);
+  ): Promise<{ serf: SerfSummary; expGained: number } | null> {
+    // The level is read before the update. A serf plays one run at a time
+    // (it is fixed for the run, one connection per account), so no other
+    // write can change its EXP in between.
+    const before = await this.repo.find(accountId, serfId);
+    if (!before?.alive) return null;
+    const expGained =
+      result === "completed" ? clearExp(dungeon, before.level) : 0;
+    const serf = await this.repo.recordRun(
+      accountId,
+      serfId,
+      result,
+      run,
+      death,
+      expGained,
+    );
+    return serf ? { serf, expGained } : null;
+  }
+
+  /** The lifetime EXP leaderboard: serf names and scores only. */
+  leaderboard(): Promise<LeaderboardEntry[]> {
+    return this.repo.leaderboard(LEADERBOARD_SIZE);
   }
 }

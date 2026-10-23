@@ -78,6 +78,21 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### EXP and leaderboard checklist (Phase 8a)
+
+Restart `npm run dev` (protocol v10); the server prints `database migrated: 003_serf_exp.sql` once. Reload (Ctrl+Shift+R) and log in.
+
+1. Dungeons tab: "Playing as <name> · Level 1 · 0 EXP" for a new serf (existing serfs start at 0 EXP too).
+2. Clear the Goblin Warrens: the completion screen shows **+100 EXP**, an EXP bar, and **LEVEL UP! Level 2** (first clear).
+3. Clear again: +100 EXP, **no level-up**; the bar shows 100/115 to level 3 (the third clear reaches level 3).
+   3b. Optional (long, ~13 clears): past level 9 the EXP per clear drops (90 at level 10, 81 at 11 …) and the completion screen says "Reduced EXP: this dungeon is aimed at levels up to 9."
+4. Press R in a run, or die: no EXP. A dead serf's death screen shows its final level and lifetime EXP.
+5. Serfs tab: "Lv N · EXP · clears/runs" per serf.
+6. **Leaderboard** tab: serfs ranked by lifetime EXP, yours included; dead serfs marked † keep their score. No emails appear.
+7. Restart the server and reload: levels, EXP, and the leaderboard are unchanged.
+
+Report: pass/fail per step and any exact error text.
+
 ### Serfs checklist (Phase 7b)
 
 Restart `npm run dev` (protocol v9); the server terminal prints `database migrated: 002_serfs.sql` once. Reload http://localhost:5173/ (Ctrl+Shift+R) and log in.

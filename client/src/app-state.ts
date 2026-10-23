@@ -50,6 +50,8 @@ export type Screen =
       killedBy: EnemyKind | null;
       /** The serf's life including this run (its final record on death). */
       serf: SerfSummary | null;
+      /** EXP this run earned (completion only). */
+      expGained: number;
     };
 
 export type ScreenEvent =
@@ -170,6 +172,7 @@ function onServerMessage(
         reward: msg.reward,
         killedBy: msg.killedBy,
         serf: msg.serf,
+        expGained: msg.expGained,
       };
     default:
       return screen;

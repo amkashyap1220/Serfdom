@@ -1051,3 +1051,59 @@ describe("serfs (7b)", () => {
     expect(done.serf?.life).toMatchObject({ runs: 2, clears: 1 });
   });
 });
+
+describe("EXP and the leaderboard (8a)", () => {
+  /** Plays one training run to completion (the dummy dies to one shot). */
+  async function clearOnce(c: TestClient, id: number, firstSeq: number) {
+    c.send(queue);
+    await until(() => server.isQueued(id));
+    server.tick();
+    await nextOfType(c, "runStarted");
+    placePlayer(id, { x: 1200, y: 1100 });
+    setDummyHp(id, 25);
+    await drive(c, id, firstSeq, 30, { x: 1, y: 0 });
+    return nextOfType(c, "runEnded");
+  }
+
+  it("completion gives 100 EXP and level 2; the next clear adds 100 more", async () => {
+    const { client } = await joined();
+    const first = await clearOnce(client, 1, 0);
+    expect(first.expGained).toBe(100);
+    expect(first.serf).toMatchObject({ exp: 100, level: 2 });
+    const second = await clearOnce(client, 1, 0);
+    expect(second.serf).toMatchObject({ exp: 200, level: 2 });
+  });
+
+  it("R and death earn nothing, and a dead serf keeps the EXP it had", async () => {
+    const { client } = await joined();
+    await clearOnce(client, 1, 0);
+    client.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    await nextOfType(client, "runStarted");
+    placePlayer(1, { x: 1250, y: 1100 }, 1);
+    for (let t = 0; t < 120 && server.instanceOf(1); t++) server.tick();
+    const died = await nextOfType(client, "runEnded");
+    expect(died).toMatchObject({ result: "died", expGained: 0 });
+    expect(died.serf).toMatchObject({ alive: false, exp: 100, level: 2 });
+  });
+
+  it("the leaderboard lists serfs by EXP with no account data, and needs a login", async () => {
+    const { client: anon } = await joined({ login: false });
+    anon.send(encodeMessage({ type: "getLeaderboard" }));
+    expect((await nextOfType(anon, "error")).reason).toBe("log in first");
+
+    const { client } = await joined();
+    await clearOnce(client, 2, 0);
+    client.send(encodeMessage({ type: "getLeaderboard" }));
+    const board = await nextOfType(client, "leaderboard");
+    expect(board.entries[0]).toEqual({
+      rank: 1,
+      name: expect.any(String),
+      level: 2,
+      exp: 100,
+      alive: true,
+    });
+    expect(JSON.stringify(board)).not.toContain("@");
+  });
+});
