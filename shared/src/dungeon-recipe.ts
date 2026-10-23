@@ -46,6 +46,10 @@ export interface DungeonRecipe {
   sideBands: readonly RoomBand[];
   /** Main-path turns; never west. */
   turnWeights: Readonly<Record<"east" | "north" | "south", number>>;
+  /** Share of slingers that lead their shots (D-109). */
+  leadShare: number;
+  /** Damage of one falling boulder in this dungeon (D-110). */
+  rockfallDamage: number;
   /** The seed-0 layout and the fallback; generated from seed 1 if absent. */
   fixed?: DungeonLayout;
 }
@@ -62,10 +66,39 @@ export function buildFromRecipe(
   const random = seededRandom(seed);
   for (let i = 0; i < ATTEMPTS; i++) {
     const layout = tryRecipe(recipe, random);
-    if (layout && validateLayout(layout).length === 0) return layout;
+    if (layout && validateLayout(layout).length === 0) {
+      return arm(recipe, layout, seed);
+    }
   }
   if (recipe.fixed) return recipe.fixed;
   throw new Error(`${recipe.name}: no valid layout for seed ${seed}`);
+}
+
+/**
+ * The dungeon's own settings on a finished map: which slingers lead, how
+ * hard boulders hit (D-109, D-110). A separate random stream, so adding these did
+ * not change any seed's layout.
+ */
+function arm(
+  recipe: DungeonRecipe,
+  layout: DungeonLayout,
+  seed: number,
+): DungeonLayout {
+  const random = seededRandom((seed ^ 0x5bd1e995) >>> 0);
+  return {
+    ...layout,
+    rooms: layout.rooms.map((room) => ({
+      ...room,
+      waves: room.waves.map((wave) =>
+        wave.map((s) =>
+          s.kind === "slinger" && random() < recipe.leadShare
+            ? { ...s, leads: true }
+            : s,
+        ),
+      ),
+      ...(room.rockfall ? { rockfall: { damage: recipe.rockfallDamage } } : {}),
+    })),
+  };
 }
 
 const ofBand = (recipe: DungeonRecipe, band: RoomBand) =>
@@ -176,13 +209,18 @@ function tryRecipe(
  * on top of each other.
  */
 export function combineSetups(
-  piece: Pick<RoomPiece, "width" | "height">,
+  piece: Pick<RoomPiece, "width" | "height" | "holeWave">,
   a: Waves,
   b: Waves,
 ): EnemySpawnDef[][] {
   const waves = Math.max(a.length, b.length);
   const out: EnemySpawnDef[][] = [];
   for (let w = 0; w < waves; w++) {
+    // A hole wave's goblins come out of the holes, wherever they start.
+    if (w === piece.holeWave) {
+      out.push([...(a[w] ?? []), ...(b[w] ?? [])]);
+      continue;
+    }
     const placed: EnemySpawnDef[] = [...(a[w] ?? [])];
     for (const s of b[w] ?? []) placed.push(freeSpot(piece, placed, s));
     out.push(placed);

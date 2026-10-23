@@ -34,44 +34,48 @@ export const DUMMY = {
 export const GRUNT = {
   maxHp: 170,
   size: 14,
-  /** Slower than the player (150), so it can be kited. */
-  speed: 95,
-  /** 10 contact hits kill a fresh 20 HP Serf (D-055). */
-  contactDamage: 2,
-  /** At most one contact hit per this many seconds, per grunt. */
-  contactCooldownSeconds: 0.8,
+  /** Slower than the player (150), so it can be kited (D-111: was 95). */
+  speed: 76,
+  /** 7 contact hits kill a fresh 20 HP Serf (D-055; D-111: was 2). */
+  contactDamage: 3,
+  /** At most one contact hit per this many seconds, per grunt (D-111: was 0.8). */
+  contactCooldownSeconds: 1.2,
 } as const;
 
 /** Ranged: keeps its distance and throws aimed rocks. */
 export const SLINGER = {
   maxHp: 125,
   size: 14,
-  speed: 70,
+  /** D-111: was 70. */
+  speed: 56,
   /** Backs away when the nearest player is closer than this… */
   minRange: 140,
   /** …and approaches when farther than this. */
   maxRange: 240,
   /** Throws only at players within this distance. */
   throwRange: 360,
-  throwIntervalSeconds: 1.6,
-  rock: { damage: 2, speed: 200, size: 6, range: 400 },
+  /** D-111: was 1.6 s and 2 damage; the rock flies as fast as before. */
+  throwIntervalSeconds: 2.4,
+  rock: { damage: 3, speed: 200, size: 6, range: 400 },
 } as const satisfies { rock: EnemyBulletSpec } & Record<string, unknown>;
 
 /** Tough charger (6c): walks up, telegraphs, then charges in a straight line. Only the charge hurts. */
 export const BRUTE = {
   maxHp: 450,
   size: 20,
-  speed: 60,
+  /** D-111: was 60. */
+  speed: 48,
   /** Starts a charge when the nearest player is this close and it is ready. */
   chargeTriggerRange: 240,
-  /** Stands still and flashes (the telegraph) for this long. */
-  windupSeconds: 0.7,
-  chargeSpeed: 320,
+  /** Stands still and flashes (the telegraph) for this long (D-111: was 0.7). */
+  windupSeconds: 0.9,
+  /** D-111: was 320. */
+  chargeSpeed: 260,
   chargeSeconds: 0.9,
-  /** Stands still after a charge. */
-  recoverSeconds: 1.2,
-  /** Per player, at most once per charge. */
-  chargeDamage: 4,
+  /** Stands still after a charge (D-111: was 1.2). */
+  recoverSeconds: 2.4,
+  /** Per player, at most once per charge (D-111: was 4). */
+  chargeDamage: 6,
 } as const;
 
 /**
@@ -85,33 +89,35 @@ export const WARLORD = {
   aggroRange: 600,
   /** Phase 2 below this fraction of max HP. */
   phaseTwoBelow: 0.5,
+  // D-111: attacks 1.5× less often, 1.5× the damage (was 1.4/1.2 s, 3/2 s,
+  // 2 damage; summons every 9 s; rockfall every 3.5 s for 3).
   spread: {
-    phase1: { count: 5, intervalSeconds: 1.4 },
-    phase2: { count: 7, intervalSeconds: 1.2 },
+    phase1: { count: 5, intervalSeconds: 2.1 },
+    phase2: { count: 7, intervalSeconds: 1.8 },
     angleStepDegrees: 15,
-    bullet: { damage: 2, speed: 170, size: 8, range: 520 },
+    bullet: { damage: 3, speed: 170, size: 8, range: 520 },
   },
   ring: {
-    phase1: { count: 12, intervalSeconds: 3 },
-    phase2: { count: 16, intervalSeconds: 2 },
-    bullet: { damage: 2, speed: 110, size: 8, range: 500 },
+    phase1: { count: 12, intervalSeconds: 4.5 },
+    phase2: { count: 16, intervalSeconds: 3 },
+    bullet: { damage: 3, speed: 110, size: 8, range: 500 },
   },
   summon: {
     kind: "grunt",
     count: 2,
-    intervalSeconds: 9,
+    intervalSeconds: 12,
     /** No more summons while this many of its summons are alive. */
     maxAlive: 6,
     /** Summons appear this far left and right of the Warlord. */
     offset: 60,
   },
   rockfall: {
-    intervalSeconds: 3.5,
+    intervalSeconds: 5,
     /** A warning circle under each living player… */
     radius: 32,
     /** …that hits whoever is inside it this long later. */
     delaySeconds: 1.2,
-    damage: 3,
+    damage: 5,
   },
 } as const;
 

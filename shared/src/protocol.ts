@@ -1,3 +1,4 @@
+import { HAZARD_KINDS, type HazardKind } from "./sim.ts";
 import { MAX_SEED } from "./seeded-random.ts";
 import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
 import {
@@ -56,6 +57,8 @@ import {
  *          `fire.auto` (automatic shots hold fire while vanished).
  * v21 (11a): runStarted carries the run's dungeon `seed`; every client
  *          builds the same generated layout from it (T-050, D-104).
+ * v22 (12b): snapshot enemies say whether they lead their shots (D-109);
+ *          runEnded's killedBy may be a room hazard ("rockfall", D-110).
  * v19 (10c): snapshot players list their buffs, enemies say whether
  *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
@@ -90,7 +93,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -215,6 +218,8 @@ export interface SnapshotEnemy {
   alert: boolean;
   /** Under a Warlock's Curse (D-098). */
   cursed: boolean;
+  /** A slinger that aims where you will be (D-109); drawn lighter. */
+  leads: boolean;
 }
 
 /** An ability's flash on the ground, drawn once. */
@@ -333,7 +338,8 @@ export type ServerMessage =
       /** One item per chest, rolled by the server for this player only (D-010, D-080); empty unless completed. */
       loot: LootDrop[];
       /** Kind of enemy that landed the killing blow (deaths only). */
-      killedBy: EnemyKind | null;
+      /** An enemy kind, or a room hazard (D-109). */
+      killedBy: EnemyKind | HazardKind | null;
       /** The serf's life including this run; on death, its final record. */
       serf: SerfSummary | null;
       /** EXP this run earned (completion only, D-069). */
@@ -685,7 +691,11 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       ) {
         return fail("runEnded: unexpected fields");
       }
-      if (obj.killedBy !== null && !isEnemyKind(obj.killedBy)) {
+      if (
+        obj.killedBy !== null &&
+        !isEnemyKind(obj.killedBy) &&
+        !(HAZARD_KINDS as readonly unknown[]).includes(obj.killedBy)
+      ) {
         return fail("runEnded: bad killedBy");
       }
       const serf = obj.serf === null ? null : parseSerfSummary(obj.serf);
@@ -722,7 +732,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           result,
           stats,
           loot,
-          killedBy: obj.killedBy,
+          killedBy: obj.killedBy as EnemyKind | HazardKind | null,
           serf,
           expGained: obj.expGained,
           statGains,
@@ -1228,12 +1238,15 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "respawnIn",
       "alert",
       "cursed",
+      "leads",
     ])
   ) {
     return null;
   }
   if (!isEnemyKind(v.kind) || typeof v.alert !== "boolean") return null;
-  if (typeof v.cursed !== "boolean") return null;
+  if (typeof v.cursed !== "boolean" || typeof v.leads !== "boolean") {
+    return null;
+  }
   if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
     return null;
   }
@@ -1256,6 +1269,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     respawnIn: v.respawnIn,
     alert: v.alert,
     cursed: v.cursed,
+    leads: v.leads,
   };
 }
 

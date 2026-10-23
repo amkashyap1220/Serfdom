@@ -148,7 +148,7 @@ describe("the 11b room pool (D-105)", () => {
       guard: ["medium", 2670],
       kitchen: ["medium", 1890],
       gallery: ["medium", 1930],
-      ambush: ["heavy", 3455],
+      ambush: ["heavy", 3380], // 3,455 before its second wave came from holes (D-109)
       pit: ["heavy", 3320],
       warcamp: ["heavy", 3100],
     });

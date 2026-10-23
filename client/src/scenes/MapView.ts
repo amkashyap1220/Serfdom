@@ -1,5 +1,10 @@
 import * as Phaser from "phaser";
-import { PORTAL_RADIUS, type DungeonLayout, type Rect } from "@serfdom/shared";
+import {
+  PORTAL_RADIUS,
+  WALL_THICKNESS,
+  type DungeonLayout,
+  type Rect,
+} from "@serfdom/shared";
 import { GRID } from "../render-config";
 import { wallOutline } from "../wall-outline";
 
@@ -15,6 +20,7 @@ const COLORS = {
   doorEdge: 0xd9774a,
   portal: 0x9b7bff,
   portalCore: 0xe8dcff,
+  hole: 0x0d0b09,
   label: "#8a94a6",
 } as const;
 
@@ -24,6 +30,30 @@ const COLORS = {
  * and the doors that are still closed. Rebuilt only when the dungeon
  * changes; doors redraw when the set of closed doors changes.
  */
+/** A 36 px gap in the wall beside a hole point (D-109). */
+function holeRect(b: Rect, hole: { x: number; y: number }): Rect {
+  const t = WALL_THICKNESS;
+  const half = 18;
+  const left = hole.x - b.x;
+  const right = b.x + b.width - hole.x;
+  const top = hole.y - b.y;
+  const bottom = b.y + b.height - hole.y;
+  const nearest = Math.min(left, right, top, bottom);
+  if (nearest === left)
+    return { x: b.x - t, y: hole.y - half, width: t, height: 2 * half };
+  if (nearest === right)
+    return { x: b.x + b.width, y: hole.y - half, width: t, height: 2 * half };
+  if (nearest === top)
+    return { x: hole.x - half, y: b.y - t, width: 2 * half, height: t };
+  return { x: hole.x - half, y: b.y + b.height, width: 2 * half, height: t };
+}
+
+const overlapsRect = (a: Rect, b: Rect) =>
+  a.x < b.x + b.width &&
+  b.x < a.x + a.width &&
+  a.y < b.y + b.height &&
+  b.y < a.y + a.height;
+
 export class MapView {
   private readonly scene: Phaser.Scene;
   private readonly layer: Phaser.GameObjects.Layer;
@@ -65,6 +95,17 @@ export class MapView {
     g.lineStyle(1, COLORS.wallEdge);
     for (const s of wallOutline(layout.walls)) {
       g.lineBetween(s.x1, s.y1, s.x2, s.y2);
+    }
+    // Ambush holes (D-109): dark gaps in the wall nearest each hole.
+    g.fillStyle(COLORS.hole);
+    for (const room of layout.rooms) {
+      for (const hole of room.holes ?? []) {
+        const r = holeRect(room.bounds, hole);
+        // A hole beside a doorway is not drawn: it would look like a
+        // blocked passage. Its goblins still come out there.
+        if (layout.doors.some((d) => overlapsRect(d.rect, r))) continue;
+        g.fillRect(r.x, r.y, r.width, r.height);
+      }
     }
     // Doors and the portal sit above the floor and walls. Each new layout
     // adds its floor on top of the layer, so lift them back above it.

@@ -22,6 +22,8 @@ export interface EnemyView {
   alert: boolean;
   /** Under a Warlock's Curse (D-098): drawn with a violet outline. */
   cursed: boolean;
+  /** A slinger that leads its shots (D-109): drawn lighter. */
+  leads: boolean;
 }
 
 export interface HazardView {

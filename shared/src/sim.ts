@@ -1,3 +1,4 @@
+import { ROCKFALL } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
 import { enemyAct } from "./enemy-ai.ts";
@@ -84,6 +85,8 @@ export interface PlayerState {
   abilityCooldown: number;
   /** Timed buffs on this player (D-098): damage and regen only. */
   buffs: PlayerBuffs;
+  /** World px per second over its last input; leading slingers aim with it (D-109). */
+  velocity: Vec2;
 }
 
 /** A timed bonus: `bonus` is a share (0.3 = +30%), `remaining` seconds. */
@@ -146,8 +149,10 @@ export interface Hazard {
   damage: number;
   /** Seconds until it lands. */
   landsIn: number;
-  /** The enemy that made it. */
+  /** The enemy that made it (-1 for a room's hazard). */
   ownerId: number;
+  /** Set for a room's hazard (D-110): its hits are hazard hits. */
+  hazard?: HazardKind;
 }
 
 /** An enemy to add to the simulation (dungeon room waves, boss summons). */
@@ -157,6 +162,8 @@ export interface EnemySpawn {
   roomId: string | null;
   /** Dies with this enemy (summons). */
   summonerId?: number | null;
+  /** A slinger that leads its shots (D-109). */
+  leads?: boolean;
 }
 
 /** One tick of a player's intent: where to move and whether/where to fire. */
@@ -526,6 +533,14 @@ export type SimEvent =
       damage: number;
       position: Vec2;
     }
+  /** Damage from a room hazard (D-110), not an enemy. */
+  | {
+      type: "hazardHit";
+      playerId: number;
+      hazard: HazardKind;
+      damage: number;
+      position: Vec2;
+    }
   | { type: "playerDied"; playerId: number }
   /** An ability landed (drawn by every client). */
   | {
@@ -587,6 +602,7 @@ export function spawnEnemies(
       s.roomId,
       respawnSeconds,
       s.summonerId ?? null,
+      s.leads ?? false,
     ),
   );
   return { ...state, enemies: [...state.enemies, ...added], nextEnemyId };
@@ -615,6 +631,7 @@ export function newPlayer(
     ability,
     abilityCooldown: 0,
     buffs: {},
+    velocity: { x: 0, y: 0 },
   };
 }
 
@@ -714,6 +731,10 @@ export function applyPlayerInput(
   const updated: PlayerState = {
     ...player,
     position,
+    velocity: {
+      x: (position.x - player.position.x) / dtSeconds,
+      y: (position.y - player.position.y) / dtSeconds,
+    },
     fireCooldown: cooldown.remaining,
     mp,
     abilityCooldown,
@@ -899,13 +920,29 @@ export function stepWorld(
       hazards.push({ ...h, landsIn });
       continue;
     }
-    players = players.map((pl) =>
-      isPlayerAlive(pl) &&
-      Math.hypot(pl.position.x - h.position.x, pl.position.y - h.position.y) <=
-        h.radius
-        ? damagePlayer(pl, h.ownerId, h.damage, pl.position, events)
-        : pl,
-    );
+    players = players.map((pl) => {
+      if (
+        !isPlayerAlive(pl) ||
+        Math.hypot(pl.position.x - h.position.x, pl.position.y - h.position.y) >
+          h.radius
+      ) {
+        return pl;
+      }
+      const before = events.length;
+      const hit = damagePlayer(pl, h.ownerId, h.damage, pl.position, events);
+      // A room's boulder is not an enemy's hit (D-110).
+      const reported = events[before];
+      if (h.hazard && reported?.type === "playerHit") {
+        events[before] = {
+          type: "hazardHit",
+          playerId: pl.id,
+          hazard: h.hazard,
+          damage: reported.damage,
+          position: reported.position,
+        };
+      }
+      return hit;
+    });
   }
   hazards.push(...newHazards);
 
@@ -1093,6 +1130,36 @@ function tickBuffs(buffs: PlayerBuffs, dtSeconds: number): PlayerBuffs {
  * recording playerHit with the damage actually taken (and playerDied on
  * the killing blow).
  */
+/** Room hazards that can hurt a player (D-110). */
+export const HAZARD_KINDS = ["rockfall"] as const;
+export type HazardKind = (typeof HAZARD_KINDS)[number];
+
+/**
+ * Boulders start falling (D-110): each is a hazard that lands after
+ * ROCKFALL.warnSeconds, like the Warlord's rockfall, but belongs to the
+ * room, so its hits are hazard hits (a death names the rockfall).
+ */
+export function dropBoulders(
+  state: SimState,
+  drops: readonly { at: Vec2; damage: number }[],
+): SimState {
+  if (drops.length === 0) return state;
+  return {
+    ...state,
+    hazards: [
+      ...state.hazards,
+      ...drops.map((d) => ({
+        position: { ...d.at },
+        radius: ROCKFALL.radius,
+        damage: d.damage,
+        landsIn: ROCKFALL.warnSeconds,
+        ownerId: -1,
+        hazard: "rockfall" as const,
+      })),
+    ],
+  };
+}
+
 function damagePlayer(
   player: PlayerState,
   enemyId: number,

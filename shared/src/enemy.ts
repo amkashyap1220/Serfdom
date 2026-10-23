@@ -31,6 +31,8 @@ export interface EnemyState {
   attackCooldown: number;
   /** The enemy that summoned it (it dies with its summoner), or null. */
   summonerId: number | null;
+  /** A slinger that aims where its target will be (D-109). */
+  leads: boolean;
   /** Per-kind behavior state (enemy-ai.ts). */
   ai: EnemyAi;
   /** Inside a Nature's Reach this tick: moves at half speed (D-097). Set by the world step. */
@@ -97,10 +99,12 @@ export function newEnemy(
   roomId: string | null,
   respawnSeconds: number | null,
   summonerId: number | null = null,
+  leads = false,
 ): EnemyState {
   const { maxHp, size } = ENEMY_STATS[kind];
   return {
     summonerId,
+    leads,
     ai: initialAi(kind),
     id,
     kind,

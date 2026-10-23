@@ -20,6 +20,86 @@ const east = { move: { x: 1, y: 0 }, fire: { trigger: false, aim: null } };
 
 type Snapshot = Extract<ServerMessage, { type: "snapshot" }>;
 
+describe("rockfall in a run (D-110)", () => {
+  // A generated Warrens with a Tunnel; stand in it so it fights.
+  const seed = Array.from({ length: 200 }, (_, i) => i + 1).find((s) =>
+    buildWarrens(s).rooms.some((r) => r.id === "tunnel"),
+  )!;
+  const tunnel = buildWarrens(seed).rooms.find((r) => r.id === "tunnel")!;
+  const centre = {
+    x: tunnel.bounds.x + tunnel.bounds.width / 2,
+    y: tunnel.bounds.y + tunnel.bounds.height / 2,
+  };
+  const inTunnel = (hp?: number) => {
+    const r = new DungeonInstance(1, "goblin-warrens", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed,
+    });
+    r.setStateForTest({
+      ...r.state,
+      players: r.state.players.map((p) => ({
+        ...p,
+        position: { ...centre },
+        hp: hp ?? p.hp,
+      })),
+    });
+    return r;
+  };
+  // Goblins hold their fire, so only boulders can hurt.
+  const calm = (r: DungeonInstance) =>
+    r.setStateForTest({
+      ...r.state,
+      enemies: r.state.enemies.map((e) => ({ ...e, attackCooldown: 99 })),
+      projectiles: [],
+    });
+
+  it("boulders start falling once the room fights, one every 1.05 s, sent in snapshots", () => {
+    const r = inTunnel();
+    r.tick();
+    calm(r);
+    const first = r.snapshot(1) as Snapshot;
+    expect(first.hazards).toHaveLength(1);
+    for (let t = 0; t < 70; t++) {
+      r.tick();
+      calm(r);
+    }
+    // 1.17 s later: boulders at 0 and 1.05 s, none landed yet (1.2 s to fall).
+    expect((r.snapshot(2) as Snapshot).hazards).toHaveLength(2);
+  });
+
+  it("the same seed drops the same boulders", () => {
+    const spots = () => {
+      const r = inTunnel();
+      for (let t = 0; t < 100; t++) {
+        r.tick();
+        calm(r);
+      }
+      return r.state.hazards.map((h) => h.position);
+    };
+    expect(spots()).toEqual(spots());
+  });
+
+  it("a boulder can kill, and the death names the rockfall", () => {
+    let killedBy: string | null | undefined;
+    // Stand still on a spot a boulder will hit: follow the first one.
+    const r = inTunnel(1);
+    r.tick();
+    calm(r);
+    const target = r.state.hazards[0]!.position;
+    r.setStateForTest({
+      ...r.state,
+      players: r.state.players.map((p) => ({ ...p, position: { ...target } })),
+    });
+    for (let t = 0; t < 120 && killedBy === undefined; t++) {
+      const { ended } = r.tick();
+      if (ended[0]) killedBy = ended[0].killedBy;
+      calm(r);
+    }
+    expect(killedBy).toBe("rockfall");
+  });
+});
+
 describe("DungeonInstance layouts (D-104)", () => {
   it("builds the generated Warrens for its seed; seed 0 is the handcrafted one", () => {
     const seeded = new DungeonInstance(1, "goblin-warrens", [1], {

@@ -349,6 +349,15 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Ordinary goblins in greater numbers; no general buff. Shamans (Phase 12b) strengthen goblins near them. Its own boss, the Goblin Warchief, arrives in 12c; the Warlord stands in until then.
 - Loot T2–T4 (the first T4 drops, so the first extra rolls and Luck items); EXP base 160 up to level 12.
 
+### Room mechanics (D-109)
+
+Pace (D-111): in the intro dungeons enemies attack 1.5× less often and move 20% slower than first tuned, and each hit does 1.5× the damage, so the screen stays readable.
+
+Rooms must not all be beatable by running in a circle, and difficulty should not rest on enemy numbers alone. Chosen mechanics: falling boulders (in place of spike traps, D-110), obstacles and cover, sweeping traps, slow or burning floor; slingers that lead their shots, flankers, bombers that leave fire, ambush holes. Intro dungeons use some of them.
+
+- Built (12b): **leading slingers** (aim where you will be; drawn lighter): 1 in 3 in the Warrens, all in the Stronghold. **Falling boulders** (D-110, replacing spike traps): in rockfall rooms (Warrens Tunnel and Guard room; Stronghold also the Armory), while the room fights a boulder falls every 1.05 s, mostly anywhere on the floor, 1 in 4 near a player; its shadow grows for 1.2 s, then it lands (5 damage in the Warrens, 9 in the Stronghold, D-111). **Ambush holes**: the Ambush hall's second wave and the Barracks' reinforcements come out of holes in the walls, 2 every 4 s.
+- Next: obstacles and cover (12c), sweeping traps and slow or burning floor (12d), flankers, bombers, and shamans (12e), then fewer enemies per room (12f).
+
 ## 11. Multiplayer and reward rules
 
 - Maximum party size: ten players (D-012; was four).

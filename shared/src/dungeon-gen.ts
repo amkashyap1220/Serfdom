@@ -36,6 +36,11 @@ export interface RoomPiece {
   height: number;
   /** Spawn points relative to the floor's top-left corner. */
   waves: readonly (readonly EnemySpawnDef[])[];
+  /** Boulders fall while it fights (D-110). */
+  rockfall?: boolean;
+  /** Ambush holes and the wave that comes out of them (D-109). */
+  holes?: readonly Vec2[];
+  holeWave?: number;
 }
 
 /** Door gap, as in the handcrafted Warrens. */
@@ -62,7 +67,12 @@ export function pieceHp(piece: Pick<RoomPiece, "waves">): number {
 function orient(
   piece: RoomPiece,
   entry: Side,
-): { width: number; height: number; waves: EnemySpawnDef[][] } {
+): {
+  width: number;
+  height: number;
+  waves: EnemySpawnDef[][];
+  holes: Vec2[];
+} {
   const { width: w, height: h } = piece;
   const map: Record<Side, (p: Vec2) => Vec2> = {
     west: (p) => p,
@@ -75,8 +85,9 @@ function orient(
     width: turned ? h : w,
     height: turned ? w : h,
     waves: piece.waves.map((wave) =>
-      wave.map((s) => ({ kind: s.kind, at: map[entry](s.at) })),
+      wave.map((s) => ({ ...s, at: map[entry](s.at) })),
     ),
+    holes: (piece.holes ?? []).map((h) => map[entry](h)),
   };
 }
 
@@ -85,6 +96,23 @@ interface Placed {
   /** Sides that already have a door. */
   used: Set<Side>;
   parent: number | null;
+}
+
+/**
+ * A room's trap fields, present only when it has them (rockfall damage is
+ * set per dungeon once the map is built, D-110).
+ */
+function traps(
+  rockfall: boolean,
+  holes: Vec2[],
+  holeWave: number | undefined,
+  damage = 0,
+): Pick<RoomDef, "rockfall" | "holes" | "holeWave"> {
+  return {
+    ...(rockfall ? { rockfall: { damage } } : {}),
+    ...(holes.length > 0 ? { holes } : {}),
+    ...(holeWave !== undefined ? { holeWave } : {}),
+  };
 }
 
 const grow = (r: Rect, by: number): Rect => ({
@@ -200,14 +228,22 @@ export class RoomAssembly {
         north: { x: center - half, y: p.y - t, width: DOOR_WIDTH, height: t },
       }[side];
 
+      const shift = (v: Vec2): Vec2 => ({
+        x: bounds.x + v.x,
+        y: bounds.y + v.y,
+      });
       const waves = o.waves.map((wave) =>
-        wave.map((s) => ({
-          kind: s.kind,
-          at: { x: bounds.x + s.at.x, y: bounds.y + s.at.y },
-        })),
+        wave.map((s) => ({ ...s, at: shift(s.at) })),
       );
       this.placed.push({
-        room: { id, name: piece.name, bounds, waves, required },
+        room: {
+          id,
+          name: piece.name,
+          bounds,
+          waves,
+          required,
+          ...traps(piece.rockfall === true, o.holes.map(shift), piece.holeWave),
+        },
         used: new Set([OPPOSITE[side]]),
         parent: parentIndex,
       });
@@ -246,7 +282,13 @@ export class RoomAssembly {
       ...room,
       bounds: moveRect(room.bounds),
       waves: room.waves.map((wave) =>
-        wave.map((s) => ({ kind: s.kind, at: move(s.at) })),
+        wave.map((s) => ({ ...s, at: move(s.at) })),
+      ),
+      ...traps(
+        room.rockfall !== undefined,
+        (room.holes ?? []).map(move),
+        room.holeWave,
+        room.rockfall?.damage,
       ),
     }));
     const doors = this.doors.map((d) => ({ ...d, rect: moveRect(d.rect) }));

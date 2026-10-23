@@ -78,6 +78,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Room mechanics checklist (Phase 12b, D-109)
+
+Pace (D-111): goblins move 20% slower and attack 1.5× less often, but each hit does 1.5× the damage (a grunt touch 3, a rock 3, a brute charge 6, Warlord bullets 3). The screen should feel calmer; each hit should matter more.
+
+Restart `npm run dev` (protocol v22) and reload. Play a few Warrens runs (note the seed) and, with a serf that has completed the Warrens, a Stronghold run.
+
+1. **Falling boulders**: in the Tunnel and the Guard room (and the Stronghold's Armory), once the room fights, boulders start falling: a dark shadow and red circle grow on the floor while a grey boulder drops onto it, then it lands. Being inside the circle costs HP (5 in the Warrens, 9 in the Stronghold, less with Defense). Most land anywhere, about 1 in 4 near you, so standing still or circling gets you hit. They stop when the room is cleared. The Warlord's rockfall now looks the same.
+2. **Leading slingers**: some slingers (lighter purple) throw where you are going: keep running in a straight line or circle and their rocks meet you. Plain slingers throw at where you are. All Stronghold slingers lead.
+3. **Ambush holes**: dark gaps in the Ambush hall's walls (and the Stronghold's Barracks). After the first wave dies, goblins come out of the holes two at a time, about every 4 s; the door opens only after the last one dies.
+4. **Death by a boulder** (optional, a low-HP serf): the death screen says "Slain by a falling boulder".
+5. Circling the room should no longer be a safe answer everywhere. Tell me where it still is.
+
+Report: pass/fail per step, seeds, screenshots of anything odd, and how the rooms felt.
+
 ### Goblin Stronghold checklist (Phase 12a, D-108)
 
 Restart `npm run dev`, reload.

@@ -2,6 +2,7 @@ import {
   dungeonInfo,
   type DungeonId,
   type EnemyKind,
+  type HazardKind,
   type SerfSummary,
   type LootDrop,
   type RunStats,
@@ -49,7 +50,7 @@ export type Screen =
       /** One item per chest (D-080); empty unless completed. */
       loot: LootDrop[];
       /** What landed the killing blow (deaths). */
-      killedBy: EnemyKind | null;
+      killedBy: EnemyKind | HazardKind | null;
       /** The serf's life including this run (its final record on death). */
       serf: SerfSummary | null;
       /** EXP this run earned (completion only). */

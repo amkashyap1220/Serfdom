@@ -10,7 +10,24 @@ export const WALL_THICKNESS = 32;
 export interface EnemySpawnDef {
   kind: EnemyKind;
   at: Vec2;
+  /** A slinger that aims where you will be, not where you are (D-109). */
+  leads?: boolean;
 }
+
+/**
+ * Rockfall rooms (D-110): while one fights, a boulder falls every
+ * `everySeconds`: most anywhere on its floor, `nearShare` of them within
+ * `nearRadius` of a player in the room. Each shows its shadow for
+ * `warnSeconds`, then lands, hitting everyone within `radius`.
+ */
+export const ROCKFALL = {
+  /** D-111: was 0.7 s. */
+  everySeconds: 1.05,
+  nearShare: 0.25,
+  nearRadius: 120,
+  warnSeconds: 1.2,
+  radius: 28,
+} as const;
 
 /**
  * One room (Phase 6b). It wakes when a living player's center is inside
@@ -26,6 +43,15 @@ export interface RoomDef {
   waves: readonly (readonly EnemySpawnDef[])[];
   /** The run completes when every required room is cleared (T-031). */
   required: boolean;
+  /** A rockfall room and the damage of one boulder (D-110). */
+  rockfall?: { damage: number };
+  /**
+   * Ambush holes (D-109): floor points just inside its walls. Wave
+   * `holeWave` does not appear at once: its goblins come out of the holes,
+   * a few at a time.
+   */
+  holes?: readonly Vec2[];
+  holeWave?: number;
 }
 
 /** A gap in a wall that is blocked until `room` is cleared; doors never close again. */
@@ -161,6 +187,31 @@ export function validateLayout(layout: DungeonLayout): string[] {
         }
       }
     });
+  }
+
+  for (const room of layout.rooms) {
+    if (room.holeWave !== undefined) {
+      if (!room.holes || room.holes.length === 0) {
+        problems.push(`${room.id}: a hole wave but no holes`);
+      }
+      if (room.holeWave >= room.waves.length) {
+        problems.push(`${room.id}: hole wave ${room.holeWave} does not exist`);
+      }
+    }
+    for (const hole of room.holes ?? []) {
+      const b = room.bounds;
+      const edge = Math.min(
+        hole.x - b.x,
+        hole.y - b.y,
+        b.x + b.width - hole.x,
+        b.y + b.height - hole.y,
+      );
+      if (!contains(b, hole) || edge > 40) {
+        problems.push(
+          `${room.id}: hole at ${hole.x},${hole.y} is not just inside a wall`,
+        );
+      }
+    }
   }
 
   // Each door must join exactly two rooms, one of which opens it.

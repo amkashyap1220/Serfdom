@@ -10,8 +10,14 @@ import type { CombatViewModel } from "../combat-view-model";
 const texture = (kind: EnemyKind) => `enemy-${kind}`;
 const flashTexture = (kind: EnemyKind) => `enemy-${kind}-flash`;
 const alertTexture = (kind: EnemyKind) => `enemy-${kind}-alert`;
+/** A slinger that leads its shots (D-109) is drawn lighter. */
+const LEADING_TEXTURE = "enemy-slinger-leads";
 /** How fast a telegraphing enemy blinks. */
 const ALERT_BLINK_MS = 90;
+/** A boulder is drawn falling for this long before it lands (both kinds). */
+const BOULDER_FALL_SECONDS = 1.2;
+/** How high above its shadow a boulder starts. */
+const BOULDER_DROP_PX = 140;
 /** How long an enemy shows the white hit flash. */
 const HIT_FLASH_MS = 80;
 
@@ -41,6 +47,10 @@ const COLORS = {
   guard: 0x7fa8d1,
   heal: 0x5fe38a,
   zone: 0x6fcf4f,
+  leadingSlinger: 0xd7b8ec,
+  shadow: 0x000000,
+  boulder: 0x8c7f6e,
+  boulderEdge: 0x4a4238,
 } as const;
 
 interface EnemySprite {
@@ -62,6 +72,8 @@ export class CombatView {
   private readonly projectiles: Phaser.GameObjects.Graphics;
   private readonly hazards: Phaser.GameObjects.Graphics;
   private readonly blasts: Phaser.GameObjects.Graphics;
+  /** Falling boulders, above players and enemies. */
+  private readonly boulders: Phaser.GameObjects.Graphics;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -91,6 +103,13 @@ export class CombatView {
         COLORS.enemyMark,
       );
     }
+    makeSquareTexture(
+      scene,
+      LEADING_TEXTURE,
+      ENEMY_STATS.slinger.size,
+      COLORS.leadingSlinger,
+      COLORS.enemyMark,
+    );
     // Hazards are drawn under everything else on the world layer.
     this.hazards = scene.add.graphics();
     layer.add(this.hazards);
@@ -98,6 +117,8 @@ export class CombatView {
     layer.add(this.blasts);
     this.projectiles = scene.add.graphics();
     layer.add(this.projectiles);
+    this.boulders = scene.add.graphics();
+    layer.add(this.boulders);
   }
 
   /**
@@ -130,7 +151,9 @@ export class CombatView {
             ? flashTexture(enemy.kind)
             : enemy.alert && Math.floor(nowMs / ALERT_BLINK_MS) % 2 === 0
               ? alertTexture(enemy.kind)
-              : texture(enemy.kind),
+              : enemy.leads
+                ? LEADING_TEXTURE
+                : texture(enemy.kind),
         );
 
       const above = rotateVec(
@@ -147,14 +170,29 @@ export class CombatView {
         );
     }
 
-    // Rockfall warnings: an outline, filling in as the landing nears.
     const h = this.hazards.clear();
+    // Falling boulders (the Warlord's and rockfall rooms', D-110): the
+    // shadow grows on the floor and the hit area is outlined; the boulder
+    // drops onto it, drawn above everyone.
+    const rocks = this.boulders.clear();
+    this.layer.bringToTop(this.boulders);
     for (const hz of view.hazards) {
-      const urgency = 1 - Math.min(1, hz.landsIn / 1.2);
-      h.fillStyle(COLORS.hazard, 0.15 + 0.45 * urgency);
-      h.fillCircle(hz.x, hz.y, hz.radius * (0.4 + 0.6 * urgency));
-      h.lineStyle(2, COLORS.hazard, 0.9);
+      const fall = 1 - Math.min(1, hz.landsIn / BOULDER_FALL_SECONDS);
+      h.fillStyle(COLORS.shadow, 0.2 + 0.4 * fall);
+      h.fillEllipse(
+        hz.x,
+        hz.y,
+        2 * hz.radius * (0.3 + 0.7 * fall),
+        1.4 * hz.radius * (0.3 + 0.7 * fall),
+      );
+      h.lineStyle(2, COLORS.hazard, 0.5 + 0.4 * fall);
       h.strokeCircle(hz.x, hz.y, hz.radius);
+      const size = hz.radius * 0.6;
+      const lift = (1 - fall) * BOULDER_DROP_PX;
+      rocks.fillStyle(COLORS.boulder, 1);
+      rocks.fillCircle(hz.x, hz.y - lift, size);
+      rocks.lineStyle(2, COLORS.boulderEdge, 1);
+      rocks.strokeCircle(hz.x, hz.y - lift, size);
     }
 
     const bl = this.blasts.clear();

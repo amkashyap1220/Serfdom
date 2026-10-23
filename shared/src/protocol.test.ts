@@ -488,6 +488,13 @@ describe("menu, queue, and run messages (v4)", () => {
       server({ ...started, ability: { kind: "volley", tier: 11 } }).ok,
     ).toBe(false);
     expect(server({ ...started, ability: undefined }).ok).toBe(false);
+    // v22: a room's rockfall can be the killer; nothing else unknown (D-110).
+    expect(
+      server({ ...ended, result: "died", stats, killedBy: "rockfall" }).ok,
+    ).toBe(true);
+    expect(
+      server({ ...ended, result: "died", stats, killedBy: "lava" }).ok,
+    ).toBe(false);
     // v21: the layout seed, an unsigned 32-bit whole number (D-104).
     expect(server({ ...started, seed: 4294967295 }).ok).toBe(true);
     for (const seed of [-1, 1.5, 4294967296, "7", null, undefined]) {
@@ -532,6 +539,7 @@ describe("snapshot messages", () => {
     respawnIn: 0,
     alert: false,
     cursed: false,
+    leads: false,
   };
   const shot: SnapshotProjectile = {
     id: 5,

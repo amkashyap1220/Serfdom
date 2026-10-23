@@ -19,6 +19,35 @@ import { stepFireCooldown } from "./weapon.ts";
 export interface AiTarget {
   id: number;
   position: Vec2;
+  /** Px per second; leading slingers aim with it (D-109). Still if absent. */
+  velocity?: Vec2;
+}
+
+/** A leading slinger looks at most this far ahead (D-109). */
+export const MAX_LEAD_SECONDS = 0.6;
+
+/**
+ * Where to throw: at the target, or for a leading slinger where the target
+ * will be when the rock arrives, if it keeps moving the same way (at most
+ * MAX_LEAD_SECONDS ahead).
+ */
+export function throwPoint(
+  from: Vec2,
+  target: AiTarget,
+  rockSpeed: number,
+  leads: boolean,
+): Vec2 {
+  const v = target.velocity;
+  if (!leads || !v) return target.position;
+  const distance = Math.hypot(
+    target.position.x - from.x,
+    target.position.y - from.y,
+  );
+  const ahead = Math.min(MAX_LEAD_SECONDS, distance / rockSpeed);
+  return {
+    x: target.position.x + v.x * ahead,
+    y: target.position.y + v.y * ahead,
+  };
 }
 
 /** A delayed area attack: hits living players inside `radius` when it lands. */
@@ -189,7 +218,10 @@ function slingerAct(
     target.distance <= SLINGER.throwRange,
     1 / SLINGER.throwIntervalSeconds,
   );
-  const aim = toward(position, at);
+  const aim = toward(
+    position,
+    throwPoint(position, target.target, SLINGER.rock.speed, enemy.leads),
+  );
   return result(
     { ...enemy, position, attackCooldown: attack.remaining },
     {

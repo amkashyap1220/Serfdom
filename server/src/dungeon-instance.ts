@@ -1,4 +1,8 @@
 import {
+  dropBoulders,
+  rockfallDrops,
+  seededRandom,
+  type HazardKind,
   addPlayer,
   applyPlayerInput,
   blockingWalls,
@@ -59,7 +63,7 @@ export interface RunEnd {
   result: RunResult;
   stats: RunStats;
   /** Kind of the enemy whose hit killed them (deaths only). */
-  killedBy: EnemyKind | null;
+  killedBy: EnemyKind | HazardKind | null;
 }
 
 /**
@@ -76,6 +80,7 @@ export interface RunEnd {
  * who died (D-050) and, once every required room is cleared, of every
  * survivor (completed; T-031).
  */
+
 export class DungeonInstance {
   readonly id: number;
   readonly dungeon: DungeonId;
@@ -95,6 +100,8 @@ export class DungeonInstance {
   private readonly joinWindowTicks: number;
   /** Ticks this run has been running. */
   private age = 0;
+  /** Where this run's boulders fall (D-110). */
+  private readonly rockRandom: () => number;
 
   constructor(
     id: number,
@@ -112,6 +119,8 @@ export class DungeonInstance {
     this.id = id;
     this.dungeon = dungeon;
     this.seed = options.seed ?? 0;
+    // Its own stream, so the same seed drops the same boulders (D-110).
+    this.rockRandom = seededRandom((this.seed ^ 0x2545f491) >>> 0);
     this.layout = layoutFor(dungeon, this.seed);
     this.maxQueuedInputs = options.maxQueuedInputs;
     this.joinWindowTicks = options.joinWindowTicks;
@@ -272,11 +281,15 @@ export class DungeonInstance {
     for (const e of world.events) {
       if (e.type !== "playerDied") continue;
       // The killing blow is this player's last hit in this tick.
-      let killer: EnemyKind | null = null;
+      let killer: EnemyKind | HazardKind | null = null;
       for (let i = world.events.length - 1; i >= 0; i--) {
         const h = world.events[i];
         if (h?.type === "playerHit" && h.playerId === e.playerId) {
           killer = kinds.get(h.enemyId) ?? null;
+          break;
+        }
+        if (h?.type === "hazardHit" && h.playerId === e.playerId) {
+          killer = h.hazard;
           break;
         }
       }
@@ -287,6 +300,15 @@ export class DungeonInstance {
     const rooms = stepRooms(this.rooms, this.sim, this.layout);
     this.rooms = rooms.progress;
     this.sim = spawnEnemies(this.sim, rooms.spawns);
+    // Boulders in fighting rockfall rooms (D-110), from this run's stream.
+    const fall = rockfallDrops(
+      this.rooms,
+      this.layout,
+      this.sim.players,
+      this.rockRandom,
+    );
+    this.rooms = fall.progress;
+    this.sim = dropBoulders(this.sim, fall.drops);
 
     // Completion (D-057): with a portal, each living player completes by
     // stepping into it once it is open; without one, everyone at once.
@@ -347,6 +369,7 @@ export class DungeonInstance {
         respawnIn: e.respawnIn,
         alert: isTelegraphing(e),
         cursed: e.curse !== undefined,
+        leads: e.leads,
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,
@@ -383,7 +406,7 @@ export class DungeonInstance {
   private end(
     playerId: number,
     result: RunResult,
-    killedBy: EnemyKind | null = null,
+    killedBy: EnemyKind | HazardKind | null = null,
   ): RunEnd | null {
     const member = this.members.get(playerId);
     if (!member) return null;

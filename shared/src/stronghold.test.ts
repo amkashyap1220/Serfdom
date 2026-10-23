@@ -52,7 +52,8 @@ describe("Goblin Stronghold (D-108)", () => {
 
   it("no two goblins start on top of each other, and all start inside", () => {
     for (const { piece } of STRONGHOLD_PIECES) {
-      for (const wave of piece.waves) {
+      // A hole wave starts at its holes and comes out a few at a time.
+      for (const wave of piece.waves.filter((_, w) => w !== piece.holeWave)) {
         wave.forEach((a, i) => {
           const half = ENEMY_STATS[a.kind].size / 2;
           expect(a.at.x - half, piece.key).toBeGreaterThanOrEqual(0);

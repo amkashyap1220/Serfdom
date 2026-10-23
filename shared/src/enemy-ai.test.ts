@@ -66,9 +66,10 @@ describe("grunt", () => {
   });
 
   it("hits on contact, at most once per cooldown", () => {
-    // Standing on the player for 2 s: hits at 0, 0.8 s, 1.6 s.
+    // Standing on the player for 2 s: a hit at once, then one per cooldown.
     const { contacts } = act(grunt(0, 0), [player(1, 0, 0)], 120);
-    expect(contacts.length).toBe(3);
+    const every = Math.round(GRUNT.contactCooldownSeconds / TICK_SECONDS);
+    expect(contacts.length).toBe(Math.floor(119 / every) + 1);
     expect(contacts[1]! - contacts[0]!).toBe(
       Math.round(GRUNT.contactCooldownSeconds / TICK_SECONDS),
     );
@@ -98,8 +99,9 @@ describe("slinger", () => {
 
   it("throws aimed rocks at the interval, only within throw range", () => {
     const inRange = act(slinger(200, 0), [player(1, 0, 0)], 200);
-    // 200 ticks = 3.33 s at one rock per 1.6 s → rocks at 0, 1.6, 3.2 s.
-    expect(inRange.bullets).toBe(3);
+    // 200 ticks = 3.33 s: a rock at once, then one per throw interval.
+    const every = Math.round(SLINGER.throwIntervalSeconds / TICK_SECONDS);
+    expect(inRange.bullets).toBe(Math.floor(199 / every) + 1);
     const a = enemyAct(slinger(200, 0), [player(1, 0, 0)], [], TICK_SECONDS);
     expect(a.bullets[0]?.direction.x).toBeCloseTo(-1, 9);
     expect(a.bullets[0]?.spec).toEqual(SLINGER.rock);
@@ -146,7 +148,8 @@ describe("enemies in the world tick", () => {
     const s = spawnEnemies(world(), [
       { kind: "slinger", at: { x: 200, y: 0 }, roomId: "r" },
     ]);
-    const { events } = run(s, 120);
+    // Its first throw waits half an interval; the rock flies 200 px in 1 s.
+    const { events } = run(s, 60 * 3);
     expect(events.some((e) => e.type === "enemyAttack")).toBe(true);
     expect(
       events.some(

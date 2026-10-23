@@ -69,6 +69,7 @@ export class PlayerPredictor {
       ability: null,
       abilityCooldown: 0,
       buffs: {},
+      velocity: { x: 0, y: 0 },
     };
     this.walls = walls;
   }
@@ -151,5 +152,6 @@ function fromSnapshot(p: SnapshotPlayer, combat: PlayerCombat): PlayerState {
     ability: null,
     abilityCooldown: 0,
     buffs: {},
+    velocity: { x: 0, y: 0 },
   };
 }

@@ -1,3 +1,4 @@
+import type { RoomPiece } from "./dungeon-gen.ts";
 import type { DungeonLayout, EnemySpawnDef } from "./dungeon-layout.ts";
 import {
   buildFromRecipe,
@@ -38,8 +39,9 @@ const newRoom = (
   height: number,
   band: RoomBand,
   waves: Waves,
+  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave"> = {},
 ): RecipePiece => ({
-  piece: { key, name, width, height, waves },
+  piece: { key, name, width, height, waves, ...traps },
   band,
   setups: [waves],
 });
@@ -74,71 +76,97 @@ export const STRONGHOLD_PIECES: readonly RecipePiece[] = [
     ],
   ]),
   // 3,780: a first wave, then reinforcements from the bunks at the back.
-  newRoom("barracks", "Barracks", 720, 560, "medium", [
+  newRoom(
+    "barracks",
+    "Barracks",
+    720,
+    560,
+    "medium",
     [
-      ...g([
-        [240, 120],
-        [240, 440],
-        [320, 200],
-        [320, 360],
-        [400, 120],
-        [400, 440],
-        [480, 200],
-        [480, 360],
-      ]),
-      ...s([
-        [640, 160],
-        [640, 400],
-      ]),
+      [
+        ...g([
+          [240, 120],
+          [240, 440],
+          [320, 200],
+          [320, 360],
+          [400, 120],
+          [400, 440],
+          [480, 200],
+          [480, 360],
+        ]),
+        ...s([
+          [640, 160],
+          [640, 400],
+        ]),
+      ],
+      [
+        ...g([
+          [560, 80],
+          [560, 480],
+          [620, 140],
+          [620, 420],
+          [660, 240],
+          [660, 320],
+        ]),
+        ...b([
+          [520, 220],
+          [520, 340],
+        ]),
+        ...s([
+          [680, 80],
+          [680, 480],
+        ]),
+      ],
     ],
-    [
-      ...g([
-        [560, 80],
-        [560, 480],
-        [620, 140],
-        [620, 420],
-        [660, 240],
-        [660, 320],
-      ]),
-      ...b([
-        [520, 220],
-        [520, 340],
-      ]),
-      ...s([
-        [680, 80],
-        [680, 480],
-      ]),
-    ],
-  ]),
+    // The reinforcements come out of the bunks: holes at the back (D-109).
+    {
+      holes: [
+        { x: 700, y: 140 },
+        { x: 700, y: 420 },
+        { x: 560, y: 20 },
+        { x: 560, y: 540 },
+      ],
+      holeWave: 1,
+    },
+  ),
   // 3,910: brutes guarding the racks, slingers behind them.
-  newRoom("armory", "Armory", 560, 560, "medium", [
+  newRoom(
+    "armory",
+    "Armory",
+    560,
+    560,
+    "medium",
     [
-      ...g([
-        [200, 140],
-        [200, 420],
-        [260, 220],
-        [260, 340],
-        [320, 140],
-        [320, 420],
-        [380, 220],
-        [380, 340],
-      ]),
-      ...b([
-        [440, 180],
-        [440, 380],
-        [480, 280],
-        [360, 280],
-      ]),
-      ...s([
-        [510, 80],
-        [510, 200],
-        [510, 360],
-        [510, 480],
-        [440, 60],
-        [440, 500],
-      ]),
+      [
+        ...g([
+          [200, 140],
+          [200, 420],
+          [260, 220],
+          [260, 340],
+          [320, 140],
+          [320, 420],
+          [380, 220],
+          [380, 340],
+        ]),
+        ...b([
+          [440, 180],
+          [440, 380],
+          [480, 280],
+          [360, 280],
+        ]),
+        ...s([
+          [510, 80],
+          [510, 200],
+          [510, 360],
+          [510, 480],
+          [440, 60],
+          [440, 500],
+        ]),
+      ],
     ],
-  ]),
+    // Boulders fall among the racks (D-110).
+    { rockfall: true },
+  ),
 ];
 
 export const STRONGHOLD_RECIPE: DungeonRecipe = {
@@ -152,6 +180,9 @@ export const STRONGHOLD_RECIPE: DungeonRecipe = {
   sideRooms: WARRENS_RULES.sideRooms,
   sideBands: WARRENS_RULES.sideBands,
   turnWeights: WARRENS_RULES.turnWeights,
+  // D-109–D-111: every slinger leads its shots; a boulder does 9.
+  leadShare: 1,
+  rockfallDamage: 9,
 };
 
 /** The Goblin Stronghold for `seed` (seed 0 is seed 1's map, kept fixed). */

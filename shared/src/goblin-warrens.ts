@@ -288,6 +288,17 @@ const oldPiece = (
   return { piece, band, setups: [piece.waves, ...alternatives] };
 };
 
+/** Adds traps to a pool entry (the room's shape and setups unchanged). */
+const withTraps = (
+  entry: RecipePiece,
+  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave">,
+  setups: Waves[] = [...entry.setups],
+): RecipePiece => ({
+  ...entry,
+  piece: { ...entry.piece, ...traps, waves: setups[0]! },
+  setups,
+});
+
 const g = (points: [number, number][]) => spawns("grunt", points);
 const s = (points: [number, number][]) => spawns("slinger", points);
 const b = (points: [number, number][]) => spawns("brute", points);
@@ -298,24 +309,89 @@ const b = (points: [number, number][]) => spawns("brute", points);
  * lands inside the HP band. The Goblin den moved to light; the Guard room
  * stays medium.
  */
-export const WARRENS_PIECES: readonly WarrensPiece[] = [
-  // Light.
-  oldPiece("tunnel", "light", [
+const AMBUSH_HOLES = [
+  { x: 200, y: 20 },
+  { x: 520, y: 20 },
+  { x: 200, y: 580 },
+  { x: 520, y: 580 },
+];
+
+/** A hole wave: its goblins come out of `holes` in turn (positions are the holes). */
+const fromHoles = (
+  holes: readonly { x: number; y: number }[],
+  kinds: EnemyKind[],
+): EnemySpawnDef[] =>
+  kinds.map((kind, i) => ({ kind, at: { ...holes[i % holes.length]! } }));
+
+const repeat = (kind: EnemyKind, n: number): EnemyKind[] => Array(n).fill(kind);
+
+function ambushHall(): RecipePiece {
+  const first = asPiece("ambush").waves[0]!;
+  const setups: Waves[] = [
+    [
+      first,
+      fromHoles(AMBUSH_HOLES, [
+        ...repeat("brute", 3),
+        ...repeat("grunt", 3),
+        ...repeat("slinger", 2),
+      ]),
+    ],
     [
       [
         ...g([
-          [460, 50],
-          [520, 110],
-          [580, 80],
+          [300, 120],
+          [300, 480],
+          [480, 200],
+          [480, 400],
         ]),
         ...s([
-          [740, 40],
-          [760, 80],
-          [740, 120],
+          [660, 100],
+          [660, 240],
+          [660, 360],
+          [660, 500],
         ]),
       ],
+      fromHoles(AMBUSH_HOLES, [
+        ...repeat("brute", 3),
+        ...repeat("grunt", 4),
+        "slinger",
+      ]),
     ],
-  ]),
+  ];
+  return {
+    piece: {
+      ...asPiece("ambush"),
+      holes: AMBUSH_HOLES,
+      holeWave: 1,
+      waves: setups[0]!,
+    },
+    band: "heavy",
+    setups,
+  };
+}
+
+export const WARRENS_PIECES: readonly WarrensPiece[] = [
+  // Light.
+  // Boulders fall in the tunnel while it fights (D-110).
+  withTraps(
+    oldPiece("tunnel", "light", [
+      [
+        [
+          ...g([
+            [460, 50],
+            [520, 110],
+            [580, 80],
+          ]),
+          ...s([
+            [740, 40],
+            [760, 80],
+            [740, 120],
+          ]),
+        ],
+      ],
+    ]),
+    { rockfall: true },
+  ),
   oldPiece(
     "den",
     "light",
@@ -412,31 +488,37 @@ export const WARRENS_PIECES: readonly WarrensPiece[] = [
       ],
     ],
   ]),
-  oldPiece("guard", "medium", [
-    [
+  // Boulders fall in the guard room while it fights (D-110).
+  withTraps(
+    oldPiece("guard", "medium", [
       [
-        ...g([
-          [240, 120],
-          [240, 280],
-          [320, 200],
-          [380, 200],
-        ]),
-        ...s([
-          [590, 60],
-          [590, 140],
-          [590, 260],
-          [590, 340],
-          [530, 100],
-          [530, 300],
-        ]),
-        ...b([
-          [440, 100],
-          [440, 300],
-          [480, 200],
-        ]),
+        [
+          ...g([
+            [240, 120],
+            [240, 280],
+            [320, 200],
+            [380, 200],
+          ]),
+          ...s([
+            [590, 60],
+            [590, 140],
+            [590, 260],
+            [590, 340],
+            [530, 100],
+            [530, 300],
+          ]),
+          ...b([
+            [440, 100],
+            [440, 300],
+            [480, 200],
+          ]),
+        ],
       ],
-    ],
-  ]),
+    ]),
+    {
+      rockfall: true,
+    },
+  ),
   newPiece("kitchen", "Goblin kitchen", 560, 480, "medium", [
     [
       [
@@ -521,43 +603,9 @@ export const WARRENS_PIECES: readonly WarrensPiece[] = [
     ],
   ]),
   // Heavy.
-  oldPiece("ambush", "heavy", [
-    [
-      [
-        ...g([
-          [300, 120],
-          [300, 480],
-          [480, 200],
-          [480, 400],
-        ]),
-        ...s([
-          [660, 100],
-          [660, 240],
-          [660, 360],
-          [660, 500],
-        ]),
-      ],
-      // The second wave comes from behind again, near the entrance.
-      [
-        ...g([
-          [70, 80],
-          [70, 520],
-          [160, 60],
-          [160, 540],
-          [250, 80],
-          [250, 520],
-        ]),
-        ...b([
-          [120, 200],
-          [120, 400],
-        ]),
-        ...s([
-          [360, 60],
-          [360, 540],
-        ]),
-      ],
-    ],
-  ]),
+  // The second wave pours out of holes in the walls (D-109); HP stays close
+  // to the handcrafted room (3,380 and 3,335 for its two setups).
+  ambushHall(),
   newPiece("pit", "Brute pit", 640, 640, "heavy", [
     [
       [
@@ -684,6 +732,9 @@ export const WARRENS_RECIPE: DungeonRecipe = {
   boss: WARRENS_THRONE,
   pieces: WARRENS_PIECES,
   ...WARRENS_RULES,
+  // D-109–D-111: one slinger in three leads its shots; a boulder does 5.
+  leadShare: 1 / 3,
+  rockfallDamage: 5,
   fixed: GOBLIN_WARRENS,
 };
 
