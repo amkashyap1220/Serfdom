@@ -284,3 +284,29 @@ describe("abilities reach the snapshot (10b)", () => {
     expect(snap.zones[0]).toMatchObject({ radius: 60 });
   });
 });
+
+describe("cast-time flashes reach the snapshot (10c)", () => {
+  it("a Curse cast on the player timeline sends its flash with its kind", () => {
+    const r = new DungeonInstance(1, "training", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      loadoutFor: () => ({
+        stats: { ...SERF_BASE, mp: 40 },
+        weaponTier: null,
+        ability: { kind: "curse", tier: 0 },
+      }),
+    });
+    r.tick();
+    r.snapshot(0);
+    r.queueInput(1, 0, {
+      move: { x: 0, y: 0 },
+      fire: { trigger: false, aim: null },
+      ability: { x: 100, y: 0 },
+    });
+    r.tick();
+    const snap = r.snapshot(1) as Extract<ServerMessage, { type: "snapshot" }>;
+    expect(snap.blasts).toEqual([
+      expect.objectContaining({ kind: "curse", by: 1, radius: 50 }),
+    ]);
+  });
+});

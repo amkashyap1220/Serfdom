@@ -7,8 +7,7 @@ import {
   nextFireMode,
   PLAYER_WEAPON,
   resolveFireIntent,
-  resolveAbilityTarget,
-  ABILITIES,
+  abilityIntent,
   TICK_SECONDS,
   worldDirectionFromInput,
   WARLORD,
@@ -292,17 +291,17 @@ export class WorldScene extends Phaser.Scene {
       const fire = this.resolveFire(this.net.position, targets);
       // Space held: where to cast, by the fire mode (D-094); the server
       // decides whether it casts (item, MP, cooldown) and clamps the range.
-      const mine = this.net.myAbility;
-      const ability =
-        this.lastKeys.ability && mine
-          ? resolveAbilityTarget(
-              this.fireMode,
-              { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
-              this.net.position,
-              targets,
-              ABILITIES[mine.kind].range,
-            )
-          : null;
+      // Space, or Full auto by itself (D-099); the server decides whether
+      // it casts (item, MP, cooldown) and clamps the range.
+      const ability = abilityIntent(
+        this.fireMode,
+        this.lastKeys.ability,
+        this.net.myAbility,
+        { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
+        this.net.position,
+        targets,
+        PLAYER_WEAPON.range,
+      );
       const fired = this.net.tick({ move, fire, ability });
       if (fired) this.totals.shots++;
     }

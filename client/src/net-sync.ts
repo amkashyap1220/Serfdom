@@ -7,6 +7,7 @@ import {
   dungeonInfo,
   SERF_BASE,
   TICK_SECONDS,
+  type BlastKind,
   type DungeonId,
   type PlayerInput,
   type Rect,
@@ -20,6 +21,7 @@ import {
   type CombatViewModel,
   type ProjectileView,
   serverProjectilesToDraw,
+  type AuraView,
   type BlastView,
   type ChainView,
 } from "./combat-view-model";
@@ -71,7 +73,13 @@ export class NetSync {
   private synced = false;
   private inRun = false;
   /** Blasts the server reported, kept briefly so they can be drawn fading. */
-  private blasts: { x: number; y: number; radius: number; atMs: number }[] = [];
+  private blasts: {
+    kind: BlastKind;
+    x: number;
+    y: number;
+    radius: number;
+    atMs: number;
+  }[] = [];
   private chains: { points: { x: number; y: number }[]; atMs: number }[] = [];
   /** Forwarded to the screen flow (set by main.ts). */
   onLobby: (message: LobbyMessage, receivedAtMs: number) => void = () => {};
@@ -232,11 +240,24 @@ export class NetSync {
       portalOpen: latest.snapshot.portalOpen,
       blasts: this.blastViews(nowMs),
       chains: this.chainViews(nowMs),
+      auras: this.auraViews(latest.snapshot, nowMs),
       zones: latest.snapshot.zones.map((z) => ({
         ...z,
         remaining: Math.max(0, z.remaining - age),
       })),
     };
+  }
+
+  /** Buffed players' glows at the positions they are drawn at (D-098). */
+  private auraViews(snapshot: SnapshotMessage, nowMs: number): AuraView[] {
+    const remotes = this.remotePositions(nowMs);
+    const auras: AuraView[] = [];
+    for (const p of snapshot.players) {
+      if (p.buffs.length === 0 || p.hp <= 0) continue;
+      const at = p.id === this.self?.id ? this.position : remotes.get(p.id);
+      if (at) auras.push({ x: at.x, y: at.y, buffs: p.buffs });
+    }
+    return auras;
   }
 
   /** Chain Lightning paths younger than BLAST_SHOW_MS, fading. */
@@ -252,6 +273,7 @@ export class NetSync {
   private blastViews(nowMs: number): BlastView[] {
     this.blasts = this.blasts.filter((b) => nowMs - b.atMs < BLAST_SHOW_MS);
     return this.blasts.map((b) => ({
+      kind: b.kind,
       x: b.x,
       y: b.y,
       radius: b.radius,
@@ -272,6 +294,7 @@ export class NetSync {
     }
     for (const b of snapshot.blasts) {
       this.blasts.push({
+        kind: b.kind,
         x: b.x,
         y: b.y,
         radius: b.radius,

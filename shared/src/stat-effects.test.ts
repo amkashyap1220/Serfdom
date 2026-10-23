@@ -409,3 +409,127 @@ describe("Druid Nature's Reach (D-097)", () => {
     expect(start - slowed).toBeCloseTo((start - free) / 2, 1);
   });
 });
+
+describe("10c buffs and the curse (D-098)", () => {
+  const SPACE: PlayerInput = {
+    move: { x: 0, y: 0 },
+    fire: { trigger: false, aim: null },
+    ability: { x: 0, y: 0 },
+  };
+  const AT = (x: number, y: number): PlayerInput => ({
+    ...SPACE,
+    ability: { x, y },
+  });
+  const FIRE: PlayerInput = {
+    move: { x: 0, y: 0 },
+    fire: { trigger: true, aim: { x: 1, y: 0 } },
+  };
+  const caster = (
+    kind: "battleCry" | "inspiration" | "curse",
+    tier = 0,
+    enemies: { x: number; y: number }[] = [],
+  ) =>
+    addPlayer(
+      createSimState(enemies),
+      1,
+      { x: 0, y: 0 },
+      { ...SERF_BASE, mp: 40 },
+      null,
+      { kind, tier },
+    );
+
+  it("Battle Cry: +30% (+5% per tier) on shots for 5 s; a recast refreshes, never stacks", () => {
+    let s = applyPlayerInput(
+      caster("battleCry", 2),
+      1,
+      SPACE,
+      [],
+      TICK_SECONDS,
+    ).state;
+    expect(findPlayer(s, 1)!.buffs.battleCry).toEqual({
+      remaining: 5,
+      bonus: 0.4,
+    });
+    s = applyPlayerInput(s, 1, FIRE, [], TICK_SECONDS).state;
+    expect(s.projectiles.at(-1)!.damage).toBeCloseTo(25 * 1.4, 9);
+    s = world(s, 60 * 5).state;
+    expect(findPlayer(s, 1)!.buffs.battleCry).toBeUndefined();
+  });
+
+  it("Inspiration: you and allies within 160 px get +20% and +1 HP/s for 6 s; others do not", () => {
+    let s = caster("inspiration");
+    s = addPlayer(s, 2, { x: 150, y: 0 });
+    s = addPlayer(s, 3, { x: 300, y: 0 });
+    s = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS).state;
+    expect(
+      [1, 2, 3].map((id) => findPlayer(s, id)!.buffs.inspiration?.bonus),
+    ).toEqual([0.2, 0.2, undefined]);
+    s = { ...s, players: s.players.map((p) => ({ ...p, hp: 5 })) };
+    const after = world(s, 60).state;
+    // Base regen 0.5 HP/s, plus 1 while inspired.
+    expect(findPlayer(after, 2)!.hp).toBeCloseTo(6.5, 6);
+    expect(findPlayer(after, 3)!.hp).toBeCloseTo(5.5, 6);
+  });
+
+  it("Battle Cry and Inspiration add: +30% and +20% = +50%", () => {
+    let s = caster("battleCry");
+    s = {
+      ...s,
+      players: s.players.map((p) => ({
+        ...p,
+        buffs: { inspiration: { remaining: 6, bonus: 0.2 } },
+      })),
+    };
+    s = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS).state;
+    s = world(s, 90).state; // both buffs still running 1.5 s later
+    s = applyPlayerInput(s, 1, FIRE, [], TICK_SECONDS).state;
+    expect(s.projectiles.at(-1)!.damage).toBeCloseTo(25 * 1.5, 9);
+  });
+
+  it("Curse: enemies in 50 px take +25% (+5% per tier) from every source for 5 s, on top of buffs", () => {
+    let s = caster("curse", 1, [
+      { x: 100, y: 0 },
+      { x: 100, y: 80 },
+    ]);
+    s = applyPlayerInput(s, 1, AT(100, 0), [], TICK_SECONDS).state;
+    expect(s.enemies[0]!.curse).toEqual({ remaining: 5, bonus: 0.3 });
+    expect(s.enemies[1]!.curse).toBeUndefined(); // 80 px from the centre
+    // A plain shot (not an ability) hits the cursed one for 25 × 1.3. (A
+    // second player would rescale enemy HP for the party, D-045.)
+    s = applyPlayerInput(s, 1, FIRE, [], TICK_SECONDS).state;
+    const before = s.enemies[0]!.hp;
+    const { state, events } = world(s, 20);
+    expect(before - state.enemies[0]!.hp).toBeCloseTo(25 * 1.3, 6);
+    expect(events.find((e) => e.type === "hit")).toMatchObject({
+      damage: expect.closeTo(32.5, 6),
+    });
+    expect(world(state, 60 * 5).state.enemies[0]!.curse).toBeUndefined();
+  });
+
+  it("each cast reports its flash: the Bard's ring and the curse", () => {
+    const r1 = applyPlayerInput(
+      caster("inspiration"),
+      1,
+      SPACE,
+      [],
+      TICK_SECONDS,
+    );
+    expect(r1.events).toContainEqual(
+      expect.objectContaining({
+        type: "blast",
+        kind: "inspiration",
+        radius: 160,
+      }),
+    );
+    const r2 = applyPlayerInput(
+      caster("curse"),
+      1,
+      AT(100, 0),
+      [],
+      TICK_SECONDS,
+    );
+    expect(r2.events).toContainEqual(
+      expect.objectContaining({ type: "blast", kind: "curse", radius: 50 }),
+    );
+  });
+});

@@ -1,4 +1,9 @@
-import type { EnemyKind, SnapshotProjectile } from "@serfdom/shared";
+import type {
+  BlastKind,
+  BuffKind,
+  EnemyKind,
+  SnapshotProjectile,
+} from "@serfdom/shared";
 
 /**
  * What the combat renderer draws: the server's snapshots plus local
@@ -15,6 +20,8 @@ export interface EnemyView {
   respawnIn: number;
   /** Telegraphing an attack (brute windup). */
   alert: boolean;
+  /** Under a Warlock's Curse (D-098): drawn with a violet outline. */
+  cursed: boolean;
 }
 
 export interface HazardView {
@@ -36,6 +43,7 @@ export interface ProjectileView {
 
 /** An ability blast shortly after it landed; `fade` runs 0 → 1. */
 export interface BlastView {
+  kind: BlastKind;
   x: number;
   y: number;
   radius: number;
@@ -56,6 +64,13 @@ export interface ZoneView {
   remaining: number;
 }
 
+/** A buffed player's glow (D-098), drawn under them. */
+export interface AuraView {
+  x: number;
+  y: number;
+  buffs: BuffKind[];
+}
+
 export interface CombatViewModel {
   enemies: EnemyView[];
   projectiles: ProjectileView[];
@@ -63,6 +78,7 @@ export interface CombatViewModel {
   blasts: BlastView[];
   chains: ChainView[];
   zones: ZoneView[];
+  auras: AuraView[];
   portalOpen: boolean;
 }
 
@@ -73,6 +89,7 @@ export const EMPTY_VIEW: CombatViewModel = {
   blasts: [],
   chains: [],
   zones: [],
+  auras: [],
   portalOpen: false,
 };
 

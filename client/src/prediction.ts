@@ -68,6 +68,7 @@ export class PlayerPredictor {
       combat,
       ability: null,
       abilityCooldown: 0,
+      buffs: {},
     };
     this.walls = walls;
   }
@@ -149,5 +150,6 @@ function fromSnapshot(p: SnapshotPlayer, combat: PlayerCombat): PlayerState {
     // Casting is the server's alone; prediction only moves and shoots.
     ability: null,
     abilityCooldown: 0,
+    buffs: {},
   };
 }

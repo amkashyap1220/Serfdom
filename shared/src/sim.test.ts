@@ -67,7 +67,11 @@ describe("enemy damage and respawn", () => {
 
   it("reduces HP and reports defeat at zero, never below", () => {
     const a = damageEnemy(enemy, 25);
-    expect(a).toEqual({ enemy: { ...enemy, hp: 5 }, defeated: false });
+    expect(a).toEqual({
+      enemy: { ...enemy, hp: 5 },
+      defeated: false,
+      damage: 25,
+    });
     const b = damageEnemy(a.enemy, 25);
     expect(b.enemy.hp).toBe(0);
     expect(b.defeated).toBe(true);
@@ -76,7 +80,18 @@ describe("enemy damage and respawn", () => {
 
   it("ignores damage to a defeated enemy", () => {
     const dead = { ...enemy, hp: 0, respawnIn: 2 };
-    expect(damageEnemy(dead, 25)).toEqual({ enemy: dead, defeated: false });
+    expect(damageEnemy(dead, 25)).toEqual({
+      enemy: dead,
+      defeated: false,
+      damage: 0,
+    });
+  });
+
+  it("a cursed enemy takes the curse bonus on top, and reports it (D-098)", () => {
+    const cursed = { ...enemy, hp: 100, curse: { remaining: 3, bonus: 0.3 } };
+    const r = damageEnemy(cursed, 20);
+    expect(r.damage).toBeCloseTo(26, 9);
+    expect(r.enemy.hp).toBeCloseTo(74, 9);
   });
 
   it("rejects negative or non-finite damage", () => {

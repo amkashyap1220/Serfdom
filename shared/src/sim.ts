@@ -27,6 +27,12 @@ import {
   chainLightningJumps,
   NATURES_REACH,
   naturesReachDamage,
+  BATTLE_CRY,
+  battleCryBonus,
+  CURSE,
+  curseBonus,
+  INSPIRATION,
+  inspirationBonus,
   arcaneBlastDamage,
   clampToRange,
   VOLLEY,
@@ -70,6 +76,29 @@ export interface PlayerState {
   ability: AbilityLoadout | null;
   /** Seconds until the ability may be cast again. */
   abilityCooldown: number;
+  /** Timed buffs on this player (D-098): damage and regen only. */
+  buffs: PlayerBuffs;
+}
+
+/** A timed bonus: `bonus` is a share (0.3 = +30%), `remaining` seconds. */
+export interface Buff {
+  remaining: number;
+  bonus: number;
+}
+
+/** Each buff at most once; a recast refreshes it (D-098). */
+export interface PlayerBuffs {
+  battleCry?: Buff;
+  inspiration?: Buff;
+}
+
+/** How much a player's damage is multiplied by their buffs (bonuses add). */
+export function damageMultiplier(player: PlayerState): number {
+  return (
+    1 +
+    (player.buffs.battleCry?.bonus ?? 0) +
+    (player.buffs.inspiration?.bonus ?? 0)
+  );
 }
 
 export interface SimState {
@@ -127,63 +156,171 @@ interface Cast {
   /** Enemies after an instant ability hit them, with its events. */
   enemies?: EnemyState[];
   events?: SimEvent[];
+  /** Buffs to give, by player (the caster or allies). */
+  buffs?: { playerId: number; kind: keyof PlayerBuffs; buff: Buff }[];
 }
 
 /**
  * The effect of casting `ability` toward `target` (an offset from the
  * player); null when it cannot be aimed (nothing is spent then). Damage
- * scales with the item tier (D-095) and the caster's Attack (D-096).
+ * scales with the item tier (D-095), the caster's Attack (D-096), and
+ * their buffs (D-098).
  */
 function castAbility(
   ability: AbilityLoadout,
+  caster: PlayerState,
+  position: Vec2,
+  target: Vec2,
+  state: SimState,
+): Cast | null {
+  const ownerId = caster.id;
+  const power = caster.combat.attackFactor * damageMultiplier(caster);
+  switch (ability.kind) {
+    case "arcaneBlast":
+      return arcaneBlast(ability.tier, ownerId, position, target, power);
+    case "volley":
+      return volley(ability.tier, ownerId, position, target, power);
+    case "chainLightning":
+      return chainLightning(
+        ability.tier,
+        ownerId,
+        position,
+        target,
+        power,
+        state.enemies,
+      );
+    case "naturesReach":
+      return naturesReach(ability.tier, ownerId, position, target, power);
+    case "battleCry":
+      return {
+        buffs: [
+          {
+            playerId: ownerId,
+            kind: "battleCry",
+            buff: {
+              remaining: BATTLE_CRY.seconds,
+              bonus: battleCryBonus(ability.tier),
+            },
+          },
+        ],
+      };
+    case "inspiration":
+      return {
+        buffs: state.players
+          .filter(
+            (p) =>
+              isPlayerAlive(p) &&
+              Math.hypot(
+                p.position.x - position.x,
+                p.position.y - position.y,
+              ) <= INSPIRATION.radius,
+          )
+          .map((p) => ({
+            playerId: p.id,
+            kind: "inspiration" as const,
+            buff: {
+              remaining: INSPIRATION.seconds,
+              bonus: inspirationBonus(ability.tier),
+            },
+          })),
+        events: [
+          {
+            type: "blast",
+            kind: "inspiration",
+            playerId: ownerId,
+            at: { ...position },
+            radius: INSPIRATION.radius,
+          },
+        ],
+      };
+    case "curse":
+      return curse(ability.tier, ownerId, position, target, state.enemies);
+  }
+}
+
+function arcaneBlast(
+  tier: number,
   ownerId: number,
   position: Vec2,
   target: Vec2,
-  combat: PlayerCombat,
-  enemies: readonly EnemyState[],
-): Cast | null {
-  if (ability.kind === "naturesReach") {
-    const offset = clampToRange(target, NATURES_REACH.range);
-    return {
-      zone: {
-        ownerId,
-        at: { x: position.x + offset.x, y: position.y + offset.y },
-        radius: NATURES_REACH.radius,
-        remaining: NATURES_REACH.seconds,
-        // The first pulse lands at once.
-        pulseIn: 0,
-        damage: naturesReachDamage(ability.tier) * combat.attackFactor,
-      },
-    };
-  }
-  if (ability.kind === "chainLightning") {
-    return chainLightning(
-      ability.tier,
+  power: number,
+): Cast {
+  const offset = clampToRange(target, ARCANE_BLAST.range);
+  return {
+    blast: {
       ownerId,
-      position,
-      target,
-      combat,
-      enemies,
-    );
-  }
-  if (ability.kind === "arcaneBlast") {
-    const offset = clampToRange(target, ARCANE_BLAST.range);
-    return {
-      blast: {
-        ownerId,
-        at: { x: position.x + offset.x, y: position.y + offset.y },
-        radius: ARCANE_BLAST.radius,
-        damage: arcaneBlastDamage(ability.tier) * combat.attackFactor,
+      at: { x: position.x + offset.x, y: position.y + offset.y },
+      radius: ARCANE_BLAST.radius,
+      damage: arcaneBlastDamage(tier) * power,
+    },
+  };
+}
+
+function naturesReach(
+  tier: number,
+  ownerId: number,
+  position: Vec2,
+  target: Vec2,
+  power: number,
+): Cast {
+  const offset = clampToRange(target, NATURES_REACH.range);
+  return {
+    zone: {
+      ownerId,
+      at: { x: position.x + offset.x, y: position.y + offset.y },
+      radius: NATURES_REACH.radius,
+      remaining: NATURES_REACH.seconds,
+      // The first pulse lands at once.
+      pulseIn: 0,
+      damage: naturesReachDamage(tier) * power,
+    },
+  };
+}
+
+/** Warlock Curse (D-098): every enemy in the area is cursed for 5 s. */
+function curse(
+  tier: number,
+  ownerId: number,
+  position: Vec2,
+  target: Vec2,
+  enemies: readonly EnemyState[],
+): Cast {
+  const offset = clampToRange(target, CURSE.range);
+  const at = { x: position.x + offset.x, y: position.y + offset.y };
+  const mark = { remaining: CURSE.seconds, bonus: curseBonus(tier) };
+  return {
+    enemies: enemies.map((e) =>
+      isAlive(e) &&
+      Math.hypot(e.position.x - at.x, e.position.y - at.y) <= CURSE.radius
+        ? { ...e, curse: mark }
+        : e,
+    ),
+    events: [
+      {
+        type: "blast",
+        kind: "curse",
+        playerId: ownerId,
+        at,
+        radius: CURSE.radius,
       },
-    };
-  }
-  // Volley (D-097): an even fan around the aim.
+    ],
+  };
+}
+
+/** Volley (D-097): an even fan around the aim. */
+function volley(
+  tier: number,
+  ownerId: number,
+  position: Vec2,
+  target: Vec2,
+  power: number,
+): Cast | null {
   const length = Math.hypot(target.x, target.y);
   if (!(length > 1e-9)) return null;
   const aim = { x: target.x / length, y: target.y / length };
   const step = (VOLLEY.spreadDegrees * Math.PI) / 180 / (VOLLEY.arrows - 1);
   const first = -((VOLLEY.arrows - 1) / 2) * step;
-  const damage = volleyArrowDamage(ability.tier) * combat.attackFactor;
+  const damage = volleyArrowDamage(tier) * power;
   return {
     projectiles: Array.from({ length: VOLLEY.arrows }, (_, i) => ({
       owner: "player" as const,
@@ -210,7 +347,7 @@ function chainLightning(
   ownerId: number,
   position: Vec2,
   target: Vec2,
-  combat: PlayerCombat,
+  power: number,
   enemies: readonly EnemyState[],
 ): Cast | null {
   const offset = clampToRange(target, CHAIN_LIGHTNING.range);
@@ -247,7 +384,7 @@ function chainLightning(
   const updated = [...enemies];
   const events: SimEvent[] = [];
   const points: Vec2[] = [{ ...position }];
-  let damage = chainLightningDamage(tier) * combat.attackFactor;
+  let damage = chainLightningDamage(tier) * power;
   for (let n = 0; current && n <= chainLightningJumps(tier); n++) {
     hit.add(current.id);
     points.push({ ...current.position });
@@ -258,7 +395,7 @@ function chainLightning(
       type: "hit",
       enemyId: current.id,
       playerId: ownerId,
-      damage,
+      damage: result.damage,
       position: current.position,
     });
     if (result.defeated)
@@ -309,7 +446,13 @@ export type SimEvent =
     }
   | { type: "playerDied"; playerId: number }
   /** An ability landed (drawn by every client). */
-  | { type: "blast"; playerId: number; at: Vec2; radius: number }
+  | {
+      type: "blast";
+      kind: "arcaneBlast" | "inspiration" | "curse";
+      playerId: number;
+      at: Vec2;
+      radius: number;
+    }
   /** Chain Lightning's path: the caster, then each enemy hit (drawn). */
   | { type: "chain"; playerId: number; points: Vec2[] };
 
@@ -389,6 +532,7 @@ export function newPlayer(
     combat,
     ability,
     abilityCooldown: 0,
+    buffs: {},
   };
 }
 
@@ -475,14 +619,7 @@ export function applyPlayerInput(
     abilityCooldown <= 1e-9 &&
     mp >= ABILITIES[ability.kind].mpCost
   ) {
-    cast = castAbility(
-      ability,
-      playerId,
-      position,
-      target,
-      player.combat,
-      state.enemies,
-    );
+    cast = castAbility(ability, player, position, target, state);
     if (cast) {
       mp -= ABILITIES[ability.kind].mpCost;
       abilityCooldown = ABILITIES[ability.kind].cooldownSeconds;
@@ -496,9 +633,14 @@ export function applyPlayerInput(
     mp,
     abilityCooldown,
   };
+  // Buffs from the cast land on the caster or on allies (D-098).
+  const buffed = (p: PlayerState): PlayerState => {
+    const gain = cast?.buffs?.find((b) => b.playerId === p.id);
+    return gain ? { ...p, buffs: { ...p.buffs, [gain.kind]: gain.buff } } : p;
+  };
   let next: SimState = {
     ...state,
-    players: state.players.map((p) => (p.id === playerId ? updated : p)),
+    players: state.players.map((p) => buffed(p.id === playerId ? updated : p)),
     blasts: cast?.blast ? [...state.blasts, cast.blast] : state.blasts,
     zones: cast?.zone ? [...state.zones, cast.zone] : state.zones,
   };
@@ -529,7 +671,7 @@ export function applyPlayerInput(
           direction: aim,
           speed: PLAYER_WEAPON.projectileSpeed,
           remaining: PLAYER_WEAPON.range,
-          damage: player.combat.shotDamage,
+          damage: player.combat.shotDamage * damageMultiplier(player),
           size: PLAYER_WEAPON.projectileSize,
         },
       ],
@@ -574,7 +716,12 @@ export function stepWorld(
   let enemies = state.enemies.map((e) => {
     const scaled = scaleEnemyForParty(e, partySize);
     const slowed = inZone(scaled);
-    return scaled.slowed === slowed ? scaled : { ...scaled, slowed };
+    const curse =
+      scaled.curse && scaled.curse.remaining - dtSeconds > 1e-9
+        ? { ...scaled.curse, remaining: scaled.curse.remaining - dtSeconds }
+        : undefined;
+    if (scaled.slowed === slowed && !scaled.curse && !curse) return scaled;
+    return { ...scaled, slowed, curse };
   });
   const projectiles = [...state.projectiles];
   let nextId = state.nextProjectileId;
@@ -660,6 +807,7 @@ export function stepWorld(
   for (const b of state.blasts) {
     events.push({
       type: "blast",
+      kind: "arcaneBlast",
       playerId: b.ownerId,
       at: b.at,
       radius: b.radius,
@@ -676,7 +824,7 @@ export function stepWorld(
         type: "hit",
         enemyId: e.id,
         playerId: b.ownerId,
-        damage: b.damage,
+        damage: result.damage,
         position: e.position,
       });
       if (result.defeated) {
@@ -705,7 +853,7 @@ export function stepWorld(
           type: "hit",
           enemyId: e.id,
           playerId: z.ownerId,
-          damage: z.damage,
+          damage: result.damage,
           position: e.position,
         });
         if (result.defeated) {
@@ -749,7 +897,7 @@ export function stepWorld(
         type: "hit",
         enemyId: target.id,
         playerId: p.ownerId,
-        damage: p.damage,
+        damage: result.damage,
         position: outcome.position,
       });
       if (result.defeated) {
@@ -794,16 +942,43 @@ export function stepWorld(
   };
 }
 
-/** Always-on HP and MP regeneration (D-056, D-096); the dead do not regenerate. */
+/**
+ * Always-on HP and MP regeneration (D-056, D-096), plus Inspiration's
+ * extra HP (D-098); buffs run down. The dead do not regenerate.
+ */
 function regenerate(player: PlayerState, dtSeconds: number): PlayerState {
   if (!isPlayerAlive(player)) return player;
   const { combat } = player;
-  if (player.hp >= player.maxHp && player.mp >= combat.maxMp) return player;
+  const buffs = tickBuffs(player.buffs, dtSeconds);
+  const hpPerSecond =
+    combat.regenPerSecond +
+    (player.buffs.inspiration ? INSPIRATION.regenPerSecond : 0);
+  if (
+    player.hp >= player.maxHp &&
+    player.mp >= combat.maxMp &&
+    buffs === player.buffs
+  ) {
+    return player;
+  }
   return {
     ...player,
-    hp: Math.min(player.maxHp, player.hp + combat.regenPerSecond * dtSeconds),
+    hp: Math.min(player.maxHp, player.hp + hpPerSecond * dtSeconds),
     mp: Math.min(combat.maxMp, player.mp + combat.mpRegenPerSecond * dtSeconds),
+    buffs,
   };
+}
+
+/** Counts buffs down; expired ones go. Unchanged buffs keep their object. */
+function tickBuffs(buffs: PlayerBuffs, dtSeconds: number): PlayerBuffs {
+  if (!buffs.battleCry && !buffs.inspiration) return buffs;
+  const next: PlayerBuffs = {};
+  for (const key of ["battleCry", "inspiration"] as const) {
+    const b = buffs[key];
+    if (b && b.remaining - dtSeconds > 1e-9) {
+      next[key] = { ...b, remaining: b.remaining - dtSeconds };
+    }
+  }
+  return next;
 }
 
 /**

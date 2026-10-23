@@ -78,6 +78,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Abilities and fire modes checklist (Phase 10c)
+
+Restart `npm run dev` (protocol v19) and reload. Classes needed: Barbarian, Bard, Warlock (choose at level 5; each comes with its ability item).
+
+1. **T cycles four modes**: Full auto → Auto aim + Space → Auto fire + Space → Manual (HUD "Fire mode (T)"). You start in Auto aim + Space.
+2. **Full auto**: walk near enemies without pressing anything: you shoot the closest one and your ability goes off by itself whenever an enemy is in its reach (buffs too, when an enemy is within shot range). Away from enemies it does not fire; press Space and it casts anyway (aimed abilities at the cursor).
+3. **Auto aim + Space**, **Auto fire + Space**, **Manual**: the ability only goes off with Space; shooting works as before (auto at the closest enemy / always toward the mouse / left click).
+4. **Barbarian** Battle Cry (Space): a red ring around you for 5 s; your shots hit harder (enemy HP numbers drop faster). MP −15; 10 s cooldown.
+5. **Bard** Inspiration: a gold ring widens from you; you and allies within 160 px get a gold ring for 6 s, hit harder, and heal faster (two clients: stand together, watch the other's HP climb). MP −20; 12 s.
+6. **Warlock** Curse: a violet flash on the target; enemies inside get a violet outline for 5 s and take more damage from everyone (watch a party member's shots too). MP −15; 6 s.
+7. Older abilities (Arcane Blast, Volley, Chain Lightning, Nature's Reach) still work in every mode.
+
+Report: pass/fail per step and any exact error text.
+
 ### Abilities checklist (Phase 10b: Ranger, Sorcerer, Druid)
 
 Restart `npm run dev` (protocol v18) and reload. You need a level-5+ serf of each class (choose the class at level 5; each comes with its T0 ability item worn).

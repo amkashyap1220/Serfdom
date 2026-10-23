@@ -1,22 +1,29 @@
 import type { Vec2 } from "./geometry.ts";
 
 /**
- * Basic-attack fire modes (D-034):
- * - autoAim: fires whenever an enemy is in range, at the closest one.
- * - autoFire: fires continuously toward the mouse.
- * - manual: fires while the left mouse button is held, toward the mouse.
+ * The four modes T cycles through (D-099, replacing D-034's three; names
+ * PROVISIONAL):
+ * - fullAuto: aims at and fires on the closest enemy in range, and uses
+ *   the ability by itself whenever an enemy is in its reach (never a
+ *   movement ability); Space still works.
+ * - autoAim: aims and fires on its own; the ability needs Space.
+ * - autoFire: fires toward the mouse all the time; the ability needs Space.
+ * - manual: fires while the left mouse button is held, toward the mouse;
+ *   the ability needs Space.
  */
-export type FireMode = "autoAim" | "autoFire" | "manual";
+export type FireMode = "fullAuto" | "autoAim" | "autoFire" | "manual";
 
 export const FIRE_MODES: readonly FireMode[] = [
+  "fullAuto",
   "autoAim",
   "autoFire",
   "manual",
 ];
 
 export const FIRE_MODE_LABELS: Readonly<Record<FireMode, string>> = {
-  autoAim: "Auto aim",
-  autoFire: "Auto fire",
+  fullAuto: "Full auto",
+  autoAim: "Auto aim + Space",
+  autoFire: "Auto fire + Space",
   manual: "Manual",
 };
 
@@ -87,7 +94,7 @@ export function resolveFireIntent(
   targets: readonly AimTarget[],
   range: number,
 ): FireIntent {
-  if (mode === "autoAim") {
+  if (mode === "autoAim" || mode === "fullAuto") {
     const target = closestTargetInRange(playerPosition, targets, range);
     if (!target) return NO_FIRE;
     const aim = aimDirection(playerPosition, target.position);

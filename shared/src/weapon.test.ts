@@ -12,10 +12,11 @@ const origin = { x: 0, y: 0 };
 const NO_POINTER: PointerState = { world: null, down: false };
 
 describe("nextFireMode", () => {
-  it("cycles auto aim → auto fire → manual → auto aim", () => {
+  it("cycles full auto → auto aim → auto fire → manual → full auto (D-099)", () => {
+    expect(nextFireMode("fullAuto")).toBe("autoAim");
     expect(nextFireMode("autoAim")).toBe("autoFire");
     expect(nextFireMode("autoFire")).toBe("manual");
-    expect(nextFireMode("manual")).toBe("autoAim");
+    expect(nextFireMode("manual")).toBe("fullAuto");
   });
 });
 

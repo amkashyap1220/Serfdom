@@ -495,6 +495,7 @@ describe("snapshot messages", () => {
     maxHp: 200,
     mp: 12.5,
     maxMp: 16,
+    buffs: [] as ("battleCry" | "inspiration")[],
     cooldown: 0,
   };
   const enemy = {
@@ -507,6 +508,7 @@ describe("snapshot messages", () => {
     maxHp: 875,
     respawnIn: 0,
     alert: false,
+    cursed: false,
   };
   const shot: SnapshotProjectile = {
     id: 5,
@@ -534,7 +536,7 @@ describe("snapshot messages", () => {
       closedDoors: ["tunnel-camp"],
       hazards: [{ x: 3700, y: 980, radius: 32, landsIn: 0.4 }],
       portalOpen: false,
-      blasts: [{ by: 2, x: 1100.5, y: 990, radius: 40 }],
+      blasts: [{ kind: "arcaneBlast", by: 2, x: 1100.5, y: 990, radius: 40 }],
       chains: [
         {
           by: 2,

@@ -38,6 +38,7 @@ function server(
     maxHp: 200,
     mp: 10,
     maxMp: 10,
+    buffs: [],
     cooldown: 0,
     ...extra,
   };

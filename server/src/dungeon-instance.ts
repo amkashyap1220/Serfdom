@@ -30,6 +30,8 @@ import {
   type RunStats,
   type ServerMessage,
   type SimState,
+  BUFF_KINDS,
+  type SimEvent,
   type SnapshotBlast,
   type SnapshotChain,
   type SnapshotPlayer,
@@ -191,6 +193,33 @@ export class DungeonInstance {
     return queueInput(member.inputs, seq, input, this.maxQueuedInputs);
   }
 
+  /**
+   * Remembers the ability effects to draw (blasts, rings, curses, chains),
+   * from either timeline: casts happen on a player's inputs, Arcane Blasts
+   * land in the world step. Each goes out in exactly one snapshot.
+   */
+  private collectEffects(events: readonly SimEvent[]): void {
+    for (const e of events) {
+      if (e.type === "blast") {
+        this.blastsToSend.push({
+          kind: e.kind,
+          by: e.playerId,
+          x: roundCoord(e.at.x),
+          y: roundCoord(e.at.y),
+          radius: e.radius,
+        });
+      } else if (e.type === "chain") {
+        this.chainsToSend.push({
+          by: e.playerId,
+          points: e.points.map((p) => ({
+            x: roundCoord(p.x),
+            y: roundCoord(p.y),
+          })),
+        });
+      }
+    }
+  }
+
   /** Removes a player (R or disconnect). Returns their final stats, or null if not a member. */
   leave(playerId: number): RunEnd | null {
     return this.end(playerId, "left");
@@ -212,17 +241,7 @@ export class DungeonInstance {
           const r = applyPlayerInput(this.sim, id, input, walls, TICK_SECONDS);
           this.sim = r.state;
           member.stats = recordRunEvents(member.stats, id, r.events);
-          for (const e of r.events) {
-            if (e.type === "chain") {
-              this.chainsToSend.push({
-                by: e.playerId,
-                points: e.points.map((p) => ({
-                  x: roundCoord(p.x),
-                  y: roundCoord(p.y),
-                })),
-              });
-            }
-          }
+          this.collectEffects(r.events);
         }
       } catch {
         faulted.push(id);
@@ -234,16 +253,7 @@ export class DungeonInstance {
     const kinds = new Map(this.sim.enemies.map((e) => [e.id, e.kind]));
     const world = stepWorld(this.sim, walls, TICK_SECONDS);
     this.sim = world.state;
-    for (const e of world.events) {
-      if (e.type === "blast") {
-        this.blastsToSend.push({
-          by: e.playerId,
-          x: roundCoord(e.at.x),
-          y: roundCoord(e.at.y),
-          radius: e.radius,
-        });
-      }
-    }
+    this.collectEffects(world.events);
     for (const e of this.sim.enemies) kinds.set(e.id, e.kind);
     for (const [id, member] of this.members) {
       member.stats = recordRunEvents(member.stats, id, world.events);
@@ -309,6 +319,7 @@ export class DungeonInstance {
         maxHp: p.maxHp,
         mp: roundCoord(p.mp),
         maxMp: p.combat.maxMp,
+        buffs: BUFF_KINDS.filter((b) => p.buffs[b] !== undefined),
         cooldown: p.fireCooldown,
       });
     }
@@ -330,6 +341,7 @@ export class DungeonInstance {
         maxHp: e.maxHp,
         respawnIn: e.respawnIn,
         alert: isTelegraphing(e),
+        cursed: e.curse !== undefined,
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,

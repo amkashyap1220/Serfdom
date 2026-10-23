@@ -52,6 +52,7 @@ describe("prediction uses your stats (8c-2)", () => {
       maxHp: me.maxHp,
       mp: me.mp,
       maxMp: me.combat.maxMp,
+      buffs: [],
       cooldown: me.fireCooldown,
     });
     expect(predictor.lastCorrection).toBe(0);

@@ -51,6 +51,8 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v19 (10c): snapshot players list their buffs, enemies say whether
+ *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
  *          client aims with that ability's reach; snapshots carry Chain
  *          Lightning paths and Nature's Reach zones (drawing only).
@@ -83,7 +85,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 18;
+export const PROTOCOL_VERSION = 19;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -187,6 +189,8 @@ export interface SnapshotPlayer {
   /** Ability resource (D-093). */
   mp: number;
   maxMp: number;
+  /** Active buffs, for the glow (D-098). */
+  buffs: BuffKind[];
   /** Seconds until this player may fire again (needed to predict own shots exactly). */
   cooldown: number;
 }
@@ -202,16 +206,27 @@ export interface SnapshotEnemy {
   respawnIn: number;
   /** Telegraphing an attack (a brute about to charge). */
   alert: boolean;
+  /** Under a Warlock's Curse (D-098). */
+  cursed: boolean;
 }
 
-/** A warning circle that lands after `landsIn` seconds. */
+/** An ability's flash on the ground, drawn once. */
 export interface SnapshotBlast {
+  /** Which ability: Arcane Blast, the Bard's ring, the Warlock's curse. */
+  kind: BlastKind;
   /** The caster. */
   by: number;
   x: number;
   y: number;
   radius: number;
 }
+
+export const BLAST_KINDS = ["arcaneBlast", "inspiration", "curse"] as const;
+export type BlastKind = (typeof BLAST_KINDS)[number];
+
+/** Buffs a snapshot shows on a player (D-098). */
+export const BUFF_KINDS = ["battleCry", "inspiration"] as const;
+export type BuffKind = (typeof BUFF_KINDS)[number];
 
 export interface SnapshotChain {
   by: number;
@@ -226,6 +241,7 @@ export interface SnapshotZone {
   remaining: number;
 }
 
+/** A warning circle that lands after `landsIn` seconds. */
 export interface SnapshotHazard {
   x: number;
   y: number;
@@ -1068,6 +1084,7 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
       "maxHp",
       "mp",
       "maxMp",
+      "buffs",
       "cooldown",
     ])
   ) {
@@ -1092,6 +1109,13 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
   ) {
     return null;
   }
+  if (
+    !Array.isArray(v.buffs) ||
+    v.buffs.length > BUFF_KINDS.length ||
+    !v.buffs.every((b) => (BUFF_KINDS as readonly unknown[]).includes(b))
+  ) {
+    return null;
+  }
   return {
     id: v.id,
     x: v.x,
@@ -1101,19 +1125,30 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
     maxHp: v.maxHp,
     mp: v.mp,
     maxMp: v.maxMp,
+    buffs: v.buffs as BuffKind[],
     cooldown: v.cooldown,
   };
 }
 
 function parseSnapshotBlast(v: unknown): SnapshotBlast | null {
-  if (!isPlainObject(v) || !hasExactKeys(v, ["by", "x", "y", "radius"])) {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["kind", "by", "x", "y", "radius"]) ||
+    !(BLAST_KINDS as readonly unknown[]).includes(v.kind)
+  ) {
     return null;
   }
   if (!isPlayerId(v.by) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
     return null;
   }
   if (!isNonNegative(v.radius)) return null;
-  return { by: v.by, x: v.x, y: v.y, radius: v.radius };
+  return {
+    kind: v.kind as BlastKind,
+    by: v.by,
+    x: v.x,
+    y: v.y,
+    radius: v.radius,
+  };
 }
 
 function parseSnapshotChain(v: unknown): SnapshotChain | null {
@@ -1157,11 +1192,13 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "maxHp",
       "respawnIn",
       "alert",
+      "cursed",
     ])
   ) {
     return null;
   }
   if (!isEnemyKind(v.kind) || typeof v.alert !== "boolean") return null;
+  if (typeof v.cursed !== "boolean") return null;
   if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
     return null;
   }
@@ -1183,6 +1220,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     maxHp: v.maxHp,
     respawnIn: v.respawnIn,
     alert: v.alert,
+    cursed: v.cursed,
   };
 }
 

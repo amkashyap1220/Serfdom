@@ -35,6 +35,8 @@ export interface EnemyState {
   ai: EnemyAi;
   /** Inside a Nature's Reach this tick: moves at half speed (D-097). Set by the world step. */
   slowed?: boolean;
+  /** Warlock Curse (D-098): takes `bonus` more damage from every source while `remaining` > 0. */
+  curse?: { remaining: number; bonus: number };
 }
 
 /**
@@ -126,12 +128,18 @@ export function isAlive(enemy: EnemyState): boolean {
 export function damageEnemy(
   enemy: EnemyState,
   damage: number,
-): { enemy: EnemyState; defeated: boolean } {
-  const { hp, died } = applyDamage(enemy.hp, damage); // validates damage
-  if (!isAlive(enemy)) return { enemy, defeated: false };
+): { enemy: EnemyState; defeated: boolean; damage: number } {
+  if (!Number.isFinite(damage) || damage < 0) {
+    throw new RangeError(`damage must be finite and >= 0, got ${damage}`);
+  }
+  if (!isAlive(enemy)) return { enemy, defeated: false, damage: 0 };
+  // A cursed enemy takes more from every source (D-098).
+  const taken = damage * (1 + (enemy.curse?.bonus ?? 0));
+  const { hp, died } = applyDamage(enemy.hp, taken);
   return {
     enemy: { ...enemy, hp, respawnIn: died ? (enemy.respawnSeconds ?? 0) : 0 },
     defeated: died,
+    damage: taken,
   };
 }
 
