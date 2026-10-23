@@ -3,7 +3,7 @@ import { DUMMY_ENEMY, ENEMY_RING_ATTACK } from "./combat-config.ts";
 // Goblin Warrens enemy roles (T-029, Phases 6b–6c). PROVISIONAL first-pass
 // numbers chosen by Claude (the user delegated dungeon design, D-047),
 // balanced for a fresh level-1 Serf (D-054: 20 HP, 0.5 HP/s); to be tuned
-// in 6d. Change here only.
+// in 6d (6d tuning: HP +~12% after the user's 2-player clear in 4:00). Change here only.
 
 export const ENEMY_KINDS = [
   "dummy",
@@ -32,7 +32,7 @@ export const DUMMY = {
 
 /** Melee: runs at the nearest player and hurts on contact. */
 export const GRUNT = {
-  maxHp: 150,
+  maxHp: 170,
   size: 14,
   /** Slower than the player (150), so it can be kited. */
   speed: 95,
@@ -44,7 +44,7 @@ export const GRUNT = {
 
 /** Ranged: keeps its distance and throws aimed rocks. */
 export const SLINGER = {
-  maxHp: 110,
+  maxHp: 125,
   size: 14,
   speed: 70,
   /** Backs away when the nearest player is closer than this… */
@@ -59,7 +59,7 @@ export const SLINGER = {
 
 /** Tough charger (6c): walks up, telegraphs, then charges in a straight line. Only the charge hurts. */
 export const BRUTE = {
-  maxHp: 400,
+  maxHp: 450,
   size: 20,
   speed: 60,
   /** Starts a charge when the nearest player is this close and it is ready. */
@@ -79,7 +79,7 @@ export const BRUTE = {
  * Phase 2 adds reinforcements and rockfall (the GDD's limited arena hazard).
  */
 export const WARLORD = {
-  maxHp: 4500,
+  maxHp: 5000,
   size: 28,
   /** Attacks while any player is this close. */
   aggroRange: 600,

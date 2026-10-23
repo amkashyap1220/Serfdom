@@ -24,8 +24,8 @@ import type { EnemyKind } from "./enemy-config.ts";
  * room; when it dies the exit portal opens where it stood, and each player
  * completes by stepping into it (D-057).
  *
- * Solo HP on the way (6c): tunnel 750, camp 1630, ambush 3050 (two waves),
- * guard 2360, Warlord 4500 → 12290 required; den 820 optional.
+ * Solo HP on the way (6d tuning): tunnel 850, camp 1845, ambush 3455 (two
+ * waves), guard 2670, Warlord 5000 → 13820 required; den 930 optional.
  */
 
 const DOOR = 64;

@@ -469,7 +469,7 @@ describe("menu and queue (6a)", () => {
       hp: PLAYER_HEALTH.maxHp,
     });
     server.tick();
-    expect(dummy().maxHp).toBe(875);
+    expect(dummy().maxHp).toBe(750);
     let snap = await nextOfType(a!, "snapshot");
     while (snap.players.length < 2) snap = await nextOfType(a!, "snapshot");
     expect(snap.players.map((p) => p.id)).toEqual([1, 2]);
@@ -627,7 +627,7 @@ describe("shared combat on the server (5b)", () => {
   it("scales the dummy's HP for two living players (D-045)", async () => {
     await inRun(2);
     server.tick();
-    expect(dummy().maxHp).toBe(875);
+    expect(dummy().maxHp).toBe(750);
   });
 
   it("cannot be tricked into a faster fire rate by sending extra inputs", async () => {

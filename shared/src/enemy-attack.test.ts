@@ -65,14 +65,15 @@ describe("applyDamage", () => {
 });
 
 describe("party scaling formula (D-045)", () => {
-  it("is 1×, 1.75×, 2.5×, 3.25× for 1–4 players", () => {
-    expect([1, 2, 3, 4].map(partyHpMultiplier)).toEqual([1, 1.75, 2.5, 3.25]);
-    expect(scaledMaxHp(500, 4)).toBe(1625);
+  it("is 1×, 1.5×, 2×, 2.5× for 1–4 players, 5.5× for 10 (6d tuning)", () => {
+    expect([1, 2, 3, 4].map(partyHpMultiplier)).toEqual([1, 1.5, 2, 2.5]);
+    expect(partyHpMultiplier(10)).toBe(5.5);
+    expect(scaledMaxHp(500, 4)).toBe(1250);
   });
 
   it("treats 0 or fractional party sizes sensibly", () => {
     expect(partyHpMultiplier(0)).toBe(1);
-    expect(partyHpMultiplier(2.9)).toBe(1.75);
+    expect(partyHpMultiplier(2.9)).toBe(1.5);
   });
 
   it("keeps the HP fraction, never kills or revives by rescaling", () => {
@@ -282,7 +283,7 @@ describe("death (D-046 prototype)", () => {
     const enemyBefore = dead.enemies[0]!;
     const { events, state } = runWorld(dead, RING_TICKS + 1);
     expect(count(events, "enemyAttack")).toBeGreaterThan(0); // player 2 in range
-    // Party went 2 → 1, so max HP rescaled (875 → 500), but the HP
+    // Party went 2 → 1, so max HP rescaled (750 → 500), but the HP
     // *fraction* is unchanged: no reset, no free heal (D-045, D-046).
     const after = state.enemies[0]!;
     expect(after.maxHp).toBe(500);

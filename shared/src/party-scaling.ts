@@ -1,12 +1,15 @@
 /**
  * Enemy HP scaling by party size (D-045, PROVISIONAL; the user may change it).
  *
- *   maxHp = base × (1 + 0.75 × (players − 1))  →  1×, 1.75×, 2.5×, 3.25×
+ *   maxHp = base × (1 + 0.5 × (players − 1))  →  1×, 1.5×, 2×, … 5.5× at 10
+ *
+ * 6d tuning: lowered from 0.75 so a full party of 10 clears in ~3 min
+ * while solo stays ~5 min (D-047).
  *
  * Each extra player adds less than a full solo's worth of HP: groups split
  * attention between dodging and shooting, and solo play must stay viable.
  */
-export const EXTRA_PLAYER_HP_FACTOR = 0.75;
+export const EXTRA_PLAYER_HP_FACTOR = 0.5;
 
 export function partyHpMultiplier(players: number): number {
   const n = Math.max(1, Math.floor(players));

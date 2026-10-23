@@ -216,7 +216,7 @@ describe("party HP scaling (D-045)", () => {
     s = { ...s, enemies: s.enemies.map((e) => ({ ...e, hp: 250 })) };
     s = addPlayer(s, 2, { x: 0, y: 0 });
     s = stepWorld(s, [], TICK_SECONDS).state;
-    expect(s.enemies[0]).toMatchObject({ maxHp: 875, hp: 438, scaledFor: 2 });
+    expect(s.enemies[0]).toMatchObject({ maxHp: 750, hp: 375, scaledFor: 2 });
     // The second player dies: back to solo scaling, still ~half.
     s = {
       ...s,

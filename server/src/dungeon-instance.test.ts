@@ -1,5 +1,7 @@
 import {
   GOBLIN_WARRENS,
+  GRUNT,
+  WARLORD,
   PLAYER_HEALTH,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -71,7 +73,7 @@ describe("DungeonInstance in the Goblin Warrens", () => {
     r.tick();
     expect(r.state.enemies.map((e) => e.kind)).toEqual(Array(5).fill("grunt"));
     const snap = r.snapshot(2) as Snapshot;
-    expect(snap.enemies[0]).toMatchObject({ kind: "grunt", hp: 150 });
+    expect(snap.enemies[0]).toMatchObject({ kind: "grunt", hp: GRUNT.maxHp });
     const full: number = PLAYER_HEALTH.maxHp;
     let hp = full;
     for (let t = 0; t < 60 * 6; t++) {
@@ -135,7 +137,10 @@ describe("DungeonInstance in the Goblin Warrens", () => {
   it("the Warlord waits in the throne room; the portal opens only when it dies", () => {
     const { r } = atTheWarlord([1]);
     const boss = r.state.enemies.find((e) => e.kind === "warlord");
-    expect(boss).toMatchObject({ position: { x: 3780, y: 1000 }, hp: 4500 });
+    expect(boss).toMatchObject({
+      position: { x: 3780, y: 1000 },
+      hp: WARLORD.maxHp,
+    });
     expect(r.portalOpen).toBe(false);
     killWarlord(r);
     r.tick(); // the Warlord is removed

@@ -76,7 +76,7 @@ Network delay (Phase 4c, D-042 target < 100 ms excluding network travel): Claude
 
 Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a centered message reads "You died / Main menu (placeholder) / Press Enter to play again"; there is no automatic respawn. Enter returns with 200/200 HP (offline: at the start; online in 5a: where the server has you). The dummy is not reset. Party HP scaling (D-045) is covered by shared tests; it only becomes visible once combat is on the server (5b).
 
-Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→875, 3→1250, 4→1625). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
+Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
 ### Phase 6 acceptance checklist (two clients)
 
@@ -95,7 +95,7 @@ Report: pass/fail per step, both rolls and the matching terminal lines, your cle
 
 Run `npm run dev` (restart it if it was running before 6c: protocol v6), open http://localhost:5173/, Ctrl+Shift+R. Play the Warrens as in the 6b checklist, plus:
 
-1. **Brutes** (orange squares, 400 HP): in the camp, the ambush hall's second wave, and the guard room. One walks toward you, stops and **blinks yellow**, then charges in a straight line. Stepping sideways during the blink dodges it; getting hit costs 4 HP. Walking next to a brute that is not charging does not hurt.
+1. **Brutes** (orange squares, 450 HP): in the camp, the ambush hall's second wave, and the guard room. One walks toward you, stops and **blinks yellow**, then charges in a straight line. Stepping sideways during the blink dodges it; getting hit costs 4 HP. Walking next to a brute that is not charging does not hurt.
 2. **Throne room**: entering it spawns the **Goblin Warlord** (large dark-red square). A health bar appears across the top of the screen.
 3. Phase 1: aimed 5-shot fans and rings of orange bullets.
 4. Below half HP the bar turns bright red and says **ENRAGED**: wider 7-shot fans, denser rings, pairs of grunts, and **red warning circles** under you that fill in and hit for 3 if you are still inside after 1.2 s.
@@ -112,9 +112,9 @@ Run `npm run dev` (restart it if it was running before 6b: protocol v5), open ht
 You are a fresh level-1 Serf: **20 HP**, regenerating **0.5 HP/s** all the time (HUD `Player HP`, one decimal). About 10 hits kill you.
 
 1. Queue (Enter). After ≤ 5 s you are in the **Entrance cave**: room names in each room's top-left corner, brown walls, HUD `Doors closed: 5` (the entrance door opened at once).
-2. Walk east (D) through the gap into the **Tunnel**: 5 green squares (grunts, 150 HP) appear and run at you. Touching one costs 2 HP at most every 0.8 s per grunt (several at once add up fast).
+2. Walk east (D) through the gap into the **Tunnel**: 5 green squares (grunts, 170 HP) appear and run at you. Touching one costs 2 HP at most every 0.8 s per grunt (several at once add up fast).
 3. A red-brown block (a closed door) closes the tunnel's east end; you cannot walk or shoot through it. Kill the grunts: the door disappears and `Doors closed` drops to 4.
-4. **Goblin camp**: grunts plus 3 purple squares (slingers, 110 HP) that keep their distance and throw orange rocks (2 damage). Clearing it opens **two** doors: north (optional side den) and east (`Doors closed: 2`).
+4. **Goblin camp**: grunts plus 3 purple squares (slingers, 125 HP) that keep their distance and throw orange rocks (2 damage). Clearing it opens **two** doors: north (optional side den) and east (`Doors closed: 2`).
 5. Optional: the **Side den** (4 grunts, 2 slingers). Clearing it opens nothing.
 6. **Ambush hall**: a first wave; when it dies a second, larger wave spawns, partly behind you near the entry.
 7. **Guard room**: 6 grunts and a line of 6 slingers. Clearing it opens the last door.
@@ -130,9 +130,9 @@ Run `npm run dev` (restart it if it was running before 6a: protocol v4), open **
 
 1. Both windows show the **SERFDOM** menu with tabs Dungeons / Serfs / Stash / Leaderboard. Serfs, Stash, and Leaderboard say "Coming in Phase …".
 2. In A press **Enter** (or click Enter queue): "Finding a party for Goblin Warrens · 1 / 10 players waiting · Starting in 5 s", counting down.
-3. Within 5 s press Enter in B: both show **2 / 10**. When the countdown ends both enter the same run (the overlay disappears); each sees the other; dummy shows 875/875.
+3. Within 5 s press Enter in B: both show **2 / 10**. When the countdown ends both enter the same run (the overlay disappears); each sees the other; dummy shows 750/750.
 4. In B press **R**: B is back at the menu with "You fled the Goblin Warrens. No rewards."; A keeps playing and the dummy rescales to 500 max.
-5. In B queue again within 15 s of the run starting: B joins **A's run** at the spawn (HUD shows the other player; dummy max goes back to 875). Press R in B, wait until the run is over 15 s old, queue again: B gets a **separate** solo run after 5 s and the two windows do not see each other. Press R in B.
+5. In B queue again within 15 s of the run starting: B joins **A's run** at the spawn (HUD shows the other player; dummy max goes back to 750). Press R in B, wait until the run is over 15 s old, queue again: B gets a **separate** solo run after 5 s and the two windows do not see each other. Press R in B.
 6. In A kill the dummy: **DUNGEON CLEARED** with confetti, your stats (clear time, enemies slain, damage dealt, accuracy, damage taken) and a wiggling chest placeholder.
 7. Press **Enter** on that screen: requeue; a solo run starts within 5 s at (1000, 1000) with 200 HP and a full-HP dummy.
 8. Die (T twice for Manual, stand left of the dummy at about (1075, 1100)): the screen cuts to red then black: **YOUR SERF HAS DIED** with your life stats; Return appears after ~1.5 s; Enter before that does nothing.
@@ -148,7 +148,7 @@ _Historical: steps 7–8 (placeholder menu, Enter to play again) were replaced b
 Run `npm run dev`, open **two separate windows** side by side at http://localhost:5173/ (not tabs: browsers pause background tabs), reload both with Ctrl+Shift+R.
 
 1. Both HUDs: `Movement + combat: server-authoritative`; each sees the other as a blue square.
-2. Dummy max HP matches the number of living players (1→500, 2→875, 3→1250, 4→1625, D-045).
+2. Dummy max HP matches the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d, D-045).
 3. Fight from window A only: both windows show the same dummy HP at every moment; B sees A's cyan shots.
 4. Fight from both windows at once: damage adds up; when the dummy dies both windows show `respawn …s`; it returns at full (scaled) HP after 3 s.
 5. Your own shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands; `Pending / correction` stays ~0–1 / 0.00 px.
