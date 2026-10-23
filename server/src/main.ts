@@ -1,4 +1,9 @@
+import { randomInt } from "node:crypto";
+import { SERF_SLOTS } from "@serfdom/shared";
 import pg from "pg";
+
+/** A random() in [0, 1) from the OS's secure generator (stat and item rolls). */
+const cryptoRandom = () => randomInt(2 ** 47) / 2 ** 47;
 import { PgAccountRepo } from "./auth/account-repo.ts";
 import { AccountService } from "./auth/account-service.ts";
 import { migrate } from "./db/migrate.ts";
@@ -41,7 +46,7 @@ try {
       : "database up to date",
   );
   const accounts = new AccountService(new PgAccountRepo(pool));
-  const serfs = new SerfService(new PgSerfRepo(pool));
+  const serfs = new SerfService(new PgSerfRepo(pool), SERF_SLOTS, cryptoRandom);
   const server = await GameServer.start({ port, accounts, serfs });
   consoleLogger.info(
     `Serfdom server listening on ws://localhost:${server.port}`,

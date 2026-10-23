@@ -42,7 +42,9 @@ export type LobbyMessage = Extract<
       | "loggedOut"
       | "serfList"
       | "serfError"
-      | "leaderboard";
+      | "leaderboard"
+      | "stash"
+      | "stashError";
   }
 >;
 
@@ -133,6 +135,14 @@ export class Connection {
 
   sendCreateSerf(name: string): void {
     this.send({ type: "createSerf", name });
+  }
+
+  sendGetStash(): void {
+    this.send({ type: "getStash" });
+  }
+
+  sendSellItem(itemId: number): void {
+    this.send({ type: "sellItem", itemId });
   }
 
   sendGetLeaderboard(): void {
@@ -233,6 +243,8 @@ export class Connection {
       case "serfList":
       case "serfError":
       case "leaderboard":
+      case "stash":
+      case "stashError":
         this.handlers.onLobby?.(msg, performance.now());
         break;
     }

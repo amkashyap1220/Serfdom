@@ -3,6 +3,10 @@ import {
   SERF_SLOTS,
   serfNameProblem,
   addStats,
+  STASH_SIZE,
+  luckOf,
+  rollItem,
+  type LootDrop,
   applyGains,
   CLASS_CHOICE_LEVEL,
   classBonus,
@@ -19,7 +23,7 @@ import {
   type RunStats,
   type SerfSummary,
 } from "@serfdom/shared";
-import type { Death, SerfRepo } from "./serf-repo.ts";
+import type { Death, SerfRepo, Stash } from "./serf-repo.ts";
 
 /** PROVISIONAL: how many serfs the leaderboard shows. */
 export const LEADERBOARD_SIZE = 20;
@@ -101,6 +105,7 @@ export class SerfService {
     serf: SerfSummary;
     expGained: number;
     statGains: Stats;
+    loot: LootDrop[];
   } | null> {
     // The level is read before the update. A serf plays one run at a time
     // (it is fixed for the run, one connection per account), so no other
@@ -118,15 +123,65 @@ export class SerfService {
       expGained,
     );
     if (!serf) return null;
-    if (!serf.alive || expGained === 0) {
-      return { serf, expGained, statGains: zeroStats() };
+    if (result !== "completed" || !serf.alive) {
+      return { serf, expGained, statGains: zeroStats(), loot: [] };
     }
     const settled = await this.settle(accountId, serfId);
+    const loot = await this.rollLoot(accountId, before, dungeon);
+    // Read once more so the serf comes back with its new items.
+    const latest = await this.repo.find(accountId, serfId);
     return {
-      serf: settled?.serf ?? serf,
+      serf: latest ?? settled?.serf ?? serf,
       expGained,
       statGains: settled?.gains ?? zeroStats(),
+      loot,
     };
+  }
+
+  /**
+   * One chest per Luck point (D-065, D-068), counting only what the serf
+   * had equipped for the run; each chest is one item from the dungeon's
+   * pool (D-080), into the stash while it has room, else pending (D-086,
+   * D-088).
+   */
+  private async rollLoot(
+    accountId: number,
+    serf: SerfSummary,
+    dungeon: DungeonId,
+  ): Promise<LootDrop[]> {
+    const chests = luckOf(serf.items.filter((i) => i.equipped !== null));
+    const items = Array.from({ length: chests }, () =>
+      rollItem(dungeon, this.random),
+    );
+    const drops = await this.repo.addLoot(
+      accountId,
+      serf.id,
+      items,
+      STASH_SIZE,
+    );
+    return drops ?? [];
+  }
+
+  /** The account's stash, gold, and pending rewards (D-085–D-088). */
+  async stash(accountId: number): Promise<Stash & { capacity: number }> {
+    return { ...(await this.repo.stash(accountId)), capacity: STASH_SIZE };
+  }
+
+  /** Sells a stash or pending item for gold (D-087); reasons are safe to show. */
+  async sell(
+    accountId: number,
+    itemId: number,
+  ): Promise<{ ok: true; price: number } | { ok: false; reason: string }> {
+    const sold = await this.repo.sell(accountId, itemId, STASH_SIZE);
+    // Someone else's item looks exactly like one that does not exist.
+    return sold
+      ? { ok: true, price: sold.price }
+      : { ok: false, reason: "No such item in your stash." };
+  }
+
+  /** Rewards wait for this serf: it may not start a dungeon (D-088). */
+  hasPending(accountId: number, serfId: number): Promise<boolean> {
+    return this.repo.hasPending(accountId, serfId);
   }
 
   /**

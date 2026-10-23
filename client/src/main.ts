@@ -74,6 +74,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
     dismissResults: () => dispatch({ type: "dismissResults" }),
     openTab: (tab) => {
       if (tab === "leaderboard") net.connection.sendGetLeaderboard();
+      if (tab === "stash") net.connection.sendGetStash();
       dispatch({ type: "openTab", tab });
     },
     submitLogin: (mode, email, password) => {
@@ -84,6 +85,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
     switchLoginMode: () => dispatch({ type: "switchLoginMode" }),
     logout: () => net.connection.sendLogout(),
     createSerf: (name) => net.connection.sendCreateSerf(name),
+    sellItem: (itemId) => net.connection.sendSellItem(itemId),
     chooseClass: (serfId, classId) =>
       net.connection.sendChooseClass(serfId, classId),
     selectSerf: (serfId) => {
@@ -114,6 +116,14 @@ game.events.once(Phaser.Core.Events.READY, () => {
       view.setSerfs(message);
       onSerfList(message);
       showSerf(message.serfs.find((s) => s.id === message.selectedId) ?? null);
+    } else if (message.type === "stash") {
+      view.setStash(message);
+      // Rewards waiting for room come first, also right after login (D-088, D-090).
+      if (message.pending.length > 0 && screen.kind === "menu") {
+        dispatch({ type: "openTab", tab: "stash" });
+      }
+    } else if (message.type === "stashError") {
+      view.setStashError(message.reason);
     } else if (message.type === "leaderboard") {
       view.setLeaderboard(message.entries);
     } else if (message.type === "serfError") {

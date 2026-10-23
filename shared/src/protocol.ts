@@ -3,7 +3,14 @@ import { isClassId, type ClassId } from "./classes.ts";
 import { STAT_KEYS, type Stats } from "./stats.ts";
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
-import { isValidRoll, type PlaceholderReward } from "./reward.ts";
+import {
+  EQUIP_SLOTS,
+  isValidItemSpec,
+  type EquipSlot,
+  type Item,
+  type ItemSpec,
+  type StatRoll,
+} from "./items.ts";
 import {
   LIFE_STAT_KEYS,
   SERF_NAME_MAX,
@@ -38,6 +45,15 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v15 (9a): no bag (D-085). Serfs carry only equipped items; rewards
+ *          go to the account stash or wait as pending when it is full
+ *          (D-086–D-088). Server stash {capacity, gold, items, pending} and
+ *          stashError; client getStash and sellItem. runEnded.loot items
+ *          carry their id and whether they are pending.
+ * v14 (9a): items. Serfs carry their items (bag and equipped);
+ *          runEnded's placeholder reward roll becomes `loot`: one item per
+ *          chest (one chest per Luck point), with the bag id it was kept as
+ *          or null when the bag was full.
  * v13 (8c-2): runStarted carries your stats, so prediction moves and
  *          fires exactly as the server simulates you.
  * v12 (8c): serfs carry their rolled stats; runEnded carries statGains
@@ -52,7 +68,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 15;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -100,7 +116,25 @@ export type ClientMessage =
   /** The lifetime EXP leaderboard (GDD §12). */
   | { type: "getLeaderboard" }
   /** Give one of your serfs its permanent class (level 5+, none yet; D-073). */
-  | { type: "chooseClass"; serfId: number; classId: ClassId };
+  | { type: "chooseClass"; serfId: number; classId: ClassId }
+  /** Your stash, gold, and pending rewards. */
+  | { type: "getStash" }
+  /** Sell one of your stash or pending items to the vendor for gold (D-087). */
+  | { type: "sellItem"; itemId: number };
+
+/** One reward chest's item and whether it fit in the bag. */
+export interface LootDrop {
+  /** The item as it now exists on the account (it has an id). */
+  item: Item;
+  /** True when the stash was full: it waits until the player sells something (D-087, D-088). */
+  pending: boolean;
+}
+
+/** A reward that did not fit, held for the serf that won it (D-088). */
+export interface PendingReward {
+  item: Item;
+  serfId: number;
+}
 
 export interface LeaderboardEntry {
   rank: number;
@@ -196,8 +230,8 @@ export type ServerMessage =
       dungeon: DungeonId;
       result: RunResult;
       stats: RunStats;
-      /** Rolled by the server for this player only; null unless completed (D-010). */
-      reward: PlaceholderReward | null;
+      /** One item per chest, rolled by the server for this player only (D-010, D-080); empty unless completed. */
+      loot: LootDrop[];
       /** Kind of enemy that landed the killing blow (deaths only). */
       killedBy: EnemyKind | null;
       /** The serf's life including this run; on death, its final record. */
@@ -218,6 +252,16 @@ export type ServerMessage =
     }
   /** createSerf/selectSerf refused; `reason` is safe to show. */
   | { type: "serfError"; reason: string }
+  /** The account's shared stash (D-085), gold (D-087), and rewards waiting for room (D-088). */
+  | {
+      type: "stash";
+      capacity: number;
+      gold: number;
+      items: Item[];
+      pending: PendingReward[];
+    }
+  /** getStash/sellItem refused; `reason` is safe to show. */
+  | { type: "stashError"; reason: string }
   | {
       type: "snapshot";
       tick: number;
@@ -298,6 +342,17 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         message: { type: obj.type, email: obj.email, password: obj.password },
       };
     }
+    case "getStash":
+      if (!hasExactKeys(obj, ["type"])) {
+        return fail("getStash: unexpected fields");
+      }
+      return { ok: true, message: { type: "getStash" } };
+    case "sellItem":
+      if (!hasExactKeys(obj, ["type", "itemId"])) {
+        return fail("sellItem: unexpected fields");
+      }
+      if (!isPlayerId(obj.itemId)) return fail("sellItem: bad itemId");
+      return { ok: true, message: { type: "sellItem", itemId: obj.itemId } };
     case "getLeaderboard":
       if (!hasExactKeys(obj, ["type"])) {
         return fail("getLeaderboard: unexpected fields");
@@ -452,7 +507,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "dungeon",
           "result",
           "stats",
-          "reward",
+          "loot",
           "killedBy",
           "serf",
           "expGained",
@@ -485,10 +540,10 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       }
       const stats = parseRunStats(obj.stats);
       if (!stats) return fail("runEnded: bad stats");
-      const reward = parseReward(obj.reward);
-      if (reward === undefined) return fail("runEnded: bad reward");
-      if ((reward !== null) !== (result === "completed")) {
-        return fail("runEnded: a reward comes with completion only");
+      const loot = parseList(obj.loot, parseLootDrop);
+      if (!loot) return fail("runEnded: bad loot");
+      if (result !== "completed" && loot.length > 0) {
+        return fail("runEnded: loot comes with completion only");
       }
       return {
         ok: true,
@@ -497,7 +552,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           dungeon: obj.dungeon,
           result,
           stats,
-          reward,
+          loot,
           killedBy: obj.killedBy,
           serf,
           expGained: obj.expGained,
@@ -546,6 +601,37 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         return fail("serfError: reason must be a string");
       }
       return { ok: true, message: { type: "serfError", reason: obj.reason } };
+    case "stashError":
+      if (!hasExactKeys(obj, ["type", "reason"])) {
+        return fail("stashError: unexpected fields");
+      }
+      if (typeof obj.reason !== "string") {
+        return fail("stashError: reason must be a string");
+      }
+      return { ok: true, message: { type: "stashError", reason: obj.reason } };
+    case "stash": {
+      if (
+        !hasExactKeys(obj, ["type", "capacity", "gold", "items", "pending"])
+      ) {
+        return fail("stash: unexpected fields");
+      }
+      if (!isPlayerId(obj.capacity)) return fail("stash: bad capacity");
+      if (!isNonNegativeInt(obj.gold)) return fail("stash: bad gold");
+      const items = parseList(obj.items, parseUnworn);
+      if (!items) return fail("stash: bad item");
+      const pending = parseList(obj.pending, parsePending);
+      if (!pending) return fail("stash: bad pending reward");
+      return {
+        ok: true,
+        message: {
+          type: "stash",
+          capacity: obj.capacity,
+          gold: obj.gold,
+          items,
+          pending,
+        },
+      };
+    }
     case "snapshot": {
       if (
         !hasExactKeys(obj, [
@@ -635,6 +721,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
       "exp",
       "classId",
       "stats",
+      "items",
       "alive",
       "life",
       "death",
@@ -642,6 +729,8 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
   ) {
     return undefined;
   }
+  const items = parseList(v.items, parseItem);
+  if (!items) return undefined;
   const stats = parseStats(v.stats);
   if (!stats) return undefined;
   if (v.classId !== null && !isClassId(v.classId)) return undefined;
@@ -670,6 +759,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
     exp: v.exp,
     classId: v.classId,
     stats,
+    items,
     alive: v.alive,
     life,
     death,
@@ -720,11 +810,73 @@ function parseLifeStats(v: unknown): LifeStats | null {
   return life as LifeStats;
 }
 
-/** null is a valid "no reward"; undefined means malformed. */
-function parseReward(v: unknown): PlaceholderReward | null | undefined {
-  if (v === null) return null;
-  if (!isPlainObject(v) || !hasExactKeys(v, ["roll"])) return undefined;
-  return isValidRoll(v.roll) ? { roll: v.roll } : undefined;
+/** An item as the server could have rolled it, or null (D-067 checks inside). */
+function parseItemSpec(v: unknown): ItemSpec | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["slot", "type", "tier", "rolls", "luck"]) ||
+    typeof v.slot !== "string" ||
+    (v.type !== null && typeof v.type !== "string") ||
+    typeof v.tier !== "number" ||
+    typeof v.luck !== "number" ||
+    !Array.isArray(v.rolls)
+  ) {
+    return null;
+  }
+  const rolls: StatRoll[] = [];
+  for (const r of v.rolls) {
+    if (
+      !isPlainObject(r) ||
+      !hasExactKeys(r, ["stat", "amount"]) ||
+      typeof r.stat !== "string" ||
+      typeof r.amount !== "number"
+    ) {
+      return null;
+    }
+    rolls.push({ stat: r.stat as StatRoll["stat"], amount: r.amount });
+  }
+  const spec = {
+    slot: v.slot,
+    type: v.type,
+    tier: v.tier,
+    rolls,
+    luck: v.luck,
+  } as ItemSpec;
+  return isValidItemSpec(spec) ? spec : null;
+}
+
+function parseItem(v: unknown): Item | null {
+  if (!isPlainObject(v) || !isPlayerId(v.id)) return null;
+  const { id, equipped, ...rest } = v;
+  if (
+    equipped !== null &&
+    !(EQUIP_SLOTS as readonly unknown[]).includes(equipped)
+  ) {
+    return null;
+  }
+  const spec = parseItemSpec(rest);
+  if (!spec) return null;
+  return { ...spec, id: id as number, equipped: equipped as EquipSlot | null };
+}
+
+/** An owned item that is not worn (stash, pending, or a fresh drop). */
+function parseUnworn(v: unknown): Item | null {
+  const item = parseItem(v);
+  return item && item.equipped === null ? item : null;
+}
+
+function parseLootDrop(v: unknown): LootDrop | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["item", "pending"])) return null;
+  if (typeof v.pending !== "boolean") return null;
+  const item = parseUnworn(v.item);
+  return item ? { item, pending: v.pending } : null;
+}
+
+function parsePending(v: unknown): PendingReward | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["item", "serfId"])) return null;
+  if (!isPlayerId(v.serfId)) return null;
+  const item = parseUnworn(v.item);
+  return item ? { item, serfId: v.serfId } : null;
 }
 
 function parseRunStats(v: unknown): RunStats | null {

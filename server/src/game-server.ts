@@ -9,14 +9,12 @@ import {
   parseClientMessage,
   PROTOCOL_VERSION,
   TICK_RATE,
-  PLACEHOLDER_ROLL_MAX,
   TICK_SECONDS,
   type ClientMessage,
   type DungeonId,
   type ServerMessage,
   type Stats,
 } from "@serfdom/shared";
-import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { AccountService, AuthResult } from "./auth/account-service.ts";
 import type { SerfService } from "./serfs/serf-service.ts";
@@ -48,8 +46,6 @@ export interface GameServerOptions {
   queueWaitSeconds?: number;
   /** A run accepts new players from the queue for this long after it starts (D-052). */
   joinWindowSeconds?: number;
-  /** Reward roll source (tests inject a fixed sequence). Default: crypto randomness. */
-  rollReward?: () => number;
   log?: Logger;
 }
 
@@ -78,6 +74,8 @@ interface Session {
    * select/create, after each recorded run, and on chooseClass.
    */
   serfNeedsClass: boolean;
+  /** Rewards wait for the chosen serf (full stash): it may not queue (D-088). */
+  serfBlocked: boolean;
   /** The chosen serf's stats, kept current at the same moments (D-077). */
   serfStats: Stats;
 }
@@ -116,7 +114,6 @@ export class GameServer {
   private readonly maxQueuedInputs: number;
   private readonly maxMessagesPerSecond: number;
   private readonly joinWindowTicks: number;
-  private readonly rollReward: () => number;
   private readonly matchmaker: Matchmaker;
   private readonly instances = new Map<number, DungeonInstance>();
   private readonly runOf = new Map<number, DungeonInstance>();
@@ -147,9 +144,6 @@ export class GameServer {
     this.snapshotEveryTicks = options.snapshotEveryTicks ?? 1;
     this.maxQueuedInputs = options.maxQueuedInputs ?? 30;
     this.maxMessagesPerSecond = options.maxMessagesPerSecond ?? 180;
-    // Unpredictable to clients: rolls happen only here, never on a client.
-    this.rollReward =
-      options.rollReward ?? (() => randomInt(1, PLACEHOLDER_ROLL_MAX + 1));
     this.joinWindowTicks = Math.round(
       (options.joinWindowSeconds ?? DEFAULT_JOIN_WINDOW_SECONDS) * TICK_RATE,
     );
@@ -284,6 +278,7 @@ export class GameServer {
       serfId: null,
       serfBusy: false,
       serfNeedsClass: false,
+      serfBlocked: false,
       serfStats: SERF_BASE,
     };
     this.sessions.set(socket, session);
@@ -353,6 +348,10 @@ export class GameServer {
           this.reject(socket, session, "choose a serf first");
           return;
         }
+        if (session.serfBlocked) {
+          this.reject(socket, session, "settle your rewards first");
+          return;
+        }
         if (session.serfNeedsClass) {
           this.reject(socket, session, "choose a class first");
           return;
@@ -368,6 +367,10 @@ export class GameServer {
       case "selectSerf":
       case "chooseClass":
         this.onSerf(socket, session, message);
+        return;
+      case "getStash":
+      case "sellItem":
+        this.onStash(socket, session, message);
         return;
       case "getLeaderboard":
         if (session.accountId === null) {
@@ -466,6 +469,7 @@ export class GameServer {
         this.accountSocket.set(result.accountId, socket);
         session.serfId = null;
         this.sendSerfList(socket);
+        this.sendStash(socket);
         this.send(socket, {
           type: "authOk",
           email: result.email,
@@ -591,7 +595,6 @@ export class GameServer {
       {
         maxQueuedInputs: this.maxQueuedInputs,
         joinWindowTicks: this.joinWindowTicks,
-        rollReward: this.rollReward,
         statsFor: (id) => this.statsOf(id),
       },
     );
@@ -639,7 +642,7 @@ export class GameServer {
       session.serfId = null;
     }
     this.log.info(
-      `guest #${id} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s${end.reward ? ` (placeholder roll ${end.reward.roll})` : ""}`,
+      `guest #${id} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s`,
     );
     const recorded = owner
       ? this.serfs.recordRun(
@@ -665,6 +668,8 @@ export class GameServer {
         if (serf && nowSession && nowSession.serfId === serf.id) {
           nowSession.serfNeedsClass = needsClass(serf);
           nowSession.serfStats = serf.stats;
+          // A reward that did not fit blocks the next dungeon (D-088).
+          if (saved?.loot.some((d) => d.pending)) nowSession.serfBlocked = true;
         }
         if (!notify) return;
         this.sendEncoded(
@@ -674,7 +679,7 @@ export class GameServer {
             dungeon: instance.dungeon,
             result: end.result,
             stats: end.stats,
-            reward: end.reward,
+            loot: saved?.loot ?? [],
             killedBy: end.killedBy,
             serf,
             // Only what was actually saved counts.
@@ -683,8 +688,81 @@ export class GameServer {
           }),
         );
         const s = this.socketOf.get(id);
-        if (s) this.sendSerfList(s);
+        if (s) {
+          this.sendSerfList(s);
+          if (saved && saved.loot.length > 0) this.sendStash(s);
+        }
       });
+  }
+
+  /**
+   * getStash / sellItem (D-085–D-088): logged in only, one at a time (like
+   * serf requests). Selling may free room for pending rewards, so the
+   * played serf's block is recomputed before the new stash is sent.
+   */
+  private onStash(
+    socket: WebSocket,
+    session: Session,
+    message: Extract<ClientMessage, { type: "getStash" | "sellItem" }>,
+  ): void {
+    const accountId = session.accountId;
+    if (accountId === null) {
+      this.reject(socket, session, "log in first");
+      return;
+    }
+    if (message.type === "getStash") {
+      this.sendStash(socket);
+      return;
+    }
+    if (session.serfBusy) {
+      this.reject(socket, session, "busy");
+      return;
+    }
+    session.serfBusy = true;
+    this.serfs
+      .sell(accountId, message.itemId)
+      .then(async (sold) => {
+        if (session.accountId !== accountId) return;
+        if (!sold.ok) {
+          this.send(socket, { type: "stashError", reason: sold.reason });
+          return;
+        }
+        this.log.info(
+          `${label(session)} sold item #${message.itemId} for ${sold.price} gold`,
+        );
+        if (session.serfId !== null) {
+          session.serfBlocked = await this.serfs.hasPending(
+            accountId,
+            session.serfId,
+          );
+        }
+        this.sendStash(socket);
+      })
+      .catch((err: unknown) => {
+        this.log.warn(`${label(session)} sell error: ${String(err)}`);
+        this.send(socket, {
+          type: "stashError",
+          reason: "Server error. Please try again.",
+        });
+      })
+      .finally(() => {
+        session.serfBusy = false;
+      });
+  }
+
+  private sendStash(socket: WebSocket): void {
+    const session = this.sessions.get(socket);
+    const accountId = session?.accountId;
+    if (!session || accountId == null) return;
+    this.serfs
+      .stash(accountId)
+      .then((stash) => {
+        if (session.accountId !== accountId) return;
+        this.send(socket, { type: "stash", ...stash });
+      })
+      .catch((err: unknown) =>
+        this.log.warn(`${label(session)} stash error: ${String(err)}`),
+      );
   }
 
   /** The stats a player's serf fights with (a fresh Serf's if unknown). */
@@ -738,7 +816,7 @@ export class GameServer {
           ? this.serfs.choose(accountId, message.serfId)
           : this.serfs.chooseClass(accountId, message.serfId, message.classId);
     attempt
-      .then((result) => {
+      .then(async (result) => {
         // Logged out (or reconnected) meanwhile: drop the answer.
         if (!this.sessions.has(socket) || session.accountId !== accountId) {
           return;
@@ -747,8 +825,12 @@ export class GameServer {
           this.send(socket, { type: "serfError", reason: result.reason });
           return;
         }
+        // Known before the serf is played, so it cannot slip into a queue.
+        const blocked = await this.serfs.hasPending(accountId, result.serf.id);
+        if (session.accountId !== accountId) return;
         // A new serf, or one just given its class, is played right away.
         session.serfId = result.serf.id;
+        session.serfBlocked = blocked;
         session.serfNeedsClass = needsClass(result.serf);
         session.serfStats = result.serf.stats;
         this.log.info(

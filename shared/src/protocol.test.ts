@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { CLASS_IDS } from "./classes.ts";
 import { SERF_BASE, zeroStats } from "./stats.ts";
+import type { ItemSpec } from "./items.ts";
+
+const RING: ItemSpec = {
+  slot: "ring",
+  type: null,
+  tier: 1,
+  rolls: [{ stat: "attack", amount: 2 }],
+  luck: 1,
+};
 import {
   encodeMessage,
   MAX_MESSAGE_BYTES,
@@ -272,7 +281,7 @@ describe("menu, queue, and run messages (v4)", () => {
         dungeon: "goblin-warrens",
         result: "died",
         stats,
-        reward: null,
+        loot: [],
         killedBy: "brute",
         expGained: 0,
         statGains: zeroStats(),
@@ -283,6 +292,7 @@ describe("menu, queue, and run messages (v4)", () => {
           exp: 400,
           classId: "rogue",
           stats: { ...SERF_BASE, hp: 31 },
+          items: [],
           alive: false,
           life: { ...stats, runs: 4, clears: 2 },
           death: { dungeon: "goblin-warrens", killedBy: "brute" },
@@ -293,7 +303,10 @@ describe("menu, queue, and run messages (v4)", () => {
         dungeon: "goblin-warrens",
         result: "completed",
         stats,
-        reward: { roll: 777 },
+        loot: [
+          { item: { ...RING, id: 12, equipped: null }, pending: false },
+          { item: { ...RING, id: 13, equipped: null, luck: 0 }, pending: true },
+        ],
         killedBy: null,
         serf: null,
         expGained: 100,
@@ -314,7 +327,7 @@ describe("menu, queue, and run messages (v4)", () => {
     const ended = {
       type: "runEnded",
       dungeon: "goblin-warrens",
-      reward: null,
+      loot: [],
       killedBy: null,
       serf: null,
       expGained: 0,
@@ -323,39 +336,60 @@ describe("menu, queue, and run messages (v4)", () => {
     const won = { ...ended, result: "completed", stats, expGained: 100 };
     // Stat gains (v12): whole, non-negative, every stat, completion only.
     const gains = { ...zeroStats(), hp: 2 };
-    expect(server({ ...won, reward: { roll: 5 }, statGains: gains }).ok).toBe(
-      true,
-    );
+    expect(server({ ...won, statGains: gains }).ok).toBe(true);
     expect(
       server({ ...ended, result: "died", stats, statGains: gains }).ok,
     ).toBe(false);
-    expect(
-      server({ ...won, reward: { roll: 5 }, statGains: { ...gains, hp: -1 } })
-        .ok,
-    ).toBe(false);
-    expect(
-      server({ ...won, reward: { roll: 5 }, statGains: { ...gains, luck: 1 } })
-        .ok,
-    ).toBe(false);
-    expect(
-      server({ ...won, reward: { roll: 5 }, statGains: { hp: 2 } }).ok,
-    ).toBe(false);
+    expect(server({ ...won, statGains: { ...gains, hp: -1 } }).ok).toBe(false);
+    expect(server({ ...won, statGains: { ...gains, luck: 1 } }).ok).toBe(false);
+    expect(server({ ...won, statGains: { hp: 2 } }).ok).toBe(false);
     // EXP only with completion (D-069), and only whole non-negative amounts.
     expect(server({ ...ended, result: "died", stats, expGained: 100 }).ok).toBe(
       false,
     );
     expect(server({ ...won, expGained: -5 }).ok).toBe(false);
     expect(server({ ...won, expGained: 2.5 }).ok).toBe(false);
-    expect(server({ ...won, reward: { roll: 5 } }).ok).toBe(true);
-    // A reward only with completion, and only a whole roll in range.
-    expect(server({ ...won, reward: null }).ok).toBe(false);
+    // Loot (v14): only with completion, only items the server could roll.
+    const drop = { item: { ...RING, id: 3, equipped: null }, pending: false };
+    expect(server({ ...won, loot: [drop] }).ok).toBe(true);
+    expect(server({ ...ended, result: "died", stats, loot: [drop] }).ok).toBe(
+      false,
+    );
+    expect(server({ ...won, loot: [{ ...drop, pending: "yes" }] }).ok).toBe(
+      false,
+    );
     expect(
-      server({ ...ended, result: "died", stats, reward: { roll: 5 } }).ok,
+      server({
+        ...won,
+        loot: [{ ...drop, item: { ...drop.item, equipped: "ring1" } }],
+      }).ok,
     ).toBe(false);
-    expect(server({ ...won, reward: { roll: 0 } }).ok).toBe(false);
-    expect(server({ ...won, reward: { roll: 1001 } }).ok).toBe(false);
-    expect(server({ ...won, reward: { roll: 2.5 } }).ok).toBe(false);
-    expect(server({ ...won, reward: { roll: 5, gold: 9999 } }).ok).toBe(false);
+    // A bare item spec (no id) is not an owned item.
+    expect(server({ ...won, loot: [{ ...drop, item: RING }] }).ok).toBe(false);
+    expect(server({ ...won, loot: [{ ...drop, gold: 5 }] }).ok).toBe(false);
+    expect(
+      server({ ...won, loot: [{ ...drop, item: { ...drop.item, luck: -1 } }] })
+        .ok,
+    ).toBe(false);
+    expect(
+      server({ ...won, loot: [{ ...drop, item: { ...drop.item, luck: 2 } }] })
+        .ok,
+    ).toBe(false);
+    expect(
+      server({
+        ...won,
+        loot: [
+          {
+            ...drop,
+            item: {
+              ...drop.item,
+              rolls: [{ stat: "attack", amount: 9 }],
+            },
+          },
+        ],
+      }).ok,
+    ).toBe(false);
+    expect(server({ ...won, reward: { roll: 5 } }).ok).toBe(false);
     expect(server({ ...ended, result: "won", stats }).ok).toBe(false);
     expect(
       server({ ...ended, result: "died", stats, killedBy: "dragon" }).ok,
@@ -561,6 +595,7 @@ describe("serf messages (v9)", () => {
       exp: 0,
       classId: null,
       stats: SERF_BASE,
+      items: [] as unknown[],
       alive: true,
       life,
       death: null,
@@ -583,6 +618,17 @@ describe("serf messages (v9)", () => {
       false,
     );
     expect(list([{ ...serf, stats: { ...SERF_BASE, luck: 9 } }])).toBe(false);
+    // v14 items: owned items with an id and where they are worn.
+    const owned = { ...RING, id: 5, equipped: "ring2" };
+    expect(
+      list([{ ...serf, items: [owned, { ...owned, id: 6, equipped: null }] }]),
+    ).toBe(true);
+    expect(list([{ ...serf, items: [{ ...owned, equipped: "belt" }] }])).toBe(
+      false,
+    );
+    expect(list([{ ...serf, items: [{ ...owned, id: 0 }] }])).toBe(false);
+    expect(list([{ ...serf, items: [{ ...owned, luck: -1 }] }])).toBe(false);
+    expect(list([{ ...serf, items: [{ ...owned, owner: 2 }] }])).toBe(false);
   });
 });
 
@@ -647,5 +693,43 @@ describe("leaderboard messages (v10, class in v11)", () => {
       parseClientMessage(JSON.stringify({ type: "getLeaderboard", top: 9999 }))
         .ok,
     ).toBe(false);
+  });
+});
+
+describe("stash messages (v15, D-085–D-088)", () => {
+  const owned = { ...RING, id: 4, equipped: null };
+  const stash = {
+    type: "stash",
+    capacity: 20,
+    gold: 42,
+    items: [owned],
+    pending: [{ item: { ...owned, id: 5 }, serfId: 2 }],
+  };
+  it("round-trips a stash and refuses bad ones", () => {
+    expect(parseServerMessage(JSON.stringify(stash))).toEqual({
+      ok: true,
+      message: stash,
+    });
+    const bad = (m: object) =>
+      parseServerMessage(JSON.stringify({ ...stash, ...m })).ok;
+    expect(bad({ gold: -1 })).toBe(false);
+    expect(bad({ gold: 1.5 })).toBe(false);
+    expect(bad({ capacity: 0 })).toBe(false);
+    expect(bad({ items: [{ ...owned, equipped: "ring1" }] })).toBe(false);
+    expect(bad({ items: [{ ...owned, luck: 2 }] })).toBe(false);
+    expect(bad({ pending: [{ item: owned }] })).toBe(false);
+    expect(bad({ potions: [] })).toBe(false);
+  });
+
+  it("accepts getStash and sellItem only in their exact shapes", () => {
+    const client = (m: unknown) => parseClientMessage(JSON.stringify(m));
+    expect(client({ type: "getStash" }).ok).toBe(true);
+    expect(client({ type: "getStash", all: true }).ok).toBe(false);
+    expect(client({ type: "sellItem", itemId: 9 })).toEqual({
+      ok: true,
+      message: { type: "sellItem", itemId: 9 },
+    });
+    expect(client({ type: "sellItem", itemId: 0 }).ok).toBe(false);
+    expect(client({ type: "sellItem", itemId: 9, price: 9999 }).ok).toBe(false);
   });
 });

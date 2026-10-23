@@ -30,7 +30,14 @@ import {
   type SerfSummary,
   type ServerMessage,
   MAX_PARTY_SIZE,
-  PLACEHOLDER_ROLL_MAX,
+  sellPrice,
+  type Item,
+  itemBonus,
+  armorTypeName,
+  itemName,
+  weaponDamage,
+  type ItemSpec,
+  type LootDrop,
   type DungeonId,
 } from "@serfdom/shared";
 import {
@@ -54,6 +61,7 @@ export interface ScreenActions {
   switchLoginMode(): void;
   createSerf(name: string): void;
   selectSerf(serfId: number): void;
+  sellItem(itemId: number): void;
   chooseClass(serfId: number, classId: ClassId): void;
   logout(): void;
 }
@@ -68,18 +76,16 @@ const CONFETTI_WAVE_GAP_S = 0.8;
 const COUNT_UP_MS = 900;
 const COUNT_UP_STAGGER_MS = 250;
 const COUNT_UP_START_MS = 500;
-/** Slot-machine reveal of the reward roll (D-049): spins after the chest lands, reels stop one by one. */
-const REEL_START_MS = 1400;
-const REEL_FIRST_STOP_MS = 2300;
-const REEL_STOP_GAP_MS = 450;
-const REEL_TICK_MS = 55;
+/** Chests open one by one after the chest lands (D-049): first at this, then a gap each. */
+const LOOT_FIRST_MS = 1900;
+const LOOT_GAP_MS = 700;
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
 const CONFETTI_COLORS = ["#f0c419", "#5bc0de", "#ff6b6b", "#7ed957", "#ffffff"];
 
 const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
   { tab: "dungeons", label: "Dungeons", comingIn: null },
   { tab: "serfs", label: "Serfs", comingIn: null },
-  { tab: "stash", label: "Stash", comingIn: "Phase 12 (shared stash)" },
+  { tab: "stash", label: "Stash", comingIn: null },
   { tab: "leaderboard", label: "Leaderboard", comingIn: null },
 ];
 
@@ -103,6 +109,9 @@ export class ScreenView {
   private serfs: Extract<ServerMessage, { type: "serfList" }> | null = null;
   private serfError: string | null = null;
   private leaderboard: LeaderboardEntry[] | null = null;
+  /** The account's stash, gold, and waiting rewards (null until known). */
+  private stash: Extract<ServerMessage, { type: "stash" }> | null = null;
+  private stashError: string | null = null;
   private typedSerfName = "";
   /** Class highlighted in the picker, waiting for Confirm (the choice is permanent). */
   private pickedClass: ClassId | null = null;
@@ -125,6 +134,22 @@ export class ScreenView {
     this.typedSerfName = "";
     this.pickedClass = null;
     this.shown = null;
+  }
+
+  setStash(stash: Extract<ServerMessage, { type: "stash" }>): void {
+    this.stash = stash;
+    this.stashError = null;
+    this.shown = null;
+  }
+
+  setStashError(reason: string): void {
+    this.stashError = reason;
+    this.shown = null;
+  }
+
+  /** Rewards waiting for room for this serf: it may not start a dungeon (D-088). */
+  private waitingFor(serfId: number): number {
+    return this.stash?.pending.filter((p) => p.serfId === serfId).length ?? 0;
   }
 
   setLeaderboard(entries: LeaderboardEntry[]): void {
@@ -293,6 +318,8 @@ export class ScreenView {
       body.append(el("p", "hint", `Coming in ${current.comingIn}.`));
     } else if (tab === "leaderboard") {
       this.buildLeaderboard(body);
+    } else if (tab === "stash") {
+      this.buildStash(body);
     } else if (tab === "serfs") {
       this.buildSerfs(body);
     } else {
@@ -306,6 +333,19 @@ export class ScreenView {
             )
           : el("p", "notice", "Choose or create a serf first (Serfs tab)."),
       );
+      const waiting = playing ? this.waitingFor(playing.id) : 0;
+      if (playing && waiting > 0) {
+        body.append(
+          el(
+            "p",
+            "notice",
+            `Your stash is full: ${waiting} reward${waiting === 1 ? " waits" : "s wait"} for room. Sell something in the Stash tab before the next dungeon.`,
+          ),
+          button("Open stash", () => this.actions.openTab("stash")),
+        );
+        this.finishMenu(nav, body, notice);
+        return;
+      }
       if (playing && needsClass(playing)) {
         this.buildClassPicker(body, playing);
         this.finishMenu(nav, body, notice);
@@ -340,6 +380,7 @@ export class ScreenView {
   ): void {
     const account = el("div", "account-bar");
     account.append(
+      el("span", "gold", this.stash ? `Gold ${this.stash.gold}` : ""),
       el("span", "", this.email ? `Logged in as ${this.email}` : ""),
       button("Log out", () => this.actions.logout()),
     );
@@ -495,6 +536,63 @@ export class ScreenView {
     }
   }
 
+  /**
+   * Stash tab (D-085–D-090): rewards waiting for room first, then the
+   * shared stash. Every item can be sold for gold; selling makes room, and
+   * the oldest waiting reward moves in (the server decides).
+   */
+  private buildStash(body: HTMLElement): void {
+    const stash = this.stash;
+    if (!stash) {
+      body.append(el("p", "hint", "Loading your stash…"));
+      return;
+    }
+    if (this.stashError) body.append(el("p", "error", this.stashError));
+    if (stash.pending.length > 0) {
+      body.append(
+        el("h2", "error", `Waiting for room (${stash.pending.length})`),
+        el(
+          "p",
+          "hint",
+          "Your stash is full. Sell one of these, or something below; the oldest waiting reward then moves in. The serf that won it cannot start a dungeon until then.",
+        ),
+        this.itemGrid(
+          stash.pending.map((p) => p.item),
+          "item-grid pending-grid",
+        ),
+      );
+    }
+    body.append(
+      el(
+        "h2",
+        "",
+        `Stash ${stash.items.length}/${stash.capacity} · Gold ${stash.gold}`,
+      ),
+    );
+    if (stash.items.length === 0) {
+      body.append(
+        el("p", "hint", "Empty. Rewards from cleared dungeons land here."),
+      );
+      return;
+    }
+    body.append(
+      this.itemGrid(
+        stash.items,
+        stash.pending.length > 0 ? "item-grid short" : "item-grid",
+      ),
+    );
+  }
+
+  private itemGrid(items: readonly Item[], className: string): HTMLElement {
+    const grid = el("div", className);
+    for (const item of items) {
+      const card = itemCard(item);
+      card.append(sellButton(item, () => this.actions.sellItem(item.id)));
+      grid.append(card);
+    }
+    return grid;
+  }
+
   /** Lifetime EXP leaderboard (GDD §12): living and dead, serf names only. */
   private buildLeaderboard(body: HTMLElement): void {
     body.append(el("h2", "", "Lifetime EXP"));
@@ -577,14 +675,17 @@ export class ScreenView {
     }
     const actions = el("div", "actions");
     const mustChoose = screen.serf !== null && needsClass(screen.serf);
+    const waiting = screen.loot.some((d) => d.pending);
     actions.append(
-      mustChoose
-        ? button("Choose your class (Enter)", () =>
-            this.actions.dismissResults(),
-          )
-        : button(`Requeue ${info.name} (Enter)`, () =>
-            this.actions.queue(screen.dungeon),
-          ),
+      waiting
+        ? button("Settle rewards (Enter)", () => this.settleRewards())
+        : mustChoose
+          ? button("Choose your class (Enter)", () =>
+              this.actions.dismissResults(),
+            )
+          : button(`Requeue ${info.name} (Enter)`, () =>
+              this.actions.queue(screen.dungeon),
+            ),
       button("Menu (Esc)", () => this.actions.dismissResults()),
     );
     const shots = s.shotsFired;
@@ -609,11 +710,15 @@ export class ScreenView {
       expGain(screen.serf, screen.expGained, screen.dungeon, screen.statGains),
       stats,
       chest,
-      screen.reward
-        ? rewardReel(screen.reward.roll)
-        : el("p", "hint", "No reward roll."),
+      lootReveal(screen.loot, (id) => this.actions.sellItem(id)),
       actions,
     );
+  }
+
+  /** To the Stash tab, where waiting rewards are settled. */
+  private settleRewards(): void {
+    this.actions.dismissResults();
+    this.actions.openTab("stash");
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -629,8 +734,9 @@ export class ScreenView {
           return; // pick a class with the mouse
         else if (first) this.actions.queue(first.id);
       } else if (screen.kind === "results" && screen.result === "completed") {
-        // At level 5 without a class, Enter goes to the class picker instead.
-        if (screen.serf && needsClass(screen.serf))
+        // A full stash first, then a class at level 5; otherwise requeue.
+        if (screen.loot.some((d) => d.pending)) this.settleRewards();
+        else if (screen.serf && needsClass(screen.serf))
           this.actions.dismissResults();
         else this.actions.queue(screen.dungeon);
       } else if (
@@ -715,56 +821,77 @@ function countingStatList(
 }
 
 /**
- * The chest's slot machine: one reel per digit of the server's roll. The
- * roll was decided by the server before this screen appeared; the spin is
- * presentation only. Placeholder until Phase 9 defines real rewards.
+ * The chests (D-049, D-080): one card per chest, each opening in turn to
+ * show the item the server rolled before this screen appeared. Lost items
+ * (full bag) say so.
  */
-function rewardReel(roll: number): HTMLElement {
-  const digits = String(roll).padStart(
-    String(PLACEHOLDER_ROLL_MAX).length,
-    "0",
+function lootReveal(
+  loot: readonly LootDrop[],
+  sell: (itemId: number) => void,
+): HTMLElement {
+  const box = el("div", "loot");
+  if (loot.length === 0) return box;
+  box.append(
+    el(
+      "p",
+      "hint",
+      `${loot.length} chest${loot.length === 1 ? "" : "s"} (Luck ${loot.length})`,
+    ),
   );
-  const box = el("div", "reel-box");
-  const reels = el("div", "reels");
-  const cells = [...digits].map(() => {
-    const cell = el("span", "reel", "0");
-    reels.append(cell);
-    return cell;
+  const row = el("div", "loot-row");
+  loot.forEach((drop, i) => {
+    const card = itemCard(drop.item);
+    card.classList.add("loot-card");
+    card.style.animationDelay = `${LOOT_FIRST_MS + i * LOOT_GAP_MS}ms`;
+    if (drop.pending) {
+      card.classList.add("waiting");
+      card.append(
+        el("span", "error", "Stash full: sell this or something in the stash"),
+        sellButton(drop.item, () => sell(drop.item.id)),
+      );
+    } else {
+      card.append(el("span", "item-where", "→ Stash"));
+    }
+    row.append(card);
   });
-  const label = el("p", "hint", "Rolling…");
-  box.append(reels, label);
-
-  const start = performance.now();
-  const timer = setInterval(() => {
-    if (!box.isConnected && performance.now() - start > 100) {
-      clearInterval(timer);
-      return;
-    }
-    const t = performance.now() - start;
-    if (t < REEL_START_MS) return;
-    let spinning = 0;
-    cells.forEach((cell, i) => {
-      const stopsAt = REEL_FIRST_STOP_MS + i * REEL_STOP_GAP_MS;
-      if (t < stopsAt) {
-        cell.textContent = String(Math.floor(Math.random() * 10));
-        cell.classList.add("spinning");
-        spinning++;
-      } else if (
-        cell.classList.contains("spinning") ||
-        cell.textContent !== digits[i]
-      ) {
-        cell.textContent = digits[i] ?? "0";
-        cell.classList.remove("spinning");
-        cell.classList.add("stopped");
-      }
-    });
-    if (spinning === 0) {
-      clearInterval(timer);
-      box.classList.add("revealed");
-      label.textContent = `Placeholder roll ${roll} / ${PLACEHOLDER_ROLL_MAX}: real rewards arrive in Phase 9.`;
-    }
-  }, REEL_TICK_MS);
+  box.append(row);
   return box;
+}
+
+/** An item's name (coloured by tier), what it gives, and its rolls. */
+export function itemCard(item: ItemSpec): HTMLElement {
+  const card = el("div", `item-card tier-${Math.min(item.tier, 3)}`);
+  card.append(el("span", "item-name", itemName(item)));
+  // Armor also names its material, which decides who can wear it (D-081).
+  const material = armorTypeName(item);
+  const base =
+    item.slot === "weapon"
+      ? `${weaponDamage(item.tier)} damage`
+      : [material, bonusText(itemBonus({ ...item, rolls: [] }))]
+          .filter((part) => part)
+          .join(" · ");
+  if (base) card.append(el("span", "item-base", base));
+  if (item.rolls.length > 0) {
+    const rolls = el("span", "item-rolls");
+    for (const r of item.rolls) {
+      rolls.append(
+        el(
+          "span",
+          r.amount < 0 ? "roll-bad" : "roll-good",
+          `${r.amount < 0 ? "−" : "+"}${Math.abs(r.amount)} ${STAT_LABELS[r.stat]}`,
+        ),
+      );
+    }
+    card.append(rolls);
+  }
+  if (item.luck > 0) card.append(el("span", "item-luck", "+1 LUCK"));
+  return card;
+}
+
+function bonusText(stats: Stats): string {
+  return STAT_KEYS.filter((k) => stats[k] !== 0)
+    .map((k) => `+${stats[k]} ${STAT_LABELS[k]}`)
+    .join(" ");
 }
 
 /**
@@ -840,12 +967,19 @@ function expGain(
   return box;
 }
 
+/** "Sell · +10 gold" (D-087, D-090: the server pays the same). */
+function sellButton(item: ItemSpec, onSell: () => void): HTMLButtonElement {
+  const b = button(`Sell · +${sellPrice(item)} gold`, onSell);
+  b.classList.add("sell");
+  return b;
+}
+
 /** "HP 23 · MP 12 · … · LUCK 1"; a classed serf shows its maxes (D-075) too. */
 export function statLine(serf: SerfSummary): string {
   return [
     ...STAT_KEYS.map((key) => `${STAT_LABELS[key]} ${statText(serf, key)}`),
-    // No items yet (Phase 9), so every serf has the base Luck (D-066).
-    `LUCK ${luckOf()}`,
+    // Luck counts equipped items only (D-068).
+    `LUCK ${luckOf(serf.items.filter((i) => i.equipped !== null))}`,
   ].join(" · ");
 }
 

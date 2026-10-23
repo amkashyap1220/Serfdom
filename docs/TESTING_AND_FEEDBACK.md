@@ -78,6 +78,23 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Stash, gold, and rewards checklist (Phase 9a)
+
+Restart `npm run dev` (protocol v15); the server prints `database migrated: 007_stash_gold.sql` once (items you got while testing 9a-1 move into your stash). Reload (Ctrl+Shift+R) and log in. The account bar shows **Gold N**.
+
+1. Clear the Goblin Warrens: one chest card flips open (e.g. "T1 Necklace · +1 VIT") and says **→ Stash**. A T0 ring, necklace, or cape always has one roll (D-084).
+2. **Stash** tab: "Stash N/20 · Gold G" and the item, with **Sell · +N gold** (T0 2, T1 10, T2 22; more with +1 Luck).
+3. Sell one: gold goes up by exactly that amount and the item is gone. The Serfs tab no longer lists a bag (a serf carries only what it wears, D-085).
+4. Fill the stash to 20 (keep clearing; or psql, see below) and clear once more: the chest card is dashed, says **Stash full: sell this or something in the stash**, has a Sell button, and the main button is **Settle rewards (Enter)**.
+5. Enter: the Stash tab shows **Waiting for room (1)** above the stash. The Dungeons tab says the serf is blocked and has no queue button.
+6. Close the tab, reopen, log in: you land on the Stash tab with the reward still waiting (D-088).
+7. Sell a stash item: the waiting reward moves into the stash; the Dungeons tab lets you queue again. (Or sell the waiting reward itself.)
+8. Let a serf die: the stash and gold are unchanged.
+
+To fill the stash quickly (dev database, then reload): `& $psql -U serfdom -d serfdom -c "insert into items (account_id, location, slot, type, tier, rolls, luck) select id, 'stash', 'cape', null, 0, jsonb_build_array(jsonb_build_object('stat', 'hp', 'amount', 1)), 0 from accounts, generate_series(1, 19);"` (adds 19 T0 capes to every account on your dev database; `$psql` as in the README).
+
+Report: pass/fail per step, the gold amounts you saw, and any exact error text.
+
 ### Luck checklist (Phase 8d)
 
 No restart needed beyond the usual reload (Ctrl+Shift+R); the protocol is unchanged (v13).

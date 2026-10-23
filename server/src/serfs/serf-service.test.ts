@@ -1,4 +1,6 @@
 import {
+  STASH_SIZE,
+  isValidItemSpec,
   newRunStats,
   SERF_BASE,
   totalExpForLevel,
@@ -240,5 +242,101 @@ describe("stat rolls on level-up (D-074, D-075)", () => {
     );
     expect(r?.statGains).toEqual(zeroStats());
     expect(r?.serf.stats).toEqual(SERF_BASE);
+  });
+});
+
+describe("reward chests (D-065, D-068, D-080, D-086)", () => {
+  it("a completion gives one chest (Luck 1) whose item lands in the stash", async () => {
+    const { serfs, id } = await serfWith(0);
+    const r = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(r?.loot).toHaveLength(1);
+    const drop = r!.loot[0]!;
+    expect(isValidItemSpec(drop.item)).toBe(true);
+    expect(drop.item.tier).toBeLessThanOrEqual(2);
+    expect(drop.pending).toBe(false);
+    expect(r?.serf.items).toEqual([]); // nothing is worn without equipping
+    const stash = await serfs.stash(1);
+    expect(stash).toMatchObject({ capacity: STASH_SIZE, gold: 0, pending: [] });
+    expect(stash.items).toEqual([drop.item]);
+  });
+
+  it("leaving or dying gives no chest; the stash survives a death", async () => {
+    const { serfs, id } = await serfWith(0);
+    await serfs.recordRun(1, id, "goblin-warrens", "completed", run, null);
+    const left = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "left",
+      run,
+      null,
+    );
+    expect(left?.loot).toEqual([]);
+    const death = { dungeon: "goblin-warrens" as const, killedBy: "grunt" };
+    const died = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "died",
+      run,
+      death,
+    );
+    expect(died?.loot).toEqual([]);
+    expect((await serfs.stash(1)).items).toHaveLength(1);
+  });
+
+  it("with a full stash the reward waits, blocks the serf, and selling settles it", async () => {
+    const repo = new MemorySerfRepo();
+    const serfs = new SerfService(repo);
+    const made = await serfs.create(1, "Full Stash");
+    if (!made.ok) throw new Error(made.reason);
+    const cape = {
+      slot: "cape" as const,
+      type: null,
+      tier: 0,
+      rolls: [{ stat: "hp" as const, amount: 1 }],
+      luck: 0,
+    };
+    await repo.addLoot(
+      1,
+      made.serf.id,
+      Array(STASH_SIZE).fill(cape),
+      STASH_SIZE,
+    );
+    const r = await serfs.recordRun(
+      1,
+      made.serf.id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(r?.loot[0]?.pending).toBe(true);
+    expect(await serfs.hasPending(1, made.serf.id)).toBe(true);
+    const stash = await serfs.stash(1);
+    expect(stash.items).toHaveLength(STASH_SIZE);
+    expect(stash.pending).toHaveLength(1);
+    // Sell a stash cape (T0, no Luck: 2 gold): the reward moves in.
+    const sold = await serfs.sell(1, stash.items[0]!.id);
+    expect(sold).toEqual({ ok: true, price: 2 });
+    expect(await serfs.hasPending(1, made.serf.id)).toBe(false);
+    const after = await serfs.stash(1);
+    expect(after.gold).toBe(2);
+    expect(after.items.map((i) => i.id)).toContain(r!.loot[0]!.item.id);
+    expect(await serfs.sell(1, 999)).toEqual({
+      ok: false,
+      reason: "No such item in your stash.",
+    });
+    expect(await serfs.sell(2, after.items[0]!.id)).toEqual({
+      ok: false,
+      reason: "No such item in your stash.",
+    });
   });
 });

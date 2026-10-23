@@ -8,6 +8,8 @@ import {
   parseServerMessage,
   PROTOCOL_VERSION,
   SERF_BASE,
+  sellPrice,
+  STASH_SIZE,
   type ServerMessage,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -1077,6 +1079,10 @@ describe("EXP and the leaderboard (8a)", () => {
     // Level 2 rolled Serf gains (D-074): HP always grows 1–3.
     expect(first.statGains.hp).toBeGreaterThanOrEqual(1);
     expect(first.serf?.stats.hp).toBe(20 + first.statGains.hp);
+    // One chest at Luck 1 (D-068); its item is in the bag (D-080).
+    expect(first.loot).toHaveLength(1);
+    expect(first.loot[0]?.pending).toBe(false);
+    expect(first.serf?.items).toEqual([]); // to the stash, not worn (D-086)
     const second = await clearOnce(client, 1, 0);
     expect(second.serf).toMatchObject({ exp: 200, level: 2 });
   });
@@ -1188,5 +1194,73 @@ describe("stats in combat (8c-2, D-077)", () => {
     expect(me.maxHp).toBe(leveled.stats.hp);
     expect(me.hp).toBe(leveled.stats.hp);
     expect(me.combat).toEqual(combatFor(leveled.stats));
+  });
+});
+
+describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
+  it("a full stash holds the reward, blocks the serf, and selling settles it", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const { client } = await joined();
+    const serfId = (await clearOnce(client, 1, 0)).serf!.id;
+    const cape = {
+      slot: "cape" as const,
+      type: null,
+      tier: 0,
+      rolls: [{ stat: "hp" as const, amount: 1 }],
+      luck: 0,
+    };
+    // Account 1 (the first registered): the first clear left 1 item; fill the rest.
+    await repo.addLoot(1, serfId, Array(STASH_SIZE - 1).fill(cape), STASH_SIZE);
+
+    const full = await clearOnce(client, 1, 0);
+    expect(full.loot).toHaveLength(1);
+    expect(full.loot[0]?.pending).toBe(true);
+    let stash = await nextOfType(client, "stash");
+    while (stash.pending.length === 0)
+      stash = await nextOfType(client, "stash");
+    expect(stash.items).toHaveLength(STASH_SIZE);
+
+    client.send(queue);
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "settle your rewards first",
+    );
+    expect(server.isQueued(1)).toBe(false);
+
+    client.send(
+      encodeMessage({ type: "sellItem", itemId: stash.items[0]!.id }),
+    );
+    const after = await nextOfType(client, "stash");
+    expect(after.gold).toBe(sellPrice(stash.items[0]!));
+    expect(after.pending).toEqual([]);
+    expect(after.items.map((i) => i.id)).toContain(full.loot[0]!.item.id);
+
+    client.send(queue);
+    await until(() => server.isQueued(1));
+  });
+
+  it("stash requests need a login; unknown or others' items do not sell", async () => {
+    const { client: anon } = await joined({ login: false });
+    anon.send(encodeMessage({ type: "getStash" }));
+    expect((await nextOfType(anon, "error")).reason).toBe("log in first");
+
+    const { client } = await joined();
+    client.send(encodeMessage({ type: "getStash" }));
+    expect(await nextOfType(client, "stash")).toMatchObject({
+      capacity: STASH_SIZE,
+      gold: 0,
+    });
+    client.send(encodeMessage({ type: "sellItem", itemId: 424242 }));
+    expect((await nextOfType(client, "stashError")).reason).toBe(
+      "No such item in your stash.",
+    );
   });
 });

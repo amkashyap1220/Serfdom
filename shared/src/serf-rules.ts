@@ -1,4 +1,5 @@
 import type { ClassId } from "./classes.ts";
+import type { Item } from "./items.ts";
 import type { RunResult, RunStats } from "./run-stats.ts";
 import type { Stats } from "./stats.ts";
 
@@ -83,6 +84,8 @@ export interface SerfSummary {
   classId: ClassId | null;
   /** Rolled by the server at each level-up (D-074); never sent by a client. */
   stats: Stats;
+  /** Bag and equipped items (D-079: gone when the serf dies). */
+  items: Item[];
   alive: boolean;
   life: LifeStats;
   /** Where and to what it died (dead serfs only). */

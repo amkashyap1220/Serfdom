@@ -221,12 +221,18 @@ Tasks:
 - Implement a small representative subset of items.
 - Centralize tier/stat/drop configuration.
 - Implement per-player randomized completion rewards: each completing player rolls one reward chest per point of Luck (D-065, D-068), replacing the Phase 6 single placeholder roll (T-039). Luck counts equipped items only; no cap.
+- Shared account stash (moved here from Phase 12, D-085); a serf carries only equipped items.
+- Reward flow (D-086–D-088): to the stash, or Equip now with a stat comparison on hover; a replaced item goes to the stash; a full stash forces selling the new item or a stash item for gold; undecided rewards are held server-side and block that serf's next dungeon.
+- Account gold and selling to the vendor (50% of reference value, D-087).
+- Document the potion flow (D-089: drink now or potion rack, one roll per Luck point); build it with the first potion dungeon.
 - Add the Luck item modifier (D-067, D-068): exactly +1, at most one per item, never negative; any item that can roll stats can roll it, Artifacts included.
 - Add tests for drop eligibility, random roll bounds, and inventory ownership.
 
 Acceptance:
 
 - Equipment can be obtained and equipped according to rules.
+- Rewards reach the stash or the serf exactly once; nothing is lost when the stash is full (the player must sell first), and a pending reward survives a disconnect.
+- Selling pays the right gold once; gold and the stash survive the serf's death.
 - Each completing player receives individual reward chests, one per Luck point (1 for a fresh Serf, +1 per equipped Luck item); carried but unequipped Luck items add nothing.
 - No item can ever have a negative Luck modifier or more than +1 Luck (tested, including generated items).
 - A player dying before completion receives no completion rewards.
@@ -273,7 +279,7 @@ Acceptance:
 
 ## Phase 12 — Economy and account systems
 
-**Goal:** Add shared stash, gold, vendor, marketplace, and upgrades.
+**Goal:** Add the marketplace, buying, and upgrades (the shared stash, gold, and selling to the vendor arrive in Phase 9, D-085–D-087).
 
 Tasks:
 

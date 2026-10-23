@@ -3,7 +3,7 @@ import {
   type DungeonId,
   type EnemyKind,
   type SerfSummary,
-  type PlaceholderReward,
+  type LootDrop,
   type RunStats,
   type ServerMessage,
   type Stats,
@@ -46,7 +46,8 @@ export type Screen =
       dungeon: DungeonId;
       stats: RunStats;
       /** The server's roll for us alone (placeholder until Phase 9); null on death. */
-      reward: PlaceholderReward | null;
+      /** One item per chest (D-080); empty unless completed. */
+      loot: LootDrop[];
       /** What landed the killing blow (deaths). */
       killedBy: EnemyKind | null;
       /** The serf's life including this run (its final record on death). */
@@ -172,7 +173,7 @@ function onServerMessage(
         result: msg.result,
         dungeon: msg.dungeon,
         stats: msg.stats,
-        reward: msg.reward,
+        loot: msg.loot,
         killedBy: msg.killedBy,
         serf: msg.serf,
         expGained: msg.expGained,

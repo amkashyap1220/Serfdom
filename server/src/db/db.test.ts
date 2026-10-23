@@ -29,6 +29,42 @@ afterAll(async () => {
   await pool?.end();
 });
 
+describe("items in PostgreSQL", () => {
+  it("rows: stash items have no serf; a death keeps them", async () => {
+    const accounts = new PgAccountRepo(pool);
+    const acc = await accounts.createAccount("items-death@b.co", "h");
+    if (acc === "taken") throw new Error("taken");
+    const repo = new PgSerfRepo(pool);
+    const serf = await repo.create(acc.id, "Item Corpse", 2);
+    if (typeof serf === "string") throw new Error(serf);
+    const cape = {
+      slot: "cape" as const,
+      type: null,
+      tier: 0,
+      rolls: [{ stat: "speed" as const, amount: 1 }],
+      luck: 0,
+    };
+    await repo.addLoot(acc.id, serf.id, [cape], 20);
+    const rows = async () =>
+      (
+        await pool.query<{ location: string; serf_id: string | null }>(
+          "select location, serf_id from items where account_id = $1",
+          [acc.id],
+        )
+      ).rows;
+    expect(await rows()).toEqual([{ location: "stash", serf_id: null }]);
+    await repo.recordRun(
+      acc.id,
+      serf.id,
+      "died",
+      { ...newRunStats(), seconds: 1 },
+      { dungeon: "x", killedBy: null },
+      0,
+    );
+    expect(await rows()).toHaveLength(1);
+  });
+});
+
 describe("migrations", () => {
   it("are recorded, and running them again applies nothing", async () => {
     const names = (
@@ -40,7 +76,7 @@ describe("migrations", () => {
     expect(await migrate(pool)).toEqual([]);
   });
 
-  it("created the account and serf tables", async () => {
+  it("created the account, serf, and item tables", async () => {
     const tables = (
       await pool.query<{ table_name: string }>(
         "select table_name from information_schema.tables where table_schema = 'public' order by 1",
@@ -48,6 +84,7 @@ describe("migrations", () => {
     ).rows.map((r) => r.table_name);
     expect(tables).toEqual([
       "accounts",
+      "items",
       "schema_migrations",
       "serfs",
       "sessions",
@@ -159,6 +196,14 @@ describe("accounts in PostgreSQL", () => {
     expect(await repo.findSession(Buffer.alloc(32, 9), new Date())).toBeNull();
   });
 });
+
+const RING = {
+  slot: "ring" as const,
+  type: null,
+  tier: 2,
+  rolls: [{ stat: "hp" as const, amount: -7 }],
+  luck: 1,
+};
 
 /** Serf storage behaves the same in memory and in PostgreSQL. */
 function serfContract(
@@ -395,6 +440,82 @@ function serfContract(
         classId: "druid",
         stats: bonus,
       });
+    });
+
+    it("puts loot in the stash, then pending when it is full (D-086, D-088)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Loot`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      const drops = await repo.addLoot(a, serf.id, [RING, RING, RING], 2);
+      expect(drops?.map((d) => d.pending)).toEqual([false, false, true]);
+      const [first, second, third] = drops ?? [];
+      expect(first?.item).toEqual({
+        ...RING,
+        id: first?.item.id,
+        equipped: null,
+      });
+      expect(second!.item.id).toBeGreaterThan(first!.item.id);
+      const stash = await repo.stash(a);
+      expect(stash.gold).toBe(0);
+      expect(stash.items.map((i) => i.id)).toEqual([
+        first?.item.id,
+        second?.item.id,
+      ]);
+      expect(stash.pending).toEqual([{ item: third?.item, serfId: serf.id }]);
+      expect(await repo.hasPending(a, serf.id)).toBe(true);
+      // A serf carries only what it wears: nothing yet (D-085).
+      expect((await repo.find(a, serf.id))?.items).toEqual([]);
+      // Not someone else's serf.
+      const b = await account();
+      expect(await repo.addLoot(b, serf.id, [RING], 16)).toBeNull();
+    });
+
+    it("sells once for the vendor price, and room made takes in a pending reward (D-087)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Sell`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      const drops = (await repo.addLoot(a, serf.id, [RING, RING], 1)) ?? [];
+      const kept = drops[0]!.item;
+      const waiting = drops[1]!.item;
+      // T2 ring with +1 Luck: value 5 × 9 × 1.5 = 67.5, sells for 33.
+      expect(await repo.sell(a, kept.id, 1)).toEqual({ price: 33 });
+      expect(await repo.sell(a, kept.id, 1)).toBeNull(); // only once
+      const after = await repo.stash(a);
+      expect(after.gold).toBe(33);
+      expect(after.items.map((i) => i.id)).toEqual([waiting.id]);
+      expect(after.pending).toEqual([]);
+      expect(await repo.hasPending(a, serf.id)).toBe(false);
+      // Someone else cannot sell it.
+      const b = await account();
+      expect(await repo.sell(b, waiting.id, 1)).toBeNull();
+      expect((await repo.stash(b)).gold).toBe(0);
+      // A pending reward itself can be sold too.
+      const more = (await repo.addLoot(a, serf.id, [RING], 1)) ?? [];
+      expect(more[0]?.pending).toBe(true);
+      expect(await repo.sell(a, more[0]!.item.id, 1)).toEqual({ price: 33 });
+      expect((await repo.stash(a)).gold).toBe(66);
+    });
+
+    it("a death keeps the stash, gold, and pending rewards (D-079, D-085)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Corpse`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      await repo.addLoot(a, serf.id, [RING, RING], 1);
+      await repo.recordRun(
+        a,
+        serf.id,
+        "died",
+        run,
+        { dungeon: "x", killedBy: null },
+        0,
+      );
+      const stash = await repo.stash(a);
+      expect(stash.items).toHaveLength(1);
+      expect(stash.pending).toHaveLength(1);
+      expect(await repo.addLoot(a, serf.id, [RING], 16)).toBeNull();
     });
 
     it("another account's serf does not exist for you", async () => {

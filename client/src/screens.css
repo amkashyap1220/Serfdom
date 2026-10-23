@@ -382,48 +382,6 @@
   }
 }
 
-/* Reward reel (D-049): digits spin, then lock in one by one. */
-.reel-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.reels {
-  display: flex;
-  gap: 4px;
-}
-
-.reel {
-  display: inline-block;
-  width: 28px;
-  padding: 4px 0;
-  border: 2px solid #6b4a1f;
-  background: #1a1206;
-  color: #f0c419;
-  font-size: 22px;
-  font-variant-numeric: tabular-nums;
-}
-
-.reel.spinning {
-  color: #8a6a2a;
-  filter: blur(0.6px);
-}
-
-.reel.stopped {
-  animation: stat-land 250ms ease-out;
-}
-
-.reel-box.revealed .reels {
-  animation: jackpot 700ms ease-out;
-}
-
-.reel-box.revealed .reel {
-  border-color: #f0c419;
-  box-shadow: 0 0 10px #f0c41988;
-}
-
 @keyframes jackpot {
   0% {
     transform: scale(1);
@@ -660,4 +618,143 @@
   grid-column: 1 / -1;
   color: #9fb4d0;
   font-size: 11px;
+}
+
+/* Loot (Phase 9a). Tier colours are placeholders, not the verified palette. */
+.loot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.loot-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.item-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 150px;
+  padding: 6px 10px;
+  border: 2px solid #46505f;
+  background: #0e1014;
+  font-size: 12px;
+  text-align: left;
+}
+
+.loot-card {
+  animation: loot-open 700ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.loot-card.waiting {
+  border-style: dashed;
+}
+
+.item-where {
+  color: #8d96a3;
+}
+
+.item-card.tier-0 {
+  border-color: #6b7380;
+}
+.item-card.tier-1 {
+  border-color: #7ed957;
+}
+.item-card.tier-2 {
+  border-color: #5bc0de;
+}
+.item-card.tier-3 {
+  border-color: #c77dff;
+}
+.tier-0 .item-name {
+  color: #c3cad5;
+}
+.tier-1 .item-name {
+  color: #7ed957;
+}
+.tier-2 .item-name {
+  color: #5bc0de;
+}
+.tier-3 .item-name {
+  color: #c77dff;
+}
+
+.item-name {
+  font-size: 14px;
+}
+
+.item-base {
+  color: #9fb4d0;
+}
+
+.item-rolls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roll-good {
+  color: #7ed957;
+}
+
+.roll-bad {
+  color: #ff6b6b;
+}
+
+.item-luck {
+  color: #f0c419;
+}
+
+/* A chest's item flips into view (hidden until its delay passes). */
+@keyframes loot-open {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) rotateY(90deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12) rotateY(0deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Stash (Phase 9a). */
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: 900px;
+  max-height: 330px;
+  overflow-y: auto;
+}
+
+button.sell {
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.gold {
+  color: #f0c419;
+  margin-right: 12px;
+}
+
+/* Waiting rewards never shrink; the stash scrolls in what is left. */
+.item-grid.pending-grid {
+  flex: none;
+  max-height: none;
+}
+
+.item-grid.short {
+  max-height: 200px;
 }

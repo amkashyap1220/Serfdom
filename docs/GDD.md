@@ -199,10 +199,17 @@ Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a r
 - A Resurrection Necklace Artifact is part of the prior equipment concept and is intended to preserve a character once, subject to final rule confirmation.
 - Account-level resources and eligible shared storage were previously planned to persist through character death.
 
+### Confirmed item and reward rules (Phase 9)
+
+- A serf carries only its **equipped** items; there is no bag (D-085). Death loses them (D-079).
+- Unequipped items live in the account's **shared stash**, which survives death and serves every serf (D-085).
+- **Gold** is account-wide and survives death; it comes from selling items (D-087).
+- Stat potions not drunk at once wait in the account's **potion rack** (D-089).
+
 ### Prior persistence concepts requiring final reconciliation
 
-- Gold persists through character death.
-- Shared stash is account-wide and can transfer eligible items between characters.
+- Gold persists through character death (confirmed by D-087).
+- Shared stash is account-wide and can transfer eligible items between characters (confirmed by D-085, D-086).
 - Two free character slots; additional slots purchasable with gold.
 - Shared stash capacity and potion rack may be upgradeable.
 - Equipped items are lost on death under normal rules.
@@ -310,7 +317,9 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Enemies include melee, ranged, charging/throwing, and tougher roles.
 - Goblin Warlord uses projectile patterns, reinforcements, and limited arena hazards.
 - Rewards may include completion XP, gold, dungeon-specific potions, and equipment, but exact rates need confirmation.
-- Each completing player rolls one reward chest per point of Luck (D-065, D-068): 1 chest for a fresh Serf, +1 for each equipped Luck item, no cap.
+- Each completing player rolls one reward chest per point of Luck (D-065, D-068): 1 chest for a fresh Serf, +1 for each equipped Luck item, no cap. Each chest is one item (D-080).
+- Reward flow (D-086–D-088): each item goes to the shared stash, or onto the serf with **Equip now** when its class can use it. Hovering a reward compares it with what is equipped in that slot (stats up in green, down in red). A replaced item goes to the stash. When the stash is full the player must sell the new item or a stash item for gold (50% of reference value); an undecided reward is held by the server and that serf cannot start another dungeon until it is settled.
+- Potion dungeons (not the Goblin Warrens) roll a stat-potion chance once per Luck point; a won potion is drunk at once by that serf or sent to the potion rack (D-089).
 - A character dying before completion receives no completion rewards.
 
 ## 11. Multiplayer and reward rules
@@ -328,6 +337,8 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Reconnect, disconnect, session ownership, and party-leader behavior require explicit rules.
 
 ## 12. Economy and leaderboards
+
+Confirmed in Phase 9 (D-085–D-087): a shared account stash, account gold that survives death, and selling to the vendor for 50% of an item's reference value. Buying, the marketplace, and upgrades remain Phase 12.
 
 Prior economy direction:
 

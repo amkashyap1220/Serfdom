@@ -13,13 +13,7 @@ const run = (players: number[]) =>
   new DungeonInstance(1, "goblin-warrens", players, {
     maxQueuedInputs: 30,
     joinWindowTicks: 900,
-    rollReward: rolls(),
   });
-/** A fixed sequence of rolls: 101, 102, 103, … */
-function rolls() {
-  let next = 101;
-  return () => next++;
-}
 const east = { move: { x: 1, y: 0 }, fire: { trigger: false, aim: null } };
 
 type Snapshot = Extract<ServerMessage, { type: "snapshot" }>;
@@ -166,18 +160,18 @@ describe("DungeonInstance in the Goblin Warrens", () => {
     expect(r.playerIds).toEqual([2]);
   });
 
-  it("rolls a separate reward for each completing player, and none on death or exit (D-010)", () => {
+  it("reports each player's own outcome: completed through the portal, or left (D-010)", () => {
     const { r } = atTheWarlord([1, 2, 3]);
     killWarlord(r);
     r.tick();
     r.tick();
-    expect(r.leave(3)).toMatchObject({ result: "left", reward: null });
+    expect(r.leave(3)).toMatchObject({ result: "left" });
     place(r, 1, 3780, 1000);
     place(r, 2, 3780, 1000);
     const { ended } = r.tick();
-    expect(ended.map((e) => [e.playerId, e.reward])).toEqual([
-      [1, { roll: 101 }],
-      [2, { roll: 102 }],
+    expect(ended.map((e) => [e.playerId, e.result])).toEqual([
+      [1, "completed"],
+      [2, "completed"],
     ]);
   });
 
