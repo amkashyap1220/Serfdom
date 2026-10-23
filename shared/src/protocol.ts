@@ -24,8 +24,10 @@ import {
  *          + queue / leaveQueue / exitDungeon (client) and
  *          queueStatus / runStarted / runEnded (server).
  * v5 (6b): snapshot enemies carry their kind; snapshots list closed doors.
+ * v6 (6c): enemies carry an alert (telegraph) flag; snapshots carry
+ *          hazards and whether the exit portal is open.
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Largest client → server message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 1024;
@@ -81,6 +83,16 @@ export interface SnapshotEnemy {
   hp: number;
   maxHp: number;
   respawnIn: number;
+  /** Telegraphing an attack (a brute about to charge). */
+  alert: boolean;
+}
+
+/** A warning circle that lands after `landsIn` seconds. */
+export interface SnapshotHazard {
+  x: number;
+  y: number;
+  radius: number;
+  landsIn: number;
 }
 
 export interface SnapshotProjectile {
@@ -130,6 +142,9 @@ export type ServerMessage =
       projectiles: SnapshotProjectile[];
       /** Ids of doors still closed in this run's dungeon (they block movement and shots). */
       closedDoors: string[];
+      hazards: SnapshotHazard[];
+      /** The exit portal is open: step into it to complete the run (D-057). */
+      portalOpen: boolean;
     };
 
 export type ParseResult<T> =
@@ -274,10 +289,17 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "enemies",
           "projectiles",
           "closedDoors",
+          "hazards",
+          "portalOpen",
         ])
       ) {
         return fail("snapshot: unexpected fields");
       }
+      if (typeof obj.portalOpen !== "boolean") {
+        return fail("snapshot: portalOpen must be a boolean");
+      }
+      const hazards = parseList(obj.hazards, parseSnapshotHazard);
+      if (!hazards) return fail("snapshot: bad hazard entry");
       if (
         !Array.isArray(obj.closedDoors) ||
         !obj.closedDoors.every(
@@ -303,6 +325,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           enemies,
           projectiles,
           closedDoors: [...closedDoors],
+          hazards,
+          portalOpen: obj.portalOpen,
         },
       };
     }
@@ -403,11 +427,12 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "hp",
       "maxHp",
       "respawnIn",
+      "alert",
     ])
   ) {
     return null;
   }
-  if (!isEnemyKind(v.kind)) return null;
+  if (!isEnemyKind(v.kind) || typeof v.alert !== "boolean") return null;
   if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
     return null;
   }
@@ -428,7 +453,17 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     hp: v.hp,
     maxHp: v.maxHp,
     respawnIn: v.respawnIn,
+    alert: v.alert,
   };
+}
+
+function parseSnapshotHazard(v: unknown): SnapshotHazard | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["x", "y", "radius", "landsIn"])) {
+    return null;
+  }
+  if (!isFiniteNumber(v.x) || !isFiniteNumber(v.y)) return null;
+  if (!isNonNegative(v.radius) || !isNonNegative(v.landsIn)) return null;
+  return { x: v.x, y: v.y, radius: v.radius, landsIn: v.landsIn };
 }
 
 function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {

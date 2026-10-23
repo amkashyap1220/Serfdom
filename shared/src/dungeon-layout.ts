@@ -44,7 +44,16 @@ export interface DungeonLayout {
   spawn: Vec2;
   rooms: readonly RoomDef[];
   doors: readonly DoorDef[];
+  /**
+   * Opens once every required room is cleared; each player completes the
+   * run by stepping into it (D-057). Null: the run completes for everyone
+   * the moment the required rooms are cleared (test fixtures).
+   */
+  exitPortal: Vec2 | null;
 }
+
+/** A player completes when their center is this close to the portal's center. */
+export const PORTAL_RADIUS = 24;
 
 /**
  * Walls of `thickness` around every room, with each door's rectangle cut
@@ -194,6 +203,15 @@ export function validateLayout(layout: DungeonLayout): string[] {
     }
     for (const room of layout.rooms) {
       if (!seen.has(room.id)) problems.push(`room ${room.id} is unreachable`);
+    }
+  }
+  if (layout.exitPortal) {
+    if (!roomAt(layout, layout.exitPortal)) {
+      problems.push("exit portal is not inside a room");
+    }
+    const box = boxAround(layout.exitPortal, PORTAL_RADIUS * 2);
+    if (layout.walls.some((w) => overlaps(w, box))) {
+      problems.push("exit portal overlaps a wall");
     }
   }
   if (!layout.rooms.some((r) => r.required)) {

@@ -52,6 +52,8 @@ describe("enemy damage and respawn", () => {
     id: 1,
     kind: "dummy",
     roomId: null,
+    summonerId: null,
+    ai: { kind: "none" },
     position: { x: 0, y: 0 },
     size: 16,
     hp: 30,

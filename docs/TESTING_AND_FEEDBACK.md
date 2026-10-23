@@ -78,6 +78,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→875, 3→1250, 4→1625). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Goblin Warlord checklist (Phase 6c)
+
+Run `npm run dev` (restart it if it was running before 6c: protocol v6), open http://localhost:5173/, Ctrl+Shift+R. Play the Warrens as in the 6b checklist, plus:
+
+1. **Brutes** (orange squares, 400 HP): in the camp, the ambush hall's second wave, and the guard room. One walks toward you, stops and **blinks yellow**, then charges in a straight line. Stepping sideways during the blink dodges it; getting hit costs 4 HP. Walking next to a brute that is not charging does not hurt.
+2. **Throne room**: entering it spawns the **Goblin Warlord** (large dark-red square). A health bar appears across the top of the screen.
+3. Phase 1: aimed 5-shot fans and rings of orange bullets.
+4. Below half HP the bar turns bright red and says **ENRAGED**: wider 7-shot fans, denser rings, pairs of grunts, and **red warning circles** under you that fill in and hit for 3 if you are still inside after 1.2 s.
+5. When the Warlord dies its grunts vanish, the bar disappears, and a **pulsing violet portal** appears where it stood. HUD `Exit portal: OPEN`. Nothing completes until you walk into it.
+6. Walk into the portal: gold flash, **DUNGEON CLEARED** shakes and shimmers, the stats count up, three waves of confetti, and the chest drops in over spinning light rays.
+7. With two windows: when one player enters the portal, only that player completes; the other keeps playing until they enter it (or die).
+
+Report: whether you beat the Warlord, your clear time, HP at the end, which attacks felt unfair or too easy, and any console errors.
+
 ### Goblin Warrens checklist (Phase 6b)
 
 Run `npm run dev` (restart it if it was running before 6b: protocol v5), open http://localhost:5173/, Ctrl+Shift+R.
@@ -91,7 +105,7 @@ You are a fresh level-1 Serf: **20 HP**, regenerating **0.5 HP/s** all the time 
 5. Optional: the **Side den** (4 grunts, 2 slingers). Clearing it opens nothing.
 6. **Ambush hall**: a first wave; when it dies a second, larger wave spawns, partly behind you near the entry.
 7. **Guard room**: 6 grunts and a line of 6 slingers. Clearing it opens the last door.
-8. Step into the **Warlord's throne** (empty until 6c): DUNGEON CLEARED with your stats.
+8. Step into the **Warlord's throne**: since 6c the Goblin Warlord waits there (see the 6c checklist).
 9. Dying anywhere shows the death screen. Pressing R anywhere returns to the menu.
 10. With two windows (queue within 5 s of each other): both see the same enemies and doors; a room wakes for both when either enters it.
 

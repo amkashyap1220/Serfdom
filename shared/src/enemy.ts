@@ -1,6 +1,7 @@
 import {
   ENEMY_STATS,
   FIRST_ATTACK_DELAY,
+  WARLORD,
   type EnemyKind,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
@@ -28,6 +29,60 @@ export interface EnemyState {
   respawnSeconds: number | null;
   /** Seconds until its next attack is allowed. */
   attackCooldown: number;
+  /** The enemy that summoned it (it dies with its summoner), or null. */
+  summonerId: number | null;
+  /** Per-kind behavior state (enemy-ai.ts). */
+  ai: EnemyAi;
+}
+
+/**
+ * Behavior state that only some kinds need. Timers count down in seconds.
+ * - brute: walk → windup (telegraph) → charge (locked direction) → recover.
+ * - warlord: one timer per attack; `ringTurn` alternates the ring's offset.
+ */
+export type EnemyAi =
+  | { kind: "none" }
+  | {
+      kind: "brute";
+      mode: "walk" | "windup" | "charge" | "recover";
+      timer: number;
+      direction: Vec2;
+      /** Players already hit by the current charge. */
+      hit: readonly number[];
+    }
+  | {
+      kind: "warlord";
+      spread: number;
+      ring: number;
+      ringTurn: number;
+      summon: number;
+      rockfall: number;
+    };
+
+function initialAi(kind: EnemyKind): EnemyAi {
+  switch (kind) {
+    case "brute":
+      return {
+        kind,
+        mode: "walk",
+        timer: 0,
+        direction: { x: 0, y: 0 },
+        hit: [],
+      };
+    case "warlord": {
+      const delay = FIRST_ATTACK_DELAY.warlord;
+      return {
+        kind,
+        spread: delay,
+        ring: delay,
+        ringTurn: 0,
+        summon: WARLORD.summon.intervalSeconds / 3,
+        rockfall: WARLORD.rockfall.intervalSeconds / 2,
+      };
+    }
+    default:
+      return { kind: "none" };
+  }
 }
 
 /** A fresh enemy of `kind` at full (solo) HP. */
@@ -37,9 +92,12 @@ export function newEnemy(
   position: Vec2,
   roomId: string | null,
   respawnSeconds: number | null,
+  summonerId: number | null = null,
 ): EnemyState {
   const { maxHp, size } = ENEMY_STATS[kind];
   return {
+    summonerId,
+    ai: initialAi(kind),
     id,
     kind,
     roomId,

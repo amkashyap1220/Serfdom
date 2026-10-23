@@ -313,6 +313,7 @@ describe("snapshot messages", () => {
     hp: 875,
     maxHp: 875,
     respawnIn: 0,
+    alert: false,
   };
   const shot: SnapshotProjectile = {
     id: 5,
@@ -337,6 +338,8 @@ describe("snapshot messages", () => {
       enemies: [enemy],
       projectiles: [shot],
       closedDoors: ["tunnel-camp"],
+      hazards: [{ x: 3700, y: 980, radius: 32, landsIn: 0.4 }],
+      portalOpen: false,
     };
     expect(parseServerMessage(encodeMessage(msg))).toEqual({
       ok: true,
@@ -354,6 +357,8 @@ describe("snapshot messages", () => {
           enemies: e,
           projectiles: pr,
           closedDoors: [],
+          hazards: [],
+          portalOpen: true,
         }),
       ).ok;
     expect(snap([player])).toBe(true);
@@ -364,6 +369,7 @@ describe("snapshot messages", () => {
     expect(snap([], [{ ...enemy, hp: "1" }])).toBe(false);
     expect(snap([], [{ ...enemy, kind: "dragon" }])).toBe(false);
     expect(snap([], [{ ...enemy, kind: undefined }])).toBe(false);
+    expect(snap([], [{ ...enemy, alert: "yes" }])).toBe(false);
     expect(snap([], [], [{ ...shot, owner: "boss" }])).toBe(false);
     expect(snap([], [], [{ ...shot, damage: 9999 }])).toBe(false);
   });
@@ -375,6 +381,8 @@ describe("snapshot messages", () => {
       players: [],
       enemies: [],
       projectiles: [],
+      hazards: [],
+      portalOpen: false,
     };
     const ok = (closedDoors: unknown) =>
       parseServerMessage(JSON.stringify({ ...base, closedDoors })).ok;
@@ -384,6 +392,29 @@ describe("snapshot messages", () => {
     expect(ok([""])).toBe(false);
     expect(ok(["x".repeat(65)])).toBe(false);
     expect(parseServerMessage(JSON.stringify(base)).ok).toBe(false);
+  });
+
+  it("rejects malformed hazards and portal flags", () => {
+    const base = {
+      type: "snapshot",
+      tick: 1,
+      players: [],
+      enemies: [],
+      projectiles: [],
+      closedDoors: [],
+      hazards: [],
+      portalOpen: false,
+    };
+    const ok = (extra: object) =>
+      parseServerMessage(JSON.stringify({ ...base, ...extra })).ok;
+    expect(ok({})).toBe(true);
+    expect(ok({ portalOpen: "open" })).toBe(false);
+    expect(ok({ hazards: [{ x: 1, y: 2, radius: -1, landsIn: 1 }] })).toBe(
+      false,
+    );
+    expect(
+      ok({ hazards: [{ x: 1, y: 2, radius: 5, landsIn: 1, damage: 99 }] }),
+    ).toBe(false);
   });
 
   it("roundCoord keeps two decimals", () => {

@@ -13,6 +13,16 @@ export interface EnemyView {
   hp: number;
   maxHp: number;
   respawnIn: number;
+  /** Telegraphing an attack (brute windup). */
+  alert: boolean;
+}
+
+export interface HazardView {
+  x: number;
+  y: number;
+  radius: number;
+  /** Seconds until it lands (estimated for now). */
+  landsIn: number;
 }
 
 export interface ProjectileView {
@@ -25,4 +35,13 @@ export interface ProjectileView {
 export interface CombatViewModel {
   enemies: EnemyView[];
   projectiles: ProjectileView[];
+  hazards: HazardView[];
+  portalOpen: boolean;
 }
+
+export const EMPTY_VIEW: CombatViewModel = {
+  enemies: [],
+  projectiles: [],
+  hazards: [],
+  portalOpen: false,
+};

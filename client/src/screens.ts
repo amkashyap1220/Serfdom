@@ -20,7 +20,14 @@ export interface ScreenActions {
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
 const DEATH_RETURN_DELAY_MS = 1500;
-const CONFETTI_PIECES = 80;
+/** Confetti per wave; three waves (D-049: maximum celebration). */
+const CONFETTI_PIECES = 60;
+const CONFETTI_WAVES = 3;
+const CONFETTI_WAVE_GAP_S = 0.8;
+/** Stats count up from zero, one after another. */
+const COUNT_UP_MS = 900;
+const COUNT_UP_STAGGER_MS = 250;
+const COUNT_UP_START_MS = 500;
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
 const CONFETTI_COLORS = ["#f0c419", "#5bc0de", "#ff6b6b", "#7ed957", "#ffffff"];
 
@@ -185,14 +192,16 @@ export class ScreenView {
     const info = dungeonInfo(screen.dungeon);
     const s = screen.stats;
     const confetti = el("div", "confetti");
-    for (let i = 0; i < CONFETTI_PIECES; i++) {
-      const piece = el("i", "");
-      piece.style.left = `${Math.random() * 100}%`;
-      piece.style.background =
-        CONFETTI_COLORS[i % CONFETTI_COLORS.length] ?? "#fff";
-      piece.style.animationDelay = `${Math.random() * 0.6}s`;
-      piece.style.animationDuration = `${1.6 + Math.random() * 1.4}s`;
-      confetti.append(piece);
+    for (let wave = 0; wave < CONFETTI_WAVES; wave++) {
+      for (let i = 0; i < CONFETTI_PIECES; i++) {
+        const piece = el("i", "");
+        piece.style.left = `${Math.random() * 100}%`;
+        piece.style.background =
+          CONFETTI_COLORS[i % CONFETTI_COLORS.length] ?? "#fff";
+        piece.style.animationDelay = `${wave * CONFETTI_WAVE_GAP_S + Math.random() * 0.6}s`;
+        piece.style.animationDuration = `${1.6 + Math.random() * 1.4}s`;
+        confetti.append(piece);
+      }
     }
     const actions = el("div", "actions");
     actions.append(
@@ -201,18 +210,27 @@ export class ScreenView {
       ),
       button("Menu (Esc)", () => this.actions.dismissResults()),
     );
+    const shots = s.shotsFired;
+    const stats = countingStatList([
+      ["Clear time", s.seconds, (n) => formatDuration(n)],
+      ["Enemies slain", s.enemiesDefeated, (n) => String(Math.round(n))],
+      ["Damage dealt", s.damageDealt, (n) => String(Math.round(n))],
+      [
+        "Accuracy",
+        shots === 0 ? 0 : (100 * s.shotsHit) / shots,
+        (n) => (shots === 0 ? accuracy(s) : `${Math.round(n)}%`),
+      ],
+      ["Damage taken", s.damageTaken, (n) => String(Math.round(n))],
+    ]);
+    const chest = el("div", "chest-stage");
+    chest.append(el("div", "chest-rays"), el("div", "chest"));
     this.root.append(
+      el("div", "gold-flash"),
       confetti,
       el("h1", "cleared-title", "DUNGEON CLEARED"),
       el("p", "", `${info.name} · ${formatDuration(s.seconds)}`),
-      statList([
-        ["Clear time", formatDuration(s.seconds)],
-        ["Enemies slain", String(s.enemiesDefeated)],
-        ["Damage dealt", String(s.damageDealt)],
-        ["Accuracy", accuracy(s)],
-        ["Damage taken", String(s.damageTaken)],
-      ]),
-      el("div", "chest"),
+      stats,
+      chest,
       el("p", "hint", "Reward chest: rewards arrive in Phase 9."),
       actions,
     );
@@ -256,6 +274,42 @@ function button(label: string, onClick: () => void): HTMLButtonElement {
   b.textContent = label;
   b.addEventListener("click", onClick);
   return b;
+}
+
+/**
+ * Stats that count up from zero one by one (D-049). Uses
+ * requestAnimationFrame; the final values are exact when it finishes.
+ */
+function countingStatList(
+  rows: [string, number, (n: number) => string][],
+): HTMLElement {
+  const dl = el("dl", "stats counting");
+  const start = performance.now();
+  const cells = rows.map(([label, target, format], i) => {
+    const dd = el("dd", "", format(0));
+    dl.append(el("dt", "", label), dd);
+    return {
+      dd,
+      target,
+      format,
+      begin: start + COUNT_UP_START_MS + i * COUNT_UP_STAGGER_MS,
+    };
+  });
+  const frame = (now: number) => {
+    let running = false;
+    for (const c of cells) {
+      const t = Math.min(1, Math.max(0, (now - c.begin) / COUNT_UP_MS));
+      // Ease out, so numbers rush up then settle.
+      const eased = 1 - (1 - t) ** 3;
+      c.dd.textContent = c.format(t >= 1 ? c.target : c.target * eased);
+      c.dd.classList.toggle("done", t >= 1);
+      if (t < 1) running = true;
+    }
+    // Stop once finished or once the screen has been replaced.
+    if (running && dl.isConnected) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  return dl;
 }
 
 function statList(rows: [string, string][]): HTMLElement {

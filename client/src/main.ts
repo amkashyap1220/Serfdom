@@ -214,6 +214,7 @@ function reportLive(game: Phaser.Game): void {
     ["Hits taken", String(totals.playerHits)],
     ["Enemies alive", enemies],
     ["Doors closed", online ? String(net.closedDoors.length) : "—"],
+    ["Exit portal", online ? (view.portalOpen ? "OPEN" : "closed") : "—"],
     [
       "In flight (yours/enemy)",
       `${view.projectiles.filter((p) => p.owner === "player").length}/${view.projectiles.filter((p) => p.owner === "enemy").length}`,

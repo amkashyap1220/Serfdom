@@ -11,7 +11,7 @@ import {
 import {
   blockingWalls,
   closedDoorIds,
-  isRunComplete,
+  requiredRoomsCleared,
   newRunProgress,
   stepRooms,
   type RunProgress,
@@ -152,7 +152,7 @@ describe("room progress", () => {
     expect(step().spawns).toHaveLength(8); // wave 0
     expect(step().spawns).toEqual([]); // still alive
     sim = { ...sim, enemies: sim.enemies.map((e) => ({ ...e, hp: 0 })) };
-    expect(step().spawns).toHaveLength(11); // wave 1
+    expect(step().spawns).toHaveLength(12); // wave 1
     expect(status(progress, "ambush")).toBe("active");
     sim = { ...sim, enemies: sim.enemies.map((e) => ({ ...e, hp: 0 })) };
     expect(step().events).toContainEqual({
@@ -200,7 +200,7 @@ describe("walking a party through the Goblin Warrens", () => {
       for (const id of before) {
         if (!closedDoorIds(progress, GW).includes(id)) opened.push(id);
       }
-      if (isRunComplete(progress, GW)) {
+      if (requiredRoomsCleared(progress, GW)) {
         completedAtX = sim.players[0]!.position.x;
       }
     }

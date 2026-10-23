@@ -9,6 +9,7 @@ import {
   resolveFireIntent,
   TICK_SECONDS,
   worldDirectionFromInput,
+  WARLORD,
   type AimTarget,
   type DungeonLayout,
   type FireMode,
@@ -19,7 +20,7 @@ import {
   screenToWorld,
   stepViewRotation,
 } from "../camera-math";
-import type { CombatViewModel } from "../combat-view-model";
+import { EMPTY_VIEW, type CombatViewModel } from "../combat-view-model";
 import {
   createKeyReader,
   createPointerReader,
@@ -45,6 +46,8 @@ const COLORS = {
   playerHit: 0xff4d4d,
   viewportCenter: 0x5bc0de,
 } as const;
+
+const BOSS_BAR = { width: 400, height: 8, y: 24 } as const;
 
 /** Drawn behind the menu screens, outside any run. */
 const MENU_MAP = dungeonInfo("goblin-warrens").layout;
@@ -127,7 +130,10 @@ export class WorldScene extends Phaser.Scene {
   private readonly totals: Totals = { shots: 0, playerHits: 0 };
   private playerFlashUntil = 0;
   private lastLocalHp = 0;
-  private lastView: CombatViewModel = { enemies: [], projectiles: [] };
+  private lastView: CombatViewModel = EMPTY_VIEW;
+  /** Boss health bar, fixed to the top of the screen (overlay camera). */
+  private bossBar!: Phaser.GameObjects.Graphics;
+  private bossLabel!: Phaser.GameObjects.Text;
 
   constructor() {
     super("world");
@@ -161,12 +167,23 @@ export class WorldScene extends Phaser.Scene {
     );
     this.world.add(this.player);
     const overlay = this.drawScreenOverlay();
+    this.bossBar = this.add.graphics().setScrollFactor(0);
+    this.bossLabel = this.add
+      .text(this.scale.width / 2, BOSS_BAR.y - 14, "", {
+        fontFamily: "monospace",
+        fontSize: "11px",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
     this.readKeys = createKeyReader(this);
     this.readPointer = createPointerReader(this);
 
     // D-033: no camera bounds; the camera always centers the player and
     // shows void past the map edge.
-    this.cameras.main.setZoom(1).ignore(overlay);
+    this.cameras.main
+      .setZoom(1)
+      .ignore([overlay, this.bossBar, this.bossLabel]);
     this.cameras
       .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
       .ignore([this.mapLayer, this.world]);
@@ -307,6 +324,8 @@ export class WorldScene extends Phaser.Scene {
     this.map.show(this.currentLayout());
     this.map.syncDoors(this.net.closedDoors);
     this.lastView = this.net.viewModel(performance.now());
+    this.map.syncPortal(this.lastView.portalOpen, nowMs);
+    this.syncBossBar();
     this.combat.sync(this.lastView, this.viewRotation, nowMs);
     this.remotes.sync(
       this.net.remotePositions(performance.now()),
@@ -317,6 +336,38 @@ export class WorldScene extends Phaser.Scene {
   private renderPosition(): Vec2 {
     const p = this.localView().position;
     return { x: Math.round(p.x), y: Math.round(p.y) };
+  }
+
+  /** Shows the Warlord's health across the top of the screen while it lives. */
+  private syncBossBar(): void {
+    const boss = this.lastView.enemies.find(
+      (e) => e.kind === "warlord" && e.hp > 0,
+    );
+    const g = this.bossBar.clear();
+    this.bossLabel.setVisible(boss !== undefined);
+    if (!boss) return;
+    const x = (this.scale.width - BOSS_BAR.width) / 2;
+    const fraction = boss.hp / boss.maxHp;
+    g.fillStyle(0x000000, 0.7);
+    g.fillRect(x - 2, BOSS_BAR.y - 2, BOSS_BAR.width + 4, BOSS_BAR.height + 4);
+    g.fillStyle(fraction < WARLORD.phaseTwoBelow ? 0xff3030 : 0xc0392b);
+    g.fillRect(
+      x,
+      BOSS_BAR.y,
+      Math.round(BOSS_BAR.width * fraction),
+      BOSS_BAR.height,
+    );
+    // Notch where phase 2 begins.
+    g.fillStyle(0xffffff, 0.8);
+    g.fillRect(
+      x + BOSS_BAR.width * WARLORD.phaseTwoBelow,
+      BOSS_BAR.y,
+      1,
+      BOSS_BAR.height,
+    );
+    this.bossLabel.setText(
+      `Goblin Warlord  ${Math.ceil(boss.hp)}/${boss.maxHp}${fraction < WARLORD.phaseTwoBelow ? "  — ENRAGED" : ""}`,
+    );
   }
 
   /** The current run's dungeon, or the menu backdrop outside a run. */

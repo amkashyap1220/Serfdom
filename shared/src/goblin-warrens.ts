@@ -20,12 +20,12 @@ import type { EnemyKind } from "./enemy-config.ts";
  *
  * Doors are 64 px gaps in the 32 px walls, centered on y = 1000 (the den's
  * on the camp's north wall). Each door opens when the room it belongs to
- * (the one before it) is cleared. The throne room is empty until the
- * Goblin Warlord arrives in 6c; entering it after the guard room completes
- * the run (T-031).
+ * (the one before it) is cleared. The Goblin Warlord waits in the throne
+ * room; when it dies the exit portal opens where it stood, and each player
+ * completes by stepping into it (D-057).
  *
- * Solo HP on the way: tunnel 750, camp 1230, ambush 2650 (two waves),
- * guard 1560 → 6190 required; den 820 optional.
+ * Solo HP on the way (6c): tunnel 750, camp 1630, ambush 3050 (two waves),
+ * guard 2360, Warlord 4500 → 12290 required; den 820 optional.
  */
 
 const DOOR = 64;
@@ -76,6 +76,7 @@ const rooms: RoomDef[] = [
           [1950, 1000],
           [1950, 1150],
         ]),
+        ...spawns("brute", [[1880, 1000]]),
       ],
     ],
     required: true,
@@ -136,6 +137,7 @@ const rooms: RoomDef[] = [
           [2720, 780],
           [2720, 1220],
         ]),
+        ...spawns("brute", [[2650, 1000]]),
       ],
     ],
     required: true,
@@ -162,6 +164,10 @@ const rooms: RoomDef[] = [
           [3380, 1050],
           [3380, 1150],
         ]),
+        ...spawns("brute", [
+          [3220, 900],
+          [3220, 1100],
+        ]),
       ],
     ],
     required: true,
@@ -170,7 +176,7 @@ const rooms: RoomDef[] = [
     id: "throne",
     name: "Warlord's throne",
     bounds: { x: 3460, y: 700, width: 640, height: 600 },
-    waves: [],
+    waves: [spawns("warlord", [[3780, 1000]])],
     required: true,
   },
 ];
@@ -201,4 +207,5 @@ export const GOBLIN_WARRENS: DungeonLayout = {
   spawn: { x: 300, y: 1000 },
   rooms,
   doors,
+  exitPortal: { x: 3780, y: 1000 },
 };

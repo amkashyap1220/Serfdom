@@ -6,8 +6,11 @@ import {
   createSimState,
   dungeonInfo,
   findPlayer,
-  isRunComplete,
+  isPlayerAlive,
+  isTelegraphing,
   MAX_PARTY_SIZE,
+  PORTAL_RADIUS,
+  requiredRoomsCleared,
   newRunProgress,
   newRunStats,
   recordRunEvents,
@@ -206,13 +209,26 @@ export class DungeonInstance {
     this.rooms = rooms.progress;
     this.sim = spawnEnemies(this.sim, rooms.spawns);
 
-    if (this.members.size > 0 && isRunComplete(this.rooms, this.layout)) {
-      for (const id of this.playerIds) {
-        const end = this.end(id, "completed");
+    // Completion (D-057): with a portal, each living player completes by
+    // stepping into it once it is open; without one, everyone at once.
+    if (this.portalOpen) {
+      const portal = this.layout.exitPortal;
+      for (const p of this.sim.players) {
+        const inPortal =
+          portal === null ||
+          Math.hypot(p.position.x - portal.x, p.position.y - portal.y) <=
+            PORTAL_RADIUS;
+        if (!isPlayerAlive(p) || !inPortal) continue;
+        const end = this.end(p.id, "completed");
         if (end) ended.push(end);
       }
     }
     return { ended, faulted };
+  }
+
+  /** The exit portal is open (every required room cleared). */
+  get portalOpen(): boolean {
+    return requiredRoomsCleared(this.rooms, this.layout);
   }
 
   snapshotPlayers(): SnapshotPlayer[] {
@@ -247,6 +263,7 @@ export class DungeonInstance {
         hp: e.hp,
         maxHp: e.maxHp,
         respawnIn: e.respawnIn,
+        alert: isTelegraphing(e),
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,
@@ -260,6 +277,13 @@ export class DungeonInstance {
         size: p.size,
       })),
       closedDoors: this.closedDoors,
+      hazards: this.sim.hazards.map((h) => ({
+        x: roundCoord(h.position.x),
+        y: roundCoord(h.position.y),
+        radius: h.radius,
+        landsIn: h.landsIn,
+      })),
+      portalOpen: this.portalOpen,
     };
   }
 

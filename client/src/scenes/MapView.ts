@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import type { DungeonLayout, Rect } from "@serfdom/shared";
+import { PORTAL_RADIUS, type DungeonLayout, type Rect } from "@serfdom/shared";
 import { GRID } from "../render-config";
 
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
@@ -12,6 +12,8 @@ const COLORS = {
   wallEdge: 0x9c8670,
   door: 0x8e3b2b,
   doorEdge: 0xd9774a,
+  portal: 0x9b7bff,
+  portalCore: 0xe8dcff,
   label: "#8a94a6",
 } as const;
 
@@ -26,6 +28,7 @@ export class MapView {
   private readonly layer: Phaser.GameObjects.Layer;
   private objects: Phaser.GameObjects.GameObject[] = [];
   private readonly doors: Phaser.GameObjects.Graphics;
+  private readonly portal: Phaser.GameObjects.Graphics;
   private layout: DungeonLayout | null = null;
   private doorKey = "";
 
@@ -33,6 +36,7 @@ export class MapView {
     this.scene = scene;
     this.layer = layer;
     this.doors = scene.add.graphics();
+    this.portal = scene.add.graphics();
   }
 
   show(layout: DungeonLayout): void {
@@ -57,8 +61,22 @@ export class MapView {
       g.lineStyle(1, COLORS.wallEdge);
       g.strokeRect(wall.x + 0.5, wall.y + 0.5, wall.width - 1, wall.height - 1);
     }
-    // Doors sit above the floor and walls.
-    this.layer.add(this.doors);
+    // Doors and the portal sit above the floor and walls.
+    this.layer.add([this.doors, this.portal]);
+  }
+
+  /** Draws the exit portal (D-057) while it is open, gently pulsing. */
+  syncPortal(open: boolean, nowMs: number): void {
+    const g = this.portal.clear();
+    const at = this.layout?.exitPortal;
+    if (!open || !at) return;
+    const pulse = 0.5 + 0.5 * Math.sin(nowMs / 180);
+    g.fillStyle(COLORS.portal, 0.35 + 0.25 * pulse);
+    g.fillCircle(at.x, at.y, PORTAL_RADIUS + 6 * pulse);
+    g.lineStyle(2, COLORS.portalCore, 0.9);
+    g.strokeCircle(at.x, at.y, PORTAL_RADIUS);
+    g.fillStyle(COLORS.portalCore, 0.8);
+    g.fillCircle(at.x, at.y, 6 + 3 * pulse);
   }
 
   /** Draws the doors in `closed` (ids); open doors are just gaps. */

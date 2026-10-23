@@ -190,10 +190,8 @@
 .cleared-title {
   color: #f0c419;
   font-size: 40px !important;
-  text-shadow:
-    0 0 12px #f0c41988,
-    0 0 32px #f0c41955;
-  animation: cleared-pop 700ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  /* A filter glow, because the gradient-filled text is transparent. */
+  filter: drop-shadow(0 0 10px #f0c41988);
 }
 
 .confetti {
@@ -212,13 +210,134 @@
   animation-fill-mode: both;
 }
 
+.gold-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, #fff6c0 0%, #f0c419 45%, transparent 75%);
+  animation: gold-flash 900ms ease-out forwards;
+  pointer-events: none;
+}
+
+.cleared-title {
+  background: linear-gradient(
+    90deg,
+    #f0c419 0%,
+    #fff6c0 45%,
+    #f0c419 55%,
+    #f0c419 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.screen-results .cleared-title {
+  animation:
+    cleared-pop 700ms cubic-bezier(0.2, 1.6, 0.4, 1) both,
+    cleared-shake 400ms ease-in-out 700ms 2,
+    shimmer 1600ms linear 1100ms infinite;
+}
+
+.stats.counting dd {
+  font-variant-numeric: tabular-nums;
+  color: #f0c419;
+}
+
+.stats.counting dd.done {
+  color: #ffffff;
+  animation: stat-land 250ms ease-out;
+}
+
+.chest-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 120px;
+  height: 110px;
+  margin: 4px 0;
+}
+
+.chest-rays {
+  position: absolute;
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    #f0c41955 0deg 12deg,
+    transparent 12deg 30deg
+  );
+  animation:
+    rays-spin 6s linear infinite,
+    fade-in 600ms ease-in 900ms both;
+}
+
 .chest {
+  position: relative;
   width: 48px;
   height: 36px;
-  margin-top: 8px;
   border: 3px solid #6b4a1f;
   background: linear-gradient(#b07a2a 0 40%, #6b4a1f 40% 48%, #b07a2a 48%);
-  animation: chest-wiggle 900ms ease-in-out 700ms infinite;
+  animation:
+    chest-drop 600ms cubic-bezier(0.3, 1.5, 0.5, 1) 800ms both,
+    chest-wiggle 900ms ease-in-out 1500ms infinite;
+}
+
+@keyframes gold-flash {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes cleared-shake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  25% {
+    transform: translateX(-6px) rotate(-2deg);
+  }
+  75% {
+    transform: translateX(6px) rotate(2deg);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes stat-land {
+  from {
+    transform: scale(1.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes rays-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes chest-drop {
+  from {
+    transform: translateY(-160px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .actions {

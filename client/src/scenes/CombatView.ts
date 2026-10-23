@@ -9,6 +9,9 @@ import type { CombatViewModel } from "../combat-view-model";
 
 const texture = (kind: EnemyKind) => `enemy-${kind}`;
 const flashTexture = (kind: EnemyKind) => `enemy-${kind}-flash`;
+const alertTexture = (kind: EnemyKind) => `enemy-${kind}-alert`;
+/** How fast a telegraphing enemy blinks. */
+const ALERT_BLINK_MS = 90;
 /** How long an enemy shows the white hit flash. */
 const HIT_FLASH_MS = 80;
 
@@ -17,6 +20,8 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   dummy: 0xc0392b,
   grunt: 0x4caf50,
   slinger: 0x9b59b6,
+  brute: 0xd35400,
+  warlord: 0x8b1a1a,
 };
 
 const COLORS = {
@@ -24,6 +29,8 @@ const COLORS = {
   flash: 0xffffff,
   playerShot: 0x7fdbff,
   enemyBullet: 0xff9f1c,
+  alert: 0xffe066,
+  hazard: 0xff4d4d,
 } as const;
 
 interface EnemySprite {
@@ -43,6 +50,7 @@ interface EnemySprite {
 export class CombatView {
   private readonly enemies = new Map<number, EnemySprite>();
   private readonly projectiles: Phaser.GameObjects.Graphics;
+  private readonly hazards: Phaser.GameObjects.Graphics;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -64,7 +72,17 @@ export class CombatView {
         COLORS.flash,
         COLORS.flash,
       );
+      makeSquareTexture(
+        scene,
+        alertTexture(kind),
+        size,
+        COLORS.alert,
+        COLORS.enemyMark,
+      );
     }
+    // Hazards are drawn under everything else on the world layer.
+    this.hazards = scene.add.graphics();
+    layer.add(this.hazards);
     this.projectiles = scene.add.graphics();
     layer.add(this.projectiles);
   }
@@ -97,7 +115,9 @@ export class CombatView {
         .setTexture(
           nowMs < sprite.flashUntil
             ? flashTexture(enemy.kind)
-            : texture(enemy.kind),
+            : enemy.alert && Math.floor(nowMs / ALERT_BLINK_MS) % 2 === 0
+              ? alertTexture(enemy.kind)
+              : texture(enemy.kind),
         );
 
       const above = rotateVec(
@@ -112,6 +132,16 @@ export class CombatView {
             ? `${Math.ceil(enemy.hp)}`
             : `respawn ${enemy.respawnIn.toFixed(1)}s`,
         );
+    }
+
+    // Rockfall warnings: an outline, filling in as the landing nears.
+    const h = this.hazards.clear();
+    for (const hz of view.hazards) {
+      const urgency = 1 - Math.min(1, hz.landsIn / 1.2);
+      h.fillStyle(COLORS.hazard, 0.15 + 0.45 * urgency);
+      h.fillCircle(hz.x, hz.y, hz.radius * (0.4 + 0.6 * urgency));
+      h.lineStyle(2, COLORS.hazard, 0.9);
+      h.strokeCircle(hz.x, hz.y, hz.radius);
     }
 
     const g = this.projectiles.clear();

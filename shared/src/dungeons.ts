@@ -44,6 +44,7 @@ const TRAINING: DungeonLayout = {
     },
   ],
   doors: [],
+  exitPortal: null,
 };
 
 /** The dungeons a player can queue for (D-048). */
@@ -51,7 +52,7 @@ export const DUNGEONS = [
   {
     id: "goblin-warrens",
     name: "Goblin Warrens",
-    blurb: "Levels 1–9 · 3–5 min · boss arrives in Phase 6c",
+    blurb: "Levels 1–9 · 3–5 min · the Goblin Warlord awaits",
     listed: true,
     layout: GOBLIN_WARRENS,
   },

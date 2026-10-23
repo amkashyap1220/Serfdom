@@ -47,12 +47,20 @@ export {
   DUMMY,
   ENEMY_KINDS,
   ENEMY_STATS,
+  BRUTE,
   GRUNT,
   isEnemyKind,
   SLINGER,
+  WARLORD,
   type EnemyKind,
 } from "./enemy-config.ts";
-export { enemyAct, overlaps, toward, type AiTarget } from "./enemy-ai.ts";
+export {
+  enemyAct,
+  isTelegraphing,
+  overlaps,
+  toward,
+  type AiTarget,
+} from "./enemy-ai.ts";
 export {
   damageEnemy,
   isAlive,
@@ -60,6 +68,7 @@ export {
   ringDirections,
   scaleEnemyForParty,
   stepRespawn,
+  type EnemyAi,
   type EnemyState,
 } from "./enemy.ts";
 export {
@@ -73,6 +82,7 @@ export {
 } from "./dungeons.ts";
 export {
   contains,
+  PORTAL_RADIUS,
   roomAt,
   validateLayout,
   wallsAroundRooms,
@@ -85,7 +95,7 @@ export {
 export {
   blockingWalls,
   closedDoorIds,
-  isRunComplete,
+  requiredRoomsCleared,
   newRunProgress,
   stepRooms,
   type RoomEvent,
@@ -114,6 +124,7 @@ export {
   stepSim,
   stepWorld,
   type EnemySpawn,
+  type Hazard,
   type PlayerInput,
   type PlayerState,
   type SimEvent,
@@ -139,6 +150,7 @@ export {
   roundCoord,
   type FireInput,
   type SnapshotEnemy,
+  type SnapshotHazard,
   type SnapshotPlayer,
   type SnapshotProjectile,
 } from "./protocol.ts";

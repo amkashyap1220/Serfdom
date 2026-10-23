@@ -107,8 +107,8 @@ export function blockingWalls(
   ];
 }
 
-/** The run is complete once every required room is cleared (T-031). */
-export function isRunComplete(
+/** Every required room is cleared: the exit portal opens (D-057), or, without a portal, the run is complete. */
+export function requiredRoomsCleared(
   progress: RunProgress,
   layout: DungeonLayout,
 ): boolean {

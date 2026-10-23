@@ -10,7 +10,11 @@ import {
   type SnapshotPlayer,
   type Vec2,
 } from "@serfdom/shared";
-import type { CombatViewModel, ProjectileView } from "./combat-view-model";
+import {
+  EMPTY_VIEW,
+  type CombatViewModel,
+  type ProjectileView,
+} from "./combat-view-model";
 import { RemoteInterpolator } from "./interpolation";
 import { LocalShots } from "./local-shots";
 import { Connection, type LobbyMessage, type SnapshotMessage } from "./net";
@@ -173,7 +177,7 @@ export class NetSync {
   /** Enemies and projectiles to draw right now. */
   viewModel(nowMs: number): CombatViewModel {
     const latest = this.latest;
-    if (!latest) return { enemies: [], projectiles: [] };
+    if (!latest) return EMPTY_VIEW;
     const selfId = this.self?.id;
     const age = Math.min(
       Math.max((nowMs - latest.receivedAtMs) / 1000, 0),
@@ -198,7 +202,16 @@ export class NetSync {
         size: s.size,
       });
     }
-    return { enemies: [...latest.snapshot.enemies], projectiles };
+    return {
+      enemies: [...latest.snapshot.enemies],
+      projectiles,
+      // Count hazards down to "now", like projectiles are moved to "now".
+      hazards: latest.snapshot.hazards.map((h) => ({
+        ...h,
+        landsIn: Math.max(0, h.landsIn - age),
+      })),
+      portalOpen: latest.snapshot.portalOpen,
+    };
   }
 
   private onSnapshot(

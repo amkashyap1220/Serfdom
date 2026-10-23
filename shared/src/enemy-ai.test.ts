@@ -41,7 +41,7 @@ function act(
   for (let i = 0; i < ticks; i++) {
     const a = enemyAct(e, targets, walls, TICK_SECONDS);
     e = a.enemy;
-    if (a.contact) contacts.push(i);
+    if (a.contacts.length > 0) contacts.push(i);
     bullets += a.bullets.length;
   }
   return { enemy: e, contacts, bullets };

@@ -54,13 +54,28 @@ export interface SimState {
   projectiles: readonly Projectile[];
   nextProjectileId: number;
   nextEnemyId: number;
+  /** Delayed area attacks waiting to land (Warlord rockfall). */
+  hazards: readonly Hazard[];
 }
 
-/** An enemy to add to the simulation (dungeon room waves). */
+/** A warning circle that damages living players inside it when it lands. */
+export interface Hazard {
+  position: Vec2;
+  radius: number;
+  damage: number;
+  /** Seconds until it lands. */
+  landsIn: number;
+  /** The enemy that made it. */
+  ownerId: number;
+}
+
+/** An enemy to add to the simulation (dungeon room waves, boss summons). */
 export interface EnemySpawn {
   kind: EnemyKind;
   at: Vec2;
   roomId: string | null;
+  /** Dies with this enemy (summons). */
+  summonerId?: number | null;
 }
 
 /** One tick of a player's intent: where to move and whether/where to fire. */
@@ -116,6 +131,7 @@ export function createSimState(
     projectiles: [],
     nextProjectileId: 1,
     nextEnemyId: 1,
+    hazards: [],
   };
   return spawnEnemies(
     empty,
@@ -132,7 +148,14 @@ export function spawnEnemies(
 ): SimState {
   let nextEnemyId = state.nextEnemyId;
   const added = spawns.map((s) =>
-    newEnemy(nextEnemyId++, s.kind, s.at, s.roomId, respawnSeconds),
+    newEnemy(
+      nextEnemyId++,
+      s.kind,
+      s.at,
+      s.roomId,
+      respawnSeconds,
+      s.summonerId ?? null,
+    ),
   );
   return { ...state, enemies: [...state.enemies, ...added], nextEnemyId };
 }
@@ -245,13 +268,15 @@ export function applyPlayerInput(
  * One world tick, in order:
  * 0. Living players regenerate HP (D-056), capped at max HP.
  * 1. Rescale enemy HP for the number of living players (D-045).
- * 2. Each enemy acts by kind (enemy-ai.ts): moves, fires, or lands a
- *    contact hit on a living player.
+ * 2. Each enemy acts by kind (enemy-ai.ts): moves, fires, lands contact
+ *    hits, summons, or marks hazards. Summons join after every enemy acted.
+ * 2b. Hazards count down; landing ones hit living players inside them.
  * 3. Projectiles move and resolve hits (player shots → enemies; enemy
  *    bullets → any living player's 15×15 hurtbox at their server position,
  *    D-044).
  * 4. Enemy respawn timers. Defeated enemies that never respawn (dungeons)
- *    are removed, so snapshots do not grow with the dead.
+ *    are removed, so snapshots do not grow with the dead; summons die
+ *    with their summoner.
  * A player reaching 0 HP stays in the state as dead until removed or reset
  * (D-046); only the caller decides what "back to the menu" means.
  */
@@ -270,8 +295,26 @@ export function stepWorld(
 
   // 2. Enemies act. Living players are re-read for each enemy, so a
   // player killed by one enemy is not targeted by the next.
+  const summons: EnemySpawn[] = [];
+  const newHazards: Hazard[] = [];
+  const context = {
+    aliveSummons: (id: number) =>
+      state.enemies.filter((e) => e.summonerId === id && isAlive(e)).length,
+  };
   enemies = enemies.map((enemy) => {
-    const action = enemyAct(enemy, alivePlayers(), walls, dtSeconds);
+    const action = enemyAct(enemy, alivePlayers(), walls, dtSeconds, context);
+    for (const s of action.summons) {
+      summons.push({ ...s, roomId: enemy.roomId, summonerId: enemy.id });
+    }
+    for (const h of action.hazards) {
+      newHazards.push({
+        position: h.at,
+        radius: h.radius,
+        damage: h.damage,
+        landsIn: h.delaySeconds,
+        ownerId: enemy.id,
+      });
+    }
     for (const { direction, spec } of action.bullets) {
       projectiles.push({
         id: nextId++,
@@ -292,8 +335,7 @@ export function stepWorld(
         bullets: action.bullets.length,
       });
     }
-    if (action.contact) {
-      const { playerId, damage } = action.contact;
+    for (const { playerId, damage } of action.contacts) {
       players = players.map((pl) =>
         pl.id === playerId
           ? damagePlayer(pl, enemy.id, damage, pl.position, events)
@@ -302,6 +344,30 @@ export function stepWorld(
     }
     return action.enemy;
   });
+  let nextEnemyId = state.nextEnemyId;
+  if (summons.length > 0) {
+    const added = spawnEnemies({ ...state, enemies, nextEnemyId }, summons);
+    enemies = [...added.enemies];
+    nextEnemyId = added.nextEnemyId;
+  }
+
+  // 2b. Hazards: existing ones count down and land; new ones wait a full delay.
+  const hazards: Hazard[] = [];
+  for (const h of state.hazards) {
+    const landsIn = h.landsIn - dtSeconds;
+    if (landsIn > 1e-9) {
+      hazards.push({ ...h, landsIn });
+      continue;
+    }
+    players = players.map((pl) =>
+      isPlayerAlive(pl) &&
+      Math.hypot(pl.position.x - h.position.x, pl.position.y - h.position.y) <=
+        h.radius
+        ? damagePlayer(pl, h.ownerId, h.damage, pl.position, events)
+        : pl,
+    );
+  }
+  hazards.push(...newHazards);
 
   // 3. Projectiles. Targets are rebuilt per projectile so anything defeated
   // earlier in this tick stops absorbing hits.
@@ -346,9 +412,15 @@ export function stepWorld(
     }
   }
 
-  // 4. Enemy respawn timers; the permanently dead are dropped.
+  // 4. Enemy respawn timers; the permanently dead are dropped, and so are
+  // the summons of anything dead.
+  const deadIds = new Set(enemies.filter((e) => !isAlive(e)).map((e) => e.id));
   enemies = enemies
-    .filter((enemy) => isAlive(enemy) || enemy.respawnSeconds !== null)
+    .filter(
+      (enemy) =>
+        (isAlive(enemy) || enemy.respawnSeconds !== null) &&
+        !(enemy.summonerId !== null && deadIds.has(enemy.summonerId)),
+    )
     .map((enemy) => {
       const result = stepRespawn(enemy, dtSeconds);
       if (result.respawned)
@@ -363,6 +435,8 @@ export function stepWorld(
       enemies,
       projectiles: surviving,
       nextProjectileId: nextId,
+      nextEnemyId,
+      hazards,
     },
     events,
   };
