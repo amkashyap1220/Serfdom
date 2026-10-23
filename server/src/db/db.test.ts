@@ -788,6 +788,7 @@ describe("Phase 7 acceptance: a real server restart (end to end)", () => {
     const startServer = (p: pg.Pool) =>
       GameServer.start({
         port: 0,
+        allowTestDungeons: true,
         autoTick: false,
         queueWaitSeconds: 0,
         log: silentLogger,

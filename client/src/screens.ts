@@ -25,6 +25,7 @@ import {
   needsClass,
   type ClassId,
   DUNGEON_EXP,
+  entryProblem,
   LISTED_DUNGEONS,
   levelProgress,
   normalizeSerfName,
@@ -382,12 +383,17 @@ export class ScreenView {
       }
       for (const d of LISTED_DUNGEONS) {
         const card = el("div", "dungeon-card");
+        // Locked until this serf completes the Warrens (D-107); the server
+        // checks the same rule.
+        const locked = playing ? entryProblem(d.id, playing.life.clears) : null;
         card.append(
           el("h2", "", d.name),
           el("p", "hint", d.blurb),
-          playing
-            ? button("Enter queue (Enter)", () => this.actions.queue(d.id))
-            : button("Choose a serf", () => this.actions.openTab("serfs")),
+          !playing
+            ? button("Choose a serf", () => this.actions.openTab("serfs"))
+            : locked
+              ? el("p", "notice", `Locked: ${locked}`)
+              : button("Enter queue (Enter)", () => this.actions.queue(d.id)),
         );
         body.append(card);
       }

@@ -1,4 +1,6 @@
 import {
+  entryProblem,
+  dungeonInfo,
   MAX_SEED,
   consumeFixedSteps,
   encodeMessage,
@@ -54,6 +56,12 @@ export interface GameServerOptions {
    * 1 to MAX_SEED; tests pass () => 0 for the fixed handcrafted Warrens.
    */
   dungeonSeed?: () => number;
+  /**
+   * Let players queue for unlisted test fixtures (the Training Yard).
+   * Off by default: otherwise a modified client could farm a one-dummy
+   * map for EXP and loot (D-107). Tests turn it on.
+   */
+  allowTestDungeons?: boolean;
   log?: Logger;
 }
 
@@ -84,6 +92,8 @@ interface Session {
   serfNeedsClass: boolean;
   /** Rewards wait for the chosen serf (full stash): it may not queue (D-088). */
   serfBlocked: boolean;
+  /** The chosen serf's lifetime completions: none yet means only the Warrens (D-107). */
+  serfClears: number;
   /** The chosen serf's stats with gear and weapon, kept current at the same moments (D-077, D-083). */
   serfLoadout: Loadout;
 }
@@ -121,6 +131,7 @@ export class GameServer {
   private readonly snapshotEveryTicks: number;
   private readonly maxQueuedInputs: number;
   private readonly dungeonSeed: () => number;
+  private readonly allowTestDungeons: boolean;
   private readonly maxMessagesPerSecond: number;
   private readonly joinWindowTicks: number;
   private readonly matchmaker: Matchmaker;
@@ -154,6 +165,7 @@ export class GameServer {
     this.maxQueuedInputs = options.maxQueuedInputs ?? 30;
     this.dungeonSeed =
       options.dungeonSeed ?? (() => randomInt(1, MAX_SEED + 1));
+    this.allowTestDungeons = options.allowTestDungeons ?? false;
     this.maxMessagesPerSecond = options.maxMessagesPerSecond ?? 180;
     this.joinWindowTicks = Math.round(
       (options.joinWindowSeconds ?? DEFAULT_JOIN_WINDOW_SECONDS) * TICK_RATE,
@@ -290,6 +302,7 @@ export class GameServer {
       serfBusy: false,
       serfNeedsClass: false,
       serfBlocked: false,
+      serfClears: 0,
       serfLoadout: { stats: SERF_BASE, weaponTier: null, ability: null },
     };
     this.sessions.set(socket, session);
@@ -367,6 +380,21 @@ export class GameServer {
         if (session.serfNeedsClass) {
           this.reject(socket, session, "choose a class first");
           return;
+        }
+        // The Warrens is open to all; completing it opens every other
+        // listed dungeon, at any level (D-107). Unlisted test fixtures
+        // exist only for tests.
+        if (!dungeonInfo(message.dungeon).listed) {
+          if (!this.allowTestDungeons) {
+            this.reject(socket, session, "queue: unknown dungeon");
+            return;
+          }
+        } else {
+          const problem = entryProblem(message.dungeon, session.serfClears);
+          if (problem) {
+            this.reject(socket, session, problem);
+            return;
+          }
         }
         this.onQueue(socket, session, session.id, message.dungeon);
         return;
@@ -688,6 +716,7 @@ export class GameServer {
         const nowSession = now ? this.sessions.get(now) : undefined;
         if (serf && nowSession && nowSession.serfId === serf.id) {
           nowSession.serfNeedsClass = needsClass(serf);
+          nowSession.serfClears = serf.life.clears;
           nowSession.serfLoadout = loadoutOf(serf);
           // A reward that did not fit blocks the next dungeon (D-088).
           if (saved?.loot.some((d) => d.pending)) nowSession.serfBlocked = true;
@@ -894,6 +923,7 @@ export class GameServer {
         session.serfId = result.serf.id;
         session.serfBlocked = blocked;
         session.serfNeedsClass = needsClass(result.serf);
+        session.serfClears = result.serf.life.clears;
         session.serfLoadout = loadoutOf(result.serf);
         this.log.info(
           message.type === "chooseClass"

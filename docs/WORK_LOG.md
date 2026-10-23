@@ -410,3 +410,11 @@ Keep this concise and update it after each meaningful milestone.
 - Tests: roll counts per tier for every slot; base tier + 1 (×3 HP/MP) and more every tier; rolls capped and below the base; generated accessories cover all three slots and all 8 base stats, never Luck, never rolling their base, all valid (T0–T2 and T4–T10 pools); a T5 Ring of Defense's bonus and name; validation refuses no base, a Luck base, rolls below T4, over the cap, or on the base stat; the migration converts old-shape rows (inserted directly) into valid items with capped rolls and Luck kept from T4. Server fixtures updated (T4 ring sells for 93). `npm run check`: 337 shared, 171 server, 53 client, build.
 - Consequence flagged to the user: Luck items now only come from T4+ drops, which no current dungeon gives.
 - User ran the D-106 checklist: all pass (2026-10-23). Committed and pushed after 11b. Next: 11c (dungeon entry rules, open question 7).
+
+### Phase 11c — Dungeon entry — 2026-10-23
+
+- Asked open question 7. The user first answered "any dungeon at any level" and one queue for all levels, then refined it mid-slice: once a serf completes the Warrens, every other dungeon opens (D-107).
+- Found while checking the queue: the server accepted any dungeon id, including the unlisted Training Yard (one dummy, 100 EXP and a chest per clear), so a modified client could farm it. Now refused unless the server is started for tests (`allowTestDungeons`).
+- Shared `entryProblem` (the first completion can only be the Warrens, so lifetime clears > 0 is the check); `session.serfClears`; queue check with the shared reason; menu lock (nothing locked until a second listed dungeon exists).
+- Tests: the Warrens open at any level and clears; a non-Warrens dungeon locked with 0 clears and open with 1; a normal server refuses the Training Yard and queues a fresh serf for the Warrens; test servers opt in. `npm run check`: 339 shared, 172 server, 53 client, build. Not testable end to end yet: the lock on a listed dungeon (none exists; added to Phase 12 acceptance).
+- User ran the 11c checklist: all pass (2026-10-23). Committed and pushed 11c. Next: Phase 11 acceptance review.

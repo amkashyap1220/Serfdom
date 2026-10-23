@@ -130,6 +130,7 @@ let clients: TestClient[];
 
 beforeEach(async () => {
   server = await GameServer.start({
+    allowTestDungeons: true,
     accounts: testAccounts(),
     serfs: new SerfService(new MemorySerfRepo()),
     port: 0,
@@ -276,6 +277,7 @@ describe("startup", () => {
   it("fails clearly when the port is already in use", async () => {
     await expect(
       GameServer.start({
+        allowTestDungeons: true,
         port: server.port,
         accounts: testAccounts(),
         serfs: new SerfService(new MemorySerfRepo()),
@@ -435,6 +437,7 @@ describe("menu and queue (6a)", () => {
 
   it("sends each run's layout seed to its starters and late joiners (D-104)", async () => {
     const live = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(new MemorySerfRepo()),
       port: 0,
@@ -473,6 +476,7 @@ describe("menu and queue (6a)", () => {
 
   it("waits up to the queue time, then starts solo (T-030)", async () => {
     const live = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(new MemorySerfRepo()),
       port: 0,
@@ -501,6 +505,7 @@ describe("menu and queue (6a)", () => {
 
   it("tells everyone waiting when someone else joins the queue", async () => {
     const live = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(new MemorySerfRepo()),
       port: 0,
@@ -545,6 +550,32 @@ describe("menu and queue (6a)", () => {
     await until(() => !server.isQueued(1));
     server.tick();
     expect(server.runCount).toBe(0);
+  });
+
+  it("refuses the unlisted Training Yard unless test dungeons are on (D-107)", async () => {
+    const live = await GameServer.start({
+      accounts: testAccounts(),
+      serfs: new SerfService(new MemorySerfRepo()),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    try {
+      const c = await connect(live.port);
+      clients.push(c);
+      await helloAndLogin(c);
+      c.send(encodeMessage({ type: "queue", dungeon: "training" }));
+      expect((await nextOfType(c, "error")).reason).toBe(
+        "queue: unknown dungeon",
+      );
+      expect(live.isQueued(1)).toBe(false);
+      // A listed dungeon queues at any level (D-107).
+      c.send(encodeMessage({ type: "queue", dungeon: "goblin-warrens" }));
+      await until(() => live.isQueued(1));
+    } finally {
+      await live.close();
+    }
   });
 
   it("rejects queueing twice, while in a run, or for an unknown dungeon", async () => {
@@ -697,6 +728,7 @@ describe("authoritative movement (4b)", () => {
 describe("real-time loop", () => {
   it("processes queued inputs at about 60 ticks per second on its own", async () => {
     const live = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(new MemorySerfRepo()),
       port: 0,
@@ -1252,6 +1284,7 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     await server.close();
     const repo = new MemorySerfRepo();
     server = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(repo),
       port: 0,
@@ -1301,6 +1334,7 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     await server.close();
     const repo = new MemorySerfRepo();
     server = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(repo),
       port: 0,
@@ -1361,6 +1395,7 @@ describe("equipping over the network (9b)", () => {
     await server.close();
     const repo = new MemorySerfRepo();
     server = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(repo),
       port: 0,
@@ -1416,6 +1451,7 @@ describe("Arcane Blast over the network (10a, D-092–D-096)", () => {
     await server.close();
     const repo = new MemorySerfRepo();
     server = await GameServer.start({
+      allowTestDungeons: true,
       accounts: testAccounts(),
       serfs: new SerfService(repo),
       port: 0,

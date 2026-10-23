@@ -16,7 +16,7 @@ import {
   stepRooms,
   type RunProgress,
 } from "./dungeon-run.ts";
-import { DUNGEONS } from "./dungeons.ts";
+import { DUNGEONS, entryProblem, INTRO_DUNGEON } from "./dungeons.ts";
 import { GOBLIN_WARRENS } from "./goblin-warrens.ts";
 import { PLAYER_BODY, TICK_SECONDS } from "./movement-config.ts";
 import {
@@ -229,5 +229,21 @@ describe("walking a party through the Goblin Warrens", () => {
     sim = removePlayer(sim, 2);
     const r = stepRooms(newRunProgress(GW), sim, GW);
     expect(closedDoorIds(r.progress, GW)).not.toContain("entrance-tunnel");
+  });
+});
+
+describe("dungeon entry (D-107)", () => {
+  it("the Goblin Warrens is open to every serf, at any level", () => {
+    expect(INTRO_DUNGEON).toBe("goblin-warrens");
+    expect(entryProblem("goblin-warrens", 0)).toBeNull();
+    expect(entryProblem("goblin-warrens", 40)).toBeNull();
+  });
+
+  it("every other dungeon opens once the serf has completed the Warrens", () => {
+    // The Training Yard stands in for a second dungeon here.
+    expect(entryProblem("training", 0)).toBe(
+      "Complete the Goblin Warrens first.",
+    );
+    expect(entryProblem("training", 1)).toBeNull();
   });
 });

@@ -87,6 +87,24 @@ export function layoutFor(id: DungeonId, seed: number): DungeonLayout {
   return info.generate ? info.generate(seed) : info.layout;
 }
 
+/** The first dungeon: always open to every serf (D-018, D-107). */
+export const INTRO_DUNGEON: DungeonId = "goblin-warrens";
+
+/**
+ * Why this serf may not enter `dungeon`, or null if it may (D-107): the
+ * Goblin Warrens is always open, and once a serf has completed it every
+ * other dungeon opens, at any level. A serf's first completion can only be
+ * the Warrens, so "at least one completion" is the check. Shown to the
+ * player as is.
+ */
+export function entryProblem(
+  dungeon: DungeonId,
+  serfClears: number,
+): string | null {
+  if (dungeon === INTRO_DUNGEON || serfClears > 0) return null;
+  return `Complete the ${dungeonInfo(INTRO_DUNGEON).name} first.`;
+}
+
 export function dungeonInfo(id: DungeonId): DungeonInfo {
   const found = DUNGEONS.find((d) => d.id === id);
   if (!found) throw new RangeError(`unknown dungeon ${id}`);

@@ -320,7 +320,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Dungeon progression and formats may vary; do not assume every dungeon follows the same linear template.
 - Enemies include different roles and dense waves.
 - Major bosses use multiple phases, mechanics, and readable attacks.
-- Dungeon access is open to characters who meet that dungeon's eligibility rules.
+- Dungeon access is open to characters who meet that dungeon's eligibility rules. CONFIRMED (D-107): the Goblin Warrens is open to every serf; once a serf completes it, every other dungeon is open to that serf at any level. Serfs of any level play together in one queue.
 - Players may retreat freely through rooms they have already cleared.
 - Loot is specific to dungeon difficulty.
 - The first dungeon should be gentle enough to teach core play.

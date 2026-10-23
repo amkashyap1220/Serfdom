@@ -73,6 +73,8 @@ export {
 } from "./enemy.ts";
 export {
   dungeonInfo,
+  entryProblem,
+  INTRO_DUNGEON,
   layoutFor,
   DUNGEONS,
   isDungeonId,

@@ -264,7 +264,7 @@ Status: **complete** (2026-10-23; closed by the user after the 10d checklist pas
 
 **Goal:** Expand from a tiny handcrafted test to reusable room-based dungeons.
 
-Status: in progress. 11a (procedural Warrens, seeds) and 11b (11-room pool, two setups each) built; 11c entry rules; 11d difficulty loot pools.
+Status: in progress. 11a (procedural Warrens, seeds), 11b (11-room pool, two setups each), and 11c (entry rules, D-107) built; 11d difficulty loot pools.
 
 Tasks:
 
@@ -299,6 +299,7 @@ Tasks:
 Acceptance:
 
 - Each new dungeon can be completed solo and by a party, and its loot and EXP match its approved tables.
+- The server refuses a serf that has not completed the Goblin Warrens when it queues for a new dungeon, including a tampered queue request (D-107; the first listed non-Warrens dungeon makes this testable end to end).
 - Potions are granted exactly once per roll, never above the class max, and survive death in the rack.
 - The server decides every potion, drop, and EXP award.
 
