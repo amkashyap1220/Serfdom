@@ -51,6 +51,8 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v20 (10d): Guard and Vanish buffs; heal rings and flashes; optional
+ *          `fire.auto` (automatic shots hold fire while vanished).
  * v19 (10c): snapshot players list their buffs, enemies say whether
  *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
@@ -85,7 +87,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 19;
+export const PROTOCOL_VERSION = 20;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -106,6 +108,8 @@ const UNIT_SLACK = 1e-6;
 export interface FireInput {
   trigger: boolean;
   aim: Vec2 | null;
+  /** The shot fires by itself, not from a click (D-101); optional. */
+  auto?: boolean;
 }
 
 /** Client → server. */
@@ -221,11 +225,22 @@ export interface SnapshotBlast {
   radius: number;
 }
 
-export const BLAST_KINDS = ["arcaneBlast", "inspiration", "curse"] as const;
+export const BLAST_KINDS = [
+  "arcaneBlast",
+  "inspiration",
+  "curse",
+  "heal",
+  "healed",
+] as const;
 export type BlastKind = (typeof BLAST_KINDS)[number];
 
 /** Buffs a snapshot shows on a player (D-098). */
-export const BUFF_KINDS = ["battleCry", "inspiration"] as const;
+export const BUFF_KINDS = [
+  "battleCry",
+  "inspiration",
+  "guard",
+  "vanish",
+] as const;
 export type BuffKind = (typeof BUFF_KINDS)[number];
 
 export interface SnapshotChain {
@@ -853,17 +868,27 @@ export function roundCoord(v: number): number {
 }
 
 function parseFire(v: unknown): FireInput | string {
-  if (!isPlainObject(v) || !hasExactKeys(v, ["trigger", "aim"])) {
-    return "fire must be {trigger, aim}";
+  if (
+    !isPlainObject(v) ||
+    !(
+      hasExactKeys(v, ["trigger", "aim"]) ||
+      hasExactKeys(v, ["trigger", "aim", "auto"])
+    )
+  ) {
+    return "fire must be {trigger, aim} (auto optional)";
   }
   if (typeof v.trigger !== "boolean") return "fire.trigger must be a boolean";
-  if (v.aim === null) return { trigger: v.trigger, aim: null };
+  if ("auto" in v && typeof v.auto !== "boolean") {
+    return "fire.auto must be a boolean";
+  }
+  const auto = v.auto === true ? { auto: true } : {};
+  if (v.aim === null) return { trigger: v.trigger, aim: null, ...auto };
   const aim = parseVec2(v.aim);
   if (!aim) return "fire.aim must be null or {x, y} numbers";
   if (Math.abs(Math.hypot(aim.x, aim.y) - 1) > UNIT_SLACK) {
     return "fire.aim must be a unit vector";
   }
-  return { trigger: v.trigger, aim };
+  return { trigger: v.trigger, aim, ...auto };
 }
 
 /** undefined means malformed. */

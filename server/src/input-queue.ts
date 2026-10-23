@@ -73,6 +73,8 @@ export function queueInput(
       fire: {
         trigger: input.fire.trigger,
         aim: input.fire.aim ? normalize(input.fire.aim) : null,
+        // Only lets the sim hold this player's own shot (D-101).
+        ...(input.fire.auto ? { auto: true } : {}),
       },
       // The cast target (D-094); the sim clamps it to the ability range.
       ability: input.ability ? { ...input.ability } : null,

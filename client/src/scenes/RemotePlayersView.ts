@@ -13,6 +13,9 @@ interface RemoteSprite {
 }
 
 /** Draws other players (blue squares with a "#id" label) at interpolated positions. */
+/** A vanished player is drawn this see-through (D-100). */
+export const VANISHED_ALPHA = 0.3;
+
 export class RemotePlayersView {
   private readonly sprites = new Map<number, RemoteSprite>();
   private readonly scene: Phaser.Scene;
@@ -32,7 +35,11 @@ export class RemotePlayersView {
     return this.sprites.size;
   }
 
-  sync(positions: ReadonlyMap<number, Vec2>, viewRotation: number): void {
+  sync(
+    positions: ReadonlyMap<number, Vec2>,
+    viewRotation: number,
+    faded: ReadonlySet<number> = new Set(),
+  ): void {
     for (const [id, sprite] of this.sprites) {
       if (!positions.has(id)) {
         sprite.image.destroy();
@@ -44,7 +51,10 @@ export class RemotePlayersView {
       const sprite = this.sprites.get(id) ?? this.create(id);
       const x = Math.round(p.x);
       const y = Math.round(p.y);
-      sprite.image.setPosition(x, y).setRotation(-viewRotation);
+      sprite.image
+        .setPosition(x, y)
+        .setRotation(-viewRotation)
+        .setAlpha(faded.has(id) ? VANISHED_ALPHA : 1);
       // Upright and "above" on screen whatever the view rotation.
       const above = rotateVec({ x: 0, y: -11 }, -viewRotation);
       sprite.label

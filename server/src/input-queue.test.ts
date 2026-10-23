@@ -104,6 +104,13 @@ describe("input queue", () => {
       15,
     );
   });
+
+  it("keeps the auto flag, so a vanished player's automatic shots hold (D-101)", () => {
+    const q = newInputQueue();
+    const fire = { trigger: true, aim: { x: 1, y: 0 }, auto: true };
+    queueInput(q, 0, { move: { x: 0, y: 0 }, fire }, 30);
+    expect(takeInputsForTick(q).apply[0]!.fire).toEqual(fire);
+  });
 });
 
 describe("clampToUnit", () => {

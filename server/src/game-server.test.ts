@@ -761,7 +761,7 @@ describe("shared combat on the server (5b)", () => {
       }),
     );
     expect((await nextOfType(client!, "error")).reason).toBe(
-      "input: fire must be {trigger, aim}",
+      "input: fire must be {trigger, aim} (auto optional)",
     );
   });
 });

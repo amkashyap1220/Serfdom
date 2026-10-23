@@ -29,19 +29,15 @@ describe("Full auto uses the ability by itself (D-099)", () => {
     ).toBeNull();
   });
 
-  it("never auto-casts a movement ability", () => {
-    const original = ABILITIES.arcaneBlast.movement;
-    ABILITIES.arcaneBlast.movement = true; // stand-in until a movement ability exists
-    try {
-      expect(
-        abilityIntent("fullAuto", false, blast, cursor, at, near, SHOT),
-      ).toBeNull();
-      expect(
-        abilityIntent("fullAuto", true, blast, cursor, at, near, SHOT),
-      ).toEqual({ x: 120, y: 0 });
-    } finally {
-      ABILITIES.arcaneBlast.movement = original;
-    }
+  it("never auto-casts a movement ability: Vanish needs Space (D-102)", () => {
+    const vanish: AbilityLoadout = { kind: "vanish", tier: 0 };
+    expect(ABILITIES.vanish.movement).toBe(true);
+    expect(
+      abilityIntent("fullAuto", false, vanish, cursor, at, near, SHOT),
+    ).toBeNull();
+    expect(
+      abilityIntent("fullAuto", true, vanish, cursor, at, near, SHOT),
+    ).toEqual({ x: 0, y: 0 });
   });
 
   it("Space still casts with no enemy near: aimed at the cursor, buffs on you", () => {
@@ -96,6 +92,7 @@ describe("Full auto shooting is like Auto aim", () => {
     expect(resolveFireIntent("fullAuto", cursor, at, near, SHOT)).toEqual({
       trigger: true,
       aim: { x: 1, y: 0 },
+      auto: true,
     });
     expect(resolveFireIntent("fullAuto", cursor, at, far, SHOT).trigger).toBe(
       false,

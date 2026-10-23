@@ -80,6 +80,7 @@ describe("resolveFireIntent", () => {
     expect(resolveFireIntent("autoAim", mouseUp, origin, near, 300)).toEqual({
       trigger: true,
       aim: { x: 1, y: 0 },
+      auto: true,
     });
   });
 
@@ -93,7 +94,23 @@ describe("resolveFireIntent", () => {
     expect(resolveFireIntent("autoFire", mouseUp, origin, [], 300)).toEqual({
       trigger: true,
       aim: { x: 0, y: -1 },
+      auto: true,
     });
+    // Clicking in auto fire is a deliberate shot (D-101).
+    expect(resolveFireIntent("autoFire", mouseDown, origin, [], 300).auto).toBe(
+      false,
+    );
+  });
+
+  it("while vanished, every mode fires only on a click, toward the mouse (D-101)", () => {
+    for (const mode of ["fullAuto", "autoAim", "autoFire", "manual"] as const) {
+      expect(
+        resolveFireIntent(mode, mouseUp, origin, near, 300, true).trigger,
+      ).toBe(false);
+      expect(
+        resolveFireIntent(mode, mouseDown, origin, near, 300, true),
+      ).toEqual({ trigger: true, aim: { x: 0, y: -1 } });
+    }
   });
 
   it("manual fires only while the button is held, toward the mouse", () => {

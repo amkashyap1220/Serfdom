@@ -82,29 +82,45 @@ export interface FireIntent {
   trigger: boolean;
   /** Unit direction; null means "no valid aim", which never fires. */
   aim: Vec2 | null;
+  /**
+   * True when the shot fires by itself (auto aim, or auto fire without a
+   * click); absent or false for a deliberate click. A vanished player's
+   * automatic shots hold fire (D-101).
+   */
+  auto?: boolean;
 }
 
 export const NO_FIRE: FireIntent = { trigger: false, aim: null };
 
-/** Turns the current fire mode, mouse, and nearby enemies into a fire intent. */
+/**
+ * Turns the current fire mode, mouse, and nearby enemies into a fire
+ * intent. While `vanished`, every mode fires only on a click, toward the
+ * mouse (D-101); the server enforces the same through `auto`.
+ */
 export function resolveFireIntent(
   mode: FireMode,
   pointer: PointerState,
   playerPosition: Vec2,
   targets: readonly AimTarget[],
   range: number,
+  vanished = false,
 ): FireIntent {
+  if (vanished && mode !== "manual") {
+    return resolveFireIntent("manual", pointer, playerPosition, targets, range);
+  }
   if (mode === "autoAim" || mode === "fullAuto") {
     const target = closestTargetInRange(playerPosition, targets, range);
     if (!target) return NO_FIRE;
     const aim = aimDirection(playerPosition, target.position);
-    return { trigger: aim !== null, aim };
+    return { trigger: aim !== null, aim, auto: true };
   }
   const aim = pointer.world
     ? aimDirection(playerPosition, pointer.world)
     : null;
-  const trigger = mode === "autoFire" ? true : pointer.down;
-  return { trigger: trigger && aim !== null, aim };
+  if (mode === "autoFire") {
+    return { trigger: aim !== null, aim, auto: !pointer.down };
+  }
+  return { trigger: pointer.down && aim !== null, aim };
 }
 
 /**

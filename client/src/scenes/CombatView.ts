@@ -38,6 +38,8 @@ const COLORS = {
   inspire: 0xffe08a,
   rage: 0xff5a3c,
   curse: 0x8a2be2,
+  guard: 0x7fa8d1,
+  heal: 0x5fe38a,
   zone: 0x6fcf4f,
 } as const;
 
@@ -176,16 +178,20 @@ export class CombatView {
         bl.lineBetween(mx, my, b.x, b.y);
       }
     }
-    // Flashes (D-096, D-098): Arcane Blast purple, the Bard's ring gold
-    // (it widens out), the Warlock's curse dark violet.
+    // Flashes (D-096, D-098, D-100): Arcane Blast purple, the curse dark
+    // violet, a healed player's green flash; the Bard's gold ring and the
+    // Cleric's green ring widen out.
     for (const b of view.blasts) {
       const color =
         b.kind === "inspiration"
           ? COLORS.inspire
           : b.kind === "curse"
             ? COLORS.curse
-            : COLORS.blast;
-      if (b.kind !== "inspiration") {
+            : b.kind === "heal" || b.kind === "healed"
+              ? COLORS.heal
+              : COLORS.blast;
+      const ring = b.kind === "inspiration" || b.kind === "heal";
+      if (!ring) {
         bl.fillStyle(color, 0.5 * (1 - b.fade));
         bl.fillCircle(b.x, b.y, b.radius);
       }
@@ -193,21 +199,24 @@ export class CombatView {
       bl.strokeCircle(
         b.x,
         b.y,
-        b.kind === "inspiration"
-          ? b.radius * (0.3 + 0.7 * b.fade)
-          : b.radius * (1 + 0.3 * b.fade),
+        ring ? b.radius * (0.3 + 0.7 * b.fade) : b.radius * (1 + 0.3 * b.fade),
       );
     }
-    // Buff glows under players: red Battle Cry, gold Inspiration.
+    // Buff glows under players: red Battle Cry, gold Inspiration, blue
+    // Guard. Vanish shows as a faded sprite instead (D-100).
     for (const a of view.auras) {
-      a.buffs.forEach((buff, i) => {
-        bl.lineStyle(
-          2,
-          buff === "battleCry" ? COLORS.rage : COLORS.inspire,
-          0.9,
-        );
-        bl.strokeCircle(a.x, a.y, 12 + 4 * i);
-      });
+      a.buffs
+        .filter((buff) => buff !== "vanish")
+        .forEach((buff, i) => {
+          const color =
+            buff === "battleCry"
+              ? COLORS.rage
+              : buff === "guard"
+                ? COLORS.guard
+                : COLORS.inspire;
+          bl.lineStyle(buff === "guard" ? 3 : 2, color, 0.9);
+          bl.strokeCircle(a.x, a.y, 12 + 4 * i);
+        });
     }
     // Cursed enemies: a violet outline.
     for (const e of view.enemies) {

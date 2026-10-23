@@ -78,6 +78,19 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Abilities checklist (Phase 10d: Fighter, Rogue, Cleric)
+
+Restart `npm run dev` (protocol v20) and reload. Classes needed: Fighter, Rogue, Cleric (choose at level 5; each comes with its ability item).
+
+1. **Fighter** Guard (Space): a steel-blue ring around you for 2.5 s; hits take clearly less HP (about half at T0, on top of Defense). MP −12; 6 s cooldown.
+2. **Cleric** Healing: a green ring widens from you, with a green flash on you and every ally within 160 px; HP goes up (10 + 10% of max HP at T0), never above max. Two clients: stand together and check both heal; stand far apart and only the caster heals. MP −20; 8 s.
+3. **Rogue** Vanish: your square turns see-through for 2 s at T0 (the other client sees it faded too). Enemies stop aiming at and chasing you; bullets already in the air still hit, for half damage. MP −15; 8 s.
+4. **Vanish in every mode (D-101):** in Full auto, Auto aim + Space, and Auto fire + Space your automatic shots stop while you are faded and start again when it ends. Left-click while faded (any mode): a shot goes toward the mouse and Vanish ends at once (square solid again).
+5. In Full auto, Guard and Healing go off by themselves when an enemy is within shot range; Vanish never does (a movement ability, D-102), but Space casts it.
+6. Older abilities still work.
+
+Report: pass/fail per step and any exact error text.
+
 ### Abilities and fire modes checklist (Phase 10c)
 
 Restart `npm run dev` (protocol v19) and reload. Classes needed: Barbarian, Bard, Warlock (choose at level 5; each comes with its ability item).

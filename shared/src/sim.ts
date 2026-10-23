@@ -29,6 +29,12 @@ import {
   naturesReachDamage,
   BATTLE_CRY,
   battleCryBonus,
+  GUARD,
+  guardReduction,
+  HEALING,
+  healingAmount,
+  VANISH,
+  vanishSeconds,
   CURSE,
   curseBonus,
   INSPIRATION,
@@ -86,10 +92,28 @@ export interface Buff {
   bonus: number;
 }
 
-/** Each buff at most once; a recast refreshes it (D-098). */
+/**
+ * Each buff at most once; a recast refreshes it (D-098, D-100). For
+ * Battle Cry and Inspiration `bonus` is extra damage dealt; for Guard and
+ * Vanish it is the share of incoming damage blocked.
+ */
 export interface PlayerBuffs {
   battleCry?: Buff;
   inspiration?: Buff;
+  guard?: Buff;
+  vanish?: Buff;
+}
+
+export const PLAYER_BUFF_KEYS = [
+  "battleCry",
+  "inspiration",
+  "guard",
+  "vanish",
+] as const satisfies readonly (keyof PlayerBuffs)[];
+
+/** Vanished players are out of every enemy's sight (D-100). */
+export function isVanished(player: PlayerState): boolean {
+  return player.buffs.vanish !== undefined;
 }
 
 /** How much a player's damage is multiplied by their buffs (bonuses add). */
@@ -158,6 +182,8 @@ interface Cast {
   events?: SimEvent[];
   /** Buffs to give, by player (the caster or allies). */
   buffs?: { playerId: number; kind: keyof PlayerBuffs; buff: Buff }[];
+  /** HP to restore, by player. */
+  heals?: { playerId: number; amount: number }[];
 }
 
 /**
@@ -235,6 +261,62 @@ function castAbility(
       };
     case "curse":
       return curse(ability.tier, ownerId, position, target, state.enemies);
+    case "guard":
+      return {
+        buffs: [
+          {
+            playerId: ownerId,
+            kind: "guard",
+            buff: {
+              remaining: GUARD.seconds,
+              bonus: guardReduction(ability.tier),
+            },
+          },
+        ],
+      };
+    case "vanish":
+      return {
+        buffs: [
+          {
+            playerId: ownerId,
+            kind: "vanish",
+            buff: {
+              remaining: vanishSeconds(ability.tier),
+              bonus: VANISH.damageReduction,
+            },
+          },
+        ],
+      };
+    case "healing": {
+      const healed = state.players.filter(
+        (p) =>
+          isPlayerAlive(p) &&
+          Math.hypot(p.position.x - position.x, p.position.y - position.y) <=
+            HEALING.radius,
+      );
+      return {
+        heals: healed.map((p) => ({
+          playerId: p.id,
+          amount: healingAmount(ability.tier, p.maxHp),
+        })),
+        events: [
+          {
+            type: "blast",
+            kind: "heal",
+            playerId: ownerId,
+            at: { ...position },
+            radius: HEALING.radius,
+          },
+          ...healed.map((p): SimEvent => ({
+            type: "blast",
+            kind: "healed",
+            playerId: ownerId,
+            at: { ...p.position },
+            radius: 12,
+          })),
+        ],
+      };
+    }
   }
 }
 
@@ -448,7 +530,7 @@ export type SimEvent =
   /** An ability landed (drawn by every client). */
   | {
       type: "blast";
-      kind: "arcaneBlast" | "inspiration" | "curse";
+      kind: "arcaneBlast" | "inspiration" | "curse" | "heal" | "healed";
       playerId: number;
       at: Vec2;
       radius: number;
@@ -598,10 +680,13 @@ export function applyPlayerInput(
     dtSeconds,
     player.combat.moveSpeed,
   );
+  // A vanished player's automatic shots hold fire, so Vanish lasts in the
+  // auto modes; a click still shoots and ends it (D-101).
+  const holdFire = isVanished(player) && input.fire.auto === true;
   const cooldown = stepFireCooldown(
     player.fireCooldown,
     dtSeconds,
-    input.fire.trigger && aim !== null,
+    input.fire.trigger && aim !== null && !holdFire,
     player.combat.shotsPerSecond,
   );
 
@@ -633,10 +718,25 @@ export function applyPlayerInput(
     mp,
     abilityCooldown,
   };
-  // Buffs from the cast land on the caster or on allies (D-098).
+  // Shooting or casting anything (but Vanish itself) ends Vanish (D-100).
+  if (
+    updated.buffs.vanish &&
+    (cooldown.fired || (cast && ability?.kind !== "vanish"))
+  ) {
+    updated.buffs = Object.fromEntries(
+      Object.entries(updated.buffs).filter(([key]) => key !== "vanish"),
+    );
+  }
+  // Buffs from the cast land on the caster or on allies (D-098); heals
+  // restore HP, never above max (D-100).
   const buffed = (p: PlayerState): PlayerState => {
     const gain = cast?.buffs?.find((b) => b.playerId === p.id);
-    return gain ? { ...p, buffs: { ...p.buffs, [gain.kind]: gain.buff } } : p;
+    const heal = cast?.heals?.find((h) => h.playerId === p.id);
+    let out = gain
+      ? { ...p, buffs: { ...p.buffs, [gain.kind]: gain.buff } }
+      : p;
+    if (heal) out = { ...out, hp: Math.min(out.maxHp, out.hp + heal.amount) };
+    return out;
   };
   let next: SimState = {
     ...state,
@@ -735,7 +835,14 @@ export function stepWorld(
       state.enemies.filter((e) => e.summonerId === id && isAlive(e)).length,
   };
   enemies = enemies.map((enemy) => {
-    const action = enemyAct(enemy, alivePlayers(), walls, dtSeconds, context);
+    // A vanished player is out of sight: not aimed at, chased, or touched.
+    const action = enemyAct(
+      enemy,
+      alivePlayers().filter((p) => !isVanished(p)),
+      walls,
+      dtSeconds,
+      context,
+    );
     for (const s of action.summons) {
       summons.push({ ...s, roomId: enemy.roomId, summonerId: enemy.id });
     }
@@ -970,9 +1077,9 @@ function regenerate(player: PlayerState, dtSeconds: number): PlayerState {
 
 /** Counts buffs down; expired ones go. Unchanged buffs keep their object. */
 function tickBuffs(buffs: PlayerBuffs, dtSeconds: number): PlayerBuffs {
-  if (!buffs.battleCry && !buffs.inspiration) return buffs;
+  if (PLAYER_BUFF_KEYS.every((key) => !buffs[key])) return buffs;
   const next: PlayerBuffs = {};
-  for (const key of ["battleCry", "inspiration"] as const) {
+  for (const key of PLAYER_BUFF_KEYS) {
     const b = buffs[key];
     if (b && b.remaining - dtSeconds > 1e-9) {
       next[key] = { ...b, remaining: b.remaining - dtSeconds };
@@ -994,7 +1101,12 @@ function damagePlayer(
   events: SimEvent[],
 ): PlayerState {
   if (!isPlayerAlive(player)) return player;
-  const damage = hit * player.combat.damageTakenFactor;
+  // Defense, then Guard and Vanish, each block a share (D-078, D-100).
+  const damage =
+    hit *
+    player.combat.damageTakenFactor *
+    (1 - (player.buffs.guard?.bonus ?? 0)) *
+    (1 - (player.buffs.vanish?.bonus ?? 0));
   const { hp, died } = applyDamage(player.hp, damage);
   events.push({
     type: "playerHit",

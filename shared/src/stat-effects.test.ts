@@ -13,6 +13,7 @@ import {
   type SimState,
 } from "./sim.ts";
 import { SERF_BASE, type Stats } from "./stats.ts";
+import { guardReduction, vanishSeconds } from "./abilities.ts";
 
 const RIGHT: PlayerInput = {
   move: { x: 1, y: 0 },
@@ -531,5 +532,119 @@ describe("10c buffs and the curse (D-098)", () => {
     expect(r2.events).toContainEqual(
       expect.objectContaining({ type: "blast", kind: "curse", radius: 50 }),
     );
+  });
+});
+
+describe("10d: Guard, Vanish, Healing (D-100)", () => {
+  const SPACE: PlayerInput = {
+    move: { x: 0, y: 0 },
+    fire: { trigger: false, aim: null },
+    ability: { x: 0, y: 0 },
+  };
+  const FIRE: PlayerInput = {
+    move: { x: 0, y: 0 },
+    fire: { trigger: true, aim: { x: 1, y: 0 } },
+  };
+  const withAbility = (
+    kind: "guard" | "vanish" | "healing",
+    tier = 0,
+    enemies: { x: number; y: number }[] = [],
+    stats: Partial<Stats> = {},
+  ) =>
+    addPlayer(
+      createSimState(enemies),
+      1,
+      { x: 0, y: 0 },
+      { ...SERF_BASE, mp: 40, ...stats },
+      null,
+      { kind, tier },
+    );
+
+  it("Guard: (50 + 3 × tier)% less damage for 2.5 s, at most 80%, on top of Defense", () => {
+    expect(guardReduction(0)).toBe(0.5);
+    expect(guardReduction(10)).toBe(0.8);
+    // DEF 10 alone takes half; with a T0 Guard, a quarter (D-100's example).
+    let s = withAbility("guard", 0, [{ x: 100, y: 0 }], { defense: 10 });
+    s = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS).state;
+    expect(findPlayer(s, 1)!.buffs.guard).toEqual({
+      remaining: 2.5,
+      bonus: 0.5,
+    });
+    const hit = world(s, 60).events.find((e) => e.type === "playerHit");
+    expect(hit).toMatchObject({ damage: ENEMY_RING_ATTACK.damage * 0.25 });
+    expect(findPlayer(world(s, 60 * 3).state, 1)!.buffs.guard).toBeUndefined();
+  });
+
+  it("Vanish: enemies stop seeing you; flying bullets still hit for half; lasts 2 s + 0.2 s per tier", () => {
+    expect(vanishSeconds(5)).toBe(3);
+    // A ring dummy 100 px away only attacks while it sees a player in range.
+    let s = withAbility("vanish", 0, [{ x: 100, y: 0 }]);
+    s = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS).state;
+    expect(findPlayer(s, 1)!.buffs.vanish).toEqual({
+      remaining: 2,
+      bonus: 0.5,
+    });
+    const hidden = world(s, 90).events; // 1.5 s, still vanished
+    expect(hidden.filter((e) => e.type === "enemyAttack")).toEqual([]);
+    // Bullets already flying when you vanish still land, halved.
+    let flying = withAbility("vanish", 0, [{ x: 100, y: 0 }]);
+    flying = world(flying, 1).state; // the dummy fires its first ring
+    flying = applyPlayerInput(flying, 1, SPACE, [], TICK_SECONDS).state;
+    const late = world(flying, 60).events.find((e) => e.type === "playerHit");
+    expect(late).toMatchObject({ damage: ENEMY_RING_ATTACK.damage * 0.5 });
+  });
+
+  it("Vanish ends the moment you shoot", () => {
+    let s = withAbility("vanish");
+    s = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS).state;
+    expect(findPlayer(s, 1)!.buffs.vanish).toBeDefined();
+    s = applyPlayerInput(s, 1, FIRE, [], TICK_SECONDS).state;
+    expect(findPlayer(s, 1)!.buffs.vanish).toBeUndefined();
+  });
+
+  it("automatic shots hold fire while vanished; a click still ends it (D-101)", () => {
+    const AUTO: PlayerInput = {
+      move: { x: 0, y: 0 },
+      fire: { trigger: true, aim: { x: 1, y: 0 }, auto: true },
+    };
+    let s = withAbility("vanish");
+    s = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS).state;
+    for (let i = 0; i < 60; i++) {
+      const r = applyPlayerInput(s, 1, AUTO, [], TICK_SECONDS);
+      expect(r.events.filter((e) => e.type === "shot")).toEqual([]);
+      s = r.state;
+    }
+    expect(findPlayer(s, 1)!.buffs.vanish).toBeDefined();
+    s = applyPlayerInput(s, 1, FIRE, [], TICK_SECONDS).state;
+    expect(findPlayer(s, 1)!.buffs.vanish).toBeUndefined();
+    // Not vanished: automatic shots fire as usual.
+    const after = applyPlayerInput(
+      world(s, 60).state,
+      1,
+      AUTO,
+      [],
+      TICK_SECONDS,
+    );
+    expect(findPlayer(after.state, 1)!.fireCooldown).toBeGreaterThan(0);
+  });
+
+  it("Healing: you and allies within 160 px get (10 + 3 × tier) + 10% max HP, never above max", () => {
+    let s = withAbility("healing", 2, [], { hp: 60 });
+    s = addPlayer(s, 2, { x: 150, y: 0 }, { ...SERF_BASE, hp: 100 });
+    s = addPlayer(s, 3, { x: 300, y: 0 });
+    s = {
+      ...s,
+      players: s.players.map((p) => ({ ...p, hp: p.id === 2 ? 95 : 10 })),
+    };
+    const r = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS);
+    const hp = (id: number) => findPlayer(r.state, id)!.hp;
+    expect(hp(1)).toBeCloseTo(10 + 16 + 6, 9); // 10 + 3×2 + 10% of 60
+    expect(hp(2)).toBe(100); // 95 + 26 → capped at max
+    expect(hp(3)).toBe(10); // 300 px away
+    expect(
+      r.events
+        .filter((e) => e.type === "blast")
+        .map((e) => (e as { kind: string }).kind),
+    ).toEqual(["heal", "healed", "healed"]);
   });
 });

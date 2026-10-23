@@ -248,6 +248,15 @@ export class NetSync {
     };
   }
 
+  /** Players currently vanished (drawn faded, D-100). */
+  vanishedPlayers(): ReadonlySet<number> {
+    const ids = new Set<number>();
+    for (const p of this.latest?.snapshot.players ?? []) {
+      if (p.buffs.includes("vanish")) ids.add(p.id);
+    }
+    return ids;
+  }
+
   /** Buffed players' glows at the positions they are drawn at (D-098). */
   private auraViews(snapshot: SnapshotMessage, nowMs: number): AuraView[] {
     const remotes = this.remotePositions(nowMs);

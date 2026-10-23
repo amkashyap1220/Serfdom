@@ -15,7 +15,7 @@ import {
  * Numbers are D-096 and D-097 (approved, tunable). Built so far: Wizard
  * Arcane Blast (10a); Ranger Volley, Sorcerer Chain Lightning, Druid
  * Nature's Reach (10b); Barbarian Battle Cry, Bard Inspiration, Warlock
- * Curse (10c); Fighter, Rogue, Cleric arrive in 10d.
+ * Curse (10c); Fighter Guard, Rogue Vanish, Cleric Healing (10d): all ten.
  */
 export const ARCANE_BLAST = {
   mpCost: 15,
@@ -133,6 +133,35 @@ export function curseBonus(tier: number): number {
   return (25 + 5 * tier) / 100;
 }
 
+/** Fighter (D-100): brace behind the Shield. */
+export const GUARD = { mpCost: 12, cooldownSeconds: 6, seconds: 2.5 } as const;
+
+/** Share of each hit Guard blocks: (50 + 3 × tier)%, at most 80% (D-100). */
+export function guardReduction(tier: number): number {
+  return Math.min(0.8, (50 + 3 * tier) / 100);
+}
+
+/** Rogue (D-100): out of sight; flying bullets still hit, softer. */
+export const VANISH = {
+  mpCost: 15,
+  cooldownSeconds: 8,
+  /** Share of a hit that still lands while vanished. */
+  damageReduction: 0.5,
+} as const;
+
+/** How long Vanish lasts: 2 + 0.2 × tier seconds (D-100). */
+export function vanishSeconds(tier: number): number {
+  return 2 + 0.2 * tier;
+}
+
+/** Cleric (D-100): heal yourself and everyone near. */
+export const HEALING = { mpCost: 20, cooldownSeconds: 8, radius: 160 } as const;
+
+/** HP Healing restores: 10 + 3 × tier, plus 10% of the target's max HP. */
+export function healingAmount(tier: number, maxHp: number): number {
+  return 10 + 3 * tier + 0.1 * maxHp;
+}
+
 export type AbilityKind =
   | "arcaneBlast"
   | "volley"
@@ -140,7 +169,10 @@ export type AbilityKind =
   | "naturesReach"
   | "battleCry"
   | "inspiration"
-  | "curse";
+  | "curse"
+  | "guard"
+  | "vanish"
+  | "healing";
 
 /**
  * What every ability shares: its cost, cooldown, and reach (for aiming).
@@ -202,6 +234,29 @@ export const ABILITIES: Record<
     cooldownSeconds: CURSE.cooldownSeconds,
     range: CURSE.range,
   },
+  guard: {
+    name: "Guard",
+    mpCost: GUARD.mpCost,
+    cooldownSeconds: GUARD.cooldownSeconds,
+    range: 0,
+    selfCast: true,
+  },
+  vanish: {
+    name: "Vanish",
+    mpCost: VANISH.mpCost,
+    cooldownSeconds: VANISH.cooldownSeconds,
+    range: 0,
+    selfCast: true,
+    // An escape, so only Space casts it, never Full auto (D-102).
+    movement: true,
+  },
+  healing: {
+    name: "Healing",
+    mpCost: HEALING.mpCost,
+    cooldownSeconds: HEALING.cooldownSeconds,
+    range: 0,
+    selfCast: true,
+  },
 };
 
 /** The ability a player can cast this run, from their worn ability item. */
@@ -220,8 +275,8 @@ export function abilityForItem(
   return kind ? { kind, tier } : null;
 }
 
-/** Which ability each ability item casts (the rest arrive in 10b–10d). */
-const ITEM_ABILITY: Partial<Record<AbilityItemType, AbilityKind>> = {
+/** Which ability each ability item casts (every class has one, D-072). */
+const ITEM_ABILITY: Record<AbilityItemType, AbilityKind> = {
   spellbook: "arcaneBlast",
   quiver: "volley",
   scepter: "chainLightning",
@@ -229,6 +284,9 @@ const ITEM_ABILITY: Partial<Record<AbilityItemType, AbilityKind>> = {
   warhorn: "battleCry",
   instrument: "inspiration",
   grimoire: "curse",
+  shield: "guard",
+  cloak: "vanish",
+  tome: "healing",
 };
 
 /** Display name for the HUD. */
@@ -240,6 +298,9 @@ export const ABILITY_NAMES: Record<AbilityKind, string> = {
   battleCry: ABILITIES.battleCry.name,
   inspiration: ABILITIES.inspiration.name,
   curse: ABILITIES.curse.name,
+  guard: ABILITIES.guard.name,
+  vanish: ABILITIES.vanish.name,
+  healing: ABILITIES.healing.name,
 };
 
 /** Limits an aimed offset to the ability's range, keeping its direction. */

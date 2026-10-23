@@ -32,7 +32,7 @@ import { NetSync } from "../net-sync";
 import { PLAYER_SPRITE_SIZE } from "../render-config";
 import { CombatView, makeSquareTexture } from "./CombatView";
 import { MapView } from "./MapView";
-import { RemotePlayersView } from "./RemotePlayersView";
+import { RemotePlayersView, VANISHED_ALPHA } from "./RemotePlayersView";
 
 const PLAYER_TEXTURE = "player-placeholder";
 const PLAYER_HIT_TEXTURE = "player-placeholder-hit";
@@ -316,6 +316,7 @@ export class WorldScene extends Phaser.Scene {
       from,
       targets,
       PLAYER_WEAPON.range,
+      this.net.selfState?.buffs.includes("vanish") ?? false,
     );
   }
 
@@ -364,6 +365,9 @@ export class WorldScene extends Phaser.Scene {
       .setPosition(x, y)
       .setRotation(-this.viewRotation)
       .setVisible(alive)
+      .setAlpha(
+        this.net.selfState?.buffs.includes("vanish") ? VANISHED_ALPHA : 1,
+      )
       .setTexture(
         nowMs < this.playerFlashUntil ? PLAYER_HIT_TEXTURE : PLAYER_TEXTURE,
       );
@@ -378,6 +382,7 @@ export class WorldScene extends Phaser.Scene {
     this.remotes.sync(
       this.net.remotePositions(performance.now()),
       this.viewRotation,
+      this.net.vanishedPlayers(),
     );
   }
 

@@ -159,6 +159,19 @@ describe("input messages", () => {
     });
   });
 
+  it("accepts an optional boolean fire.auto (D-101), nothing else", () => {
+    const auto = { trigger: true, aim: { x: 1, y: 0 }, auto: true };
+    expect(parseClientMessage(input(1, { x: 0, y: 0 }, auto))).toMatchObject({
+      ok: true,
+      message: { fire: auto },
+    });
+    expect(
+      parseClientMessage(
+        input(1, { x: 0, y: 0 }, { trigger: true, aim: null, auto: "yes" }),
+      ),
+    ).toEqual({ ok: false, error: "input: fire.auto must be a boolean" });
+  });
+
   it("takes an ability target (Space held) as null or a nearby offset (v17)", () => {
     const ok = (ability: unknown) =>
       parseClientMessage(input(1, { x: 0, y: 0 }, NO_FIRE, ability)).ok;
@@ -244,7 +257,7 @@ describe("input messages", () => {
     [
       "a claimed hit",
       input(1, { x: 0, y: 0 }, { trigger: true, aim: null, hit: 7 }),
-      "input: fire must be {trigger, aim}",
+      "input: fire must be {trigger, aim} (auto optional)",
     ],
   ])("rejects %s", (_label, raw, error) => {
     expect(parseClientMessage(raw)).toEqual({ ok: false, error });
