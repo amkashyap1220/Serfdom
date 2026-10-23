@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLASS_CHOICE_LEVEL,
   clearExp,
   expToNextLevel,
   levelForExp,
@@ -68,8 +69,9 @@ describe("EXP falloff above a dungeon's level range (D-071)", () => {
   });
 
   it("matches the pace: one level per clear at most, the Warrens alone take ~75 clears to 20", () => {
-    expect(clearsToReach(2)).toBe(1); // class choice after the first clear
+    expect(clearsToReach(2)).toBe(1); // a level-up on the very first clear
     expect(clearsToReach(3)).toBe(3); // the second clear does not level
+    expect(clearsToReach(CLASS_CHOICE_LEVEL)).toBe(5); // class choice (D-073)
     expect(clearsToReach(9)).toBe(13);
     expect(clearsToReach(20)).toBe(73);
   });

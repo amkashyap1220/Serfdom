@@ -1,3 +1,4 @@
+import type { ClassId } from "./classes.ts";
 import type { RunResult, RunStats } from "./run-stats.ts";
 
 /** Living serfs an account may have at once (D-061). */
@@ -77,6 +78,8 @@ export interface SerfSummary {
   level: number;
   /** Lifetime EXP (keeps counting past the level cap; the leaderboard score). */
   exp: number;
+  /** Permanent class, picked at level 5 (D-073); null while still a plain Serf. */
+  classId: ClassId | null;
   alive: boolean;
   life: LifeStats;
   /** Where and to what it died (dead serfs only). */

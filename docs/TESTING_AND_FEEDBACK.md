@@ -78,6 +78,22 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Class choice checklist (Phase 8b)
+
+Restart `npm run dev` (protocol v11); the server prints `database migrated: 004_serf_class.sql` once. Reload (Ctrl+Shift+R) and log in. Level 5 takes 5 Goblin Warrens clears from a new serf (490 EXP); a serf you already have at level 5+ asks for its class straight away.
+
+1. Below level 5: Dungeons tab says "Playing as <name> · Serf · Level N"; you can queue as before.
+2. The clear that reaches level 5: the completion screen shows **LEVEL UP! Level 5** and **Level 5: choose your class!**, and the first button is **Choose your class (Enter)** instead of Requeue.
+3. Press Enter (or click it): the Dungeons tab shows 10 class cards (Fighter … Sorcerer, each with its item and ability) instead of the dungeon list. Pressing Enter here does nothing.
+4. Click a class: it is outlined in gold and a **Confirm: <name> becomes a <Class> (permanent)** button appears. Click another class: the outline and the button follow it. Nothing is saved yet.
+5. Click Confirm: the Dungeons tab is back with the dungeon list and "Playing as <name> · <Class> · Level 5". Server terminal: `serf #N became a <class>`.
+6. Queue and clear again: works as before; the serf stays that class.
+7. Serfs tab: "<Class> · Lv N · …". Leaderboard: a class column ("Serf" for serfs without one).
+8. With two serfs: switch to the other serf; it shows its own class (or "Serf").
+9. Restart the server and reload: the class is still there.
+
+Report: pass/fail per step and any exact error text (browser console F12 → Console, and the server terminal).
+
 ### EXP and leaderboard checklist (Phase 8a)
 
 Restart `npm run dev` (protocol v10); the server prints `database migrated: 003_serf_exp.sql` once. Reload (Ctrl+Shift+R) and log in.

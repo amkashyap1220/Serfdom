@@ -76,6 +76,8 @@ game.events.once(Phaser.Core.Events.READY, () => {
     switchLoginMode: () => dispatch({ type: "switchLoginMode" }),
     logout: () => net.connection.sendLogout(),
     createSerf: (name) => net.connection.sendCreateSerf(name),
+    chooseClass: (serfId, classId) =>
+      net.connection.sendChooseClass(serfId, classId),
     selectSerf: (serfId) => {
       saveLastSerf(serfId);
       net.connection.sendSelectSerf(serfId);

@@ -6,6 +6,12 @@ import {
   PASSWORD_MAX,
   PASSWORD_MIN,
   passwordProblem,
+  CLASS_CHOICE_LEVEL,
+  CLASS_IDS,
+  CLASSES,
+  className,
+  needsClass,
+  type ClassId,
   DUNGEON_EXP,
   LISTED_DUNGEONS,
   levelProgress,
@@ -42,6 +48,7 @@ export interface ScreenActions {
   switchLoginMode(): void;
   createSerf(name: string): void;
   selectSerf(serfId: number): void;
+  chooseClass(serfId: number, classId: ClassId): void;
   logout(): void;
 }
 
@@ -91,6 +98,8 @@ export class ScreenView {
   private serfError: string | null = null;
   private leaderboard: LeaderboardEntry[] | null = null;
   private typedSerfName = "";
+  /** Class highlighted in the picker, waiting for Confirm (the choice is permanent). */
+  private pickedClass: ClassId | null = null;
 
   constructor(root: HTMLElement, actions: ScreenActions) {
     this.root = root;
@@ -108,6 +117,7 @@ export class ScreenView {
     this.serfs = list;
     this.serfError = null;
     this.typedSerfName = "";
+    this.pickedClass = null;
     this.shown = null;
   }
 
@@ -286,10 +296,15 @@ export class ScreenView {
           ? el(
               "p",
               "",
-              `Playing as ${playing.name} · Level ${playing.level} · ${playing.exp} EXP`,
+              `Playing as ${playing.name} · ${className(playing.classId)} · Level ${playing.level} · ${playing.exp} EXP`,
             )
           : el("p", "notice", "Choose or create a serf first (Serfs tab)."),
       );
+      if (playing && needsClass(playing)) {
+        this.buildClassPicker(body, playing);
+        this.finishMenu(nav, body, notice);
+        return;
+      }
       for (const d of LISTED_DUNGEONS) {
         const card = el("div", "dungeon-card");
         card.append(
@@ -309,6 +324,14 @@ export class ScreenView {
         ),
       );
     }
+    this.finishMenu(nav, body, notice);
+  }
+
+  private finishMenu(
+    nav: HTMLElement,
+    body: HTMLElement,
+    notice: string | null,
+  ): void {
     const account = el("div", "account-bar");
     account.append(
       el("span", "", this.email ? `Logged in as ${this.email}` : ""),
@@ -317,6 +340,52 @@ export class ScreenView {
     this.root.append(account, el("h1", "title", "SERFDOM"), nav);
     if (notice) this.root.append(el("p", "notice", notice));
     this.root.append(body);
+  }
+
+  /**
+   * Level 5 (D-073): pick one of the 10 classes (D-072), permanently. Two
+   * steps, pick then confirm, so a misclick cannot decide a serf's life.
+   */
+  private buildClassPicker(body: HTMLElement, serf: SerfSummary): void {
+    body.append(
+      el(
+        "h2",
+        "class-title",
+        `${serf.name} has reached level ${CLASS_CHOICE_LEVEL}: choose a class`,
+      ),
+      el(
+        "p",
+        "hint",
+        "Permanent for this serf's life. Abilities arrive in Phase 10.",
+      ),
+    );
+    const grid = el("div", "class-grid");
+    for (const id of CLASS_IDS) {
+      const c = CLASSES[id];
+      const card = button("", () => {
+        this.pickedClass = id;
+        this.shown = null;
+      });
+      card.className =
+        id === this.pickedClass ? "class-card picked" : "class-card";
+      card.append(
+        el("span", "class-name", c.name),
+        el("span", "class-item", `${c.abilityItem} · ${c.ability}`),
+        el("span", "class-concept", c.concept),
+      );
+      grid.append(card);
+    }
+    body.append(grid);
+    const picked = this.pickedClass;
+    if (picked) {
+      body.append(
+        button(
+          `Confirm: ${serf.name} becomes a ${CLASSES[picked].name} (permanent)`,
+          () => this.actions.chooseClass(serf.id, picked),
+        ),
+      );
+    }
+    if (this.serfError) body.append(el("p", "error", this.serfError));
   }
 
   /**
@@ -348,6 +417,7 @@ export class ScreenView {
       el("h2", "", "A life in the Warrens"),
       life
         ? statList([
+            ["Class", className(serf?.classId ?? null)],
             ["Level reached", String(serf?.level ?? 1)],
             ["Lifetime EXP", String(serf?.exp ?? 0)],
             ["Dungeons entered", String(life.runs)],
@@ -389,7 +459,7 @@ export class ScreenView {
         el(
           "span",
           "hint",
-          `Lv ${s.level} · ${s.exp} EXP · ${s.life.clears}/${s.life.runs} clears`,
+          `${className(s.classId)} · Lv ${s.level} · ${s.exp} EXP · ${s.life.clears}/${s.life.runs} clears`,
         ),
         chosen
           ? el("span", "serf-chosen", "Playing")
@@ -435,6 +505,7 @@ export class ScreenView {
       row.append(
         el("span", "lb-rank", `#${e.rank}`),
         el("span", "lb-name", e.alive ? e.name : `† ${e.name}`),
+        el("span", "", className(e.classId)),
         el("span", "", `Lv ${e.level}`),
         el("span", "lb-exp", `${e.exp} EXP`),
       );
@@ -497,10 +568,15 @@ export class ScreenView {
       }
     }
     const actions = el("div", "actions");
+    const mustChoose = screen.serf !== null && needsClass(screen.serf);
     actions.append(
-      button(`Requeue ${info.name} (Enter)`, () =>
-        this.actions.queue(screen.dungeon),
-      ),
+      mustChoose
+        ? button("Choose your class (Enter)", () =>
+            this.actions.dismissResults(),
+          )
+        : button(`Requeue ${info.name} (Enter)`, () =>
+            this.actions.queue(screen.dungeon),
+          ),
       button("Menu (Esc)", () => this.actions.dismissResults()),
     );
     const shots = s.shotsFired;
@@ -539,10 +615,16 @@ export class ScreenView {
     if (e.key === "Enter") {
       if (screen.kind === "menu" && screen.tab === "dungeons") {
         const first = LISTED_DUNGEONS[0];
-        if (!this.playing) this.actions.openTab("serfs");
+        const playing = this.playing;
+        if (!playing) this.actions.openTab("serfs");
+        else if (needsClass(playing))
+          return; // pick a class with the mouse
         else if (first) this.actions.queue(first.id);
       } else if (screen.kind === "results" && screen.result === "completed") {
-        this.actions.queue(screen.dungeon);
+        // At level 5 without a class, Enter goes to the class picker instead.
+        if (screen.serf && needsClass(screen.serf))
+          this.actions.dismissResults();
+        else this.actions.queue(screen.dungeon);
       } else if (
         screen.kind === "results" &&
         performance.now() - this.shownAtMs >= DEATH_RETURN_DELAY_MS
@@ -724,9 +806,16 @@ function expGain(
   if (leveled) {
     const up = el("p", "level-up", `LEVEL UP! Level ${after.level}`);
     box.append(up);
-    if (before.level < 2 && after.level >= 2) {
+    if (
+      before.level < CLASS_CHOICE_LEVEL &&
+      after.level >= CLASS_CHOICE_LEVEL
+    ) {
       box.append(
-        el("p", "hint", "Class choice unlocks at level 2: coming in Phase 8b."),
+        el(
+          "p",
+          "level-up-note",
+          `Level ${CLASS_CHOICE_LEVEL}: choose your class!`,
+        ),
       );
     }
   }

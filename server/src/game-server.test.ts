@@ -1052,19 +1052,19 @@ describe("serfs (7b)", () => {
   });
 });
 
-describe("EXP and the leaderboard (8a)", () => {
-  /** Plays one training run to completion (the dummy dies to one shot). */
-  async function clearOnce(c: TestClient, id: number, firstSeq: number) {
-    c.send(queue);
-    await until(() => server.isQueued(id));
-    server.tick();
-    await nextOfType(c, "runStarted");
-    placePlayer(id, { x: 1200, y: 1100 });
-    setDummyHp(id, 25);
-    await drive(c, id, firstSeq, 30, { x: 1, y: 0 });
-    return nextOfType(c, "runEnded");
-  }
+/** Plays one training run to completion (the dummy dies to one shot). */
+async function clearOnce(c: TestClient, id: number, firstSeq: number) {
+  c.send(queue);
+  await until(() => server.isQueued(id));
+  server.tick();
+  await nextOfType(c, "runStarted");
+  placePlayer(id, { x: 1200, y: 1100 });
+  setDummyHp(id, 25);
+  await drive(c, id, firstSeq, 30, { x: 1, y: 0 });
+  return nextOfType(c, "runEnded");
+}
 
+describe("EXP and the leaderboard (8a)", () => {
   it("completion gives 100 EXP and level 2; the next clear adds 100 more", async () => {
     const { client } = await joined();
     const first = await clearOnce(client, 1, 0);
@@ -1102,8 +1102,58 @@ describe("EXP and the leaderboard (8a)", () => {
       name: expect.any(String),
       level: 2,
       exp: 100,
+      classId: null,
       alive: true,
     });
     expect(JSON.stringify(board)).not.toContain("@");
+  });
+});
+
+describe("class choice at level 5 (8b, D-073)", () => {
+  const choose = (serfId: number, classId: string) =>
+    // Raw JSON: one test sends a class the type system would not allow.
+    JSON.stringify({ type: "chooseClass", serfId, classId });
+
+  it("a level-5 serf must choose before queueing; the class is then permanent", async () => {
+    const { client } = await joined();
+    const serfId = (await clearOnce(client, 1, 0)).serf!.id;
+    client.send(choose(serfId, "fighter"));
+    expect((await nextOfType(client, "serfError")).reason).toMatch(
+      /picks a class at level 5.$/,
+    );
+    let last = await clearOnce(client, 1, 0);
+    for (let i = 0; i < 3; i++) last = await clearOnce(client, 1, 0);
+    expect(last.serf).toMatchObject({ level: 5, classId: null });
+
+    client.send(queue);
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "choose a class first",
+    );
+    expect(server.isQueued(1)).toBe(false);
+
+    client.send(choose(serfId, "fighter"));
+    let list = await nextOfType(client, "serfList");
+    while (list.serfs[0]?.classId !== "fighter") {
+      list = await nextOfType(client, "serfList");
+    }
+    expect(list.selectedId).toBe(serfId);
+
+    client.send(choose(serfId, "wizard"));
+    expect((await nextOfType(client, "serfError")).reason).toMatch(
+      /already a Fighter; a class is permanent.$/,
+    );
+    const next = await clearOnce(client, 1, 0);
+    expect(next.serf).toMatchObject({ classId: "fighter", level: 5 });
+  });
+
+  it("refuses unknown classes at the parser and other accounts' serfs", async () => {
+    const { client: a } = await joined();
+    const serfId = (await clearOnce(a, 1, 0)).serf!.id;
+    a.send(choose(serfId, "paladin"));
+    expect((await nextOfType(a, "error")).reason).toMatch(/unknown class/);
+
+    const { client: b } = await joined();
+    b.send(choose(serfId, "rogue"));
+    expect((await nextOfType(b, "serfError")).reason).toBe("No such serf.");
   });
 });

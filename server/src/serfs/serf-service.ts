@@ -2,7 +2,11 @@ import {
   normalizeSerfName,
   SERF_SLOTS,
   serfNameProblem,
+  CLASS_CHOICE_LEVEL,
+  className,
   clearExp,
+  totalExpForLevel,
+  type ClassId,
   type DungeonId,
   type LeaderboardEntry,
   type RunResult,
@@ -95,6 +99,42 @@ export class SerfService {
       expGained,
     );
     return serf ? { serf, expGained } : null;
+  }
+
+  /**
+   * Gives one of the account's serfs its permanent class (D-073): it must
+   * be alive, classless, and at least level 5. The reasons are safe to show.
+   */
+  async chooseClass(
+    accountId: number,
+    serfId: number,
+    classId: ClassId,
+  ): Promise<SerfResult> {
+    const serf = await this.repo.find(accountId, serfId);
+    if (!serf) return { ok: false, reason: "No such serf." };
+    if (!serf.alive) return { ok: false, reason: `${serf.name} is dead.` };
+    if (serf.classId !== null) {
+      return {
+        ok: false,
+        reason: `${serf.name} is already a ${className(serf.classId)}; a class is permanent.`,
+      };
+    }
+    if (serf.level < CLASS_CHOICE_LEVEL) {
+      return {
+        ok: false,
+        reason: `${serf.name} picks a class at level ${CLASS_CHOICE_LEVEL}.`,
+      };
+    }
+    // The checks above give good messages; the write re-checks them all at
+    // once, so a concurrent pick or death cannot slip between.
+    const chosen = await this.repo.chooseClass(
+      accountId,
+      serfId,
+      classId,
+      totalExpForLevel(CLASS_CHOICE_LEVEL),
+    );
+    if (!chosen) return { ok: false, reason: "Could not choose a class." };
+    return { ok: true, serf: chosen };
   }
 
   /** The lifetime EXP leaderboard: serf names and scores only. */

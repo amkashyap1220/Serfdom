@@ -1,4 +1,5 @@
 import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
+import { isClassId, type ClassId } from "./classes.ts";
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import { isValidRoll, type PlaceholderReward } from "./reward.ts";
@@ -36,6 +37,8 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v11 (8b): serfs and leaderboard entries carry classId; client
+ *          chooseClass. Queueing requires a class from level 5 (D-073).
  * v10 (8a): serfs carry lifetime EXP; runEnded carries expGained;
  *          client getLeaderboard, server leaderboard.
  * v9 (7b): serfs. Client createSerf / selectSerf; server serfList /
@@ -44,7 +47,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -90,13 +93,16 @@ export type ClientMessage =
   /** Play as this serf (must be one of yours and alive). */
   | { type: "selectSerf"; serfId: number }
   /** The lifetime EXP leaderboard (GDD §12). */
-  | { type: "getLeaderboard" };
+  | { type: "getLeaderboard" }
+  /** Give one of your serfs its permanent class (level 5+, none yet; D-073). */
+  | { type: "chooseClass"; serfId: number; classId: ClassId };
 
 export interface LeaderboardEntry {
   rank: number;
   name: string;
   level: number;
   exp: number;
+  classId: ClassId | null;
   alive: boolean;
 }
 
@@ -284,6 +290,20 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         return fail("getLeaderboard: unexpected fields");
       }
       return { ok: true, message: { type: "getLeaderboard" } };
+    case "chooseClass":
+      if (!hasExactKeys(obj, ["type", "serfId", "classId"])) {
+        return fail("chooseClass: unexpected fields");
+      }
+      if (!isPlayerId(obj.serfId)) return fail("chooseClass: bad serfId");
+      if (!isClassId(obj.classId)) return fail("chooseClass: unknown class");
+      return {
+        ok: true,
+        message: {
+          type: "chooseClass",
+          serfId: obj.serfId,
+          classId: obj.classId,
+        },
+      };
     case "createSerf":
       if (!hasExactKeys(obj, ["type", "name"])) {
         return fail("createSerf: unexpected fields");
@@ -580,10 +600,20 @@ function parseFire(v: unknown): FireInput | string {
 function parseSerfSummary(v: unknown): SerfSummary | undefined {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["id", "name", "level", "exp", "alive", "life", "death"])
+    !hasExactKeys(v, [
+      "id",
+      "name",
+      "level",
+      "exp",
+      "classId",
+      "alive",
+      "life",
+      "death",
+    ])
   ) {
     return undefined;
   }
+  if (v.classId !== null && !isClassId(v.classId)) return undefined;
   if (!isPlayerId(v.id) || typeof v.name !== "string") return undefined;
   if (!isPlayerId(v.level) || typeof v.alive !== "boolean") return undefined;
   if (!isNonNegativeInt(v.exp)) return undefined;
@@ -607,6 +637,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
     name: v.name,
     level: v.level,
     exp: v.exp,
+    classId: v.classId,
     alive: v.alive,
     life,
     death,
@@ -616,10 +647,11 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
 function parseLeaderboardEntry(v: unknown): LeaderboardEntry | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["rank", "name", "level", "exp", "alive"])
+    !hasExactKeys(v, ["rank", "name", "level", "exp", "classId", "alive"])
   ) {
     return null;
   }
+  if (v.classId !== null && !isClassId(v.classId)) return null;
   if (!isPlayerId(v.rank) || typeof v.name !== "string") return null;
   if (!isPlayerId(v.level) || !isNonNegativeInt(v.exp)) return null;
   if (typeof v.alive !== "boolean") return null;
@@ -628,6 +660,7 @@ function parseLeaderboardEntry(v: unknown): LeaderboardEntry | null {
     name: v.name,
     level: v.level,
     exp: v.exp,
+    classId: v.classId,
     alive: v.alive,
   };
 }

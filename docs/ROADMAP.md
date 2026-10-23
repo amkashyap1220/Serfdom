@@ -189,11 +189,11 @@ Do not store passwords in plaintext or put secrets in source control.
 
 ## Phase 8 — Progression and permadeath
 
-**Goal:** Implement level 1 Serf, class choice at level 2, level cap 20, lifetime EXP, and approved death rules.
+**Goal:** Implement the classless Serf (levels 1–4), permanent class choice at level 5 (D-073), level cap 20, lifetime EXP, and approved death rules.
 
 Tasks:
 
-- Reconcile the final 13-class roster and class definitions.
+- Class roster: 10 classes (D-072).
 - Implement progression formulas only after approval.
 - Implement death, equipment loss, account persistence, and any resurrection exception according to confirmed rules.
 - Preserve dead characters' final lifetime EXP on the single lifetime EXP leaderboard.
@@ -202,8 +202,8 @@ Tasks:
 
 Acceptance:
 
-- Level 1 is Serf only.
-- Class selection occurs at level 2.
+- Levels 1–4 are a classless Serf.
+- Class selection occurs at level 5, is permanent, and is required before the next dungeon.
 - Level 20 is the cap; no further levels or stat gains occur.
 - Lifetime EXP can continue accumulating after cap.
 - Death and rewards match the confirmed rules.
@@ -236,7 +236,7 @@ Acceptance:
 
 Tasks:
 
-- Resolve all 13 class names and design concepts.
+- Class names and concepts: the 10 classes of D-072 (GDD §4).
 - Define class ability items and Artifacts without assuming the older ten-class draft is final.
 - Add one class at a time behind tests.
 - Keep ability definitions/configuration separate from rendering.

@@ -10,6 +10,9 @@ import type { DungeonId } from "./dungeons.ts";
  */
 export const MAX_LEVEL = 20;
 
+/** A serf picks its permanent class on reaching this level (D-073). */
+export const CLASS_CHOICE_LEVEL = 5;
+
 export interface DungeonExp {
   /** EXP for a clear by a serf at or below `topLevel`. */
   base: number;

@@ -3,6 +3,7 @@ import {
   encodeMessage,
   MAX_FRAME_SECONDS,
   MAX_MESSAGE_BYTES,
+  needsClass,
   parseClientMessage,
   PROTOCOL_VERSION,
   TICK_RATE,
@@ -66,8 +67,14 @@ interface Session {
   authBusy: boolean;
   /** The living serf this connection plays as, or null (D-062). */
   serfId: number | null;
-  /** A createSerf/selectSerf is waiting for the database. */
+  /** A createSerf/selectSerf/chooseClass is waiting for the database. */
   serfBusy: boolean;
+  /**
+   * The chosen serf has reached level 5 without a class and may not queue
+   * (D-073). Updated whenever the server learns the serf's state: on
+   * select/create, after each recorded run, and on chooseClass.
+   */
+  serfNeedsClass: boolean;
 }
 
 /** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
@@ -271,6 +278,7 @@ export class GameServer {
       authBusy: false,
       serfId: null,
       serfBusy: false,
+      serfNeedsClass: false,
     };
     this.sessions.set(socket, session);
 
@@ -339,6 +347,10 @@ export class GameServer {
           this.reject(socket, session, "choose a serf first");
           return;
         }
+        if (session.serfNeedsClass) {
+          this.reject(socket, session, "choose a class first");
+          return;
+        }
         this.onQueue(socket, session, session.id, message.dungeon);
         return;
       case "register":
@@ -348,6 +360,7 @@ export class GameServer {
         return;
       case "createSerf":
       case "selectSerf":
+      case "chooseClass":
         this.onSerf(socket, session, message);
         return;
       case "getLeaderboard":
@@ -632,6 +645,12 @@ export class GameServer {
       .then((saved) => {
         const serf = saved?.serf ?? null;
         if (serf && died) this.log.info(`serf #${serf.id} died for good`);
+        // Before runEnded goes out, so a quick requeue sees the new level.
+        const now = this.socketOf.get(id);
+        const nowSession = now ? this.sessions.get(now) : undefined;
+        if (serf && nowSession && nowSession.serfId === serf.id) {
+          nowSession.serfNeedsClass = needsClass(serf);
+        }
         if (!notify) return;
         this.sendEncoded(
           id,
@@ -670,7 +689,10 @@ export class GameServer {
   private onSerf(
     socket: WebSocket,
     session: Session,
-    message: Extract<ClientMessage, { type: "createSerf" | "selectSerf" }>,
+    message: Extract<
+      ClientMessage,
+      { type: "createSerf" | "selectSerf" | "chooseClass" }
+    >,
   ): void {
     const accountId = session.accountId;
     if (session.id === null || accountId === null) {
@@ -689,7 +711,9 @@ export class GameServer {
     const attempt =
       message.type === "createSerf"
         ? this.serfs.create(accountId, message.name)
-        : this.serfs.choose(accountId, message.serfId);
+        : message.type === "selectSerf"
+          ? this.serfs.choose(accountId, message.serfId)
+          : this.serfs.chooseClass(accountId, message.serfId, message.classId);
     attempt
       .then((result) => {
         // Logged out (or reconnected) meanwhile: drop the answer.
@@ -700,10 +724,13 @@ export class GameServer {
           this.send(socket, { type: "serfError", reason: result.reason });
           return;
         }
-        // A new serf is played right away.
+        // A new serf, or one just given its class, is played right away.
         session.serfId = result.serf.id;
+        session.serfNeedsClass = needsClass(result.serf);
         this.log.info(
-          `${label(session)} ${message.type === "createSerf" ? "created" : "chose"} serf #${result.serf.id}`,
+          message.type === "chooseClass"
+            ? `${label(session)} serf #${result.serf.id} became a ${message.classId}`
+            : `${label(session)} ${message.type === "createSerf" ? "created" : "chose"} serf #${result.serf.id}`,
         );
         this.sendSerfList(socket);
       })

@@ -1,7 +1,9 @@
 import {
   addRunToLife,
+  isClassId,
   levelForExp,
   newLifeStats,
+  type ClassId,
   type LeaderboardEntry,
   type LifeStats,
   type RunResult,
@@ -53,6 +55,17 @@ export interface SerfRepo {
   ): Promise<SerfSummary | null>;
   /** All serfs, living and dead, by lifetime EXP (ties: older serf first). */
   leaderboard(limit: number): Promise<LeaderboardEntry[]>;
+  /**
+   * Sets a serf's permanent class, only if it is this account's, alive,
+   * classless, and has at least `minExp` lifetime EXP, all checked in the
+   * same write. Null if any of those fails (the class never changes).
+   */
+  chooseClass(
+    accountId: number,
+    serfId: number,
+    classId: ClassId,
+    minExp: number,
+  ): Promise<SerfSummary | null>;
 }
 
 const UNIQUE_VIOLATION = "23505";
@@ -61,6 +74,7 @@ interface SerfRow {
   id: string;
   name: string;
   exp: string;
+  class_id: string | null;
   died_at: Date | null;
   death_dungeon: string | null;
   killed_by: string | null;
@@ -82,6 +96,7 @@ function fromRow(r: SerfRow): SerfSummary {
     name: r.name,
     level: levelForExp(exp),
     exp,
+    classId: classFromRow(r.class_id),
     alive,
     life: {
       runs: r.runs,
@@ -97,6 +112,13 @@ function fromRow(r: SerfRow): SerfSummary {
       ? null
       : { dungeon: r.death_dungeon ?? "", killedBy: r.killed_by },
   };
+}
+
+/** A stored class the code no longer knows is a bug, not a Serf. */
+function classFromRow(v: string | null): ClassId | null {
+  if (v === null) return null;
+  if (!isClassId(v)) throw new Error(`unknown class in database: ${v}`);
+  return v;
 }
 
 export class PgSerfRepo implements SerfRepo {
@@ -215,13 +237,39 @@ export class PgSerfRepo implements SerfRepo {
     const r = await this.pool.query<{
       name: string;
       exp: string;
+      class_id: string | null;
       died_at: Date | null;
-    }>("select name, exp, died_at from serfs order by exp desc, id limit $1", [
-      limit,
-    ]);
-    return r.rows.map((row, i) =>
-      toEntry(i, row.name, Number(row.exp), row.died_at === null),
+    }>(
+      "select name, exp, class_id, died_at from serfs order by exp desc, id limit $1",
+      [limit],
     );
+    return r.rows.map((row, i) =>
+      toEntry(
+        i,
+        row.name,
+        Number(row.exp),
+        classFromRow(row.class_id),
+        row.died_at === null,
+      ),
+    );
+  }
+
+  async chooseClass(
+    accountId: number,
+    serfId: number,
+    classId: ClassId,
+    minExp: number,
+  ): Promise<SerfSummary | null> {
+    // One statement, so two picks at once cannot both succeed.
+    const r = await this.pool.query<SerfRow>(
+      `update serfs set class_id = $3
+       where id = $1 and account_id = $2 and died_at is null
+         and class_id is null and exp >= $4
+       returning *`,
+      [serfId, accountId, classId, minExp],
+    );
+    const row = r.rows[0];
+    return row ? fromRow(row) : null;
   }
 }
 
@@ -229,9 +277,17 @@ function toEntry(
   index: number,
   name: string,
   exp: number,
+  classId: ClassId | null,
   alive: boolean,
 ): LeaderboardEntry {
-  return { rank: index + 1, name, level: levelForExp(exp), exp, alive };
+  return {
+    rank: index + 1,
+    name,
+    level: levelForExp(exp),
+    exp,
+    classId,
+    alive,
+  };
 }
 
 function isPgError(err: unknown): err is { code: string } {
@@ -284,6 +340,7 @@ export class MemorySerfRepo implements SerfRepo {
       name,
       level: 1,
       exp: 0,
+      classId: null,
       alive: true,
       life: newLifeStats(),
       death: null,
@@ -342,7 +399,32 @@ export class MemorySerfRepo implements SerfRepo {
       )
       .slice(0, limit)
       .map((s, i) =>
-        toEntry(i, s.summary.name, s.summary.exp, s.summary.alive),
+        toEntry(
+          i,
+          s.summary.name,
+          s.summary.exp,
+          s.summary.classId,
+          s.summary.alive,
+        ),
       );
+  }
+
+  async chooseClass(
+    accountId: number,
+    serfId: number,
+    classId: ClassId,
+    minExp: number,
+  ): Promise<SerfSummary | null> {
+    const s = this.serfs.find(
+      (x) =>
+        x.accountId === accountId &&
+        x.summary.id === serfId &&
+        x.summary.alive &&
+        x.summary.classId === null &&
+        x.summary.exp >= minExp,
+    );
+    if (!s) return null;
+    s.summary = { ...s.summary, classId };
+    return structuredClone(s.summary);
   }
 }

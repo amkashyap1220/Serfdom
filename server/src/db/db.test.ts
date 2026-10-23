@@ -263,10 +263,43 @@ function serfContract(
         name: `${name}Top`,
         level: 20,
         exp: 1_000_000,
+        classId: null,
         alive: false,
       });
       expect(board.length).toBeLessThanOrEqual(3);
       expect(board.map((e) => e.rank)).toEqual(board.map((_, i) => i + 1));
+    });
+
+    it("sets a class once, only from enough EXP, only while alive (D-073)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Maud`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      expect(serf.classId).toBeNull();
+      expect(await repo.chooseClass(a, serf.id, "cleric", 500)).toBeNull();
+      await repo.recordRun(a, serf.id, "completed", run, null, 500);
+      const chosen = await repo.chooseClass(a, serf.id, "cleric", 500);
+      expect(chosen).toMatchObject({ classId: "cleric", exp: 500 });
+      // Permanent: a second pick changes nothing.
+      expect(await repo.chooseClass(a, serf.id, "rogue", 500)).toBeNull();
+      expect((await repo.find(a, serf.id))?.classId).toBe("cleric");
+      expect(
+        (await repo.leaderboard(100)).find((e) => e.name === `${name}Maud`),
+      ).toMatchObject({ classId: "cleric" });
+
+      const other = await account();
+      const late = await repo.create(a, `${name}Late`, 2);
+      if (typeof late === "string") throw new Error(late);
+      await repo.recordRun(
+        a,
+        late.id,
+        "died",
+        run,
+        { dungeon: "x", killedBy: null },
+        500,
+      );
+      expect(await repo.chooseClass(a, late.id, "bard", 500)).toBeNull();
+      expect(await repo.chooseClass(other, serf.id, "bard", 0)).toBeNull();
     });
 
     it("another account's serf does not exist for you", async () => {

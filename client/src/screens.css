@@ -585,7 +585,7 @@
 
 .lb-row {
   display: grid;
-  grid-template-columns: 48px 1fr 60px 110px;
+  grid-template-columns: 48px 1fr 90px 60px 110px;
   gap: 8px;
   padding: 3px 8px;
   background: #0e1014;
@@ -603,4 +603,46 @@
 
 .lb-exp {
   text-align: right;
+}
+
+/* Class picker (Phase 8b). */
+.class-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  width: 900px;
+}
+
+.class-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 92px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.class-card.picked {
+  outline: 2px solid #f0c419;
+  background: #2a2614;
+}
+
+.class-name {
+  color: #f0c419;
+  font-size: 15px;
+}
+
+.class-item {
+  color: #9fb4d0;
+  font-size: 11px;
+}
+
+.class-concept {
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.level-up-note {
+  color: #f0c419;
 }

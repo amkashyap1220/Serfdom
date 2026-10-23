@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CLASS_IDS } from "./classes.ts";
 import {
   encodeMessage,
   MAX_MESSAGE_BYTES,
@@ -273,6 +274,7 @@ describe("menu, queue, and run messages (v4)", () => {
           name: "Aldric Mudfoot",
           level: 1,
           exp: 400,
+          classId: "rogue",
           alive: false,
           life: { ...stats, runs: 4, clears: 2 },
           death: { dungeon: "goblin-warrens", killedBy: "brute" },
@@ -516,6 +518,7 @@ describe("serf messages (v9)", () => {
       name: "Edda",
       level: 1,
       exp: 0,
+      classId: null,
       alive: true,
       life,
       death: null,
@@ -527,12 +530,57 @@ describe("serf messages (v9)", () => {
     expect(list([{ ...serf, gold: 5 }])).toBe(false);
     expect(list([{ ...serf, death: { dungeon: "x" } }])).toBe(false);
     expect(list([serf], "1")).toBe(false);
+    expect(list([{ ...serf, classId: "wizard" }])).toBe(true);
+    expect(list([{ ...serf, classId: "paladin" }])).toBe(false);
+    // A v10 serf (no classId field) is refused, not read as classless.
+    const v10 = Object.fromEntries(
+      Object.entries(serf).filter(([key]) => key !== "classId"),
+    );
+    expect(list([v10])).toBe(false);
   });
 });
 
-describe("leaderboard messages (v10)", () => {
+describe("class choice (v11, D-073)", () => {
+  const client = (m: unknown) => parseClientMessage(JSON.stringify(m));
+
+  it("accepts chooseClass only with a known class and a valid serf id", () => {
+    expect(
+      client({ type: "chooseClass", serfId: 3, classId: "druid" }),
+    ).toEqual({
+      ok: true,
+      message: { type: "chooseClass", serfId: 3, classId: "druid" },
+    });
+    for (const classId of CLASS_IDS) {
+      expect(client({ type: "chooseClass", serfId: 3, classId }).ok).toBe(true);
+    }
+    expect(
+      client({ type: "chooseClass", serfId: 3, classId: "Druid" }).ok,
+    ).toBe(false);
+    expect(client({ type: "chooseClass", serfId: 3, classId: "serf" }).ok).toBe(
+      false,
+    );
+    expect(client({ type: "chooseClass", serfId: 3, classId: null }).ok).toBe(
+      false,
+    );
+    expect(
+      client({ type: "chooseClass", serfId: 0, classId: "druid" }).ok,
+    ).toBe(false);
+    expect(
+      client({ type: "chooseClass", serfId: 3, classId: "druid", level: 5 }).ok,
+    ).toBe(false);
+  });
+});
+
+describe("leaderboard messages (v10, class in v11)", () => {
   it("round-trips a leaderboard and rejects account data in it", () => {
-    const entry = { rank: 1, name: "Edda", level: 9, exp: 1500, alive: false };
+    const entry = {
+      rank: 1,
+      name: "Edda",
+      level: 9,
+      exp: 1500,
+      classId: "bard",
+      alive: false,
+    };
     expect(
       parseServerMessage(
         JSON.stringify({ type: "leaderboard", entries: [entry] }),

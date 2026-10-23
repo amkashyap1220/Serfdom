@@ -187,6 +187,16 @@ export {
   type SerfSummary,
 } from "./serf-rules.ts";
 export {
+  CLASS_IDS,
+  CLASSES,
+  className,
+  isClassId,
+  needsClass,
+  type ClassId,
+  type ClassInfo,
+} from "./classes.ts";
+export {
+  CLASS_CHOICE_LEVEL,
   clearExp,
   DUNGEON_EXP,
   EXP_FALLOFF_PER_LEVEL,

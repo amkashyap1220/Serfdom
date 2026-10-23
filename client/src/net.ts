@@ -2,6 +2,7 @@ import {
   encodeMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
+  type ClassId,
   type ClientMessage,
   type DungeonId,
   type PlayerInput,
@@ -136,6 +137,10 @@ export class Connection {
 
   sendGetLeaderboard(): void {
     this.send({ type: "getLeaderboard" });
+  }
+
+  sendChooseClass(serfId: number, classId: ClassId): void {
+    this.send({ type: "chooseClass", serfId, classId });
   }
 
   sendSelectSerf(serfId: number): void {

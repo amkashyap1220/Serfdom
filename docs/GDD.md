@@ -97,8 +97,8 @@ The exact hexadecimal RGB palette entries and permitted color variants should be
 
 ### Confirmed
 
-- A new character is a **Serf at level 1 only**.
-- At **level 2**, the player chooses one of **13 launch classes**.
+- A new character is a classless **Serf** (levels 1–4).
+- At **level 5**, the player chooses one of **10 launch classes** (D-072, D-073), permanently for that serf's life; it must choose before entering another dungeon. A new serf starts classless again: Fighter, Barbarian, Rogue, Ranger, Wizard, Cleric, Bard, Warlock, Druid, Sorcerer.
 - Maximum character level is **20**.
 - There are no further levels or stat increases after level 20.
 - Lifetime EXP continues to be tracked after the level cap and feeds a single lifetime EXP leaderboard.
@@ -109,15 +109,14 @@ The exact hexadecimal RGB palette entries and permitted color variants should be
 
 ### Design details still to resolve
 
-- The exact 13 launch class names and final class roster are not fully present in this context package. Do not assume the earlier ten-class draft is the final roster.
 - XP curve, exact per-level requirements, and whether any other sources of XP exist need explicit approval.
 - Exact class stat caps and level-up stat growth need explicit approval.
 
 ## 4. Classes and abilities
 
-The current requirement is 13 launch classes, with class selection at level 2. The prior design draft had ten classes and class-specific active ability items. That draft is useful as design material, but it must not be silently treated as the final 13-class roster.
+The launch roster is the **10 classes** below, chosen permanently at level 5 (D-072, D-073, CONFIRMED). Each has a class-specific active ability item. The ability items and core concepts are confirmed as the design direction; exact numbers, costs, cooldowns, and mechanics are not.
 
-### Prior class/ability concepts — provisional pending roster reconciliation
+### Class ability concepts
 
 | Draft class | Ability item | Core concept                                                                              | Draft Artifact twist                                                                                    |
 | ----------- | ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -132,7 +131,7 @@ The current requirement is 13 launch classes, with class selection at level 2. T
 | Druid       | Totem        | Nature's Reach creates a targeted damaging or entangling area.                            | The Worldroot Totem: periodically roots enemies and empowers the next hit against them.                 |
 | Sorcerer    | Scepter      | Chain Lightning jumps between enemies.                                                    | Eternity's Conduit: final strike creates a short-lived field that arcs between enemies entering it.     |
 
-These concepts are not proof that the final class roster is ten classes. Ask the user to reconcile the prior draft with the current 13-class requirement before implementing the full roster.
+Still open: which weapons and armor each class can use (not in these docs), class stat growth, and the exact ability mechanics.
 
 ## 5. Combat model
 
@@ -281,7 +280,7 @@ These rates and modifier rules are balance proposals, not immutable requirements
 - Necklace: Resurrection Necklace — once-preservation concept.
 - Cape: The Veil Between Worlds — brief intangibility/phase shift.
 
-These effects must be reconciled with the final 13-class roster and latest design decisions before implementation.
+These effects must be reconciled with the 10-class roster (D-072) and latest design decisions before implementation.
 
 ## 10. Dungeons
 
