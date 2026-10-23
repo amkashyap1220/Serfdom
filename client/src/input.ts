@@ -9,8 +9,8 @@ export interface KeyState {
   toggleFireMode: boolean;
   /** Space held (ability, D-035; no effect yet). */
   ability: boolean;
-  /** Enter pressed this frame (play again from the placeholder menu, D-046). */
-  playAgain: boolean;
+  /** R pressed this frame (leave the dungeon at once, D-036). */
+  exitDungeon: boolean;
 }
 
 export interface PointerInput {
@@ -23,7 +23,8 @@ export interface PointerInput {
 /**
  * Binds W/A/S/D for movement (D-031; arrow keys intentionally unbound),
  * Q/E/Z for view rotation (D-040; Z reset is PROVISIONAL), T for fire mode,
- * and Space for the ability. Returns a function that reads the keys now.
+ * Space for the ability, and R to exit the dungeon. Menus are DOM screens
+ * with their own keys (screens.ts). Returns a function that reads the keys now.
  * Phaser releases all keys when the window loses focus, so nothing can get
  * stuck after alt-tab.
  */
@@ -32,8 +33,7 @@ export function createKeyReader(scene: Phaser.Scene): () => KeyState {
   if (!keyboard) {
     throw new Error("Keyboard input is not available in this scene");
   }
-  const { W, A, S, D, Q, E, Z, T, SPACE, ENTER } =
-    Phaser.Input.Keyboard.KeyCodes;
+  const { W, A, S, D, Q, E, Z, T, R, SPACE } = Phaser.Input.Keyboard.KeyCodes;
   const key = (code: number) => keyboard.addKey(code);
   const up = key(W);
   const left = key(A);
@@ -44,7 +44,7 @@ export function createKeyReader(scene: Phaser.Scene): () => KeyState {
   const resetView = key(Z);
   const fireMode = key(T);
   const ability = key(SPACE);
-  const playAgain = key(ENTER);
+  const exit = key(R);
 
   return () => ({
     move: {
@@ -61,7 +61,7 @@ export function createKeyReader(scene: Phaser.Scene): () => KeyState {
     // JustDown is true once per press, so holding T does not cycle repeatedly.
     toggleFireMode: Phaser.Input.Keyboard.JustDown(fireMode),
     ability: ability.isDown,
-    playAgain: Phaser.Input.Keyboard.JustDown(playAgain),
+    exitDungeon: Phaser.Input.Keyboard.JustDown(exit),
   });
 }
 

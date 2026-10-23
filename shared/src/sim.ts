@@ -73,14 +73,33 @@ export type SimEvent =
   | { type: "respawned"; enemyId: number }
   | { type: "blocked"; position: Vec2 }
   | { type: "enemyAttack"; enemyId: number; bullets: number }
-  | { type: "playerHit"; playerId: number; damage: number; position: Vec2 }
+  | {
+      type: "playerHit";
+      playerId: number;
+      /** The enemy whose bullet it was. */
+      enemyId: number;
+      damage: number;
+      position: Vec2;
+    }
   | { type: "playerDied"; playerId: number };
 
 export function isPlayerAlive(player: PlayerState): boolean {
   return player.hp > 0;
 }
 
-export function createSimState(enemyPositions: readonly Vec2[]): SimState {
+export interface SimOptions {
+  /** Enemy respawn delay; null = defeated enemies stay dead (dungeons). */
+  respawnSeconds?: number | null;
+}
+
+export function createSimState(
+  enemyPositions: readonly Vec2[],
+  options: SimOptions = {},
+): SimState {
+  const respawnSeconds =
+    options.respawnSeconds === undefined
+      ? DUMMY_ENEMY.respawnSeconds
+      : options.respawnSeconds;
   return {
     players: [],
     enemies: enemyPositions.map((position, i) => ({
@@ -92,6 +111,7 @@ export function createSimState(enemyPositions: readonly Vec2[]): SimState {
       baseMaxHp: DUMMY_ENEMY.maxHp,
       scaledFor: 1,
       respawnIn: 0,
+      respawnSeconds,
       attackCooldown: 0,
     })),
     projectiles: [],
@@ -288,6 +308,7 @@ export function stepWorld(
         events.push({
           type: "playerHit",
           playerId: pl.id,
+          enemyId: p.ownerId,
           damage: p.damage,
           position: outcome.position,
         });
@@ -298,7 +319,7 @@ export function stepWorld(
       const i = enemies.findIndex((e) => e.id === outcome.targetId);
       const target = enemies[i];
       if (!target) continue;
-      const result = damageEnemy(target, p.damage, DUMMY_ENEMY.respawnSeconds);
+      const result = damageEnemy(target, p.damage);
       enemies[i] = result.enemy;
       events.push({
         type: "hit",

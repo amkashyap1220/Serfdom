@@ -1,4 +1,11 @@
+import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import type { Vec2 } from "./geometry.ts";
+import {
+  RUN_RESULTS,
+  RUN_STAT_KEYS,
+  type RunResult,
+  type RunStats,
+} from "./run-stats.ts";
 
 /**
  * Client/server message protocol. Messages are JSON text over a WebSocket.
@@ -12,8 +19,11 @@ import type { Vec2 } from "./geometry.ts";
  * v2 (4b): + input (client) and snapshot (server).
  * v3 (5b): input carries fire intent; + playAgain; snapshots carry player
  *          HP and fire cooldown, enemies, and projectiles.
+ * v4 (6a): menu → queue → dungeon run → results. - playAgain;
+ *          + queue / leaveQueue / exitDungeon (client) and
+ *          queueStatus / runStarted / runEnded (server).
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Largest client → server message the server accepts, in bytes. */
 export const MAX_MESSAGE_BYTES = 1024;
@@ -39,8 +49,12 @@ export type ClientMessage =
    * client never says where it is or what it hit, only what it wants to do.
    */
   | { type: "input"; seq: number; move: Vec2; fire: FireInput }
-  /** Leave the placeholder death menu and start fresh (D-046). */
-  | { type: "playAgain" };
+  /** From the menu or a results screen: wait for a run of this dungeon (D-048, D-051). */
+  | { type: "queue"; dungeon: DungeonId }
+  /** Stop waiting. Harmless if not queued. */
+  | { type: "leaveQueue" }
+  /** R: leave the current run at once (D-036). Harmless if not in a run. */
+  | { type: "exitDungeon" };
 
 /** One player's authoritative state in a snapshot. */
 export interface SnapshotPlayer {
@@ -87,6 +101,24 @@ export type ServerMessage =
   | { type: "playerJoined"; playerId: number }
   | { type: "playerLeft"; playerId: number }
   | { type: "error"; reason: string }
+  /** Sent to everyone waiting for a dungeon whenever its queue changes. */
+  | {
+      type: "queueStatus";
+      dungeon: DungeonId;
+      /** Players waiting for this dungeon, including you. */
+      queued: number;
+      /** Seconds until the run starts if nobody else joins. */
+      startsIn: number;
+    }
+  /** You are in a run now; snapshots follow. Seq numbers restart at 0. */
+  | { type: "runStarted"; dungeon: DungeonId; players: number[] }
+  /** Your run is over; you are back at the menu. */
+  | {
+      type: "runEnded";
+      dungeon: DungeonId;
+      result: RunResult;
+      stats: RunStats;
+    }
   | {
       type: "snapshot";
       tick: number;
@@ -129,11 +161,18 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         message: { type: "input", seq: obj.seq, move, fire },
       };
     }
-    case "playAgain":
-      if (!hasExactKeys(obj, ["type"])) {
-        return fail("playAgain: unexpected fields");
+    case "queue":
+      if (!hasExactKeys(obj, ["type", "dungeon"])) {
+        return fail("queue: unexpected fields");
       }
-      return { ok: true, message: { type: "playAgain" } };
+      if (!isDungeonId(obj.dungeon)) return fail("queue: unknown dungeon");
+      return { ok: true, message: { type: "queue", dungeon: obj.dungeon } };
+    case "leaveQueue":
+    case "exitDungeon":
+      if (!hasExactKeys(obj, ["type"])) {
+        return fail(`${obj.type}: unexpected fields`);
+      }
+      return { ok: true, message: { type: obj.type } };
     default:
       return fail(`unknown message type ${describe(obj.type)}`);
   }
@@ -174,6 +213,53 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         return fail("error: reason must be a string");
       }
       return { ok: true, message: { type: "error", reason: obj.reason } };
+    case "queueStatus":
+      if (!hasExactKeys(obj, ["type", "dungeon", "queued", "startsIn"])) {
+        return fail("queueStatus: unexpected fields");
+      }
+      if (!isDungeonId(obj.dungeon)) return fail("queueStatus: bad dungeon");
+      if (!isPlayerId(obj.queued) || !isNonNegative(obj.startsIn)) {
+        return fail("queueStatus: bad numbers");
+      }
+      return {
+        ok: true,
+        message: {
+          type: "queueStatus",
+          dungeon: obj.dungeon,
+          queued: obj.queued,
+          startsIn: obj.startsIn,
+        },
+      };
+    case "runStarted":
+      if (!hasExactKeys(obj, ["type", "dungeon", "players"])) {
+        return fail("runStarted: unexpected fields");
+      }
+      if (!isDungeonId(obj.dungeon)) return fail("runStarted: bad dungeon");
+      if (!Array.isArray(obj.players) || !obj.players.every(isPlayerId)) {
+        return fail("runStarted: players must be an array of player ids");
+      }
+      return {
+        ok: true,
+        message: {
+          type: "runStarted",
+          dungeon: obj.dungeon,
+          players: [...obj.players],
+        },
+      };
+    case "runEnded": {
+      if (!hasExactKeys(obj, ["type", "dungeon", "result", "stats"])) {
+        return fail("runEnded: unexpected fields");
+      }
+      if (!isDungeonId(obj.dungeon)) return fail("runEnded: bad dungeon");
+      const result = RUN_RESULTS.find((r) => r === obj.result);
+      if (!result) return fail("runEnded: bad result");
+      const stats = parseRunStats(obj.stats);
+      if (!stats) return fail("runEnded: bad stats");
+      return {
+        ok: true,
+        message: { type: "runEnded", dungeon: obj.dungeon, result, stats },
+      };
+    }
     case "snapshot": {
       if (
         !hasExactKeys(obj, [
@@ -230,6 +316,17 @@ function parseFire(v: unknown): FireInput | string {
     return "fire.aim must be a unit vector";
   }
   return { trigger: v.trigger, aim };
+}
+
+function parseRunStats(v: unknown): RunStats | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, RUN_STAT_KEYS)) return null;
+  const stats: Partial<RunStats> = {};
+  for (const key of RUN_STAT_KEYS) {
+    const n = v[key];
+    if (!isNonNegative(n)) return null;
+    stats[key] = n;
+  }
+  return stats as RunStats;
 }
 
 function parseList<T>(v: unknown, item: (x: unknown) => T | null): T[] | null {

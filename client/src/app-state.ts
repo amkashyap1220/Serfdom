@@ -1,0 +1,127 @@
+import {
+  dungeonInfo,
+  type DungeonId,
+  type RunStats,
+  type ServerMessage,
+} from "@serfdom/shared";
+
+export type MenuTab = "dungeons" | "serfs" | "stash" | "leaderboard";
+
+/**
+ * Which screen the player sees (D-048, D-050). The server decides every
+ * transition that matters (a run starting, a run ending, the stats); the
+ * client only adds instant feedback for its own clicks.
+ */
+export type Screen =
+  | { kind: "connecting"; reason: string | null }
+  | { kind: "menu"; tab: MenuTab; notice: string | null }
+  | {
+      kind: "queued";
+      dungeon: DungeonId;
+      /** Players waiting, including us (null until the server answers). */
+      queued: number | null;
+      /** performance.now() time the run should start (null until the server answers). */
+      startsAtMs: number | null;
+    }
+  | { kind: "inRun"; dungeon: DungeonId }
+  | {
+      kind: "results";
+      result: "completed" | "died";
+      dungeon: DungeonId;
+      stats: RunStats;
+    };
+
+export type ScreenEvent =
+  | { type: "connected" }
+  | { type: "disconnected"; reason: string }
+  | { type: "server"; message: ServerMessage; nowMs: number }
+  | { type: "openTab"; tab: MenuTab }
+  /** We just asked to queue (shown at once; the server confirms with queueStatus). */
+  | { type: "queueRequested"; dungeon: DungeonId }
+  | { type: "leaveQueue" }
+  /** Return / Menu on a results screen. */
+  | { type: "dismissResults" };
+
+export const INITIAL_SCREEN: Screen = { kind: "connecting", reason: null };
+
+const MENU: Screen = { kind: "menu", tab: "dungeons", notice: null };
+
+/** Pure: the next screen after an event. Returns the same object when nothing changes. */
+export function nextScreen(screen: Screen, event: ScreenEvent): Screen {
+  switch (event.type) {
+    case "connected":
+      return screen.kind === "connecting" ? MENU : screen;
+    case "disconnected":
+      return { kind: "connecting", reason: event.reason };
+    case "openTab":
+      return screen.kind === "menu"
+        ? { kind: "menu", tab: event.tab, notice: null }
+        : screen;
+    case "queueRequested":
+      return screen.kind === "menu" || screen.kind === "results"
+        ? {
+            kind: "queued",
+            dungeon: event.dungeon,
+            queued: null,
+            startsAtMs: null,
+          }
+        : screen;
+    case "leaveQueue":
+      return screen.kind === "queued" ? MENU : screen;
+    case "dismissResults":
+      return screen.kind === "results" ? MENU : screen;
+    case "server":
+      return onServerMessage(screen, event.message, event.nowMs);
+  }
+}
+
+function onServerMessage(
+  screen: Screen,
+  msg: ServerMessage,
+  nowMs: number,
+): Screen {
+  switch (msg.type) {
+    case "queueStatus":
+      // Ignore a late status after we left the queue or the run began.
+      if (screen.kind !== "queued" || screen.dungeon !== msg.dungeon) {
+        return screen;
+      }
+      return {
+        ...screen,
+        queued: msg.queued,
+        startsAtMs: nowMs + msg.startsIn * 1000,
+      };
+    case "runStarted":
+      return { kind: "inRun", dungeon: msg.dungeon };
+    case "runEnded":
+      if (msg.result === "left") {
+        return {
+          kind: "menu",
+          tab: "dungeons",
+          notice: `You fled the ${dungeonInfo(msg.dungeon).name}. No rewards.`,
+        };
+      }
+      return {
+        kind: "results",
+        result: msg.result,
+        dungeon: msg.dungeon,
+        stats: msg.stats,
+      };
+    default:
+      return screen;
+  }
+}
+
+/** "2:05" for 125.3 seconds. */
+export function formatDuration(seconds: number): string {
+  const whole = Math.floor(seconds);
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** Shots that hit, as a whole percentage ("—" before the first shot). */
+export function accuracy(stats: RunStats): string {
+  if (stats.shotsFired === 0) return "—";
+  return `${Math.round((100 * stats.shotsHit) / stats.shotsFired)}%`;
+}

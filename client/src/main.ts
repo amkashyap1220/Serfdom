@@ -1,11 +1,19 @@
 import * as Phaser from "phaser";
 import { FIRE_MODE_LABELS, rotateVec } from "@serfdom/shared";
 import "./style.css";
+import "./screens.css";
+import {
+  INITIAL_SCREEN,
+  nextScreen,
+  type Screen,
+  type ScreenEvent,
+} from "./app-state";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
 import type { ConnectionStatus } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
+import { ScreenView } from "./screens";
 
 const gameplay = requireElement("gameplay");
 const layoutList = new DebugList(requireElement("hud-layout"));
@@ -30,11 +38,42 @@ const game = new Phaser.Game({
   scene: [WorldScene],
 });
 
+/** Which screen is showing (menu, queue, run, results); see app-state.ts. */
+let screen: Screen = INITIAL_SCREEN;
+
 game.events.once(Phaser.Core.Events.READY, () => {
+  const net = worldScene(game).net;
+  const dispatch = (event: ScreenEvent) => {
+    screen = nextScreen(screen, event);
+  };
+  const view = new ScreenView(requireElement("screen"), {
+    queue: (dungeon) => {
+      net.connection.sendQueue(dungeon);
+      dispatch({ type: "queueRequested", dungeon });
+    },
+    leaveQueue: () => {
+      net.connection.sendLeaveQueue();
+      dispatch({ type: "leaveQueue" });
+    },
+    dismissResults: () => dispatch({ type: "dismissResults" }),
+    openTab: (tab) => dispatch({ type: "openTab", tab }),
+  });
+  net.onConnected = () => dispatch({ type: "connected" });
+  net.onDisconnect = (reason) => dispatch({ type: "disconnected", reason });
+  net.onLobby = (message, nowMs) =>
+    dispatch({ type: "server", message, nowMs });
+  // The welcome may have arrived before these handlers were attached.
+  if (net.connection.snapshot.status.kind === "connected") {
+    dispatch({ type: "connected" });
+  }
+
   // Wait one frame so the canvas is in the DOM and laid out before measuring.
   requestAnimationFrame(() => {
     reportLayout(game, true);
-    game.events.on(Phaser.Core.Events.POST_RENDER, () => reportLive(game));
+    game.events.on(Phaser.Core.Events.POST_RENDER, () => {
+      view.render(screen, performance.now());
+      reportLive(game);
+    });
   });
   // Re-measure on resize so the readout reflects what the window does now.
   window.addEventListener("resize", () => reportLayout(game, false));
@@ -134,7 +173,8 @@ function reportLive(game: Phaser.Game): void {
         ? conn.players.map((id) => `#${id}`).join(" ")
         : "—",
     ],
-    ["Movement + combat", online ? "server-authoritative" : "local (offline)"],
+    ["Screen", screen.kind],
+    ["Movement + combat", online ? "server-authoritative" : "not in a run"],
     [
       "Pending / correction",
       online
@@ -170,25 +210,14 @@ function reportLive(game: Phaser.Game): void {
       "Ability (Space)",
       keys.ability ? "pressed — not yet defined" : "not yet defined",
     ],
-    [
-      "Player HP",
-      local.hp > 0
-        ? `${local.hp}/${local.maxHp}`
-        : "dead (Enter to play again)",
-    ],
-    ["Hits taken / deaths", `${totals.playerHits} / ${totals.deaths}`],
+    ["Player HP", local.hp > 0 ? `${local.hp}/${local.maxHp}` : "—"],
+    ["Hits taken", String(totals.playerHits)],
     ["Dummy HP", enemies],
     [
       "In flight (yours/enemy)",
       `${view.projectiles.filter((p) => p.owner === "player").length}/${view.projectiles.filter((p) => p.owner === "enemy").length}`,
     ],
-    [
-      "Shots/hits/blocked",
-      online
-        ? `${totals.shots}/server/server`
-        : `${totals.shots}/${totals.hits}/${totals.blocked}`,
-    ],
-    ["Dummy defeats", online ? "server" : String(totals.defeats)],
+    ["Shots fired", String(totals.shots)],
   ]);
 }
 

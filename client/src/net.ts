@@ -2,6 +2,8 @@ import {
   encodeMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
+  type ClientMessage,
+  type DungeonId,
   type PlayerInput,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -26,6 +28,12 @@ export interface NetState {
 
 export type SnapshotMessage = Extract<ServerMessage, { type: "snapshot" }>;
 
+/** Messages about the menu, queue, and runs (everything but snapshots and presence). */
+export type LobbyMessage = Extract<
+  ServerMessage,
+  { type: "queueStatus" | "runStarted" | "runEnded" }
+>;
+
 export interface ConnectionHandlers {
   /** A validated snapshot arrived; `receivedAtMs` is performance.now() at arrival. */
   onSnapshot?: (
@@ -34,7 +42,10 @@ export interface ConnectionHandlers {
     bytes: number,
   ) => void;
   /** The connection dropped (it will retry automatically). */
-  onDisconnect?: () => void;
+  onDisconnect?: (reason: string) => void;
+  /** The server accepted our hello. */
+  onConnected?: (playerId: number) => void;
+  onLobby?: (message: LobbyMessage, receivedAtMs: number) => void;
 }
 
 export function serverUrl(): string {
@@ -74,17 +85,28 @@ export class Connection {
 
   /** Sends one tick of intent (movement + fire); does nothing unless connected. */
   sendInput(seq: number, input: PlayerInput): void {
-    if (this.state.status.kind !== "connected") return;
-    if (this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(
-      encodeMessage({ type: "input", seq, move: input.move, fire: input.fire }),
-    );
+    this.send({ type: "input", seq, move: input.move, fire: input.fire });
   }
 
-  /** Asks the server for a fresh start after dying (D-046). */
-  sendPlayAgain(): void {
+  /** Waits for a run of this dungeon (D-048). */
+  sendQueue(dungeon: DungeonId): void {
+    this.send({ type: "queue", dungeon });
+  }
+
+  sendLeaveQueue(): void {
+    this.send({ type: "leaveQueue" });
+  }
+
+  /** R: leave the current run at once (D-036). */
+  sendExitDungeon(): void {
+    this.send({ type: "exitDungeon" });
+  }
+
+  /** Sends only once joined; before that there is nothing to say but hello. */
+  private send(message: ClientMessage): void {
+    if (this.state.status.kind !== "connected") return;
     if (this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(encodeMessage({ type: "playAgain" }));
+    this.socket.send(encodeMessage(message));
   }
 
   private open(): void {
@@ -115,7 +137,7 @@ export class Connection {
         status: { kind: "disconnected", reason },
         players: [],
       };
-      this.handlers.onDisconnect?.();
+      this.handlers.onDisconnect?.(reason);
       // A "connection refused" while the server is down is expected during
       // development, so this is informational, not an error.
       console.info(
@@ -134,6 +156,7 @@ export class Connection {
           players: msg.players,
         };
         console.info(`[net] connected as guest #${msg.playerId}`);
+        this.handlers.onConnected?.(msg.playerId);
         break;
       case "playerJoined":
         if (!this.state.players.includes(msg.playerId)) {
@@ -155,6 +178,11 @@ export class Connection {
         break;
       case "snapshot":
         this.handlers.onSnapshot?.(msg, performance.now(), bytes);
+        break;
+      case "queueStatus":
+      case "runStarted":
+      case "runEnded":
+        this.handlers.onLobby?.(msg, performance.now());
         break;
     }
   }

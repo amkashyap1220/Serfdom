@@ -10,7 +10,7 @@ import {
 import type { CombatViewModel, ProjectileView } from "./combat-view-model";
 import { RemoteInterpolator } from "./interpolation";
 import { LocalShots } from "./local-shots";
-import { Connection, type SnapshotMessage } from "./net";
+import { Connection, type LobbyMessage, type SnapshotMessage } from "./net";
 import { PlayerPredictor } from "./prediction";
 
 /**
@@ -28,8 +28,10 @@ const MAX_EXTRAPOLATION_S = 0.1;
  * - other players are interpolated; enemies and other projectiles come
  *   from the latest snapshot.
  *
- * "Online" means connected *and* the server has told us about ourselves at
- * least once; before that the game runs its local offline sim.
+ * "Online" means connected, in a run, *and* the server has told us about
+ * ourselves in that run at least once (Phase 6a: no offline play; the menu
+ * screens cover the game until then). Every run starts from scratch: new
+ * predictor, seq numbers from 0 (the server makes a new input queue too).
  */
 export class NetSync {
   readonly connection: Connection;
@@ -42,6 +44,11 @@ export class NetSync {
     null;
   private self: SnapshotPlayer | null = null;
   private synced = false;
+  private inRun = false;
+  /** Forwarded to the screen flow (set by main.ts). */
+  onLobby: (message: LobbyMessage, receivedAtMs: number) => void = () => {};
+  onConnected: () => void = () => {};
+  onDisconnect: (reason: string) => void = () => {};
   /** Size of recent snapshots, for the HUD (bytes) and a 1 s bandwidth average. */
   lastSnapshotBytes = 0;
   private bytesWindow: { atMs: number; bytes: number }[] = [];
@@ -50,18 +57,34 @@ export class NetSync {
     this.walls = walls;
     this.connection = new Connection({
       onSnapshot: (s, t, bytes) => this.onSnapshot(s, t, bytes),
-      onDisconnect: () => {
-        this.synced = false;
-        this.latest = null;
-        this.self = null;
-        this.remotes.clear();
-        this.shots.clear();
+      onDisconnect: (reason) => {
+        this.resetRun(false);
+        this.onDisconnect(reason);
+      },
+      onConnected: () => this.onConnected(),
+      onLobby: (message, at) => {
+        if (message.type === "runStarted") this.resetRun(true);
+        if (message.type === "runEnded") this.resetRun(false);
+        this.onLobby(message, at);
       },
     });
   }
 
+  /** Forget everything about the previous run. */
+  private resetRun(inRun: boolean): void {
+    this.inRun = inRun;
+    this.synced = false;
+    this.predictor = null;
+    this.predictorId = null;
+    this.latest = null;
+    this.self = null;
+    this.remotes.clear();
+    this.shots.clear();
+  }
+
   get online(): boolean {
     return (
+      this.inRun &&
       this.synced &&
       this.predictor !== null &&
       this.connection.snapshot.status.kind === "connected"
@@ -115,8 +138,9 @@ export class NetSync {
     this.shots.step(TICK_SECONDS, this.walls, targets);
   }
 
-  playAgain(): void {
-    this.connection.sendPlayAgain();
+  /** R: leave the run (D-036). The server answers with runEnded. */
+  exitDungeon(): void {
+    if (this.inRun) this.connection.sendExitDungeon();
   }
 
   /** Where to draw other players right now. */
@@ -161,7 +185,7 @@ export class NetSync {
     bytes: number,
   ): void {
     const status = this.connection.snapshot.status;
-    if (status.kind !== "connected") return;
+    if (status.kind !== "connected" || !this.inRun) return;
     this.latest = { snapshot, receivedAtMs };
     this.lastSnapshotBytes = bytes;
     this.bytesWindow.push({ atMs: receivedAtMs, bytes });
@@ -176,7 +200,8 @@ export class NetSync {
     for (const p of snapshot.players) {
       if (p.id === status.playerId) {
         this.self = p;
-        // A reconnect gets a new guest id, so a new predictor (and fresh seqs).
+        // A new run (or a reconnect with a new guest id) gets a new
+        // predictor, and so fresh seqs.
         if (!this.predictor || this.predictorId !== p.id) {
           this.predictor = new PlayerPredictor(
             p.id,

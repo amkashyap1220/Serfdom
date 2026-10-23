@@ -17,7 +17,7 @@ Design pillars:
 - High-stakes permadeath and meaningful equipment loss.
 - Distinct classes and build choices.
 - Long-term loot collection, including rare Artifacts and Shiny items.
-- Cooperative multiplayer for parties of up to four players.
+- Cooperative multiplayer for parties of up to ten players (D-012).
 - Persistent account progression and a player-driven economy.
 - Browser accessibility and future cross-platform Steam release.
 
@@ -297,7 +297,8 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 ### Goblin Warrens
 
 - Introductory dungeon, primarily aimed at levels 1–9.
-- Target first-time clear: 3–5 minutes.
+- Target first-time clear: 3–5 minutes: about 5 minutes solo, about 3 minutes for a full party (D-047).
+- A full simple level with several encounter rooms, then the boss (D-047).
 - Geared veterans should be able to stomp it; difficulty is primarily gated by clear speed for them.
 - Mostly linear with occasional branches.
 - Enemies include melee, ranged, charging/throwing, and tougher roles.
@@ -307,7 +308,10 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 
 ## 11. Multiplayer and reward rules
 
-- Maximum party size: four players.
+- Maximum party size: ten players (D-012; was four).
+- Players enter dungeons from a main menu (stash, serfs, leaderboard, dungeon select) and can quickly requeue for the same dungeon after a run (D-048).
+- Parties form through an open queue that fills a run with up to 4 queued players (D-051); a run accepts joiners for its first 15 seconds, then is locked (D-052).
+- Completion should feel rewarding: strong celebratory effects and a slot-machine-like reward chest (D-049). Death is abrupt and tragic: a stats screen about the serf's life, then return to choose a serf and dungeon (D-050).
 - Browser and Steam desktop clients share the same game servers and can play together.
 - Mixed-platform parties can enter the same dungeon instance and fight the same enemies/boss.
 - Every player who completes a dungeon receives their own randomized reward results; rewards are individual rather than a single shared loot roll.

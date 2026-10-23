@@ -78,7 +78,26 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→875, 3→1250, 4→1625). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Menu, queue, and run checklist (Phase 6a)
+
+Run `npm run dev` (restart it if it was running before 6a: protocol v4), open **two separate windows** at http://localhost:5173/, reload both with Ctrl+Shift+R.
+
+1. Both windows show the **SERFDOM** menu with tabs Dungeons / Serfs / Stash / Leaderboard. Serfs, Stash, and Leaderboard say "Coming in Phase …".
+2. In A press **Enter** (or click Enter queue): "Finding a party for Goblin Warrens · 1 / 10 players waiting · Starting in 5 s", counting down.
+3. Within 5 s press Enter in B: both show **2 / 10**. When the countdown ends both enter the same run (the overlay disappears); each sees the other; dummy shows 875/875.
+4. In B press **R**: B is back at the menu with "You fled the Goblin Warrens. No rewards."; A keeps playing and the dummy rescales to 500 max.
+5. In B queue again within 15 s of the run starting: B joins **A's run** at the spawn (HUD shows the other player; dummy max goes back to 875). Press R in B, wait until the run is over 15 s old, queue again: B gets a **separate** solo run after 5 s and the two windows do not see each other. Press R in B.
+6. In A kill the dummy: **DUNGEON CLEARED** with confetti, your stats (clear time, enemies slain, damage dealt, accuracy, damage taken) and a wiggling chest placeholder.
+7. Press **Enter** on that screen: requeue; a solo run starts within 5 s at (1000, 1000) with 200 HP and a full-HP dummy.
+8. Die (T twice for Manual, stand left of the dummy at about (1075, 1100)): the screen cuts to red then black: **YOUR SERF HAS DIED** with your life stats; Return appears after ~1.5 s; Enter before that does nothing.
+9. Return → menu. Esc while queued leaves the queue (nothing starts).
+10. Consoles: no red errors. Server terminal: `queued for goblin-warrens`, `run #N started …`, `guest #N left/completed/died run #N after … s` lines, guest ids only.
+
+Report: pass/fail per step, the screen text or HUD values for any failure, and exact console or terminal text.
+
 ### Two-client combat checklist (Phase 5)
+
+_Historical: steps 7–8 (placeholder menu, Enter to play again) were replaced by the Phase 6a death screen; in 6a a dummy kill completes the run instead of respawning._
 
 Run `npm run dev`, open **two separate windows** side by side at http://localhost:5173/ (not tabs: browsers pause background tabs), reload both with Ctrl+Shift+R.
 

@@ -162,3 +162,21 @@ Keep this concise and update it after each meaningful milestone.
 - Added the two-client combat checklist to TESTING_AND_FEEDBACK.md.
 - Phase 5 acceptance: both clients see consistent enemy health and defeat ✅ (live + server tests); client tampering cannot award damage or rewards ✅ (intent-only protocol, claimed hits rejected, fire/move rate capped, server-side range/cooldown/eligibility); combat tests pass ✅ (`npm run check`: 149 shared, 38 server, 33 client); manual two-client steps documented ✅.
 - Next step: user runs the checklist (optional, 5b already user-tested); then Phase 6 — dungeon vertical slice (needs design decisions first).
+
+### Phase 6 — Orientation — 2026-10-22
+
+- Committed and pushed Phase 5c (`c6da739`); Phase 5 closed.
+- Recorded the user's Phase 6 answers as D-047 (full simple level + boss, 5 min solo / 3 min full party, design delegated to Claude), D-048 (main menu with stash/serfs/leaderboard/dungeon select; quick requeue), D-049 (dopamine completion, slot-machine chest), D-050 (tragic death with a serf-life stats screen).
+- Next step: user decides how a party gets into the same dungeon instance; then slice 6a.
+
+### Phase 6a — Main menu, open queue, dungeon runs, death and completion screens — 2026-10-22
+
+- User decisions: D-051 open queue, D-052 no late join. Claude PROVISIONAL: T-029 (Goblin Warrens v0 design for 6b–6c), T-030 (queue: 4 players or 5 s), T-031 (stand-in: debug map + dummy, clear = complete), T-032 (DOM screens, offline mode removed), T-033 (R = leave, serf survives, no rewards).
+- Protocol v4 (queue / leaveQueue / exitDungeon; queueStatus / runStarted / runEnded with server-counted stats; playAgain removed). Shared: `dungeons.ts`, `run-stats.ts`, enemies with `respawnSeconds: null`, `playerHit` names the enemy.
+- Server: `Matchmaker` (7 tests), `DungeonInstance`, `GameServer` routes menu ↔ queue ↔ run. Integration tests rewritten around runs and extended: queue flow, 5 s wait, queue counts, 4-player cap (5th gets own run), leave queue, bad queue requests, separate worlds / no late join, death ends run with stats while survivors continue, clear completes for all, stats credited correctly, R + requeue with seq restart, no-ops at the menu.
+- Client: `app-state.ts` reducer (9 tests), `screens.ts`/`screens.css`, NetSync run lifecycle, R key, HUD `Screen` row; offline sim and placeholder death text removed.
+- Checks: `npm run check` passed (156 shared, 55 server, 42 client, build). Live on the user's dev servers, two visible Chrome windows: both menus; A queued (1/4, 5 s) then B (2/4); one run started 4.0 s after B queued with both visible and dummy 875; B pressed R → menu notice, A continued, dummy 500; A cleared in 0:06 → DUNGEON CLEARED with stats (accuracy 91%); Enter requeued → solo run 4.7 s later at (1000, 1000), 200 HP; A died after 0:20 → death screen (damage taken 200), Enter at 0.6 s ignored, Enter after 1.5 s → menu. No console errors.
+- Next step: user tests 6a (checklist in TESTING_AND_FEEDBACK.md) and confirms T-033 (what R costs); then 6b (real Goblin Warrens map, rooms and doors, grunts and slingers).
+- Change requested by the user: runs accept joiners for their first 15 s (D-052 revised). `DungeonInstance.canJoin/join` (join window, room, never-rejoin), `GameServer.joinOpenRuns` (fullest open run first), option `joinWindowSeconds`. Tests: join at 14 s (rescales to 875), locked after 15 s, no rejoin after R, full run refuses a 5th. `npm run check`: 156 / 58 / 42 passed.
+- Open question raised: party size 4 → 10? (GDD §11 says 4.)
+- User: 6a checklist all pass. Party size 4 → 10 (D-012; `MAX_PARTY_SIZE`, tests use the constant). R costs nothing beyond the run's potential rewards (D-053, replaces T-033).

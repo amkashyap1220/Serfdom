@@ -14,8 +14,10 @@ export interface EnemyState {
   baseMaxHp: number;
   /** Party size `maxHp` is currently scaled for. */
   scaledFor: number;
-  /** Seconds until it comes back; 0 while alive. */
+  /** Seconds until it comes back; 0 while alive (and forever if it never respawns). */
   respawnIn: number;
+  /** Respawn delay after defeat, or null for enemies that stay dead (dungeons). */
+  respawnSeconds: number | null;
   /** Seconds until its next attack is allowed. */
   attackCooldown: number;
 }
@@ -31,12 +33,11 @@ export function isAlive(enemy: EnemyState): boolean {
 export function damageEnemy(
   enemy: EnemyState,
   damage: number,
-  respawnSeconds: number,
 ): { enemy: EnemyState; defeated: boolean } {
   const { hp, died } = applyDamage(enemy.hp, damage); // validates damage
   if (!isAlive(enemy)) return { enemy, defeated: false };
   return {
-    enemy: { ...enemy, hp, respawnIn: died ? respawnSeconds : 0 },
+    enemy: { ...enemy, hp, respawnIn: died ? (enemy.respawnSeconds ?? 0) : 0 },
     defeated: died,
   };
 }
@@ -46,7 +47,9 @@ export function stepRespawn(
   enemy: EnemyState,
   dtSeconds: number,
 ): { enemy: EnemyState; respawned: boolean } {
-  if (isAlive(enemy)) return { enemy, respawned: false };
+  if (isAlive(enemy) || enemy.respawnSeconds === null) {
+    return { enemy, respawned: false };
+  }
   const respawnIn = enemy.respawnIn - dtSeconds;
   if (respawnIn > 1e-9)
     return { enemy: { ...enemy, respawnIn }, respawned: false };

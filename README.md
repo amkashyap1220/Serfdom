@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phases 0–4 are complete (setup, client skeleton, movement/camera, single-player combat prototype, authoritative multiplayer foundation), and Phase 5 (shared combat) is in progress — the server now runs combat for everyone (5b): browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
+Phases 0–5 are complete (setup, client skeleton, movement/camera, combat prototype, authoritative multiplayer, shared server-run combat). Phase 6 (dungeon vertical slice) is in progress: 6a adds the main menu, an open dungeon queue, separate dungeon runs, and death/completion screens: browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
 
 ## Development setup
 
@@ -83,12 +83,15 @@ shared/   pure game rules and protocol, used by client AND server (@serfdom/shar
 server/   authoritative game server (@serfdom/server): Node 24 + ws, no build step
   src/main.ts            entry point (PORT env, default 8080)
   src/game-server.ts     connections, guest ids, presence, 60 Hz tick, snapshots
-  src/player-movement.ts per-player input queue, authoritative movement
+  src/input-queue.ts     per-player input queue (move-credit rule)
+  src/matchmaking.ts     open dungeon queue (who starts a run together)
+  src/dungeon-instance.ts one dungeon run: its own simulation, members, stats
   src/rate-limit.ts      per-connection message rate limit
   src/log.ts             logger (never logs IPs or private data)
 client/   browser client (@serfdom/client): Phaser 4 + TypeScript + Vite
   index.html             #game-container = #hud (DOM) + #gameplay (Phaser canvas)
-  src/main.ts            creates the game; HUD debug readout
+  src/main.ts            creates the game; HUD debug readout; wires screens
+  src/app-state.ts, screens.ts   menu / queue / death / completion screens
   src/net.ts, net-sync.ts, prediction.ts, interpolation.ts   networking
   src/input.ts, camera-math.ts, layout.ts, render-config.ts, debug-list.ts
   src/scenes/WorldScene.ts       input → simulation → drawing; cameras

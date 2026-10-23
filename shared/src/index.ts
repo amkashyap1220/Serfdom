@@ -51,6 +51,22 @@ export {
   type EnemyState,
 } from "./enemy.ts";
 export {
+  dungeonInfo,
+  DUNGEONS,
+  isDungeonId,
+  MAX_PARTY_SIZE,
+  type DungeonId,
+  type DungeonInfo,
+  type DungeonLayout,
+} from "./dungeons.ts";
+export {
+  newRunStats,
+  recordRunEvents,
+  RUN_RESULTS,
+  type RunResult,
+  type RunStats,
+} from "./run-stats.ts";
+export {
   addPlayer,
   aimTargets,
   applyPlayerInput,
@@ -64,6 +80,7 @@ export {
   type PlayerInput,
   type PlayerState,
   type SimEvent,
+  type SimOptions,
   type SimState,
 } from "./sim.ts";
 export {

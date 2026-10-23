@@ -1,34 +1,19 @@
 import {
-  addPlayer,
-  applyPlayerInput,
   consumeFixedSteps,
-  createSimState,
-  DUMMY_POSITIONS,
   encodeMessage,
-  findPlayer,
-  isPlayerAlive,
   MAX_FRAME_SECONDS,
   MAX_MESSAGE_BYTES,
   parseClientMessage,
-  PLAYER_START,
   PROTOCOL_VERSION,
-  removePlayer,
-  roundCoord,
-  stepWorld,
-  TEST_WALLS,
+  TICK_RATE,
   TICK_SECONDS,
+  type DungeonId,
   type ServerMessage,
-  type SimState,
-  type SnapshotPlayer,
 } from "@serfdom/shared";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
-import {
-  newInputQueue,
-  queueInput,
-  takeInputsForTick,
-  type InputQueue,
-} from "./input-queue.ts";
+import { DungeonInstance, type RunEnd } from "./dungeon-instance.ts";
 import { consoleLogger, type Logger } from "./log.ts";
+import { Matchmaker } from "./matchmaking.ts";
 import { MessageRateLimiter } from "./rate-limit.ts";
 
 export interface GameServerOptions {
@@ -46,6 +31,10 @@ export interface GameServerOptions {
   maxQueuedInputs?: number;
   /** Close a connection that sends more than this many messages in one second. */
   maxMessagesPerSecond?: number;
+  /** Longest a queued player waits before their run starts with whoever is there (T-030). */
+  queueWaitSeconds?: number;
+  /** A run accepts new players from the queue for this long after it starts (D-052). */
+  joinWindowSeconds?: number;
   log?: Logger;
 }
 
@@ -58,20 +47,27 @@ interface Session {
   invalidMessages: number;
   helloTimer: ReturnType<typeof setTimeout> | undefined;
   rate: MessageRateLimiter;
-  /** Present once joined. */
-  inputs: InputQueue | null;
 }
+
+/** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
+const DEFAULT_QUEUE_WAIT_SECONDS = 5;
+/** D-052 (user, 2026-10-22): runs accept joiners for their first 15 s. */
+const DEFAULT_JOIN_WINDOW_SECONDS = 15;
 
 /**
  * Authoritative game server.
  *
  * Phase 4: connections, guest ids, presence (4a); server-owned movement with
  * snapshots (4b); tuned for the D-042 delay target (4c).
- * Phase 5b: owns the whole combat simulation (D-043): every player, the
- * dummy, and every projectile live in one shared `SimState`. Each tick it
- * applies each player's queued inputs (movement + fire) through the shared
- * rules, advances the world once, and broadcasts a snapshot. Clients only
- * ever send intents; HP, hits, and defeats are decided here.
+ * Phase 5b: owns the combat simulation (D-043). Clients only ever send
+ * intents; HP, hits, and defeats are decided here.
+ * Phase 6a: every joined player is in exactly one place: the menu, the
+ * dungeon queue (`Matchmaker`, D-051), or one `DungeonInstance` (a run with
+ * its own simulation). Each tick it first moves queued players into a run
+ * of their dungeon that is still inside its 15 s join window and has room
+ * (D-052), then starts new runs that are ready, ticks every instance, sends each instance's snapshot to
+ * its members only, and sends `runEnded` (with server-counted stats) to
+ * anyone whose run ended by death, completion, R, or disconnect.
  *
  * Every incoming message is validated (T-021). Bad messages get an error
  * reply; repeated bad messages, floods, oversized messages, a wrong protocol
@@ -86,10 +82,15 @@ export class GameServer {
   private readonly snapshotEveryTicks: number;
   private readonly maxQueuedInputs: number;
   private readonly maxMessagesPerSecond: number;
+  private readonly joinWindowTicks: number;
+  private readonly matchmaker: Matchmaker;
+  private readonly instances = new Map<number, DungeonInstance>();
+  private readonly runOf = new Map<number, DungeonInstance>();
+  private readonly socketOf = new Map<number, WebSocket>();
   private nextPlayerId = 1;
+  private nextInstanceId = 1;
   private tickCount = 0;
   private loop: ReturnType<typeof setInterval> | undefined;
-  private sim: SimState = createSimState(DUMMY_POSITIONS);
   /** Size in bytes of the most recent snapshot (diagnostics). */
   lastSnapshotBytes = 0;
 
@@ -101,6 +102,14 @@ export class GameServer {
     this.snapshotEveryTicks = options.snapshotEveryTicks ?? 1;
     this.maxQueuedInputs = options.maxQueuedInputs ?? 30;
     this.maxMessagesPerSecond = options.maxMessagesPerSecond ?? 180;
+    this.joinWindowTicks = Math.round(
+      (options.joinWindowSeconds ?? DEFAULT_JOIN_WINDOW_SECONDS) * TICK_RATE,
+    );
+    this.matchmaker = new Matchmaker(
+      Math.round(
+        (options.queueWaitSeconds ?? DEFAULT_QUEUE_WAIT_SECONDS) * TICK_RATE,
+      ),
+    );
     wss.on("connection", (socket) => this.onConnection(socket));
     if (options.autoTick ?? true) this.startLoop();
   }
@@ -133,77 +142,52 @@ export class GameServer {
       .filter((id): id is number => id !== null);
   }
 
-  /** The authoritative simulation (tests and diagnostics). */
-  get state(): SimState {
-    return this.sim;
+  /** The run a player is in, if any (tests and diagnostics). */
+  instanceOf(playerId: number): DungeonInstance | undefined {
+    return this.runOf.get(playerId);
   }
 
-  /** Authoritative player state as sent in snapshots. */
-  get players(): SnapshotPlayer[] {
-    const out: SnapshotPlayer[] = [];
-    for (const s of this.sessions.values()) {
-      if (s.id === null || !s.inputs) continue;
-      const p = findPlayer(this.sim, s.id);
-      if (!p) continue;
-      out.push({
-        id: p.id,
-        x: p.position.x,
-        y: p.position.y,
-        ack: s.inputs.ack,
-        hp: p.hp,
-        maxHp: p.maxHp,
-        cooldown: p.fireCooldown,
-      });
-    }
-    return out;
+  /** Number of runs in progress. */
+  get runCount(): number {
+    return this.instances.size;
+  }
+
+  isQueued(playerId: number): boolean {
+    return this.matchmaker.has(playerId);
   }
 
   /** Number of inputs waiting to be applied for a player (tests and diagnostics). */
   queuedInputs(playerId: number): number {
-    for (const s of this.sessions.values()) {
-      if (s.id === playerId) return s.inputs?.pending.length ?? 0;
-    }
-    return 0;
+    return this.runOf.get(playerId)?.queuedInputs(playerId) ?? 0;
   }
 
-  /** Replaces the simulation (tests only, e.g. to set up a near-death player). */
-  setStateForTest(state: SimState): void {
-    this.sim = state;
-  }
-
-  /** Advances the simulation one fixed tick (called by the loop, or directly by tests). */
+  /**
+   * Advances everything one fixed tick (called by the loop, or directly by
+   * tests): start runs that are ready, tick every run, send snapshots.
+   */
   tick(): void {
-    for (const [socket, session] of this.sessions) {
-      if (session.id === null || !session.inputs) continue;
-      const { apply } = takeInputsForTick(session.inputs);
-      try {
-        for (const input of apply) {
-          this.sim = applyPlayerInput(
-            this.sim,
-            session.id,
-            input,
-            TEST_WALLS,
-            TICK_SECONDS,
-          ).state;
-        }
-      } catch (err) {
-        // Should be impossible after validation; if it happens, drop only
-        // this player rather than crashing the server for everyone.
-        this.log.warn(`${label(session)} input error: ${String(err)}`);
-        socket.close(CLOSE_POLICY, "invalid state");
-      }
+    this.joinOpenRuns();
+    for (const run of this.matchmaker.takeReady(this.tickCount)) {
+      this.startRun(run.dungeon, run.players);
     }
-    const world = stepWorld(this.sim, TEST_WALLS, TICK_SECONDS);
-    this.sim = world.state;
-    for (const e of world.events) {
-      if (e.type === "playerDied") this.log.info(`guest #${e.playerId} died`);
-    }
-
     this.tickCount++;
-    if (this.tickCount % this.snapshotEveryTicks === 0) {
-      const encoded = encodeMessage(this.snapshot());
-      this.lastSnapshotBytes = Buffer.byteLength(encoded);
-      this.broadcastEncoded(encoded);
+    const sendSnapshots = this.tickCount % this.snapshotEveryTicks === 0;
+    for (const instance of this.instances.values()) {
+      const { ended, faulted } = instance.tick();
+      for (const id of faulted) {
+        // Should be impossible after validation; drop only this player
+        // rather than crashing the server for everyone.
+        this.log.warn(`guest #${id} input error; disconnecting`);
+        this.runOf.delete(id);
+        this.socketOf.get(id)?.close(CLOSE_POLICY, "invalid state");
+      }
+      for (const end of ended) this.finishRun(instance, end);
+      if (sendSnapshots && !instance.isEmpty) {
+        const encoded = encodeMessage(instance.snapshot(this.tickCount));
+        this.lastSnapshotBytes = Buffer.byteLength(encoded);
+        for (const id of instance.playerIds) this.sendEncoded(id, encoded);
+      }
+      if (instance.isEmpty) this.instances.delete(instance.id);
     }
   }
 
@@ -213,34 +197,6 @@ export class GameServer {
     return new Promise((resolve, reject) =>
       this.wss.close((err) => (err ? reject(err) : resolve())),
     );
-  }
-
-  private snapshot(): ServerMessage {
-    return {
-      type: "snapshot",
-      tick: this.tickCount,
-      players: this.players,
-      enemies: this.sim.enemies.map((e) => ({
-        id: e.id,
-        x: e.position.x,
-        y: e.position.y,
-        size: e.size,
-        hp: e.hp,
-        maxHp: e.maxHp,
-        respawnIn: e.respawnIn,
-      })),
-      projectiles: this.sim.projectiles.map((p) => ({
-        id: p.id,
-        owner: p.owner,
-        by: p.ownerId,
-        x: roundCoord(p.position.x),
-        y: roundCoord(p.position.y),
-        dx: p.direction.x,
-        dy: p.direction.y,
-        speed: p.speed,
-        size: p.size,
-      })),
-    };
   }
 
   /**
@@ -274,7 +230,6 @@ export class GameServer {
         socket.close(CLOSE_POLICY, "hello timeout");
       }, this.helloTimeoutMs),
       rate: new MessageRateLimiter(this.maxMessagesPerSecond),
-      inputs: null,
     };
     this.sessions.set(socket, session);
 
@@ -313,38 +268,150 @@ export class GameServer {
         this.onHello(socket, session, message.protocol);
         return;
       case "input": {
-        if (!session.inputs) {
+        if (session.id === null) {
           this.reject(socket, session, "send hello first");
           return;
         }
-        const result = queueInput(
-          session.inputs,
-          message.seq,
-          { move: message.move, fire: message.fire },
-          this.maxQueuedInputs,
-        );
+        // Inputs that arrive after a run ended (in flight while the client
+        // learned of it) are expected and ignored, not errors.
+        const instance = this.runOf.get(session.id);
+        if (!instance) return;
+        const result = instance.queueInput(session.id, message.seq, {
+          move: message.move,
+          fire: message.fire,
+        });
         if (result.kind === "rejected") {
           this.reject(socket, session, result.reason);
         }
         return;
       }
-      case "playAgain": {
+      case "queue":
         if (session.id === null) {
           this.reject(socket, session, "send hello first");
           return;
         }
-        const player = findPlayer(this.sim, session.id);
-        if (player && isPlayerAlive(player)) {
-          this.reject(socket, session, "playAgain is only allowed when dead");
-          return;
+        this.onQueue(socket, session, session.id, message.dungeon);
+        return;
+      case "leaveQueue": {
+        if (session.id === null) return;
+        const dungeon = this.matchmaker.leave(session.id);
+        if (dungeon) {
+          this.log.info(`${label(session)} left the queue`);
+          this.sendQueueStatus(dungeon);
         }
-        // D-046 prototype: a fresh state at the start; the enemy is not
-        // reset for anyone else.
-        this.sim = addPlayer(this.sim, session.id, PLAYER_START);
-        this.log.info(`${label(session)} plays again`);
+        return;
+      }
+      case "exitDungeon": {
+        if (session.id === null) return;
+        const instance = this.runOf.get(session.id);
+        const end = instance?.leave(session.id);
+        if (instance && end) this.finishRun(instance, end);
         return;
       }
     }
+  }
+
+  private onQueue(
+    socket: WebSocket,
+    session: Session,
+    id: number,
+    dungeon: DungeonId,
+  ): void {
+    if (this.runOf.has(id)) {
+      this.reject(socket, session, "already in a run");
+      return;
+    }
+    if (this.matchmaker.has(id)) {
+      this.reject(socket, session, "already queued");
+      return;
+    }
+    this.matchmaker.join(id, dungeon, this.tickCount);
+    this.log.info(`${label(session)} queued for ${dungeon}`);
+    this.sendQueueStatus(dungeon);
+  }
+
+  /** Tells everyone waiting for `dungeon` how many are waiting and when it starts. */
+  private sendQueueStatus(dungeon: DungeonId): void {
+    const waiting = this.matchmaker.queuedFor(dungeon);
+    const startsIn =
+      this.matchmaker.ticksUntilStart(dungeon, this.tickCount) * TICK_SECONDS;
+    const encoded = encodeMessage({
+      type: "queueStatus",
+      dungeon,
+      queued: waiting.length,
+      startsIn,
+    });
+    for (const id of waiting) this.sendEncoded(id, encoded);
+  }
+
+  /**
+   * Late join (D-052): each queued player, longest-waiting first, goes into
+   * the fullest run of their dungeon that can still take them.
+   */
+  private joinOpenRuns(): void {
+    const changed = new Set<DungeonId>();
+    for (const { playerId, dungeon } of this.matchmaker.waitingPlayers) {
+      let best: DungeonInstance | undefined;
+      for (const run of this.instances.values()) {
+        if (run.dungeon !== dungeon || !run.canJoin(playerId)) continue;
+        if (!best || run.playerIds.length > best.playerIds.length) best = run;
+      }
+      if (!best) continue;
+      this.matchmaker.leave(playerId);
+      changed.add(dungeon);
+      best.join(playerId);
+      this.runOf.set(playerId, best);
+      this.sendEncoded(
+        playerId,
+        encodeMessage({
+          type: "runStarted",
+          dungeon,
+          players: best.playerIds,
+        }),
+      );
+      this.log.info(`guest #${playerId} joined run #${best.id} in progress`);
+    }
+    for (const dungeon of changed) this.sendQueueStatus(dungeon);
+  }
+
+  private startRun(dungeon: DungeonId, players: readonly number[]): void {
+    const instance = new DungeonInstance(
+      this.nextInstanceId++,
+      dungeon,
+      players,
+      {
+        maxQueuedInputs: this.maxQueuedInputs,
+        joinWindowTicks: this.joinWindowTicks,
+      },
+    );
+    this.instances.set(instance.id, instance);
+    for (const id of players) this.runOf.set(id, instance);
+    const encoded = encodeMessage({
+      type: "runStarted",
+      dungeon,
+      players: [...players],
+    });
+    for (const id of players) this.sendEncoded(id, encoded);
+    this.log.info(
+      `run #${instance.id} started: ${dungeon} with ${players.map((p) => `#${p}`).join(" ")}`,
+    );
+  }
+
+  /** A player's run is over: back to the menu with their stats. */
+  private finishRun(instance: DungeonInstance, end: RunEnd): void {
+    this.runOf.delete(end.playerId);
+    this.sendEncoded(
+      end.playerId,
+      encodeMessage({
+        type: "runEnded",
+        dungeon: instance.dungeon,
+        result: end.result,
+        stats: end.stats,
+      }),
+    );
+    this.log.info(
+      `guest #${end.playerId} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s`,
+    );
   }
 
   private onHello(socket: WebSocket, session: Session, protocol: number): void {
@@ -363,10 +430,8 @@ export class GameServer {
     }
     clearTimeout(session.helloTimer);
     session.id = this.nextPlayerId++;
-    session.inputs = newInputQueue();
-    // PROVISIONAL: everyone spawns at the debug start; players do not
-    // collide with each other.
-    this.sim = addPlayer(this.sim, session.id, PLAYER_START);
+    this.socketOf.set(session.id, socket);
+    // Joined players start at the menu; nothing else happens until they queue.
     this.send(socket, {
       type: "welcome",
       playerId: session.id,
@@ -380,7 +445,15 @@ export class GameServer {
     clearTimeout(session.helloTimer);
     this.sessions.delete(socket);
     if (session.id !== null) {
-      this.sim = removePlayer(this.sim, session.id);
+      const id = session.id;
+      this.socketOf.delete(id);
+      const dungeon = this.matchmaker.leave(id);
+      if (dungeon) this.sendQueueStatus(dungeon);
+      const instance = this.runOf.get(id);
+      if (instance?.leave(id)) {
+        this.runOf.delete(id);
+        this.log.info(`guest #${id} disconnected from run #${instance.id}`);
+      }
       this.broadcast({ type: "playerLeft", playerId: session.id });
       this.log.info(`${label(session)} left (${this.playerIds.length} online)`);
     }
@@ -395,6 +468,11 @@ export class GameServer {
       this.log.warn(`${label(session)} closed: too many invalid messages`);
       socket.close(CLOSE_POLICY, "too many invalid messages");
     }
+  }
+
+  private sendEncoded(playerId: number, encoded: string): void {
+    const socket = this.socketOf.get(playerId);
+    if (socket?.readyState === WebSocket.OPEN) socket.send(encoded);
   }
 
   private send(socket: WebSocket, message: ServerMessage): void {

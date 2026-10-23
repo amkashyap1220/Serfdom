@@ -1,0 +1,261 @@
+/* Full-container screens (screens.ts). Placeholder colors only; not the
+   verified palette (see ASSET_MANIFEST.md). */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #0e1014;
+  color: #c9d1dc;
+  font-family: ui-monospace, monospace;
+  text-align: center;
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+.screen h1 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: 0.08em;
+}
+
+.screen h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.screen p {
+  margin: 0;
+}
+
+.screen .title {
+  font-size: 40px;
+  color: #f0c419;
+}
+
+.screen .hint {
+  max-width: 560px;
+  color: #8a94a6;
+  font-size: 12px;
+}
+
+.screen .notice {
+  padding: 6px 12px;
+  border: 1px solid #6b5b4b;
+  background: #2a2118;
+}
+
+.screen button {
+  padding: 8px 16px;
+  border: 2px solid #46505f;
+  background: #171a21;
+  color: #ffffff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.screen button:hover,
+.screen button:focus-visible {
+  border-color: #f0c419;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tabs button.active {
+  border-color: #f0c419;
+  color: #f0c419;
+}
+
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-height: 220px;
+  justify-content: center;
+}
+
+.dungeon-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 360px;
+  padding: 16px;
+  border: 2px solid #46505f;
+  background: #171a21;
+}
+
+.screen .countdown {
+  font-size: 22px;
+  color: #f0c419;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 24px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.stats dt {
+  color: #8a94a6;
+  text-align: left;
+}
+
+.stats dd {
+  margin: 0;
+  text-align: right;
+  color: #ffffff;
+}
+
+/* Death (D-050): an abrupt cut to black and red, then the life record. */
+.screen-results:has(.death-title) {
+  background: #050000;
+}
+
+.death-flash {
+  position: absolute;
+  inset: 0;
+  background: #b00000;
+  animation: death-flash 900ms ease-out forwards;
+  pointer-events: none;
+}
+
+.death-title {
+  color: #ff3030;
+  font-size: 36px !important;
+  animation: death-title 1200ms ease-out;
+}
+
+.epitaph {
+  color: #c9a0a0;
+  font-style: italic;
+}
+
+.screen-results:has(.death-title) .stats {
+  animation: fade-in 1200ms ease-in 400ms both;
+}
+
+.screen button.delayed {
+  animation: fade-in 400ms ease-in both;
+}
+
+@keyframes death-flash {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes death-title {
+  from {
+    letter-spacing: 0.5em;
+    opacity: 0;
+  }
+  to {
+    letter-spacing: 0.08em;
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    visibility: hidden;
+  }
+  to {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* Completion (D-049): maximum celebration. 6c adds more. */
+.cleared-title {
+  color: #f0c419;
+  font-size: 40px !important;
+  text-shadow:
+    0 0 12px #f0c41988,
+    0 0 32px #f0c41955;
+  animation: cleared-pop 700ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.confetti i {
+  position: absolute;
+  top: -12px;
+  width: 6px;
+  height: 10px;
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+.chest {
+  width: 48px;
+  height: 36px;
+  margin-top: 8px;
+  border: 3px solid #6b4a1f;
+  background: linear-gradient(#b07a2a 0 40%, #6b4a1f 40% 48%, #b07a2a 48%);
+  animation: chest-wiggle 900ms ease-in-out 700ms infinite;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@keyframes cleared-pop {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes confetti-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(680px) rotate(720deg);
+  }
+}
+
+@keyframes chest-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(6deg);
+  }
+}

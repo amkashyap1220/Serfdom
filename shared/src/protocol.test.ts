@@ -202,13 +202,94 @@ describe("input messages", () => {
     expect(parseClientMessage(raw)).toEqual({ ok: false, error });
   });
 
-  it("accepts playAgain and rejects extra fields on it", () => {
+  it("no longer accepts the v3 playAgain message", () => {
     expect(parseClientMessage(JSON.stringify({ type: "playAgain" }))).toEqual({
-      ok: true,
-      message: { type: "playAgain" },
+      ok: false,
+      error: 'unknown message type "playAgain"',
     });
+  });
+});
+
+describe("menu, queue, and run messages (v4)", () => {
+  const client = (m: unknown) => parseClientMessage(JSON.stringify(m));
+  const server = (m: unknown) => parseServerMessage(JSON.stringify(m));
+
+  it("accepts queue for a known dungeon only", () => {
+    expect(client({ type: "queue", dungeon: "goblin-warrens" })).toEqual({
+      ok: true,
+      message: { type: "queue", dungeon: "goblin-warrens" },
+    });
+    expect(client({ type: "queue", dungeon: "dragon-lair" })).toEqual({
+      ok: false,
+      error: "queue: unknown dungeon",
+    });
+    expect(client({ type: "queue" }).ok).toBe(false);
     expect(
-      parseClientMessage(JSON.stringify({ type: "playAgain", hp: 200 })).ok,
+      client({ type: "queue", dungeon: "goblin-warrens", party: [1, 2] }).ok,
+    ).toBe(false);
+  });
+
+  it("accepts leaveQueue and exitDungeon with no extra fields", () => {
+    expect(client({ type: "leaveQueue" })).toEqual({
+      ok: true,
+      message: { type: "leaveQueue" },
+    });
+    expect(client({ type: "exitDungeon" })).toEqual({
+      ok: true,
+      message: { type: "exitDungeon" },
+    });
+    // A client cannot claim it completed the dungeon on the way out.
+    expect(client({ type: "exitDungeon", completed: true }).ok).toBe(false);
+  });
+
+  const stats = {
+    seconds: 61.5,
+    shotsFired: 120,
+    shotsHit: 80,
+    damageDealt: 2000,
+    enemiesDefeated: 3,
+    damageTaken: 140,
+  };
+
+  it("round-trips queueStatus, runStarted, and runEnded", () => {
+    const msgs: ServerMessage[] = [
+      {
+        type: "queueStatus",
+        dungeon: "goblin-warrens",
+        queued: 2,
+        startsIn: 3.5,
+      },
+      { type: "runStarted", dungeon: "goblin-warrens", players: [1, 4] },
+      { type: "runEnded", dungeon: "goblin-warrens", result: "died", stats },
+    ];
+    for (const m of msgs) {
+      expect(parseServerMessage(encodeMessage(m))).toEqual({
+        ok: true,
+        message: m,
+      });
+    }
+  });
+
+  it("rejects malformed run messages", () => {
+    const ended = { type: "runEnded", dungeon: "goblin-warrens" };
+    expect(server({ ...ended, result: "won", stats }).ok).toBe(false);
+    expect(
+      server({ ...ended, result: "died", stats: { ...stats, seconds: -1 } }).ok,
+    ).toBe(false);
+    expect(
+      server({ ...ended, result: "died", stats: { ...stats, gold: 5 } }).ok,
+    ).toBe(false);
+    expect(
+      server({ type: "runStarted", dungeon: "goblin-warrens", players: [0] })
+        .ok,
+    ).toBe(false);
+    expect(
+      server({
+        type: "queueStatus",
+        dungeon: "goblin-warrens",
+        queued: 0,
+        startsIn: 1,
+      }).ok,
     ).toBe(false);
   });
 });

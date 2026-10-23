@@ -15,6 +15,8 @@ body {
   /* Centered horizontally. Below 960×640 the page scrolls rather than
      shrinking: PROVISIONAL until smaller-window behavior is decided. */
   margin: 0 auto;
+  /* Anchor for the full-container screens (#screen). */
+  position: relative;
 }
 
 #hud {

@@ -1,6 +1,7 @@
 import {
   encodeMessage,
   MAX_MESSAGE_BYTES,
+  MAX_PARTY_SIZE,
   parseServerMessage,
   PROTOCOL_VERSION,
   type ServerMessage,
@@ -81,6 +82,8 @@ beforeEach(async () => {
     port: 0,
     helloTimeoutMs: 200,
     autoTick: false,
+    // Runs start on the next tick, so tests decide exactly who is in a party.
+    queueWaitSeconds: 0,
     log: silentLogger,
   });
   clients = [];
@@ -246,120 +249,58 @@ const input = (
     fire: { trigger: aim !== null, aim },
   });
 
-describe("authoritative movement (4b)", () => {
-  it("moves a player only by its inputs, one per tick, and acks them", async () => {
-    const { client } = await joined();
-    for (let seq = 0; seq < 30; seq++) {
-      client.send(input(seq, 1, 0));
-      await until(() => server.queuedInputs(1) === 1);
-      server.tick();
-    }
-    // 30 ticks × 150 px/s × 1/60 s = 75 px.
-    expect(server.players[0]?.x).toBeCloseTo(1075, 9);
-    expect(server.players[0]?.ack).toBe(29);
-    const snap = await nextOfType(client, "snapshot");
-    expect(snap.players[0]).toMatchObject({ id: 1, y: 1000 });
-  });
+const GW = "goblin-warrens";
+const ids = (from: number, count: number) =>
+  Array.from({ length: count }, (_, i) => from + i);
+const queue = encodeMessage({ type: "queue", dungeon: GW });
 
-  it("sends a snapshot every tick with every player in them", async () => {
-    const a = await joined();
-    await joined();
-    server.tick();
-    const snap = await nextOfType(a.client, "snapshot");
-    expect(snap.tick).toBe(1);
-    expect(snap.players.map((p) => p.id).sort()).toEqual([1, 2]);
-  });
-
-  it("rejects a too-long direction and does not move", async () => {
-    const { client } = await joined();
-    client.send(input(0, 2, 0));
-    expect(await nextOfType(client, "error")).toEqual({
-      type: "error",
-      reason: "input: move must have length <= 1",
-    });
-    server.tick();
-    expect(server.players[0]?.x).toBe(1000);
-  });
-
-  it("rejects a position sent instead of an intent", async () => {
-    const { client } = await joined();
-    client.send(JSON.stringify({ type: "input", seq: 0, x: 1900, y: 1900 }));
-    expect((await nextOfType(client, "error")).reason).toBe(
-      "input: unexpected fields",
-    );
-  });
-
-  it("rejects input before hello and replayed seq numbers", async () => {
-    const c = await connect(server.port);
-    clients.push(c);
-    c.send(input(0, 1, 0));
-    expect((await c.next()).type).toBe("error");
-    const { client } = await joined();
-    client.send(input(5, 1, 0));
-    client.send(input(5, 1, 0));
-    expect((await nextOfType(client, "error")).reason).toBe(
-      "input seq must increase",
-    );
-  });
-
-  it("drops a disconnected player from later snapshots", async () => {
-    const a = await joined();
-    const b = await joined();
-    b.client.socket.close();
-    await serverHasPlayers([1]);
-    server.tick();
-    const snap = await nextOfType(a.client, "snapshot");
-    expect(snap.players.map((p) => p.id)).toEqual([1]);
-  });
-
-  it("closes a client that floods messages", async () => {
-    const { client } = await joined();
-    for (let seq = 0; seq < 400; seq++) client.send(input(seq, 1, 0));
-    expect(await client.closed).toEqual({ code: 1008, reason: "rate limit" });
-  });
-});
-
-describe("real-time loop", () => {
-  it("processes queued inputs at about 60 ticks per second on its own", async () => {
-    const live = await GameServer.start({ port: 0, log: silentLogger });
-    try {
-      const c = await connect(live.port);
-      clients.push(c);
-      c.send(hello);
-      await nextOfType(c, "welcome");
-      // Send like a real client: one input every 1/60 s for 0.5 s.
-      for (let seq = 0; seq < 30; seq++) {
-        c.send(input(seq, 0, 1));
-        await new Promise((r) => setTimeout(r, 1000 / 60));
-      }
-      await new Promise((r) => setTimeout(r, 200));
-      const p = live.players[0];
-      expect(p?.ack).toBe(29);
-      // Timer jitter may make the server drop a stale input or two, never add any.
-      expect(p?.y).toBeGreaterThan(1075 - 3 * 2.5 - 1e-9);
-      expect(p?.y).toBeLessThanOrEqual(1075 + 1e-9);
-    } finally {
-      await live.close();
-    }
-  });
-});
-
-async function serverHasPlayers(ids: number[]): Promise<void> {
-  await until(() => server.playerIds.join() === ids.join());
+/** Queues every client and starts one run with all of them. Ids are 1..n in order. */
+async function inRun(n: number): Promise<TestClient[]> {
+  const party: TestClient[] = [];
+  for (let i = 0; i < n; i++) party.push((await joined()).client);
+  for (const c of party) c.send(queue);
+  const firstId = server.playerIds.length - n + 1;
+  await until(() => party.every((_, i) => server.isQueued(firstId + i)));
+  server.tick();
+  for (const c of party) await nextOfType(c, "runStarted");
+  return party;
 }
 
-/** Moves a joined player to `at` in the authoritative sim (test setup only). */
+/** The simulation of player `id`'s run. */
+function sim(id = 1) {
+  const run = server.instanceOf(id);
+  if (!run) throw new Error(`player ${id} is not in a run`);
+  return run.state;
+}
+
+function playerOf(id: number) {
+  const p = sim(id).players.find((pl) => pl.id === id);
+  if (!p) throw new Error(`no player ${id}`);
+  return p;
+}
+
+/** Moves a player within their run's sim (test setup only). */
 function placePlayer(
   id: number,
   at: { x: number; y: number },
   hp?: number,
 ): void {
-  const s = server.state;
-  server.setStateForTest({
+  const run = server.instanceOf(id)!;
+  const s = run.state;
+  run.setStateForTest({
     ...s,
     players: s.players.map((p) =>
       p.id === id ? { ...p, position: { ...at }, hp: hp ?? p.hp } : p,
     ),
+  });
+}
+
+function setDummyHp(id: number, hp: number): void {
+  const run = server.instanceOf(id)!;
+  const s = run.state;
+  run.setStateForTest({
+    ...s,
+    enemies: s.enemies.map((e) => ({ ...e, hp })),
   });
 }
 
@@ -371,48 +312,324 @@ async function drive(
   ticks: number,
   aim: { x: number; y: number } | null,
 ): Promise<void> {
-  for (let i = 0; i < ticks; i++) {
+  for (let i = 0; i < ticks && server.instanceOf(id); i++) {
     client.send(input(firstSeq + i, 0, 0, aim));
     await until(() => server.queuedInputs(id) >= 1);
     server.tick();
   }
 }
 
-const dummy = () => server.state.enemies[0]!;
+const dummy = (id = 1) => sim(id).enemies[0]!;
+
+describe("menu and queue (6a)", () => {
+  it("a joined player waits at the menu: not in any run, no snapshots", async () => {
+    const { client } = await joined();
+    server.tick();
+    expect(server.instanceOf(1)).toBeUndefined();
+    expect(server.runCount).toBe(0);
+    // Provoke a reply: if a snapshot had been sent it would arrive first.
+    client.send(hello);
+    expect((await client.next()).type).toBe("error");
+  });
+
+  it("queue → queueStatus → runStarted → snapshots", async () => {
+    const { client } = await joined();
+    client.send(queue);
+    expect(await client.next()).toEqual({
+      type: "queueStatus",
+      dungeon: GW,
+      queued: 1,
+      startsIn: 0,
+    });
+    server.tick();
+    expect(await client.next()).toEqual({
+      type: "runStarted",
+      dungeon: GW,
+      players: [1],
+    });
+    const snap = await nextOfType(client, "snapshot");
+    expect(snap.players).toEqual([
+      expect.objectContaining({ id: 1, x: 1000, y: 1000, ack: -1, hp: 200 }),
+    ]);
+  });
+
+  it("waits up to the queue time, then starts solo (T-030)", async () => {
+    const live = await GameServer.start({
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 5,
+      log: silentLogger,
+    });
+    try {
+      const c = await connect(live.port);
+      clients.push(c);
+      c.send(hello);
+      await nextOfType(c, "welcome");
+      c.send(queue);
+      expect(await nextOfType(c, "queueStatus")).toMatchObject({
+        queued: 1,
+        startsIn: 5,
+      });
+      for (let t = 0; t < 300; t++) live.tick();
+      expect(live.runCount).toBe(0);
+      live.tick();
+      expect(live.runCount).toBe(1);
+      expect(await nextOfType(c, "runStarted")).toMatchObject({ players: [1] });
+    } finally {
+      await live.close();
+    }
+  });
+
+  it("tells everyone waiting when someone else joins the queue", async () => {
+    const live = await GameServer.start({
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 5,
+      log: silentLogger,
+    });
+    try {
+      const [a, b] = [await connect(live.port), await connect(live.port)];
+      clients.push(a, b);
+      for (const c of [a, b]) {
+        c.send(hello);
+        await nextOfType(c, "welcome");
+      }
+      a.send(queue);
+      await nextOfType(a, "queueStatus");
+      b.send(queue);
+      expect(await nextOfType(a, "queueStatus")).toMatchObject({ queued: 2 });
+      expect(await nextOfType(b, "queueStatus")).toMatchObject({ queued: 2 });
+      b.socket.close();
+      expect(await nextOfType(a, "queueStatus")).toMatchObject({ queued: 1 });
+    } finally {
+      await live.close();
+    }
+  });
+
+  it("puts at most MAX_PARTY_SIZE (10) players in one run; the next gets a run of their own", async () => {
+    const n = MAX_PARTY_SIZE + 1;
+    const party: TestClient[] = [];
+    for (let i = 0; i < n; i++) party.push((await joined()).client);
+    for (const c of party) c.send(queue);
+    await until(() => ids(1, n).every((id) => server.isQueued(id)));
+    server.tick();
+    expect(server.runCount).toBe(2);
+    expect(server.instanceOf(1)?.playerIds).toEqual(ids(1, MAX_PARTY_SIZE));
+    expect(server.instanceOf(n)?.playerIds).toEqual([n]);
+  });
+
+  it("leaving the queue means no run starts", async () => {
+    const { client } = await joined();
+    client.send(queue);
+    client.send(encodeMessage({ type: "leaveQueue" }));
+    await until(() => !server.isQueued(1));
+    server.tick();
+    expect(server.runCount).toBe(0);
+  });
+
+  it("rejects queueing twice, while in a run, or for an unknown dungeon", async () => {
+    const [c] = await inRun(1);
+    c!.send(queue);
+    expect((await nextOfType(c!, "error")).reason).toBe("already in a run");
+    const { client } = await joined();
+    client.send(JSON.stringify({ type: "queue", dungeon: "dragon-lair" }));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "queue: unknown dungeon",
+    );
+    client.send(queue);
+    client.send(queue);
+    expect((await nextOfType(client, "error")).reason).toBe("already queued");
+  });
+
+  it("joins a run in progress within its first 15 s (D-052)", async () => {
+    const [a] = await inRun(1);
+    for (let t = 0; t < 14 * 60; t++) server.tick(); // 14 s in
+    const { client: b } = await joined();
+    b.send(queue);
+    await until(() => server.isQueued(2));
+    server.tick();
+    expect(await nextOfType(b, "runStarted")).toEqual({
+      type: "runStarted",
+      dungeon: GW,
+      players: [1, 2],
+    });
+    expect(server.instanceOf(2)).toBe(server.instanceOf(1));
+    // The joiner starts fresh at the spawn; enemies rescale for two.
+    expect(playerOf(2)).toMatchObject({
+      position: { x: 1000, y: 1000 },
+      hp: 200,
+    });
+    server.tick();
+    expect(dummy().maxHp).toBe(875);
+    let snap = await nextOfType(a!, "snapshot");
+    while (snap.players.length < 2) snap = await nextOfType(a!, "snapshot");
+    expect(snap.players.map((p) => p.id)).toEqual([1, 2]);
+  });
+
+  it("after 15 s the run is locked; a new queuer gets a separate world", async () => {
+    const [a] = await inRun(1);
+    for (let t = 0; t < 15 * 60; t++) server.tick();
+    const [b] = await inRun(1);
+    expect(server.instanceOf(1)).not.toBe(server.instanceOf(2));
+    expect(server.instanceOf(1)?.playerIds).toEqual([1]);
+    server.tick();
+    const snapA = await nextOfType(a!, "snapshot");
+    expect(snapA.players.map((p) => p.id)).toEqual([1]);
+    await nextOfType(b!, "snapshot");
+  });
+
+  it("a player who left cannot rejoin the same run, even inside the window", async () => {
+    const [a] = await inRun(2);
+    const firstRun = server.instanceOf(1);
+    a!.send(encodeMessage({ type: "exitDungeon" }));
+    await nextOfType(a!, "runEnded");
+    a!.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    await nextOfType(a!, "runStarted");
+    expect(server.instanceOf(1)).not.toBe(firstRun);
+    expect(firstRun?.playerIds).toEqual([2]);
+  });
+
+  it("does not let anyone into a full run, even inside the window", async () => {
+    await inRun(MAX_PARTY_SIZE);
+    await inRun(1);
+    const next = MAX_PARTY_SIZE + 1;
+    expect(server.instanceOf(next)?.playerIds).toEqual([next]);
+    expect(server.instanceOf(1)?.playerIds).toEqual(ids(1, MAX_PARTY_SIZE));
+  });
+});
+
+describe("authoritative movement (4b)", () => {
+  it("moves a player only by its inputs, one per tick, and acks them", async () => {
+    const [client] = await inRun(1);
+    for (let seq = 0; seq < 30; seq++) {
+      client!.send(input(seq, 1, 0));
+      await until(() => server.queuedInputs(1) === 1);
+      server.tick();
+    }
+    // 30 ticks × 150 px/s × 1/60 s = 75 px.
+    expect(playerOf(1).position.x).toBeCloseTo(1075, 9);
+    expect(server.instanceOf(1)?.snapshotPlayers()[0]?.ack).toBe(29);
+  });
+
+  it("sends each run's snapshot, with every member, every tick", async () => {
+    const [a] = await inRun(2);
+    server.tick();
+    const snap = await nextOfType(a!, "snapshot");
+    expect(snap.players.map((p) => p.id).sort()).toEqual([1, 2]);
+  });
+
+  it("rejects a too-long direction and does not move", async () => {
+    const [client] = await inRun(1);
+    client!.send(input(0, 2, 0));
+    expect(await nextOfType(client!, "error")).toEqual({
+      type: "error",
+      reason: "input: move must have length <= 1",
+    });
+    server.tick();
+    expect(playerOf(1).position.x).toBe(1000);
+  });
+
+  it("rejects a position sent instead of an intent", async () => {
+    const [client] = await inRun(1);
+    client!.send(JSON.stringify({ type: "input", seq: 0, x: 1900, y: 1900 }));
+    expect((await nextOfType(client!, "error")).reason).toBe(
+      "input: unexpected fields",
+    );
+  });
+
+  it("rejects input before hello and replayed seq numbers", async () => {
+    const c = await connect(server.port);
+    clients.push(c);
+    c.send(input(0, 1, 0));
+    expect((await c.next()).type).toBe("error");
+    const [client] = await inRun(1);
+    client!.send(input(5, 1, 0));
+    client!.send(input(5, 1, 0));
+    expect((await nextOfType(client!, "error")).reason).toBe(
+      "input seq must increase",
+    );
+  });
+
+  it("drops a disconnected player from their run", async () => {
+    const [a, b] = await inRun(2);
+    b!.socket.close();
+    await until(() => server.instanceOf(2) === undefined);
+    expect(sim(1).players.map((p) => p.id)).toEqual([1]);
+    server.tick();
+    let snap = await nextOfType(a!, "snapshot");
+    while (snap.players.length > 1) snap = await nextOfType(a!, "snapshot");
+    expect(snap.players.map((p) => p.id)).toEqual([1]);
+  });
+
+  it("closes a client that floods messages", async () => {
+    const [client] = await inRun(1);
+    for (let seq = 0; seq < 400; seq++) client!.send(input(seq, 1, 0));
+    expect(await client!.closed).toEqual({ code: 1008, reason: "rate limit" });
+  });
+});
+
+describe("real-time loop", () => {
+  it("processes queued inputs at about 60 ticks per second on its own", async () => {
+    const live = await GameServer.start({
+      port: 0,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    try {
+      const c = await connect(live.port);
+      clients.push(c);
+      c.send(hello);
+      await nextOfType(c, "welcome");
+      c.send(queue);
+      await nextOfType(c, "runStarted");
+      // Send like a real client: one input every 1/60 s for 0.5 s.
+      for (let seq = 0; seq < 30; seq++) {
+        c.send(input(seq, 0, 1));
+        await new Promise((r) => setTimeout(r, 1000 / 60));
+      }
+      await new Promise((r) => setTimeout(r, 200));
+      const p = live.instanceOf(1)?.snapshotPlayers()[0];
+      expect(p?.ack).toBe(29);
+      // Timer jitter may make the server drop a stale input or two, never add any.
+      expect(p?.y).toBeGreaterThan(1075 - 3 * 2.5 - 1e-9);
+      expect(p?.y).toBeLessThanOrEqual(1075 + 1e-9);
+    } finally {
+      await live.close();
+    }
+  });
+});
 
 describe("shared combat on the server (5b)", () => {
-  it("a player's shots damage the shared dummy, and everyone sees the same HP", async () => {
-    const a = await joined();
-    const b = await joined();
+  it("a player's shots damage the shared dummy, and the party sees the same HP", async () => {
+    const [a, b] = await inRun(2);
     // Dummy at (1300, 1100); put player 1 100 px to its left.
     placePlayer(1, { x: 1200, y: 1100 });
-    await drive(a.client, 1, 0, 60, { x: 1, y: 0 });
-    const hp = dummy().hp;
-    expect(hp).toBeLessThan(dummy().maxHp);
+    await drive(a!, 1, 0, 60, { x: 1, y: 0 });
+    expect(dummy().hp).toBeLessThan(dummy().maxHp);
     server.tick();
-    const snapA = await nextOfType(a.client, "snapshot");
-    let snapB = await nextOfType(b.client, "snapshot");
-    while (snapB.tick < snapA.tick)
-      snapB = await nextOfType(b.client, "snapshot");
+    const snapA = await nextOfType(a!, "snapshot");
+    let snapB = await nextOfType(b!, "snapshot");
+    while (snapB.tick < snapA.tick) snapB = await nextOfType(b!, "snapshot");
     expect(snapA.enemies[0]?.hp).toBe(snapB.enemies[0]?.hp);
   });
 
   it("scales the dummy's HP for two living players (D-045)", async () => {
-    await joined();
-    await joined();
+    await inRun(2);
     server.tick();
     expect(dummy().maxHp).toBe(875);
   });
 
   it("cannot be tricked into a faster fire rate by sending extra inputs", async () => {
-    const { client } = await joined();
+    const [client] = await inRun(1);
     placePlayer(1, { x: 1200, y: 1100 });
     let seq = 0;
     // Twice the honest rate (2 inputs per tick = 120/s). Not 5 per tick:
     // that would trip the 180 messages/s flood limit, a different safeguard.
     for (let t = 0; t < 60; t++) {
       for (let i = 0; i < 2; i++)
-        client.send(input(seq++, 0, 0, { x: 1, y: 0 }));
+        client!.send(input(seq++, 0, 0, { x: 1, y: 0 }));
       await until(() => server.queuedInputs(1) >= 1);
       server.tick();
     }
@@ -424,10 +641,12 @@ describe("shared combat on the server (5b)", () => {
   });
 
   it("snapshots carry players' HP and cooldown, enemies, and projectiles", async () => {
-    const { client } = await joined();
+    const [client] = await inRun(1);
     placePlayer(1, { x: 1200, y: 1100 });
-    await drive(client, 1, 0, 2, { x: 1, y: 0 });
-    const snap = await nextOfType(client, "snapshot");
+    await drive(client!, 1, 0, 2, { x: 1, y: 0 });
+    let snap = await nextOfType(client!, "snapshot");
+    while (snap.projectiles.length === 0)
+      snap = await nextOfType(client!, "snapshot");
     expect(snap.players[0]).toMatchObject({ id: 1, hp: 200, maxHp: 200 });
     expect(snap.players[0]!.cooldown).toBeGreaterThan(0);
     expect(snap.enemies[0]).toMatchObject({
@@ -443,35 +662,9 @@ describe("shared combat on the server (5b)", () => {
     expect(server.lastSnapshotBytes).toBeLessThan(65536);
   });
 
-  it("kills a player, ignores their inputs while dead, and resets them on playAgain", async () => {
-    const { client } = await joined();
-    // 20 HP, standing directly west of the dummy: the next ring kills.
-    placePlayer(1, { x: 1250, y: 1100 }, 20);
-    for (let t = 0; t < 60 && server.state.players[0]!.hp > 0; t++)
-      server.tick();
-    expect(server.state.players[0]?.hp).toBe(0);
-    const deadAt = { ...server.state.players[0]!.position };
-    client.send(input(0, -1, 0));
-    await until(() => server.queuedInputs(1) >= 1);
-    server.tick();
-    expect(server.state.players[0]?.position).toEqual(deadAt);
-
-    client.send(JSON.stringify({ type: "playAgain" }));
-    await until(() => server.state.players[0]!.hp === 200);
-    expect(server.state.players[0]?.position).toEqual({ x: 1000, y: 1000 });
-  });
-
-  it("rejects playAgain while alive", async () => {
-    const { client } = await joined();
-    client.send(JSON.stringify({ type: "playAgain" }));
-    expect((await nextOfType(client, "error")).reason).toBe(
-      "playAgain is only allowed when dead",
-    );
-  });
-
   it("rejects an input claiming a hit", async () => {
-    const { client } = await joined();
-    client.send(
+    const [client] = await inRun(1);
+    client!.send(
       JSON.stringify({
         type: "input",
         seq: 0,
@@ -479,16 +672,87 @@ describe("shared combat on the server (5b)", () => {
         fire: { trigger: true, aim: { x: 1, y: 0 }, hit: 1 },
       }),
     );
-    expect((await nextOfType(client, "error")).reason).toBe(
+    expect((await nextOfType(client!, "error")).reason).toBe(
       "input: fire must be {trigger, aim}",
     );
   });
+});
 
-  it("removes a disconnected player from the simulation", async () => {
-    await joined();
-    const b = await joined();
-    b.client.socket.close();
-    await until(() => server.state.players.length === 1);
-    expect(server.state.players[0]?.id).toBe(1);
+describe("how runs end (6a)", () => {
+  it("death ends the run at once with server-counted stats; survivors keep going (D-050)", async () => {
+    const [a, b] = await inRun(2);
+    // 20 HP, standing directly west of the dummy: the next ring kills.
+    placePlayer(1, { x: 1250, y: 1100 }, 20);
+    for (let t = 0; t < 120 && server.instanceOf(1); t++) server.tick();
+    const ended = await nextOfType(a!, "runEnded");
+    expect(ended).toMatchObject({ dungeon: GW, result: "died" });
+    expect(ended.stats.damageTaken).toBe(20);
+    expect(ended.stats.seconds).toBeGreaterThan(0);
+    // Player 2 is still in the run, and the dummy rescales for one player.
+    server.tick();
+    expect(server.instanceOf(2)?.playerIds).toEqual([2]);
+    expect(dummy(2).maxHp).toBe(500);
+    // Late inputs from the dead player are ignored, not errors.
+    a!.send(input(0, -1, 0));
+    a!.send(hello);
+    expect((await nextOfType(a!, "error")).reason).toBe("already joined");
+    await nextOfType(b!, "snapshot");
+  });
+
+  it("clearing every enemy completes the run for every survivor", async () => {
+    const [a, b] = await inRun(2);
+    placePlayer(1, { x: 1200, y: 1100 });
+    setDummyHp(1, 25);
+    await drive(a!, 1, 0, 30, { x: 1, y: 0 });
+    for (const c of [a!, b!]) {
+      const ended = await nextOfType(c, "runEnded");
+      expect(ended.result).toBe("completed");
+    }
+    expect(server.runCount).toBe(0);
+  });
+
+  it("counts shots, hits, damage, and the defeat for the player who landed them", async () => {
+    const [a] = await inRun(1);
+    placePlayer(1, { x: 1200, y: 1100 });
+    setDummyHp(1, 50);
+    await drive(a!, 1, 0, 40, { x: 1, y: 0 });
+    for (let t = 0; t < 30 && server.instanceOf(1); t++) server.tick();
+    const { stats } = await nextOfType(a!, "runEnded");
+    expect(stats).toMatchObject({
+      shotsHit: 2,
+      damageDealt: 50,
+      enemiesDefeated: 1,
+    });
+    expect(stats.shotsFired).toBeGreaterThanOrEqual(2);
+  });
+
+  it("R (exitDungeon) leaves at once; the player can requeue and seqs restart at 0", async () => {
+    const [a] = await inRun(1);
+    await drive(a!, 1, 0, 5, null);
+    a!.send(encodeMessage({ type: "exitDungeon" }));
+    expect((await nextOfType(a!, "runEnded")).result).toBe("left");
+    expect(server.instanceOf(1)).toBeUndefined();
+    server.tick();
+    expect(server.runCount).toBe(0);
+
+    a!.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    await nextOfType(a!, "runStarted");
+    // A fresh run: back at the spawn with full HP, accepting seq 0 again.
+    expect(playerOf(1)).toMatchObject({
+      position: { x: 1000, y: 1000 },
+      hp: 200,
+    });
+    await drive(a!, 1, 0, 1, null);
+    expect(server.instanceOf(1)?.snapshotPlayers()[0]?.ack).toBe(0);
+  });
+
+  it("exitDungeon and leaveQueue at the menu are harmless no-ops", async () => {
+    const { client } = await joined();
+    client.send(encodeMessage({ type: "exitDungeon" }));
+    client.send(encodeMessage({ type: "leaveQueue" }));
+    client.send(hello);
+    expect((await nextOfType(client, "error")).reason).toBe("already joined");
   });
 });

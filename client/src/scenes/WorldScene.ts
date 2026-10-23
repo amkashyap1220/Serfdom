@@ -1,28 +1,17 @@
 import * as Phaser from "phaser";
 import {
-  addPlayer,
-  aimTargets,
   consumeFixedSteps,
-  createSimState,
   DUMMY_ENEMY,
-  DUMMY_POSITIONS,
-  findPlayer,
+  dungeonInfo,
   MAX_FRAME_SECONDS,
   NO_INPUT,
   nextFireMode,
-  PLAYER_START,
   PLAYER_WEAPON,
   resolveFireIntent,
-  stepSim,
-  TEST_WALLS,
-  TEST_WORLD,
   TICK_SECONDS,
   worldDirectionFromInput,
   type AimTarget,
   type FireMode,
-  type PlayerState,
-  type SimEvent,
-  type SimState,
   type Vec2,
 } from "@serfdom/shared";
 import {
@@ -30,7 +19,7 @@ import {
   screenToWorld,
   stepViewRotation,
 } from "../camera-math";
-import { viewFromSim, type CombatViewModel } from "../combat-view-model";
+import type { CombatViewModel } from "../combat-view-model";
 import {
   createKeyReader,
   createPointerReader,
@@ -62,6 +51,12 @@ const COLORS = {
   viewportCenter: 0x5bc0de,
 } as const;
 
+/**
+ * The map being drawn and collided against. Phase 6a has one dungeon, so
+ * one map; 6b gives each dungeon its own.
+ */
+const MAP = dungeonInfo("goblin-warrens").layout;
+
 /** What the scene knows about the player this browser controls. */
 export interface LocalView {
   position: Vec2;
@@ -85,39 +80,33 @@ export interface WorldDebugState {
   /** Camera rotation in radians, [0, 2π). */
   viewRotation: number;
   fireMode: FireMode;
-  /** Running totals since load, for the HUD (hits/blocked: offline only). */
+  /** Running totals since load, for the HUD. */
   totals: Totals;
 }
 
 interface Totals {
   shots: number;
-  hits: number;
-  blocked: number;
-  defeats: number;
   playerHits: number;
-  deaths: number;
 }
-
-/** Id of this browser's player in its local offline sim. */
-const LOCAL_PLAYER_ID = 1;
 
 const NO_KEYS: KeyState = {
   move: NO_INPUT,
   rotate: { left: false, right: false, reset: false },
   toggleFireMode: false,
   ability: false,
-  playAgain: false,
+  exitDungeon: false,
 };
 
 /**
- * Debug scene: test map, WASD movement with walls, player-centered camera
- * with Q/E rotation, and the combat prototype against a dummy.
+ * The dungeon scene: map, WASD movement with walls, player-centered camera
+ * with Q/E rotation, and combat.
  *
- * Two modes, one renderer:
- * - **Online** (Phase 5b): the server runs combat (D-043). This scene sends
- *   intents through NetSync, predicts its own movement and shots, and draws
- *   enemies, HP, and other projectiles from snapshots.
- * - **Offline**: the same shared rules run locally for one player.
+ * The server runs everything consequential (D-043). While in a run this
+ * scene sends intents through NetSync, predicts its own movement and shots,
+ * and draws enemies, HP, and other projectiles from snapshots. Outside a run
+ * (menu, queue, results: DOM screens drawn over it, screens.ts) it just
+ * shows the empty map. Phase 6a removed the offline mode: with menus and
+ * server-decided outcomes the game needs the server.
  *
  * Two cameras: the main camera draws the world layer and rotates; a second,
  * never-rotating "overlay" camera draws screen-fixed debug marks. A single
@@ -128,36 +117,22 @@ export class WorldScene extends Phaser.Scene {
   private world!: Phaser.GameObjects.Layer;
   private combat!: CombatView;
   private remotes!: RemotePlayersView;
-  private readonly net = new NetSync(TEST_WALLS);
+  readonly net = new NetSync(MAP.walls);
   private readKeys: () => KeyState = () => NO_KEYS;
   private readPointer: () => PointerInput = () => ({
     screen: null,
     leftDown: false,
   });
-  /** Offline-only simulation. */
-  private sim: SimState = addPlayer(
-    createSimState(DUMMY_POSITIONS),
-    LOCAL_PLAYER_ID,
-    PLAYER_START,
-  );
   private lastKeys: KeyState = NO_KEYS;
   private lastPointer: PointerInput = { screen: null, leftDown: false };
   private lastPointerWorld: Vec2 | null = null;
   private viewRotation = 0;
   private fireMode: FireMode = "autoAim";
   private carriedSeconds = 0;
-  private readonly totals: Totals = {
-    shots: 0,
-    hits: 0,
-    blocked: 0,
-    defeats: 0,
-    playerHits: 0,
-    deaths: 0,
-  };
+  private readonly totals: Totals = { shots: 0, playerHits: 0 };
   private playerFlashUntil = 0;
   private lastLocalHp = 0;
   private lastView: CombatViewModel = { enemies: [], projectiles: [] };
-  private deathText!: Phaser.GameObjects.Text;
 
   constructor() {
     super("world");
@@ -183,30 +158,15 @@ export class WorldScene extends Phaser.Scene {
       COLORS.playerHit,
       COLORS.playerMark,
     );
-    this.player = this.add.image(
-      PLAYER_START.x,
-      PLAYER_START.y,
-      PLAYER_TEXTURE,
-    );
+    this.player = this.add.image(MAP.spawn.x, MAP.spawn.y, PLAYER_TEXTURE);
     this.world.add(this.player);
     const overlay = this.drawScreenOverlay();
-    this.deathText = this.add
-      .text(this.scale.width / 2, this.scale.height / 2 - 40, "", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#ffffff",
-        align: "center",
-        backgroundColor: "#000000aa",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setVisible(false);
     this.readKeys = createKeyReader(this);
     this.readPointer = createPointerReader(this);
 
     // D-033: no camera bounds; the camera always centers the player and
     // shows void past the map edge.
-    this.cameras.main.setZoom(1).ignore([overlay, this.deathText]);
+    this.cameras.main.setZoom(1).ignore(overlay);
     this.cameras
       .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
       .ignore(this.world);
@@ -250,23 +210,10 @@ export class WorldScene extends Phaser.Scene {
     );
     const move = worldDirectionFromInput(this.lastKeys.move, this.viewRotation);
 
-    const online = this.net.online;
-    const events: SimEvent[] = [];
-    for (let i = 0; i < steps; i++) {
-      if (online) {
-        this.onlineTick(move);
-      } else {
-        events.push(...this.offlineTick(move));
-      }
+    if (this.net.online) {
+      for (let i = 0; i < steps; i++) this.onlineTick(move);
     }
-    this.countEvents(events);
-
-    // D-046 prototype: a dead player is at the placeholder "main menu";
-    // Enter plays again with a fresh state at the start.
-    if (this.lastKeys.playAgain && this.localView().hp <= 0) {
-      if (online) this.net.playAgain();
-      else this.sim = addPlayer(this.sim, LOCAL_PLAYER_ID, PLAYER_START);
-    }
+    if (this.lastKeys.exitDungeon) this.net.exitDungeon();
     this.syncView(time);
   }
 
@@ -304,22 +251,6 @@ export class WorldScene extends Phaser.Scene {
     this.net.stepLocalShots();
   }
 
-  /** One tick offline: the shared rules run locally for our one player. */
-  private offlineTick(move: Vec2): SimEvent[] {
-    const fire = this.resolveFire(
-      this.localPlayer().position,
-      aimTargets(this.sim),
-    );
-    const result = stepSim(
-      this.sim,
-      new Map([[LOCAL_PLAYER_ID, { move, fire }]]),
-      TEST_WALLS,
-      TICK_SECONDS,
-    );
-    this.sim = result.state;
-    return result.events;
-  }
-
   /** Re-resolved every tick: auto aim follows the closest living enemy. */
   private resolveFire(from: Vec2, targets: readonly AimTarget[]) {
     return resolveFireIntent(
@@ -331,36 +262,15 @@ export class WorldScene extends Phaser.Scene {
     );
   }
 
-  /** The offline sim's player (always present there). */
-  private localPlayer(): PlayerState {
-    const p = findPlayer(this.sim, LOCAL_PLAYER_ID);
-    if (!p) throw new Error("local player missing from sim");
-    return p;
-  }
-
-  /** Our position (predicted online) and HP (from the server online). */
+  /** Our position (predicted) and HP (from the server); outside a run, the spawn and 0 HP. */
   private localView(): LocalView {
-    if (this.net.online) {
-      const self = this.net.selfState;
-      return {
-        position: this.net.position,
-        hp: self?.hp ?? 0,
-        maxHp: self?.maxHp ?? 0,
-      };
-    }
-    const p = this.localPlayer();
-    return { position: p.position, hp: p.hp, maxHp: p.maxHp };
-  }
-
-  private countEvents(events: readonly SimEvent[]): void {
-    for (const e of events) {
-      if (e.type === "shot") this.totals.shots++;
-      else if (e.type === "hit") this.totals.hits++;
-      else if (e.type === "blocked") this.totals.blocked++;
-      else if (e.type === "defeated") this.totals.defeats++;
-      else if (e.type === "playerHit") this.totals.playerHits++;
-      else if (e.type === "playerDied") this.totals.deaths++;
-    }
+    if (!this.net.online) return { position: MAP.spawn, hp: 0, maxHp: 0 };
+    const self = this.net.selfState;
+    return {
+      position: this.net.position,
+      hp: self?.hp ?? 0,
+      maxHp: self?.maxHp ?? 0,
+    };
   }
 
   /**
@@ -374,11 +284,10 @@ export class WorldScene extends Phaser.Scene {
    */
   private syncView(nowMs: number): void {
     const local = this.localView();
-    // Flash on any HP drop, whether the local sim or the server caused it.
-    if (local.hp < this.lastLocalHp) {
+    // Flash on any HP drop the server reports.
+    if (local.hp > 0 && local.hp < this.lastLocalHp) {
       this.playerFlashUntil = nowMs + PLAYER_HIT_FLASH_MS;
-      if (this.net.online) this.totals.playerHits++;
-      if (this.net.online && local.hp <= 0) this.totals.deaths++;
+      this.totals.playerHits++;
     }
     this.lastLocalHp = local.hp;
 
@@ -391,16 +300,9 @@ export class WorldScene extends Phaser.Scene {
       .setTexture(
         nowMs < this.playerFlashUntil ? PLAYER_HIT_TEXTURE : PLAYER_TEXTURE,
       );
-    // PROTOTYPE ONLY (D-046): placeholder for the real menu/stash and
-    // permadeath rules of later phases.
-    this.deathText
-      .setVisible(!alive)
-      .setText("You died\nMain menu (placeholder)\nPress Enter to play again");
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
 
-    this.lastView = this.net.online
-      ? this.net.viewModel(performance.now())
-      : viewFromSim(this.sim);
+    this.lastView = this.net.viewModel(performance.now());
     this.combat.sync(this.lastView, this.viewRotation, nowMs);
     this.remotes.sync(
       this.net.remotePositions(performance.now()),
@@ -417,21 +319,21 @@ export class WorldScene extends Phaser.Scene {
     const g = this.add.graphics();
     this.world.add(g);
     g.fillStyle(COLORS.floor);
-    g.fillRect(0, 0, TEST_WORLD.width, TEST_WORLD.height);
+    g.fillRect(0, 0, MAP.world.width, MAP.world.height);
 
-    for (let x = 0; x <= TEST_WORLD.width; x += GRID.minor) {
+    for (let x = 0; x <= MAP.world.width; x += GRID.minor) {
       g.lineStyle(
         1,
         x % GRID.major === 0 ? COLORS.gridMajor : COLORS.gridMinor,
       );
-      g.lineBetween(x, 0, x, TEST_WORLD.height);
+      g.lineBetween(x, 0, x, MAP.world.height);
     }
-    for (let y = 0; y <= TEST_WORLD.height; y += GRID.minor) {
+    for (let y = 0; y <= MAP.world.height; y += GRID.minor) {
       g.lineStyle(
         1,
         y % GRID.major === 0 ? COLORS.gridMajor : COLORS.gridMinor,
       );
-      g.lineBetween(0, y, TEST_WORLD.width, y);
+      g.lineBetween(0, y, MAP.world.width, y);
     }
 
     // Absolute world coordinates, so positions in the HUD can be matched to the map.
@@ -440,8 +342,8 @@ export class WorldScene extends Phaser.Scene {
       fontSize: "10px",
       color: "#8a94a6",
     };
-    for (let x = 0; x <= TEST_WORLD.width; x += GRID.label) {
-      for (let y = 0; y <= TEST_WORLD.height; y += GRID.label) {
+    for (let x = 0; x <= MAP.world.width; x += GRID.label) {
+      for (let y = 0; y <= MAP.world.height; y += GRID.label) {
         this.world.add(this.add.text(x + 2, y + 2, `${x},${y}`, style));
       }
     }
@@ -450,7 +352,7 @@ export class WorldScene extends Phaser.Scene {
   private drawWalls(): void {
     const g = this.add.graphics();
     this.world.add(g);
-    for (const wall of TEST_WALLS) {
+    for (const wall of MAP.walls) {
       g.fillStyle(COLORS.wall);
       g.fillRect(wall.x, wall.y, wall.width, wall.height);
       g.lineStyle(1, COLORS.wallEdge);

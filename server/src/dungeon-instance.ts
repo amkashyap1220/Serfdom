@@ -1,0 +1,254 @@
+import {
+  addPlayer,
+  applyPlayerInput,
+  createSimState,
+  dungeonInfo,
+  findPlayer,
+  isAlive,
+  MAX_PARTY_SIZE,
+  newRunStats,
+  recordRunEvents,
+  removePlayer,
+  roundCoord,
+  stepWorld,
+  TICK_SECONDS,
+  type DungeonId,
+  type DungeonLayout,
+  type PlayerInput,
+  type RunResult,
+  type RunStats,
+  type ServerMessage,
+  type SimState,
+  type SnapshotPlayer,
+} from "@serfdom/shared";
+import {
+  newInputQueue,
+  queueInput,
+  takeInputsForTick,
+  type InputQueue,
+  type QueueResult,
+} from "./input-queue.ts";
+
+interface Member {
+  inputs: InputQueue;
+  stats: RunStats;
+}
+
+/** One player's run is over; the caller sends them `runEnded` and back to the menu. */
+export interface RunEnd {
+  playerId: number;
+  result: RunResult;
+  stats: RunStats;
+}
+
+/**
+ * One dungeon run (Phase 6a). Owns its own simulation, so separate parties
+ * never see or hit each other. New players may join only during the first
+ * `joinWindowTicks` of the run while there is room (D-052); after that the
+ * party is locked. A player who leaves, dies, or disconnects is out of this
+ * run for good, even inside the window.
+ *
+ * Each tick: apply each member's queued inputs (the move-credit rule in
+ * input-queue.ts), advance the world once, update run stats from the
+ * events, then end the runs of players who died (D-050) and, once every
+ * enemy is defeated, of every survivor (completed; T-031 stand-in rule).
+ */
+export class DungeonInstance {
+  readonly id: number;
+  readonly dungeon: DungeonId;
+  readonly layout: DungeonLayout;
+  private sim: SimState;
+  private readonly members = new Map<number, Member>();
+  /** Everyone who was ever in this run, so nobody rejoins it. */
+  private readonly everJoined = new Set<number>();
+  private readonly maxQueuedInputs: number;
+  private readonly joinWindowTicks: number;
+  /** Ticks this run has been running. */
+  private age = 0;
+
+  constructor(
+    id: number,
+    dungeon: DungeonId,
+    playerIds: readonly number[],
+    options: { maxQueuedInputs: number; joinWindowTicks: number },
+  ) {
+    this.id = id;
+    this.dungeon = dungeon;
+    this.layout = dungeonInfo(dungeon).layout;
+    this.maxQueuedInputs = options.maxQueuedInputs;
+    this.joinWindowTicks = options.joinWindowTicks;
+    // Dungeon enemies stay dead (no respawn).
+    this.sim = createSimState(this.layout.enemySpawns, {
+      respawnSeconds: null,
+    });
+    for (const playerId of playerIds) this.join(playerId);
+  }
+
+  /** Whether `playerId` may join now: inside the join window, room left, never in this run before. */
+  canJoin(playerId: number): boolean {
+    return (
+      this.age < this.joinWindowTicks &&
+      this.members.size > 0 &&
+      this.members.size < MAX_PARTY_SIZE &&
+      !this.everJoined.has(playerId)
+    );
+  }
+
+  /** Adds a player at the spawn with full HP. Enemies rescale on the next tick (D-045). */
+  join(playerId: number): void {
+    if (this.everJoined.has(playerId)) {
+      throw new Error(`player ${playerId} was already in run ${this.id}`);
+    }
+    this.everJoined.add(playerId);
+    this.sim = addPlayer(this.sim, playerId, this.layout.spawn);
+    this.members.set(playerId, {
+      inputs: newInputQueue(),
+      stats: newRunStats(),
+    });
+  }
+
+  get playerIds(): number[] {
+    return [...this.members.keys()];
+  }
+
+  get isEmpty(): boolean {
+    return this.members.size === 0;
+  }
+
+  /** The authoritative simulation (tests and diagnostics). */
+  get state(): SimState {
+    return this.sim;
+  }
+
+  /** Replaces the simulation (tests only). */
+  setStateForTest(state: SimState): void {
+    this.sim = state;
+  }
+
+  has(playerId: number): boolean {
+    return this.members.has(playerId);
+  }
+
+  queuedInputs(playerId: number): number {
+    return this.members.get(playerId)?.inputs.pending.length ?? 0;
+  }
+
+  queueInput(playerId: number, seq: number, input: PlayerInput): QueueResult {
+    const member = this.members.get(playerId);
+    if (!member) throw new Error(`player ${playerId} is not in this run`);
+    return queueInput(member.inputs, seq, input, this.maxQueuedInputs);
+  }
+
+  /** Removes a player (R or disconnect). Returns their final stats, or null if not a member. */
+  leave(playerId: number): RunEnd | null {
+    return this.end(playerId, "left");
+  }
+
+  /**
+   * Advances the run one tick. Returns the players whose runs ended, and
+   * any player whose input made the shared rules throw (should be
+   * impossible after validation; the caller drops them).
+   */
+  tick(): { ended: RunEnd[]; faulted: number[] } {
+    this.age++;
+    const faulted: number[] = [];
+    for (const [id, member] of this.members) {
+      const { apply } = takeInputsForTick(member.inputs);
+      try {
+        for (const input of apply) {
+          const r = applyPlayerInput(
+            this.sim,
+            id,
+            input,
+            this.layout.walls,
+            TICK_SECONDS,
+          );
+          this.sim = r.state;
+          member.stats = recordRunEvents(member.stats, id, r.events);
+        }
+      } catch {
+        faulted.push(id);
+      }
+    }
+    for (const id of faulted) this.end(id, "left");
+
+    const world = stepWorld(this.sim, this.layout.walls, TICK_SECONDS);
+    this.sim = world.state;
+    for (const [id, member] of this.members) {
+      member.stats = recordRunEvents(member.stats, id, world.events);
+      member.stats = {
+        ...member.stats,
+        seconds: member.stats.seconds + TICK_SECONDS,
+      };
+    }
+
+    const ended: RunEnd[] = [];
+    for (const e of world.events) {
+      if (e.type !== "playerDied") continue;
+      const end = this.end(e.playerId, "died");
+      if (end) ended.push(end);
+    }
+    if (this.members.size > 0 && !this.sim.enemies.some(isAlive)) {
+      for (const id of this.playerIds) {
+        const end = this.end(id, "completed");
+        if (end) ended.push(end);
+      }
+    }
+    return { ended, faulted };
+  }
+
+  snapshotPlayers(): SnapshotPlayer[] {
+    const out: SnapshotPlayer[] = [];
+    for (const [id, member] of this.members) {
+      const p = findPlayer(this.sim, id);
+      if (!p) continue;
+      out.push({
+        id: p.id,
+        x: p.position.x,
+        y: p.position.y,
+        ack: member.inputs.ack,
+        hp: p.hp,
+        maxHp: p.maxHp,
+        cooldown: p.fireCooldown,
+      });
+    }
+    return out;
+  }
+
+  snapshot(tick: number): ServerMessage {
+    return {
+      type: "snapshot",
+      tick,
+      players: this.snapshotPlayers(),
+      enemies: this.sim.enemies.map((e) => ({
+        id: e.id,
+        x: e.position.x,
+        y: e.position.y,
+        size: e.size,
+        hp: e.hp,
+        maxHp: e.maxHp,
+        respawnIn: e.respawnIn,
+      })),
+      projectiles: this.sim.projectiles.map((p) => ({
+        id: p.id,
+        owner: p.owner,
+        by: p.ownerId,
+        x: roundCoord(p.position.x),
+        y: roundCoord(p.position.y),
+        dx: p.direction.x,
+        dy: p.direction.y,
+        speed: p.speed,
+        size: p.size,
+      })),
+    };
+  }
+
+  private end(playerId: number, result: RunResult): RunEnd | null {
+    const member = this.members.get(playerId);
+    if (!member) return null;
+    this.members.delete(playerId);
+    // Out of the sim, so enemies rescale for the survivors (D-045).
+    this.sim = removePlayer(this.sim, playerId);
+    return { playerId, result, stats: member.stats };
+  }
+}

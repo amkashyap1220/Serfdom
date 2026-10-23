@@ -57,13 +57,14 @@ describe("enemy damage and respawn", () => {
     baseMaxHp: 500,
     scaledFor: 1,
     respawnIn: 0,
+    respawnSeconds: 3,
     attackCooldown: 0,
   };
 
   it("reduces HP and reports defeat at zero, never below", () => {
-    const a = damageEnemy(enemy, 25, 3);
+    const a = damageEnemy(enemy, 25);
     expect(a).toEqual({ enemy: { ...enemy, hp: 5 }, defeated: false });
-    const b = damageEnemy(a.enemy, 25, 3);
+    const b = damageEnemy(a.enemy, 25);
     expect(b.enemy.hp).toBe(0);
     expect(b.defeated).toBe(true);
     expect(b.enemy.respawnIn).toBe(3);
@@ -71,12 +72,24 @@ describe("enemy damage and respawn", () => {
 
   it("ignores damage to a defeated enemy", () => {
     const dead = { ...enemy, hp: 0, respawnIn: 2 };
-    expect(damageEnemy(dead, 25, 3)).toEqual({ enemy: dead, defeated: false });
+    expect(damageEnemy(dead, 25)).toEqual({ enemy: dead, defeated: false });
   });
 
   it("rejects negative or non-finite damage", () => {
-    expect(() => damageEnemy(enemy, -1, 3)).toThrow(RangeError);
-    expect(() => damageEnemy(enemy, Number.NaN, 3)).toThrow(RangeError);
+    expect(() => damageEnemy(enemy, -1)).toThrow(RangeError);
+    expect(() => damageEnemy(enemy, Number.NaN)).toThrow(RangeError);
+  });
+
+  it("never respawns an enemy without a respawn delay (dungeons)", () => {
+    const stays: EnemyState = { ...enemy, respawnSeconds: null };
+    let e = damageEnemy(stays, 30).enemy;
+    expect(e.hp).toBe(0);
+    for (let i = 0; i < 600; i++) {
+      const r = stepRespawn(e, 1 / 60);
+      expect(r.respawned).toBe(false);
+      e = r.enemy;
+    }
+    expect(e.hp).toBe(0);
   });
 
   it("respawns at full HP after the timer", () => {
