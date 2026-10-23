@@ -13,7 +13,7 @@ Keep this concise and update it after each meaningful milestone.
 - [ ] Phase 6 — Dungeon vertical slice
 - [ ] Phase 7 — Account and persistent data
 - [x] Phase 8 — Progression and permadeath
-- [ ] Phase 9 — Equipment and rewards
+- [x] Phase 9 — Equipment and rewards
 - [ ] Phase 10 — Classes and class abilities
 - [ ] Phase 11 — Dungeon variety and procedural assembly
 - [ ] Phase 12 — Economy and account systems
@@ -325,3 +325,10 @@ Keep this concise and update it after each meaningful milestone.
 - Live (harness, **test** DB): a T0 Ring dropped with "Equip on Ada Barley"; hover showed "vs empty slot +1 DEF"; Equip now marked it equipped without replaying the celebration; HUD "DEF 1 (+1)"; the Stash tab showed it in Ring 1; Unequip moved it to the stash and DEF went back to 0. Screenshots checked. Not checked live: two-ring choice, weapon damage in a run, Luck 2 chests (covered by tests).
 - Next step: user runs the 9b checklist; then Phase 9 acceptance review (potions wait for the first potion dungeon, D-089).
 - User ran the 9b checklist: all pass (2026-10-23). Committed and pushed 9b. Next: Phase 9 acceptance review.
+
+### Phase 9 acceptance review — 2026-10-23
+
+- Committed 9b as `35fd604`. Reviewed every Phase 9 acceptance item against code and tests; two had no direct test: unequipped Luck adds no chest, and a held reward survives a disconnect. Added both (service; server end to end with a real reconnect and resume). `npm run check`: 277 shared, 158 server, 47 client, build.
+- Deferred by decision: stat potions (D-089), Shiny items and Artifacts, weapon attack styles.
+- Next step: user confirms closing Phase 9; then orient Phase 10 (classes and abilities).
+- User closed Phase 9 (2026-10-23). Committed and pushed. Next: Phase 10 orientation.

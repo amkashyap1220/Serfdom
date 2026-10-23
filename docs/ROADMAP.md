@@ -238,6 +238,8 @@ Acceptance:
 - A player dying before completion receives no completion rewards.
 - Invalid or duplicated item ownership is prevented.
 
+Status: **complete** (2026-10-23; closed by the user after the 9b checklist passed): every acceptance item is met and tested — equip rules (9b), rewards exactly once with nothing lost and a held reward surviving a reconnect (9a; reconnect test added in the review), selling once for the right gold with gold and stash surviving death (9a), one chest per worn Luck point and none for Luck in the stash (test added in the review), Luck only 0 or +1 on 20,000 generated items, no rewards on death, and ownership checks (other accounts, worn items, sell once). Not built, by decision: stat potions (D-089, first potion dungeon), Shiny items and Artifacts (later phases), weapon attack styles (later slice).
+
 ## Phase 10 — Classes and class abilities
 
 **Goal:** Implement the confirmed launch class roster and signature abilities.

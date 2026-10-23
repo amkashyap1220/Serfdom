@@ -423,6 +423,19 @@ describe("equipping (9b, D-081, D-086)", () => {
     });
   });
 
+  it("a +1 Luck item in the stash adds no chest; only worn ones count (D-068)", async () => {
+    const { serfs, id } = await withItems([luckyRing]);
+    const r = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(r?.loot).toHaveLength(1);
+  });
+
   it("an equipped +1 Luck item gives a second chest; gear counts in the loadout", async () => {
     const { serfs, id, ids } = await withItems([luckyRing, wand(0)]);
     await serfs.equip(1, id, ids[0]!, "ring1");

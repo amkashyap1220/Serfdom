@@ -1249,6 +1249,47 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     await until(() => server.isQueued(1));
   });
 
+  it("a held reward survives a disconnect and still blocks the serf (D-088)", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const { client } = await joined({ login: false });
+    const token = await register(client);
+    const serfId = await createSerf(client);
+    const cape = {
+      slot: "cape" as const,
+      type: null,
+      tier: 0,
+      rolls: [{ stat: "hp" as const, amount: 1 }],
+      luck: 0,
+    };
+    await repo.addLoot(1, serfId, Array(STASH_SIZE).fill(cape), STASH_SIZE);
+    expect((await clearOnce(client, 1, 0)).loot[0]?.pending).toBe(true);
+    client.socket.close();
+
+    const { client: again } = await joined({ login: false });
+    again.send(encodeMessage({ type: "resume", token }));
+    let stash = await nextOfType(again, "stash");
+    while (stash.pending.length === 0) stash = await nextOfType(again, "stash");
+    expect(stash.pending).toHaveLength(1);
+    expect(stash.pending[0]?.serfId).toBe(serfId);
+    again.send(encodeMessage({ type: "selectSerf", serfId }));
+    let list = await nextOfType(again, "serfList");
+    while (list.selectedId !== serfId)
+      list = await nextOfType(again, "serfList");
+    again.send(queue);
+    expect((await nextOfType(again, "error")).reason).toBe(
+      "settle your rewards first",
+    );
+  });
+
   it("stash requests need a login; unknown or others' items do not sell", async () => {
     const { client: anon } = await joined({ login: false });
     anon.send(encodeMessage({ type: "getStash" }));
