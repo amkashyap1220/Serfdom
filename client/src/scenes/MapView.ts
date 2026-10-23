@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { PORTAL_RADIUS, type DungeonLayout, type Rect } from "@serfdom/shared";
 import { GRID } from "../render-config";
+import { wallOutline } from "../wall-outline";
 
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
 // The void beyond the rooms is the game background color set in main.ts.
@@ -55,14 +56,21 @@ export class MapView {
     for (const door of layout.doors) {
       g.fillRect(door.rect.x, door.rect.y, door.rect.width, door.rect.height);
     }
+    g.fillStyle(COLORS.wall);
     for (const wall of layout.walls) {
-      g.fillStyle(COLORS.wall);
       g.fillRect(wall.x, wall.y, wall.width, wall.height);
-      g.lineStyle(1, COLORS.wallEdge);
-      g.strokeRect(wall.x + 0.5, wall.y + 0.5, wall.width - 1, wall.height - 1);
     }
-    // Doors and the portal sit above the floor and walls.
+    // Only the outline of all walls together: pieces overlap at corners
+    // and shared walls, and outlining each one drew seams through them.
+    g.lineStyle(1, COLORS.wallEdge);
+    for (const s of wallOutline(layout.walls)) {
+      g.lineBetween(s.x1, s.y1, s.x2, s.y2);
+    }
+    // Doors and the portal sit above the floor and walls. Each new layout
+    // adds its floor on top of the layer, so lift them back above it.
     this.layer.add([this.doors, this.portal]);
+    this.layer.bringToTop(this.doors);
+    this.layer.bringToTop(this.portal);
   }
 
   /** Draws the exit portal (D-057) while it is open, gently pulsing. */

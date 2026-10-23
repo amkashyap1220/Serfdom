@@ -7,6 +7,7 @@ import {
   type RoomDef,
 } from "./dungeon-layout.ts";
 import { layoutFor } from "./dungeons.ts";
+import { ENEMY_STATS } from "./enemy-config.ts";
 import type { Rect } from "./geometry.ts";
 import {
   buildWarrens,
@@ -200,6 +201,104 @@ describe("procedural Goblin Warrens (D-104)", () => {
         }
       }
       expect(leak, `seed ${seed}`).toBeNull();
+    }
+  });
+});
+
+describe("the 11b room pool (D-105)", () => {
+  const signature = (waves: RoomDef["waves"]) =>
+    waves
+      .flat()
+      .map((s) => s.kind)
+      .sort()
+      .join(",");
+
+  it("matches the approved table: bands and first-setup HP", () => {
+    expect(
+      Object.fromEntries(
+        WARRENS_PIECES.map((p) => [p.piece.key, [p.band, pieceHp(p.piece)]]),
+      ),
+    ).toEqual({
+      tunnel: ["light", 850],
+      den: ["light", 930],
+      passage: ["light", 760],
+      grotto: ["light", 930],
+      camp: ["medium", 1845],
+      guard: ["medium", 2670],
+      kitchen: ["medium", 1890],
+      gallery: ["medium", 1930],
+      ambush: ["heavy", 3455],
+      pit: ["heavy", 3320],
+      warcamp: ["heavy", 3100],
+    });
+  });
+
+  it("every room has two setups, the second within ±10% of the first and a different mix", () => {
+    for (const { piece, setups } of WARRENS_PIECES) {
+      expect(setups, piece.key).toHaveLength(2);
+      const first = pieceHp({ waves: setups[0]! });
+      const second = pieceHp({ waves: setups[1]! });
+      expect(Math.abs(second - first) / first, piece.key).toBeLessThanOrEqual(
+        0.1,
+      );
+      expect(signature(setups[1]!), piece.key).not.toBe(signature(setups[0]!));
+    }
+  });
+
+  it("every spawn of every setup sits inside its room", () => {
+    for (const { piece, setups } of WARRENS_PIECES) {
+      for (const s of setups.flat(2)) {
+        const half = ENEMY_STATS[s.kind].size / 2;
+        expect(s.at.x - half, piece.key).toBeGreaterThanOrEqual(0);
+        expect(s.at.y - half, piece.key).toBeGreaterThanOrEqual(0);
+        expect(s.at.x + half, piece.key).toBeLessThanOrEqual(piece.width);
+        expect(s.at.y + half, piece.key).toBeLessThanOrEqual(piece.height);
+      }
+    }
+  });
+
+  it("every possible main path, with any setups, lands inside the HP band", () => {
+    const hps = (band: RoomBand) =>
+      WARRENS_PIECES.filter((p) => p.band === band).map((p) => ({
+        key: p.piece.key,
+        hp: p.setups.map((w) => pieceHp({ waves: w })),
+      }));
+    const throne = pieceHp(
+      GOBLIN_WARRENS.rooms.find((r) => r.id === "throne")!,
+    );
+    const { min, max } = WARRENS_RULES.requiredHp;
+    let paths = 0;
+    for (const light of hps("light"))
+      for (const m1 of hps("medium"))
+        for (const m2 of hps("medium")) {
+          if (m1.key === m2.key) continue;
+          for (const heavy of hps("heavy"))
+            for (const a of light.hp)
+              for (const b of m1.hp)
+                for (const c of m2.hp)
+                  for (const d of heavy.hp) {
+                    const total = a + b + c + d + throne;
+                    expect(total).toBeGreaterThanOrEqual(min);
+                    expect(total).toBeLessThanOrEqual(max);
+                    paths++;
+                  }
+        }
+    expect(paths).toBe(4 * 4 * 3 * 3 * 16);
+  });
+
+  it("generated maps use both setups of every room", () => {
+    const seen = new Map<string, Set<string>>();
+    for (const seed of SEEDS.slice(0, 400)) {
+      for (const room of buildWarrens(seed).rooms) {
+        const key = room.id.replace(/-\d+$/, "");
+        if (!seen.has(key)) seen.set(key, new Set());
+        seen.get(key)!.add(signature(room.waves));
+      }
+    }
+    for (const { piece, setups } of WARRENS_PIECES) {
+      expect([...(seen.get(piece.key) ?? [])].sort(), piece.key).toEqual(
+        setups.map(signature).sort(),
+      );
     }
   });
 });

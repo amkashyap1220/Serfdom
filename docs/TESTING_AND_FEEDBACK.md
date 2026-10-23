@@ -78,6 +78,16 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Warrens room pool checklist (Phase 11b)
+
+Restart `npm run dev` and reload (no protocol change). Play several Warrens runs (note each seed).
+
+1. New rooms turn up: Collapsed passage (long and narrow), Fungus grotto (square), Goblin kitchen, Slinger gallery (a wall of slingers at the far end), Brute pit (two waves with brutes), War camp (large). The room name shows on the floor.
+2. Familiar rooms sometimes have a different enemy mix (for example, the Tunnel with slingers at its far end, or the den with six grunts).
+3. Runs still feel like 3–5 minutes solo; the hardest combat room is always the last before the throne.
+4. No enemy appears inside a wall or outside its room; no path is blocked.
+5. Report anything odd with its seed (replay with `DUNGEON_SEED`, see 11a step 6) and a screenshot.
+
 ### Procedural Warrens checklist (Phase 11a)
 
 Restart `npm run dev` (protocol v21) and reload.

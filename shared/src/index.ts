@@ -110,6 +110,7 @@ export {
   WARRENS_PIECES,
   WARRENS_RULES,
   type RoomBand,
+  type WarrensPiece,
 } from "./goblin-warrens.ts";
 export {
   pieceHp,

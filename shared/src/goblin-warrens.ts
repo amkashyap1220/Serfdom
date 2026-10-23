@@ -228,6 +228,7 @@ export const GOBLIN_WARRENS: DungeonLayout = {
  *   12,500–15,000 solo HP required, Warlord included (3–5 min, D-047).
  * - The path runs east, north, or south; it never turns back west.
  * - 0–2 optional side rooms (light or medium) branch off combat rooms.
+ * - 11b (D-105): 11 combat pieces, each with two enemy setups.
  * Seed 0 is the handcrafted layout above, kept as a fixed fixture.
  */
 
@@ -260,20 +261,439 @@ const asPiece = (id: string, name?: string): RoomPiece => {
 const ENTRANCE = asPiece("entrance");
 const THRONE = asPiece("throne");
 
+type Waves = readonly (readonly EnemySpawnDef[])[];
+
+/** One combat room of the pool: its band and its enemy setups (D-105). */
+export interface WarrensPiece {
+  piece: RoomPiece;
+  band: RoomBand;
+  /** Each run picks one; all within ±10% of the first one's HP. */
+  setups: readonly Waves[];
+}
+
+/** A new piece (11b): entrance on the west, positions relative to the floor. */
+const newPiece = (
+  key: string,
+  name: string,
+  width: number,
+  height: number,
+  band: RoomBand,
+  setups: Waves[],
+): WarrensPiece => ({
+  piece: { key, name, width, height, waves: setups[0]! },
+  band,
+  setups,
+});
+
+/** A handcrafted room as a piece, plus its alternative setups. */
+const oldPiece = (
+  id: string,
+  band: RoomBand,
+  alternatives: Waves[],
+  name?: string,
+): WarrensPiece => {
+  const piece = asPiece(id, name);
+  return { piece, band, setups: [piece.waves, ...alternatives] };
+};
+
+const g = (points: [number, number][]) => spawns("grunt", points);
+const s = (points: [number, number][]) => spawns("slinger", points);
+const b = (points: [number, number][]) => spawns("brute", points);
+
 /**
- * The combat pieces and their bands. The Guard room counts as medium
- * (PROVISIONAL, D-104): with it as heavy no main path reached the HP band.
+ * The combat pool (D-105, approved 2026-10-23). Bands: light ~700–1,000,
+ * medium ~1,800–2,800, heavy ~3,100–3,500 solo HP, so every main path
+ * lands inside the HP band. The Goblin den moved to light; the Guard room
+ * stays medium.
  */
-export const WARRENS_PIECES: readonly { piece: RoomPiece; band: RoomBand }[] = [
-  { piece: asPiece("tunnel"), band: "light" },
-  { piece: asPiece("camp"), band: "medium" },
-  { piece: asPiece("den", "Goblin den"), band: "medium" },
-  { piece: asPiece("guard"), band: "medium" },
-  { piece: asPiece("ambush"), band: "heavy" },
+export const WARRENS_PIECES: readonly WarrensPiece[] = [
+  // Light.
+  oldPiece("tunnel", "light", [
+    [
+      [
+        ...g([
+          [460, 50],
+          [520, 110],
+          [580, 80],
+        ]),
+        ...s([
+          [740, 40],
+          [760, 80],
+          [740, 120],
+        ]),
+      ],
+    ],
+  ]),
+  oldPiece(
+    "den",
+    "light",
+    [
+      [
+        g([
+          [120, 80],
+          [220, 80],
+          [160, 160],
+          [260, 160],
+          [120, 240],
+          [220, 240],
+        ]),
+      ],
+    ],
+    "Goblin den",
+  ),
+  newPiece("passage", "Collapsed passage", 640, 240, "light", [
+    [
+      [
+        ...g([
+          [300, 80],
+          [340, 120],
+          [300, 160],
+        ]),
+        ...s([
+          [590, 70],
+          [590, 170],
+        ]),
+      ],
+    ],
+    [
+      [
+        ...g([
+          [360, 90],
+          [360, 150],
+        ]),
+        ...s([
+          [580, 50],
+          [600, 120],
+          [580, 190],
+        ]),
+      ],
+    ],
+  ]),
+  newPiece("grotto", "Fungus grotto", 480, 480, "light", [
+    [
+      [
+        ...g([
+          [200, 120],
+          [200, 360],
+          [320, 200],
+          [320, 280],
+        ]),
+        ...s([
+          [420, 80],
+          [420, 400],
+        ]),
+      ],
+    ],
+    [
+      [
+        ...g([
+          [240, 240],
+          [300, 160],
+          [300, 320],
+        ]),
+        ...s([
+          [420, 100],
+          [420, 240],
+          [420, 380],
+        ]),
+      ],
+    ],
+  ]),
+  // Medium.
+  oldPiece("camp", "medium", [
+    [
+      [
+        ...g([
+          [240, 140],
+          [240, 340],
+          [320, 240],
+          [400, 160],
+          [400, 320],
+        ]),
+        ...s([
+          [590, 80],
+          [590, 200],
+          [590, 280],
+          [590, 400],
+        ]),
+        ...b([[500, 240]]),
+      ],
+    ],
+  ]),
+  oldPiece("guard", "medium", [
+    [
+      [
+        ...g([
+          [240, 120],
+          [240, 280],
+          [320, 200],
+          [380, 200],
+        ]),
+        ...s([
+          [590, 60],
+          [590, 140],
+          [590, 260],
+          [590, 340],
+          [530, 100],
+          [530, 300],
+        ]),
+        ...b([
+          [440, 100],
+          [440, 300],
+          [480, 200],
+        ]),
+      ],
+    ],
+  ]),
+  newPiece("kitchen", "Goblin kitchen", 560, 480, "medium", [
+    [
+      [
+        ...g([
+          [220, 120],
+          [220, 360],
+          [280, 200],
+          [280, 280],
+          [340, 140],
+          [340, 340],
+          [400, 240],
+        ]),
+        ...s([
+          [500, 100],
+          [500, 380],
+        ]),
+        ...b([[460, 240]]),
+      ],
+    ],
+    [
+      [
+        ...g([
+          [240, 160],
+          [240, 320],
+          [320, 240],
+          [380, 140],
+          [380, 340],
+        ]),
+        ...s([
+          [510, 120],
+          [510, 360],
+        ]),
+        ...b([
+          [460, 180],
+          [460, 300],
+        ]),
+      ],
+    ],
+  ]),
+  newPiece("gallery", "Slinger gallery", 720, 360, "medium", [
+    [
+      [
+        ...s([
+          [630, 60],
+          [630, 120],
+          [630, 180],
+          [630, 240],
+          [630, 300],
+          [680, 60],
+          [680, 120],
+          [680, 180],
+          [680, 240],
+          [680, 300],
+        ]),
+        ...g([
+          [420, 100],
+          [420, 260],
+          [480, 140],
+          [480, 220],
+        ]),
+      ],
+    ],
+    [
+      [
+        ...s([
+          [630, 60],
+          [630, 140],
+          [630, 220],
+          [630, 300],
+          [680, 60],
+          [680, 140],
+          [680, 220],
+          [680, 300],
+        ]),
+        ...g([
+          [420, 120],
+          [420, 240],
+          [500, 180],
+        ]),
+        ...b([[560, 180]]),
+      ],
+    ],
+  ]),
+  // Heavy.
+  oldPiece("ambush", "heavy", [
+    [
+      [
+        ...g([
+          [300, 120],
+          [300, 480],
+          [480, 200],
+          [480, 400],
+        ]),
+        ...s([
+          [660, 100],
+          [660, 240],
+          [660, 360],
+          [660, 500],
+        ]),
+      ],
+      // The second wave comes from behind again, near the entrance.
+      [
+        ...g([
+          [70, 80],
+          [70, 520],
+          [160, 60],
+          [160, 540],
+          [250, 80],
+          [250, 520],
+        ]),
+        ...b([
+          [120, 200],
+          [120, 400],
+        ]),
+        ...s([
+          [360, 60],
+          [360, 540],
+        ]),
+      ],
+    ],
+  ]),
+  newPiece("pit", "Brute pit", 640, 640, "heavy", [
+    [
+      [
+        ...b([
+          [400, 220],
+          [400, 420],
+        ]),
+        ...g([
+          [260, 160],
+          [260, 480],
+          [320, 320],
+          [480, 160],
+          [480, 480],
+          [540, 320],
+        ]),
+      ],
+      [
+        ...b([
+          [560, 200],
+          [560, 440],
+        ]),
+        ...s([
+          [600, 80],
+          [600, 560],
+          [460, 80],
+          [460, 560],
+        ]),
+      ],
+    ],
+    [
+      [
+        ...b([
+          [360, 200],
+          [360, 440],
+          [480, 320],
+        ]),
+        ...g([
+          [260, 320],
+          [420, 120],
+          [420, 520],
+          [560, 320],
+        ]),
+      ],
+      [
+        ...b([[540, 320]]),
+        ...s([
+          [600, 100],
+          [600, 540],
+          [480, 80],
+          [480, 560],
+          [360, 100],
+          [360, 540],
+        ]),
+      ],
+    ],
+  ]),
+  newPiece("warcamp", "War camp", 880, 560, "heavy", [
+    [
+      [
+        ...g([
+          [300, 120],
+          [300, 440],
+          [380, 200],
+          [380, 360],
+          [460, 120],
+          [460, 440],
+          [540, 200],
+          [540, 360],
+          [620, 280],
+          [380, 280],
+        ]),
+        ...s([
+          [800, 100],
+          [800, 220],
+          [800, 340],
+          [800, 460],
+        ]),
+        ...b([
+          [700, 200],
+          [700, 360],
+        ]),
+      ],
+    ],
+    [
+      [
+        ...g([
+          [300, 140],
+          [300, 420],
+          [400, 220],
+          [400, 340],
+          [500, 140],
+          [500, 420],
+          [600, 220],
+          [600, 340],
+        ]),
+        ...s([
+          [800, 160],
+          [800, 400],
+        ]),
+      ],
+      [
+        ...b([
+          [760, 200],
+          [760, 360],
+        ]),
+        ...s([
+          [840, 80],
+          [840, 480],
+          [680, 80],
+          [680, 480],
+        ]),
+        ...g([
+          [560, 280],
+          [660, 280],
+        ]),
+      ],
+    ],
+  ]),
 ];
 
 const ofBand = (band: RoomBand) =>
-  WARRENS_PIECES.filter((p) => p.band === band).map((p) => p.piece);
+  WARRENS_PIECES.filter((p) => p.band === band);
+
+/** The piece with one of its setups, chosen for this run. */
+const withSetup = (random: () => number, entry: WarrensPiece): RoomPiece => ({
+  ...entry.piece,
+  waves: pick(random, entry.setups),
+});
 
 /** Whole-layout attempts before falling back (never expected; tested). */
 const ATTEMPTS = 50;
@@ -294,12 +714,12 @@ function mainPathPieces(random: () => number): RoomPiece[] {
   for (let tries = 0; tries < 1000; tries++) {
     const used = new Set<string>();
     const chosen = WARRENS_RULES.mainPath.map((band) => {
-      const piece = pick(
+      const entry = pick(
         random,
-        ofBand(band).filter((p) => !used.has(p.key)),
+        ofBand(band).filter((p) => !used.has(p.piece.key)),
       );
-      used.add(piece.key);
-      return piece;
+      used.add(entry.piece.key);
+      return withSetup(random, entry);
     });
     const hp = [...chosen, THRONE].reduce((sum, p) => sum + pieceHp(p), 0);
     const { min, max } = WARRENS_RULES.requiredHp;
@@ -357,7 +777,7 @@ function tryWarrens(random: () => number): DungeonLayout | null {
   const sidePool = WARRENS_RULES.sideBands.flatMap(ofBand);
   const count = randomInt(random, min, max);
   for (let n = 0; n < count; n++) {
-    const piece = pick(random, sidePool);
+    const piece = withSetup(random, pick(random, sidePool));
     const id = uniqueId(piece.key);
     placing: for (const parent of shuffled(random, combat)) {
       const sides = build.freeSides(parent).filter((s) => s !== "west");
