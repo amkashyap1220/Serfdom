@@ -16,6 +16,7 @@ import {
   recordRunEvents,
   removePlayer,
   roundCoord,
+  SERF_BASE,
   spawnEnemies,
   stepRooms,
   stepWorld,
@@ -31,6 +32,7 @@ import {
   type ServerMessage,
   type SimState,
   type SnapshotPlayer,
+  type Stats,
 } from "@serfdom/shared";
 import {
   newInputQueue,
@@ -94,6 +96,8 @@ export class DungeonInstance {
       joinWindowTicks: number;
       /** Server-side randomness for reward rolls: returns 1..PLACEHOLDER_ROLL_MAX. */
       rollReward: () => number;
+      /** Each starting player's serf stats (D-077); a fresh Serf's if absent. */
+      statsFor?: (playerId: number) => Stats;
     },
   ) {
     this.id = id;
@@ -105,7 +109,9 @@ export class DungeonInstance {
     // Enemies come from room waves and stay dead (no respawn).
     this.sim = createSimState([], { respawnSeconds: null });
     this.rooms = newRunProgress(this.layout);
-    for (const playerId of playerIds) this.join(playerId);
+    for (const playerId of playerIds) {
+      this.join(playerId, options.statsFor?.(playerId) ?? SERF_BASE);
+    }
   }
 
   /** Whether `playerId` may join now: inside the join window, room left, never in this run before. */
@@ -118,13 +124,16 @@ export class DungeonInstance {
     );
   }
 
-  /** Adds a player at the spawn with full HP. Enemies rescale on the next tick (D-045). */
-  join(playerId: number): void {
+  /**
+   * Adds a player at the spawn with full HP, simulated with their serf's
+   * stats (D-077). Enemies rescale on the next tick (D-045).
+   */
+  join(playerId: number, stats: Stats = SERF_BASE): void {
     if (this.everJoined.has(playerId)) {
       throw new Error(`player ${playerId} was already in run ${this.id}`);
     }
     this.everJoined.add(playerId);
-    this.sim = addPlayer(this.sim, playerId, this.layout.spawn);
+    this.sim = addPlayer(this.sim, playerId, this.layout.spawn, stats);
     this.members.set(playerId, {
       inputs: newInputQueue(),
       stats: newRunStats(),

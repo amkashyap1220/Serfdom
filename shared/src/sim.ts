@@ -1,10 +1,5 @@
 import { boxAround } from "./collision.ts";
-import {
-  DUMMY_ENEMY,
-  PLAYER_HEALTH,
-  PLAYER_REGEN,
-  PLAYER_WEAPON,
-} from "./combat-config.ts";
+import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
 import { enemyAct } from "./enemy-ai.ts";
 import type { EnemyKind } from "./enemy-config.ts";
 import {
@@ -17,13 +12,19 @@ import {
 } from "./enemy.ts";
 import type { Rect, Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
-import { PLAYER_BODY, PLAYER_SPEED } from "./movement-config.ts";
+import { PLAYER_BODY } from "./movement-config.ts";
 import { stepMovement } from "./movement.ts";
 import {
   stepProjectile,
   type HitTarget,
   type Projectile,
 } from "./projectile.ts";
+import {
+  combatFor,
+  SERF_BASE,
+  type PlayerCombat,
+  type Stats,
+} from "./stats.ts";
 import { stepFireCooldown, type AimTarget, type FireIntent } from "./weapon.ts";
 
 /**
@@ -46,6 +47,8 @@ export interface PlayerState {
   fireCooldown: number;
   hp: number;
   maxHp: number;
+  /** From the serf's stats (D-077): speed, fire rate, damage, defense, regen. */
+  combat: PlayerCombat;
 }
 
 export interface SimState {
@@ -160,20 +163,32 @@ export function spawnEnemies(
   return { ...state, enemies: [...state.enemies, ...added], nextEnemyId };
 }
 
-export function newPlayer(id: number, spawn: Vec2): PlayerState {
+/** A player at full HP; a fresh Serf's stats unless given (D-055, D-078). */
+export function newPlayer(
+  id: number,
+  spawn: Vec2,
+  stats: Stats = SERF_BASE,
+): PlayerState {
+  const combat = combatFor(stats);
   return {
     id,
     position: { ...spawn },
     fireCooldown: 0,
-    hp: PLAYER_HEALTH.maxHp,
-    maxHp: PLAYER_HEALTH.maxHp,
+    hp: combat.maxHp,
+    maxHp: combat.maxHp,
+    combat,
   };
 }
 
 /** Adds a player, or resets an existing one to a fresh state at `spawn` (D-046 "play again"). */
-export function addPlayer(state: SimState, id: number, spawn: Vec2): SimState {
+export function addPlayer(
+  state: SimState,
+  id: number,
+  spawn: Vec2,
+  stats: Stats = SERF_BASE,
+): SimState {
   const others = state.players.filter((p) => p.id !== id);
-  return { ...state, players: [...others, newPlayer(id, spawn)] };
+  return { ...state, players: [...others, newPlayer(id, spawn, stats)] };
 }
 
 /** Removes a player (disconnect). Their projectiles keep flying. */
@@ -220,13 +235,13 @@ export function applyPlayerInput(
     PLAYER_BODY,
     walls,
     dtSeconds,
-    PLAYER_SPEED,
+    player.combat.moveSpeed,
   );
   const cooldown = stepFireCooldown(
     player.fireCooldown,
     dtSeconds,
     input.fire.trigger && aim !== null,
-    PLAYER_WEAPON.shotsPerSecond,
+    player.combat.shotsPerSecond,
   );
 
   const updated: PlayerState = {
@@ -253,7 +268,7 @@ export function applyPlayerInput(
           direction: aim,
           speed: PLAYER_WEAPON.projectileSpeed,
           remaining: PLAYER_WEAPON.range,
-          damage: PLAYER_WEAPON.damage,
+          damage: player.combat.shotDamage,
           size: PLAYER_WEAPON.projectileSize,
         },
       ],
@@ -447,20 +462,25 @@ function regenerate(player: PlayerState, dtSeconds: number): PlayerState {
   if (!isPlayerAlive(player) || player.hp >= player.maxHp) return player;
   const hp = Math.min(
     player.maxHp,
-    player.hp + PLAYER_REGEN.hpPerSecond * dtSeconds,
+    player.hp + player.combat.regenPerSecond * dtSeconds,
   );
   return { ...player, hp };
 }
 
-/** Applies an enemy's hit to a player, recording playerHit (and playerDied on the killing blow). */
+/**
+ * Applies an enemy's hit to a player, reduced by their Defense (D-078),
+ * recording playerHit with the damage actually taken (and playerDied on
+ * the killing blow).
+ */
 function damagePlayer(
   player: PlayerState,
   enemyId: number,
-  damage: number,
+  hit: number,
   position: Vec2,
   events: SimEvent[],
 ): PlayerState {
   if (!isPlayerAlive(player)) return player;
+  const damage = hit * player.combat.damageTakenFactor;
   const { hp, died } = applyDamage(player.hp, damage);
   events.push({
     type: "playerHit",

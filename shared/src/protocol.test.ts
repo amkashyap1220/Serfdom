@@ -261,7 +261,12 @@ describe("menu, queue, and run messages (v4)", () => {
         queued: 2,
         startsIn: 3.5,
       },
-      { type: "runStarted", dungeon: "goblin-warrens", players: [1, 4] },
+      {
+        type: "runStarted",
+        dungeon: "goblin-warrens",
+        players: [1, 4],
+        stats: { ...SERF_BASE, speed: 14 },
+      },
       {
         type: "runEnded",
         dungeon: "goblin-warrens",
@@ -368,6 +373,18 @@ describe("menu, queue, and run messages (v4)", () => {
       server({ type: "runStarted", dungeon: "goblin-warrens", players: [0] })
         .ok,
     ).toBe(false);
+    // v13: your stats come with runStarted, whole and complete.
+    const started = {
+      type: "runStarted",
+      dungeon: "goblin-warrens",
+      players: [1],
+      stats: SERF_BASE,
+    };
+    expect(server(started).ok).toBe(true);
+    expect(server({ ...started, stats: undefined }).ok).toBe(false);
+    expect(server({ ...started, stats: { ...SERF_BASE, speed: -1 } }).ok).toBe(
+      false,
+    );
     expect(
       server({
         type: "queueStatus",

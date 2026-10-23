@@ -78,6 +78,19 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Stats in combat checklist (Phase 8c-2)
+
+Restart `npm run dev` (protocol v13) and reload (Ctrl+Shift+R). Compare a fresh serf with a leveled one (psql: `update serfs set exp = 4465 where name = '<name>' and died_at is null;`, reload, choose a class if asked: level 20).
+
+1. A fresh level-1 serf plays exactly as before: HUD "Player HP" 20/20, same speed, fire rate, and damage as in Phase 8b.
+2. Leveled serf: in the dungeon, HUD "Player HP" equals the serf's HP stat (e.g. 108/108), not 20.
+3. It moves visibly faster when its SPD is above 10 (SPD 18 ≈ 180 px/s vs 150), and the HUD "Pending / correction" stays near 0.00 px while moving (no rubber-banding).
+4. It kills enemies faster (higher ATK) and fires faster (higher DEX).
+5. Enemy hits hurt less with DEF above 0 (e.g. a 2-damage rock takes about 1.2 HP at DEF 7), and HP comes back faster with higher VIT.
+6. Two clients (two browsers, two accounts) in one run with different serfs: each moves at its own speed; neither rubber-bands.
+
+Report: pass/fail per step and any exact error text. Note how the Warrens feels at level 20: it should be easy (D-071: it is meant for levels 1–9).
+
 ### Stat rolls checklist (Phase 8c-1)
 
 Restart `npm run dev` (protocol v12); the server prints `database migrated: 005_serf_stats.sql` once. Reload (Ctrl+Shift+R) and log in. To skip ahead, set EXP with psql (`update serfs set exp = 400 where name = '<name>' and died_at is null;`, then reload): 400 = level 4, one clear from 5.

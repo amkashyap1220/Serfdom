@@ -191,6 +191,8 @@ export {
   applyGains,
   classBonus,
   classTier,
+  combatFor,
+  type PlayerCombat,
   rollLevelGains,
   SERF_BASE,
   SERF_GROWTH,

@@ -1,6 +1,9 @@
 import {
   applyPlayerInput,
+  combatFor,
+  SERF_BASE,
   TICK_SECONDS,
+  type PlayerCombat,
   type PlayerInput,
   type PlayerState,
   type Projectile,
@@ -40,16 +43,28 @@ export class PlayerPredictor {
   private pending: PendingInput[] = [];
   private nextSeq = 0;
   private walls: readonly Rect[];
+  /**
+   * Your speed and fire rate, from the stats in runStarted: the same
+   * numbers the server simulates you with (D-077), or prediction drifts.
+   */
+  private readonly combat: PlayerCombat;
   /** Distance the last reconciliation moved the player (0 = prediction was exact). */
   lastCorrection = 0;
 
-  constructor(id: number, start: Vec2, walls: readonly Rect[]) {
+  constructor(
+    id: number,
+    start: Vec2,
+    walls: readonly Rect[],
+    combat: PlayerCombat = combatFor(SERF_BASE),
+  ) {
+    this.combat = combat;
     this.me = {
       id,
       position: { ...start },
       fireCooldown: 0,
       hp: 1,
       maxHp: 1,
+      combat,
     };
     this.walls = walls;
   }
@@ -80,7 +95,7 @@ export class PlayerPredictor {
   /** Accepts the server's authoritative state for this player after it processed inputs up to `ack`. */
   reconcile(server: SnapshotPlayer): void {
     this.pending = this.pending.filter((p) => p.seq > server.ack);
-    let replayed = fromSnapshot(server);
+    let replayed = fromSnapshot(server, this.combat);
     for (const p of this.pending)
       replayed = this.step(replayed, p.input).player;
     this.lastCorrection = Math.hypot(
@@ -92,7 +107,7 @@ export class PlayerPredictor {
 
   /** Adopts the server's state outright (first contact, or after reconnecting). Seq numbers keep increasing. */
   reset(server: SnapshotPlayer): void {
-    this.me = fromSnapshot(server);
+    this.me = fromSnapshot(server, this.combat);
     this.pending = [];
     this.lastCorrection = 0;
   }
@@ -117,12 +132,13 @@ export class PlayerPredictor {
   }
 }
 
-function fromSnapshot(p: SnapshotPlayer): PlayerState {
+function fromSnapshot(p: SnapshotPlayer, combat: PlayerCombat): PlayerState {
   return {
     id: p.id,
     position: { x: p.x, y: p.y },
     fireCooldown: p.cooldown,
     hp: p.hp,
     maxHp: p.maxHp,
+    combat,
   };
 }

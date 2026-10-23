@@ -1,4 +1,6 @@
 import type { ClassId } from "./classes.ts";
+import { PLAYER_WEAPON } from "./combat-config.ts";
+import { PLAYER_SPEED } from "./movement-config.ts";
 import { CLASS_CHOICE_LEVEL } from "./progression.ts";
 
 /**
@@ -200,4 +202,36 @@ function mapStats(f: (key: StatKey) => number): Stats {
   const out = {} as Stats;
   for (const key of STAT_KEYS) out[key] = f(key);
   return out;
+}
+
+/** What a player's stats mean in combat (D-077, D-078 formulas). */
+export interface PlayerCombat {
+  maxHp: number;
+  /** World pixels per second. */
+  moveSpeed: number;
+  shotsPerSecond: number;
+  /** HP removed per projectile hit. */
+  shotDamage: number;
+  /** Share of each incoming hit that is taken (1 = all of it). */
+  damageTakenFactor: number;
+  /** HP regenerated per second, always on (D-056). */
+  regenPerSecond: number;
+}
+
+/**
+ * D-078: damage 25 × (0.5 + ATK/20); shots/s 4 × (0.75 + DEX/40); speed
+ * 150 × (0.75 + SPD/40) (the bases are PLAYER_WEAPON and PLAYER_SPEED); taken hit × 10/(10 + DEF); regen VIT/20 HP/s.
+ * At a fresh Serf's stats (10s, DEF 0) every factor is exactly 1, so a
+ * level-1 Serf plays as before (D-054–D-056). MP and WIS: Phase 10.
+ */
+export function combatFor(stats: Stats): PlayerCombat {
+  return {
+    maxHp: stats.hp,
+    moveSpeed: PLAYER_SPEED * (0.75 + stats.speed / 40),
+    shotsPerSecond:
+      PLAYER_WEAPON.shotsPerSecond * (0.75 + stats.dexterity / 40),
+    shotDamage: PLAYER_WEAPON.damage * (0.5 + stats.attack / 20),
+    damageTakenFactor: 10 / (10 + stats.defense),
+    regenPerSecond: stats.vitality / 20,
+  };
 }

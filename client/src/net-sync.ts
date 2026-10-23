@@ -1,13 +1,16 @@
 import {
   blockingWalls,
   boxAround,
+  combatFor,
   dungeonInfo,
+  SERF_BASE,
   TICK_SECONDS,
   type DungeonId,
   type PlayerInput,
   type Rect,
   type SnapshotEnemy,
   type SnapshotPlayer,
+  type Stats,
   type Vec2,
 } from "@serfdom/shared";
 import {
@@ -49,6 +52,8 @@ export class NetSync {
   /** Static walls of the current dungeon plus its closed doors. */
   private walls: readonly Rect[] = [];
   private currentDungeon: DungeonId | null = null;
+  /** Your stats this run, from runStarted (prediction must match the server). */
+  private myStats: Stats = SERF_BASE;
   private latest: { snapshot: SnapshotMessage; receivedAtMs: number } | null =
     null;
   private self: SnapshotPlayer | null = null;
@@ -74,6 +79,7 @@ export class NetSync {
         if (message.type === "runStarted") {
           this.resetRun(true);
           this.currentDungeon = message.dungeon;
+          this.myStats = message.stats;
           // Until the first snapshot says otherwise, every door is closed.
           const layout = dungeonInfo(message.dungeon).layout;
           this.walls = blockingWalls(
@@ -252,6 +258,7 @@ export class NetSync {
             p.id,
             { x: p.x, y: p.y },
             this.walls,
+            combatFor(this.myStats),
           );
           this.predictorId = p.id;
           this.synced = false;

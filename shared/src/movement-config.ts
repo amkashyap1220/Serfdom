@@ -2,6 +2,7 @@
 // not final balance. Change here only, never inline elsewhere.
 
 /** Player movement speed in world pixels per second. */
+/** At Speed 10 (a fresh Serf); scaled by stats.ts since 8c. */
 export const PLAYER_SPEED = 150;
 
 /** Size of the player's collision box against walls, in world pixels (PROVISIONAL: matches the 16×16 sprite). */

@@ -3,8 +3,9 @@
 // only, never inline elsewhere.
 
 export const PLAYER_WEAPON = {
-  /** HP removed per projectile hit. */
+  /** HP removed per projectile hit at Attack 10 (a fresh Serf); scaled by stats.ts. */
   damage: 25,
+  /** At Dexterity 10 (a fresh Serf); scaled by stats.ts. */
   shotsPerSecond: 4,
   /** World pixels per second. */
   projectileSpeed: 400,
@@ -24,7 +25,8 @@ export const DUMMY_ENEMY = {
 
 /**
  * A fresh level-1 Serf's health (D-055: 20 HP, replacing D-039's 200 test
- * value) and hurtbox (D-038).
+ * value; now SERF_BASE.hp in stats.ts, which a test keeps equal) and
+ * hurtbox (D-038).
  */
 export const PLAYER_HEALTH = {
   maxHp: 20,
@@ -33,9 +35,9 @@ export const PLAYER_HEALTH = {
 } as const;
 
 /**
- * HP regeneration (D-056): always on, also mid-fight. GDD §6: Vitality
- * drives regen; until stats exist (Phase 8) a level-1 Serf regenerates the
- * base rate. Phase 8 replaces this with base + per-Vitality.
+ * HP regeneration (D-056): always on, also mid-fight. Since 8c it comes
+ * from Vitality (stats.ts: VIT / 20 HP/s); this is what a fresh Serf's
+ * Vitality 10 gives, kept as the reference value a test checks.
  */
 export const PLAYER_REGEN = {
   /** HP per second for a fresh level-1 Serf (full from empty in 40 s). */

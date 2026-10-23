@@ -1,4 +1,5 @@
 import {
+  combatFor,
   encodeMessage,
   MAX_MESSAGE_BYTES,
   ENEMY_RING_ATTACK,
@@ -6,6 +7,7 @@ import {
   PLAYER_HEALTH,
   parseServerMessage,
   PROTOCOL_VERSION,
+  SERF_BASE,
   type ServerMessage,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -407,6 +409,7 @@ describe("menu and queue (6a)", () => {
       type: "runStarted",
       dungeon: GW,
       players: [1],
+      stats: SERF_BASE,
     });
     const snap = await nextOfType(client, "snapshot");
     expect(snap.players).toEqual([
@@ -521,6 +524,7 @@ describe("menu and queue (6a)", () => {
       type: "runStarted",
       dungeon: GW,
       players: [1, 2],
+      stats: SERF_BASE,
     });
     expect(server.instanceOf(2)).toBe(server.instanceOf(1));
     // The joiner starts fresh at the spawn; enemies rescale for two.
@@ -1158,5 +1162,31 @@ describe("class choice at level 5 (8b, D-073)", () => {
     const { client: b } = await joined();
     b.send(choose(serfId, "rogue"));
     expect((await nextOfType(b, "serfError")).reason).toBe("No such serf.");
+  });
+});
+
+describe("stats in combat (8c-2, D-077)", () => {
+  it("a run uses the serf's rolled stats, and runStarted tells the client", async () => {
+    const { client } = await joined();
+    client.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    const fresh = await nextOfType(client, "runStarted");
+    expect(fresh.stats).toEqual(SERF_BASE);
+    client.send(encodeMessage({ type: "exitDungeon" }));
+    await nextOfType(client, "runEnded");
+
+    const leveled = (await clearOnce(client, 1, 0)).serf!;
+    expect(leveled.stats.hp).toBeGreaterThan(SERF_BASE.hp);
+    client.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    expect((await nextOfType(client, "runStarted")).stats).toEqual(
+      leveled.stats,
+    );
+    const me = server.instanceOf(1)!.state.players.find((p) => p.id === 1)!;
+    expect(me.maxHp).toBe(leveled.stats.hp);
+    expect(me.hp).toBe(leveled.stats.hp);
+    expect(me.combat).toEqual(combatFor(leveled.stats));
   });
 });

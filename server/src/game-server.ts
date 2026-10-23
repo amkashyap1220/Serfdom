@@ -4,6 +4,7 @@ import {
   MAX_FRAME_SECONDS,
   MAX_MESSAGE_BYTES,
   needsClass,
+  SERF_BASE,
   zeroStats,
   parseClientMessage,
   PROTOCOL_VERSION,
@@ -13,6 +14,7 @@ import {
   type ClientMessage,
   type DungeonId,
   type ServerMessage,
+  type Stats,
 } from "@serfdom/shared";
 import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
@@ -76,6 +78,8 @@ interface Session {
    * select/create, after each recorded run, and on chooseClass.
    */
   serfNeedsClass: boolean;
+  /** The chosen serf's stats, kept current at the same moments (D-077). */
+  serfStats: Stats;
 }
 
 /** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
@@ -280,6 +284,7 @@ export class GameServer {
       serfId: null,
       serfBusy: false,
       serfNeedsClass: false,
+      serfStats: SERF_BASE,
     };
     this.sessions.set(socket, session);
 
@@ -560,7 +565,8 @@ export class GameServer {
       if (!best) continue;
       this.matchmaker.leave(playerId);
       changed.add(dungeon);
-      best.join(playerId);
+      const stats = this.statsOf(playerId);
+      best.join(playerId, stats);
       this.runOf.set(playerId, best);
       this.setRunOwner(playerId);
       this.sendEncoded(
@@ -569,6 +575,7 @@ export class GameServer {
           type: "runStarted",
           dungeon,
           players: best.playerIds,
+          stats,
         }),
       );
       this.log.info(`guest #${playerId} joined run #${best.id} in progress`);
@@ -585,6 +592,7 @@ export class GameServer {
         maxQueuedInputs: this.maxQueuedInputs,
         joinWindowTicks: this.joinWindowTicks,
         rollReward: this.rollReward,
+        statsFor: (id) => this.statsOf(id),
       },
     );
     this.instances.set(instance.id, instance);
@@ -592,12 +600,17 @@ export class GameServer {
       this.runOf.set(id, instance);
       this.setRunOwner(id);
     }
-    const encoded = encodeMessage({
-      type: "runStarted",
-      dungeon,
-      players: [...players],
-    });
-    for (const id of players) this.sendEncoded(id, encoded);
+    for (const id of players) {
+      this.sendEncoded(
+        id,
+        encodeMessage({
+          type: "runStarted",
+          dungeon,
+          players: [...players],
+          stats: this.statsOf(id),
+        }),
+      );
+    }
     this.log.info(
       `run #${instance.id} started: ${dungeon} with ${players.map((p) => `#${p}`).join(" ")}`,
     );
@@ -651,6 +664,7 @@ export class GameServer {
         const nowSession = now ? this.sessions.get(now) : undefined;
         if (serf && nowSession && nowSession.serfId === serf.id) {
           nowSession.serfNeedsClass = needsClass(serf);
+          nowSession.serfStats = serf.stats;
         }
         if (!notify) return;
         this.sendEncoded(
@@ -671,6 +685,13 @@ export class GameServer {
         const s = this.socketOf.get(id);
         if (s) this.sendSerfList(s);
       });
+  }
+
+  /** The stats a player's serf fights with (a fresh Serf's if unknown). */
+  private statsOf(playerId: number): Stats {
+    const socket = this.socketOf.get(playerId);
+    const session = socket ? this.sessions.get(socket) : undefined;
+    return session?.serfStats ?? SERF_BASE;
   }
 
   private setRunOwner(playerId: number): void {
@@ -729,6 +750,7 @@ export class GameServer {
         // A new serf, or one just given its class, is played right away.
         session.serfId = result.serf.id;
         session.serfNeedsClass = needsClass(result.serf);
+        session.serfStats = result.serf.stats;
         this.log.info(
           message.type === "chooseClass"
             ? `${label(session)} serf #${result.serf.id} became a ${message.classId}`

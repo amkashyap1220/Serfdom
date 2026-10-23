@@ -1,4 +1,4 @@
-import { zeroStats } from "@serfdom/shared";
+import { SERF_BASE, zeroStats } from "@serfdom/shared";
 import { newRunStats, type ServerMessage } from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
 import {
@@ -99,7 +99,12 @@ describe("screen flow", () => {
   it("logged out (or logged in elsewhere) from anywhere → login screen", () => {
     const inRun = run(
       ...LOGGED_IN,
-      server({ type: "runStarted", dungeon: GW, players: [1] }),
+      server({
+        type: "runStarted",
+        dungeon: GW,
+        players: [1],
+        stats: SERF_BASE,
+      }),
     );
     expect(
       nextScreen(
@@ -134,7 +139,12 @@ describe("screen flow", () => {
     expect(
       nextScreen(
         counting,
-        server({ type: "runStarted", dungeon: GW, players: [1, 2] }),
+        server({
+          type: "runStarted",
+          dungeon: GW,
+          players: [1, 2],
+          stats: SERF_BASE,
+        }),
       ),
     ).toEqual({ kind: "inRun", dungeon: GW });
   });
@@ -143,7 +153,12 @@ describe("screen flow", () => {
     for (const result of ["died", "completed"] as const) {
       const shown = run(
         ...LOGGED_IN,
-        server({ type: "runStarted", dungeon: GW, players: [1] }),
+        server({
+          type: "runStarted",
+          dungeon: GW,
+          players: [1],
+          stats: SERF_BASE,
+        }),
         server({
           type: "runEnded",
           dungeon: GW,
@@ -241,7 +256,12 @@ describe("screen flow", () => {
     expect(
       nextScreen(
         menu,
-        server({ type: "runStarted", dungeon: GW, players: [1] }),
+        server({
+          type: "runStarted",
+          dungeon: GW,
+          players: [1],
+          stats: SERF_BASE,
+        }),
       ),
     ).toEqual({ kind: "inRun", dungeon: GW });
   });
@@ -249,7 +269,12 @@ describe("screen flow", () => {
   it("any screen → connecting on disconnect; tabs only switch in the menu", () => {
     const inRun = run(
       ...LOGGED_IN,
-      server({ type: "runStarted", dungeon: GW, players: [1] }),
+      server({
+        type: "runStarted",
+        dungeon: GW,
+        players: [1],
+        stats: SERF_BASE,
+      }),
     );
     expect(nextScreen(inRun, { type: "openTab", tab: "stash" })).toBe(inRun);
     expect(nextScreen(inRun, { type: "disconnected", reason: "x" })).toEqual({

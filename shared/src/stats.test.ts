@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { CLASS_IDS } from "./classes.ts";
+import { PLAYER_HEALTH, PLAYER_REGEN, PLAYER_WEAPON } from "./combat-config.ts";
+import { PLAYER_SPEED } from "./movement-config.ts";
 import {
   applyGains,
+  combatFor,
   classBonus,
   classTier,
   rollLevelGains,
@@ -118,5 +121,50 @@ describe("stats (D-074, D-075, T-048)", () => {
     expect(wizard.attack).toBeGreaterThan(35); // ~37.5
     expect(wizard.attack).toBeLessThan(40);
     expect(wizard.attack).toBeLessThan(statMax("wizard", "attack"));
+  });
+});
+
+describe("combat from stats (D-077, D-078)", () => {
+  it("a fresh Serf plays exactly like before stats existed", () => {
+    expect(combatFor(SERF_BASE)).toEqual({
+      maxHp: PLAYER_HEALTH.maxHp,
+      moveSpeed: PLAYER_SPEED,
+      shotsPerSecond: PLAYER_WEAPON.shotsPerSecond,
+      shotDamage: PLAYER_WEAPON.damage,
+      damageTakenFactor: 1,
+      regenPerSecond: PLAYER_REGEN.hpPerSecond,
+    });
+  });
+
+  it("matches the approved formula table", () => {
+    const c = combatFor({
+      ...SERF_BASE,
+      hp: 105,
+      attack: 30,
+      dexterity: 30,
+      speed: 30,
+      defense: 30,
+      vitality: 30,
+    });
+    expect(c.maxHp).toBe(105);
+    expect(c.shotDamage).toBe(50);
+    expect(c.shotsPerSecond).toBe(6);
+    expect(c.moveSpeed).toBe(225);
+    expect(c.damageTakenFactor).toBe(0.25);
+    expect(c.regenPerSecond).toBe(1.5);
+    // Speed 60 is out of reach (the highest Speed max is 45 → 281.25 px/s).
+    const top = combatFor({
+      ...SERF_BASE,
+      attack: 60,
+      dexterity: 60,
+      speed: 60,
+      vitality: 60,
+    });
+    expect([
+      top.shotDamage,
+      top.shotsPerSecond,
+      top.moveSpeed,
+      top.regenPerSecond,
+    ]).toEqual([87.5, 9, 337.5, 3]);
   });
 });

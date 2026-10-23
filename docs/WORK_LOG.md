@@ -276,3 +276,12 @@ Keep this concise and update it after each meaningful milestone.
 - Live (throwaway harness, **test** database): level 2 showed "+1 HP +1 MP +1 ATK +1 DEX +1 SPD +1 VIT +1 WIS"; Serfs tab and HUD matched; levels 3–5 rolled together "+7 HP +4 MP …"; Barbarian bonus visible (HP 28 → 38, ATK 12 → 15, VIT 13 → 16; MP unchanged), maxes shown (HP /200, MP /120, …). A second run rolled different values. Fixed the Serfs row layout ("Playing" had wrapped under the stats).
 - Next step: user runs the 8c-1 checklist; then 8c-2 (stats take effect in combat, client prediction uses Speed).
 - User ran the 8c-1 checklist: all pass (2026-10-23). Committed and pushed 8c-1. Next: 8c-2.
+
+### Phase 8c-2 — stats in combat — 2026-10-23
+
+- Committed 8c-1 as `c750aec`. `combatFor(stats)` (D-078 formulas, bases from the existing config so each base value lives once); `PlayerState.combat` used by movement, fire rate, shot damage, regen, and Defense; stats passed into runs (start and late join) from a session cache; protocol v13 `runStarted.stats` for exact client prediction.
+- Caught by tests: my approved draft table listed Speed 60 → 300 px/s; the formula gives 337.5 (unreachable: Speed max is 45). Recorded under D-078; formula unchanged.
+- Tests: combatFor (fresh Serf equals the old constants; table values), sim (HP, Speed, Dexterity, Attack, Defense incl. the playerHit amount, Vitality), protocol v13 (stats required and validated), server (runStarted carries the serf's rolled stats; the simulated player has its max HP and combat), client (a Speed-30 predictor moves 225 px/s and reconciles with 0 correction). `npm run check`: 242 shared, 136 server, 47 client, build.
+- Live (throwaway harness, **test** database): a level-20 Barbarian (HP 108, ATK 37, SPD 18, DEF 7) started the Warrens at 108/108 HP, moved 183 px in a ~1.01 s key hold (expected 180 px/s), and prediction correction stayed 0.00 px. Not checked live: two clients with different speeds, how hits and kills feel.
+- Next step: user runs the 8c-2 checklist; then the Phase 8 death rules review and Phase 8 acceptance.
+- User ran the 8c-2 checklist: all pass (2026-10-23). Committed and pushed 8c-2. Next: Phase 8 acceptance review.

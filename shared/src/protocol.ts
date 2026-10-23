@@ -38,6 +38,8 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v13 (8c-2): runStarted carries your stats, so prediction moves and
+ *          fires exactly as the server simulates you.
  * v12 (8c): serfs carry their rolled stats; runEnded carries statGains
  *          (all zero unless the run completed).
  * v11 (8b): serfs and leaderboard entries carry classId; client
@@ -50,7 +52,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -181,7 +183,13 @@ export type ServerMessage =
       startsIn: number;
     }
   /** You are in a run now; snapshots follow. Seq numbers restart at 0. */
-  | { type: "runStarted"; dungeon: DungeonId; players: number[] }
+  /** `stats` are yours, as the server simulates you this run (D-077). */
+  | {
+      type: "runStarted";
+      dungeon: DungeonId;
+      players: number[];
+      stats: Stats;
+    }
   /** Your run is over; you are back at the menu. */
   | {
       type: "runEnded";
@@ -417,21 +425,26 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         },
       };
     case "runStarted":
-      if (!hasExactKeys(obj, ["type", "dungeon", "players"])) {
+      if (!hasExactKeys(obj, ["type", "dungeon", "players", "stats"])) {
         return fail("runStarted: unexpected fields");
       }
       if (!isDungeonId(obj.dungeon)) return fail("runStarted: bad dungeon");
       if (!Array.isArray(obj.players) || !obj.players.every(isPlayerId)) {
         return fail("runStarted: players must be an array of player ids");
       }
-      return {
-        ok: true,
-        message: {
-          type: "runStarted",
-          dungeon: obj.dungeon,
-          players: [...obj.players],
-        },
-      };
+      {
+        const stats = parseStats(obj.stats);
+        if (!stats) return fail("runStarted: bad stats");
+        return {
+          ok: true,
+          message: {
+            type: "runStarted",
+            dungeon: obj.dungeon,
+            players: [...obj.players],
+            stats,
+          },
+        };
+      }
     case "runEnded": {
       if (
         !hasExactKeys(obj, [
