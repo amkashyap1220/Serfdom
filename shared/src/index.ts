@@ -187,6 +187,23 @@ export {
   type SerfSummary,
 } from "./serf-rules.ts";
 export {
+  addStats,
+  applyGains,
+  classBonus,
+  classTier,
+  rollLevelGains,
+  SERF_BASE,
+  SERF_GROWTH,
+  STAT_KEYS,
+  STAT_LABELS,
+  statMax,
+  TIERS,
+  zeroStats,
+  type StatKey,
+  type Stats,
+  type Tier,
+} from "./stats.ts";
+export {
   CLASS_IDS,
   CLASSES,
   className,

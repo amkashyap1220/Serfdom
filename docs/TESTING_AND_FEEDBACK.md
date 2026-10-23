@@ -78,6 +78,21 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Stat rolls checklist (Phase 8c-1)
+
+Restart `npm run dev` (protocol v12); the server prints `database migrated: 005_serf_stats.sql` once. Reload (Ctrl+Shift+R) and log in. To skip ahead, set EXP with psql (`update serfs set exp = 400 where name = '<name>' and died_at is null;`, then reload): 400 = level 4, one clear from 5.
+
+1. HUD (left panel), new **Serf** section: name, class, level, and eight stats. A new serf: HP 20, MP 10, ATK 10, DEX 10, SPD 10, DEF 0, VIT 10, WIS 10.
+2. Clear to level 2: under **LEVEL UP! Level 2** a green line of rolls appears, e.g. "+2 HP +1 MP +1 ATK …" (HP always +1 to +3; DEF never grows before a class).
+3. Serfs tab: the serf's row has a stat line matching the HUD (base + the rolls).
+4. Clear again without leveling: no roll line; stats unchanged.
+5. Reach level 5 and choose a class: the Serfs tab shows each stat as value/max (e.g. Barbarian "HP 38/200"), and the class's High stats jumped (+10 HP/MP, +3 others). The HUD matches.
+6. A serf that already had EXP before this change: the first time you play as it, its stats catch up to its level (to 5 at most until it has a class). Selecting it again does not change them.
+7. Restart the server and reload: stats unchanged.
+8. Stats do **not** change combat yet (that is 8c-2): damage, fire rate, speed, and HP in the dungeon are as before.
+
+Report: pass/fail per step, the roll line you saw, and any exact error text.
+
 ### Class choice checklist (Phase 8b)
 
 Restart `npm run dev` (protocol v11); the server prints `database migrated: 004_serf_class.sql` once. Reload (Ctrl+Shift+R) and log in. Level 5 takes 5 Goblin Warrens clears from a new serf (490 EXP); a serf you already have at level 5+ asks for its class straight away.

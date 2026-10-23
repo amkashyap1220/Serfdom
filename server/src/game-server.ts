@@ -4,6 +4,7 @@ import {
   MAX_FRAME_SECONDS,
   MAX_MESSAGE_BYTES,
   needsClass,
+  zeroStats,
   parseClientMessage,
   PROTOCOL_VERSION,
   TICK_RATE,
@@ -664,6 +665,7 @@ export class GameServer {
             serf,
             // Only what was actually saved counts.
             expGained: saved?.expGained ?? 0,
+            statGains: saved?.statGains ?? zeroStats(),
           }),
         );
         const s = this.socketOf.get(id);

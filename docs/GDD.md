@@ -187,6 +187,8 @@ These names and roles are prior design material; confirm any change against the 
 
 Confirmed starting values: a level-1 Serf has **20 HP** (D-055) and regenerates **0.5 HP/s**, always on (D-056). Dungeon difficulty is balanced for a fresh level-1 Serf (D-054).
 
+Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a range, chosen by the server: the Serf's ranges for levels 2–5, then the class's ranges by its High/Mid/Low tier for each stat. Choosing a class gives a one-time bonus to its High stats. Leveling takes each stat partway; each class has a max per stat that only stat potions (from high-tier dungeons) reach. A level-1 Serf's stats (HP 20, DEF 0, the rest 10) reproduce the starting values above exactly. The tables and formulas are D-078.
+
 ## 7. Death and account persistence
 
 ### Confirmed direction

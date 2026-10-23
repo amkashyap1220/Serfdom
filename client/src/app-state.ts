@@ -6,6 +6,7 @@ import {
   type PlaceholderReward,
   type RunStats,
   type ServerMessage,
+  type Stats,
 } from "@serfdom/shared";
 
 export type MenuTab = "dungeons" | "serfs" | "stash" | "leaderboard";
@@ -52,6 +53,8 @@ export type Screen =
       serf: SerfSummary | null;
       /** EXP this run earned (completion only). */
       expGained: number;
+      /** Stats rolled for the levels gained (all zero without a level-up). */
+      statGains: Stats;
     };
 
 export type ScreenEvent =
@@ -173,6 +176,7 @@ function onServerMessage(
         killedBy: msg.killedBy,
         serf: msg.serf,
         expGained: msg.expGained,
+        statGains: msg.statGains,
       };
     default:
       return screen;

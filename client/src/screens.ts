@@ -8,6 +8,11 @@ import {
   passwordProblem,
   CLASS_CHOICE_LEVEL,
   CLASS_IDS,
+  STAT_KEYS,
+  STAT_LABELS,
+  statMax,
+  type StatKey,
+  type Stats,
   CLASSES,
   className,
   needsClass,
@@ -418,6 +423,7 @@ export class ScreenView {
       life
         ? statList([
             ["Class", className(serf?.classId ?? null)],
+            ["Final stats", serf ? statLine(serf) : "—"],
             ["Level reached", String(serf?.level ?? 1)],
             ["Lifetime EXP", String(serf?.exp ?? 0)],
             ["Dungeons entered", String(life.runs)],
@@ -464,6 +470,7 @@ export class ScreenView {
         chosen
           ? el("span", "serf-chosen", "Playing")
           : button("Play as", () => this.actions.selectSerf(s.id)),
+        el("span", "serf-stats", statLine(s)),
       );
       body.append(row);
     }
@@ -598,7 +605,7 @@ export class ScreenView {
       confetti,
       el("h1", "cleared-title", "DUNGEON CLEARED"),
       el("p", "", `${info.name} · ${formatDuration(s.seconds)}`),
-      expGain(screen.serf, screen.expGained, screen.dungeon),
+      expGain(screen.serf, screen.expGained, screen.dungeon, screen.statGains),
       stats,
       chest,
       screen.reward
@@ -767,6 +774,7 @@ function expGain(
   serf: SerfSummary | null,
   gained: number,
   dungeon: DungeonId,
+  statGains: Stats,
 ): HTMLElement {
   const box = el("div", "exp-gain");
   if (!serf || gained <= 0) return box;
@@ -806,6 +814,15 @@ function expGain(
   if (leveled) {
     const up = el("p", "level-up", `LEVEL UP! Level ${after.level}`);
     box.append(up);
+    // The server's rolls for this level (D-074), revealed after the burst.
+    const rolls = STAT_KEYS.filter((key) => statGains[key] > 0);
+    if (rolls.length > 0) {
+      const line = el("p", "stat-gains");
+      for (const key of rolls) {
+        line.append(el("span", "", `+${statGains[key]} ${STAT_LABELS[key]}`));
+      }
+      box.append(line);
+    }
     if (
       before.level < CLASS_CHOICE_LEVEL &&
       after.level >= CLASS_CHOICE_LEVEL
@@ -820,6 +837,21 @@ function expGain(
     }
   }
   return box;
+}
+
+/** "HP 23 · MP 12 · …"; a classed serf shows its maxes (D-075) too. */
+export function statLine(serf: SerfSummary): string {
+  return STAT_KEYS.map(
+    (key) => `${STAT_LABELS[key]} ${statText(serf, key)}`,
+  ).join(" · ");
+}
+
+/** One stat: "37", or "37/60" once the serf has a class max. */
+export function statText(serf: SerfSummary, key: StatKey): string {
+  const value = serf.stats[key];
+  return serf.classId
+    ? `${value}/${statMax(serf.classId, key)}`
+    : String(value);
 }
 
 function statList(rows: [string, string][]): HTMLElement {

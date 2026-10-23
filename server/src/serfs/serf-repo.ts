@@ -3,6 +3,9 @@ import {
   isClassId,
   levelForExp,
   newLifeStats,
+  SERF_BASE,
+  STAT_KEYS,
+  type Stats,
   type ClassId,
   type LeaderboardEntry,
   type LifeStats,
@@ -65,6 +68,24 @@ export interface SerfRepo {
     serfId: number,
     classId: ClassId,
     minExp: number,
+    stats: Stats,
+    statsLevel: number,
+  ): Promise<SerfSummary | null>;
+  /** The serf plus the level its stats have been rolled up to. */
+  findWithStatsLevel(
+    accountId: number,
+    serfId: number,
+  ): Promise<{ serf: SerfSummary; statsLevel: number } | null>;
+  /**
+   * Saves stats rolled up to `toLevel`, only if they are still at
+   * `fromLevel` and the serf is alive: a level is never rolled twice.
+   */
+  saveStats(
+    accountId: number,
+    serfId: number,
+    stats: Stats,
+    fromLevel: number,
+    toLevel: number,
   ): Promise<SerfSummary | null>;
 }
 
@@ -75,6 +96,8 @@ interface SerfRow {
   name: string;
   exp: string;
   class_id: string | null;
+  stats: unknown;
+  stats_level: number;
   died_at: Date | null;
   death_dungeon: string | null;
   killed_by: string | null;
@@ -97,6 +120,7 @@ function fromRow(r: SerfRow): SerfSummary {
     level: levelForExp(exp),
     exp,
     classId: classFromRow(r.class_id),
+    stats: statsFromRow(r.stats),
     alive,
     life: {
       runs: r.runs,
@@ -119,6 +143,24 @@ function classFromRow(v: string | null): ClassId | null {
   if (v === null) return null;
   if (!isClassId(v)) throw new Error(`unknown class in database: ${v}`);
   return v;
+}
+
+/** Null is a fresh Serf; anything malformed is a bug, not a Serf. */
+function statsFromRow(v: unknown): Stats {
+  if (v === null) return { ...SERF_BASE };
+  if (typeof v !== "object" || Array.isArray(v)) {
+    throw new Error("bad stats in database");
+  }
+  const raw = v as Record<string, unknown>;
+  const stats = { ...SERF_BASE };
+  for (const key of STAT_KEYS) {
+    const n = raw[key];
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 0) {
+      throw new Error(`bad stat ${key} in database`);
+    }
+    stats[key] = n;
+  }
+  return stats;
 }
 
 export class PgSerfRepo implements SerfRepo {
@@ -259,14 +301,47 @@ export class PgSerfRepo implements SerfRepo {
     serfId: number,
     classId: ClassId,
     minExp: number,
+    stats: Stats,
+    statsLevel: number,
   ): Promise<SerfSummary | null> {
-    // One statement, so two picks at once cannot both succeed.
+    // One statement, so two picks at once cannot both succeed, and the
+    // class bonus lands with the class or not at all.
     const r = await this.pool.query<SerfRow>(
-      `update serfs set class_id = $3
+      `update serfs set class_id = $3, stats = $5
        where id = $1 and account_id = $2 and died_at is null
-         and class_id is null and exp >= $4
+         and class_id is null and exp >= $4 and stats_level = $6
        returning *`,
-      [serfId, accountId, classId, minExp],
+      [serfId, accountId, classId, minExp, JSON.stringify(stats), statsLevel],
+    );
+    const row = r.rows[0];
+    return row ? fromRow(row) : null;
+  }
+
+  async findWithStatsLevel(
+    accountId: number,
+    serfId: number,
+  ): Promise<{ serf: SerfSummary; statsLevel: number } | null> {
+    const r = await this.pool.query<SerfRow>(
+      "select * from serfs where id = $1 and account_id = $2",
+      [serfId, accountId],
+    );
+    const row = r.rows[0];
+    return row ? { serf: fromRow(row), statsLevel: row.stats_level } : null;
+  }
+
+  async saveStats(
+    accountId: number,
+    serfId: number,
+    stats: Stats,
+    fromLevel: number,
+    toLevel: number,
+  ): Promise<SerfSummary | null> {
+    const r = await this.pool.query<SerfRow>(
+      `update serfs set stats = $3, stats_level = $5
+       where id = $1 and account_id = $2 and died_at is null
+         and stats_level = $4
+       returning *`,
+      [serfId, accountId, JSON.stringify(stats), fromLevel, toLevel],
     );
     const row = r.rows[0];
     return row ? fromRow(row) : null;
@@ -297,6 +372,7 @@ function isPgError(err: unknown): err is { code: string } {
 interface MemorySerf {
   accountId: number;
   summary: SerfSummary;
+  statsLevel: number;
   createdSeq: number;
   diedSeq: number | null;
 }
@@ -341,6 +417,7 @@ export class MemorySerfRepo implements SerfRepo {
       level: 1,
       exp: 0,
       classId: null,
+      stats: { ...SERF_BASE },
       alive: true,
       life: newLifeStats(),
       death: null,
@@ -348,6 +425,7 @@ export class MemorySerfRepo implements SerfRepo {
     this.serfs.push({
       accountId,
       summary,
+      statsLevel: 1,
       createdSeq: ++this.seq,
       diedSeq: null,
     });
@@ -414,6 +492,8 @@ export class MemorySerfRepo implements SerfRepo {
     serfId: number,
     classId: ClassId,
     minExp: number,
+    stats: Stats,
+    statsLevel: number,
   ): Promise<SerfSummary | null> {
     const s = this.serfs.find(
       (x) =>
@@ -421,10 +501,43 @@ export class MemorySerfRepo implements SerfRepo {
         x.summary.id === serfId &&
         x.summary.alive &&
         x.summary.classId === null &&
-        x.summary.exp >= minExp,
+        x.summary.exp >= minExp &&
+        x.statsLevel === statsLevel,
     );
     if (!s) return null;
-    s.summary = { ...s.summary, classId };
+    s.summary = { ...s.summary, classId, stats: { ...stats } };
+    return structuredClone(s.summary);
+  }
+
+  async findWithStatsLevel(
+    accountId: number,
+    serfId: number,
+  ): Promise<{ serf: SerfSummary; statsLevel: number } | null> {
+    const s = this.serfs.find(
+      (x) => x.accountId === accountId && x.summary.id === serfId,
+    );
+    return s
+      ? { serf: structuredClone(s.summary), statsLevel: s.statsLevel }
+      : null;
+  }
+
+  async saveStats(
+    accountId: number,
+    serfId: number,
+    stats: Stats,
+    fromLevel: number,
+    toLevel: number,
+  ): Promise<SerfSummary | null> {
+    const s = this.serfs.find(
+      (x) =>
+        x.accountId === accountId &&
+        x.summary.id === serfId &&
+        x.summary.alive &&
+        x.statsLevel === fromLevel,
+    );
+    if (!s) return null;
+    s.summary = { ...s.summary, stats: { ...stats } };
+    s.statsLevel = toLevel;
     return structuredClone(s.summary);
   }
 }

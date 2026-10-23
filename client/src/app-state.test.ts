@@ -1,3 +1,4 @@
+import { zeroStats } from "@serfdom/shared";
 import { newRunStats, type ServerMessage } from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
 import {
@@ -152,6 +153,7 @@ describe("screen flow", () => {
           killedBy: null,
           serf: null,
           expGained: 0,
+          statGains: zeroStats(),
         }),
       );
       expect(shown).toEqual({
@@ -163,6 +165,7 @@ describe("screen flow", () => {
         killedBy: null,
         serf: null,
         expGained: 0,
+        statGains: zeroStats(),
       });
       // After a death you go choose a serf; after a clear, back to dungeons.
       expect(nextScreen(shown, { type: "dismissResults" })).toMatchObject({
@@ -184,6 +187,7 @@ describe("screen flow", () => {
         killedBy: null,
         serf: null,
         expGained: 0,
+        statGains: zeroStats(),
       }),
     );
     expect(
@@ -204,6 +208,7 @@ describe("screen flow", () => {
           killedBy: null,
           serf: null,
           expGained: 0,
+          statGains: zeroStats(),
         }),
       ),
     ).toEqual({

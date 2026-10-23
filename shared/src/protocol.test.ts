@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CLASS_IDS } from "./classes.ts";
+import { SERF_BASE, zeroStats } from "./stats.ts";
 import {
   encodeMessage,
   MAX_MESSAGE_BYTES,
@@ -269,12 +270,14 @@ describe("menu, queue, and run messages (v4)", () => {
         reward: null,
         killedBy: "brute",
         expGained: 0,
+        statGains: zeroStats(),
         serf: {
           id: 3,
           name: "Aldric Mudfoot",
           level: 1,
           exp: 400,
           classId: "rogue",
+          stats: { ...SERF_BASE, hp: 31 },
           alive: false,
           life: { ...stats, runs: 4, clears: 2 },
           death: { dungeon: "goblin-warrens", killedBy: "brute" },
@@ -289,6 +292,7 @@ describe("menu, queue, and run messages (v4)", () => {
         killedBy: null,
         serf: null,
         expGained: 100,
+        statGains: { ...zeroStats(), hp: 3, attack: 1 },
       },
       { type: "serfList", slots: 2, serfs: [], selectedId: null },
       { type: "serfError", reason: "That name is taken." },
@@ -309,8 +313,28 @@ describe("menu, queue, and run messages (v4)", () => {
       killedBy: null,
       serf: null,
       expGained: 0,
+      statGains: zeroStats(),
     };
     const won = { ...ended, result: "completed", stats, expGained: 100 };
+    // Stat gains (v12): whole, non-negative, every stat, completion only.
+    const gains = { ...zeroStats(), hp: 2 };
+    expect(server({ ...won, reward: { roll: 5 }, statGains: gains }).ok).toBe(
+      true,
+    );
+    expect(
+      server({ ...ended, result: "died", stats, statGains: gains }).ok,
+    ).toBe(false);
+    expect(
+      server({ ...won, reward: { roll: 5 }, statGains: { ...gains, hp: -1 } })
+        .ok,
+    ).toBe(false);
+    expect(
+      server({ ...won, reward: { roll: 5 }, statGains: { ...gains, luck: 1 } })
+        .ok,
+    ).toBe(false);
+    expect(
+      server({ ...won, reward: { roll: 5 }, statGains: { hp: 2 } }).ok,
+    ).toBe(false);
     // EXP only with completion (D-069), and only whole non-negative amounts.
     expect(server({ ...ended, result: "died", stats, expGained: 100 }).ok).toBe(
       false,
@@ -519,6 +543,7 @@ describe("serf messages (v9)", () => {
       level: 1,
       exp: 0,
       classId: null,
+      stats: SERF_BASE,
       alive: true,
       life,
       death: null,
@@ -537,6 +562,10 @@ describe("serf messages (v9)", () => {
       Object.entries(serf).filter(([key]) => key !== "classId"),
     );
     expect(list([v10])).toBe(false);
+    expect(list([{ ...serf, stats: { ...SERF_BASE, attack: 1.5 } }])).toBe(
+      false,
+    );
+    expect(list([{ ...serf, stats: { ...SERF_BASE, luck: 9 } }])).toBe(false);
   });
 });
 

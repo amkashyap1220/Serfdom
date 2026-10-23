@@ -1070,6 +1070,9 @@ describe("EXP and the leaderboard (8a)", () => {
     const first = await clearOnce(client, 1, 0);
     expect(first.expGained).toBe(100);
     expect(first.serf).toMatchObject({ exp: 100, level: 2 });
+    // Level 2 rolled Serf gains (D-074): HP always grows 1–3.
+    expect(first.statGains.hp).toBeGreaterThanOrEqual(1);
+    expect(first.serf?.stats.hp).toBe(20 + first.statGains.hp);
     const second = await clearOnce(client, 1, 0);
     expect(second.serf).toMatchObject({ exp: 200, level: 2 });
   });

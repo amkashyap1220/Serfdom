@@ -1,6 +1,12 @@
 import * as Phaser from "phaser";
-import type { ServerMessage } from "@serfdom/shared";
-import { FIRE_MODE_LABELS, rotateVec } from "@serfdom/shared";
+import type { SerfSummary, ServerMessage } from "@serfdom/shared";
+import {
+  className,
+  FIRE_MODE_LABELS,
+  rotateVec,
+  STAT_KEYS,
+  STAT_LABELS,
+} from "@serfdom/shared";
 import "./style.css";
 import "./screens.css";
 import {
@@ -21,11 +27,12 @@ import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
 import type { ConnectionStatus } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
-import { ScreenView } from "./screens";
+import { ScreenView, statText } from "./screens";
 
 const gameplay = requireElement("gameplay");
 const layoutList = new DebugList(requireElement("hud-layout"));
 const liveList = new DebugList(requireElement("hud-live"));
+const serfList = new DebugList(requireElement("hud-serf"));
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -105,6 +112,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
     } else if (message.type === "serfList") {
       view.setSerfs(message);
       onSerfList(message);
+      showSerf(message.serfs.find((s) => s.id === message.selectedId) ?? null);
     } else if (message.type === "leaderboard") {
       view.setLeaderboard(message.entries);
     } else if (message.type === "serfError") {
@@ -135,6 +143,21 @@ game.events.once(Phaser.Core.Events.READY, () => {
       dispatch({ type: "openTab", tab: "dungeons" });
     }
     selected = list.selectedId;
+  };
+
+  /** The played serf's stats in the HUD (D-074: rolled by the server). */
+  const showSerf = (serf: SerfSummary | null) => {
+    serfList.set([
+      [
+        "Serf",
+        serf
+          ? `${serf.name} · ${className(serf.classId)} · Lv ${serf.level}`
+          : "—",
+      ],
+      ...STAT_KEYS.map(
+        (key) => [STAT_LABELS[key], serf ? statText(serf, key) : "—"] as const,
+      ),
+    ]);
   };
 
   // The welcome may have arrived before these handlers were attached.

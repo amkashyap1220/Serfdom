@@ -2,9 +2,15 @@ import {
   normalizeSerfName,
   SERF_SLOTS,
   serfNameProblem,
+  addStats,
+  applyGains,
   CLASS_CHOICE_LEVEL,
+  classBonus,
   className,
   clearExp,
+  rollLevelGains,
+  zeroStats,
+  type Stats,
   totalExpForLevel,
   type ClassId,
   type DungeonId,
@@ -30,10 +36,17 @@ export type SerfResult =
 export class SerfService {
   private readonly repo: SerfRepo;
   private readonly slots: number;
+  /** Stat rolls (D-074); injectable so tests are deterministic. */
+  private readonly random: () => number;
 
-  constructor(repo: SerfRepo, slots: number = SERF_SLOTS) {
+  constructor(
+    repo: SerfRepo,
+    slots: number = SERF_SLOTS,
+    random: () => number = Math.random,
+  ) {
     this.repo = repo;
     this.slots = slots;
+    this.random = random;
   }
 
   get slotCount(): number {
@@ -67,7 +80,9 @@ export class SerfService {
     // Someone else's serf looks exactly like one that does not exist.
     if (!serf) return { ok: false, reason: "No such serf." };
     if (!serf.alive) return { ok: false, reason: `${serf.name} is dead.` };
-    return { ok: true, serf };
+    // Serfs from before Phase 8c (or given EXP by hand) catch up here.
+    const settled = await this.settle(accountId, serfId);
+    return { ok: true, serf: settled?.serf ?? serf };
   }
 
   /**
@@ -82,7 +97,11 @@ export class SerfService {
     result: RunResult,
     run: RunStats,
     death: Death | null,
-  ): Promise<{ serf: SerfSummary; expGained: number } | null> {
+  ): Promise<{
+    serf: SerfSummary;
+    expGained: number;
+    statGains: Stats;
+  } | null> {
     // The level is read before the update. A serf plays one run at a time
     // (it is fixed for the run, one connection per account), so no other
     // write can change its EXP in between.
@@ -98,7 +117,60 @@ export class SerfService {
       death,
       expGained,
     );
-    return serf ? { serf, expGained } : null;
+    if (!serf) return null;
+    if (!serf.alive || expGained === 0) {
+      return { serf, expGained, statGains: zeroStats() };
+    }
+    const settled = await this.settle(accountId, serfId);
+    return {
+      serf: settled?.serf ?? serf,
+      expGained,
+      statGains: settled?.gains ?? zeroStats(),
+    };
+  }
+
+  /**
+   * Rolls the stats for every level the serf has reached but not yet rolled
+   * (D-074): Serf ranges to level 5, class ranges after. A classless serf
+   * stops at level 5 until it chooses (D-073). The save is guarded on the
+   * old stats level, so if another write got there first, its rolls stand
+   * and these are dropped. Null if the serf is not this account's.
+   */
+  private async settle(
+    accountId: number,
+    serfId: number,
+  ): Promise<{ serf: SerfSummary; gains: Stats; statsLevel: number } | null> {
+    const found = await this.repo.findWithStatsLevel(accountId, serfId);
+    if (!found) return null;
+    const { serf, statsLevel } = found;
+    const target =
+      serf.classId === null
+        ? Math.min(serf.level, CLASS_CHOICE_LEVEL)
+        : serf.level;
+    if (!serf.alive || target <= statsLevel) {
+      return { serf, gains: zeroStats(), statsLevel };
+    }
+    let stats = serf.stats;
+    let gains = zeroStats();
+    for (let level = statsLevel + 1; level <= target; level++) {
+      const rolled = rollLevelGains(stats, level, serf.classId, this.random);
+      stats = applyGains(
+        stats,
+        rolled,
+        level > CLASS_CHOICE_LEVEL ? serf.classId : null,
+      );
+      gains = addStats(gains, rolled);
+    }
+    const saved = await this.repo.saveStats(
+      accountId,
+      serfId,
+      stats,
+      statsLevel,
+      target,
+    );
+    if (saved) return { serf: saved, gains, statsLevel: target };
+    const again = await this.repo.findWithStatsLevel(accountId, serfId);
+    return again ? { ...again, gains: zeroStats() } : null;
   }
 
   /**
@@ -127,14 +199,22 @@ export class SerfService {
     }
     // The checks above give good messages; the write re-checks them all at
     // once, so a concurrent pick or death cannot slip between.
+    // Roll any Serf levels still owed (up to 5), then give the class bonus
+    // in the same write as the class, so it lands exactly once.
+    const settled = await this.settle(accountId, serfId);
+    if (!settled) return { ok: false, reason: "No such serf." };
     const chosen = await this.repo.chooseClass(
       accountId,
       serfId,
       classId,
       totalExpForLevel(CLASS_CHOICE_LEVEL),
+      applyGains(settled.serf.stats, classBonus(classId), classId),
+      settled.statsLevel,
     );
     if (!chosen) return { ok: false, reason: "Could not choose a class." };
-    return { ok: true, serf: chosen };
+    // A serf already past level 5 rolls its class levels now.
+    const after = await this.settle(accountId, serfId);
+    return { ok: true, serf: after?.serf ?? chosen };
   }
 
   /** The lifetime EXP leaderboard: serf names and scores only. */

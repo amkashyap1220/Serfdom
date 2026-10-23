@@ -646,3 +646,18 @@
 .level-up-note {
   color: #f0c419;
 }
+
+/* Stats (Phase 8c). */
+.stat-gains {
+  display: flex;
+  gap: 10px;
+  color: #7ed957;
+  font-size: 14px;
+  animation: cleared-pop 600ms cubic-bezier(0.2, 1.6, 0.4, 1) 2300ms both;
+}
+
+.serf-stats {
+  grid-column: 1 / -1;
+  color: #9fb4d0;
+  font-size: 11px;
+}

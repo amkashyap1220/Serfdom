@@ -1,4 +1,9 @@
-import { newRunStats, totalExpForLevel } from "@serfdom/shared";
+import {
+  newRunStats,
+  SERF_BASE,
+  totalExpForLevel,
+  zeroStats,
+} from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
 import { MemorySerfRepo } from "./serf-repo.ts";
 import { SerfService } from "./serf-service.ts";
@@ -121,5 +126,99 @@ describe("SerfService.chooseClass (D-073)", () => {
       ok: false,
       reason: "Odo Flax is dead.",
     });
+  });
+});
+
+describe("stat rolls on level-up (D-074, D-075)", () => {
+  const highest = () => 0.999999;
+
+  /** A service that always rolls the top of each range. */
+  async function lucky(exp: number) {
+    const repo = new MemorySerfRepo();
+    const serfs = new SerfService(repo, 2, highest);
+    const made = await serfs.create(1, "Hamon Rye");
+    if (!made.ok) throw new Error(made.reason);
+    await repo.recordRun(1, made.serf.id, "completed", run, null, exp);
+    return { repo, serfs, id: made.serf.id };
+  }
+
+  it("the clear that reaches level 2 rolls Serf gains and saves them", async () => {
+    const { serfs, id } = await lucky(0);
+    const r = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(r?.statGains).toEqual({
+      hp: 3,
+      mp: 2,
+      attack: 1,
+      dexterity: 1,
+      speed: 1,
+      defense: 0,
+      vitality: 1,
+      wisdom: 1,
+    });
+    expect(r?.serf.stats).toEqual({
+      ...SERF_BASE,
+      hp: 23,
+      mp: 12,
+      attack: 11,
+      dexterity: 11,
+      speed: 11,
+      vitality: 11,
+      wisdom: 11,
+    });
+    // The next clear (still level 2) rolls nothing.
+    const next = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(next?.serf.level).toBe(2);
+    expect(next?.statGains).toEqual(zeroStats());
+    expect(next?.serf.stats.hp).toBe(23);
+  });
+
+  it("a serf with EXP but no rolls catches up once, only to level 5 while classless", async () => {
+    const { serfs, id } = await lucky(totalExpForLevel(9));
+    const first = await serfs.choose(1, id);
+    if (!first.ok) throw new Error(first.reason);
+    expect(first.serf.stats.hp).toBe(20 + 4 * 3); // levels 2–5 only
+    const again = await serfs.choose(1, id);
+    expect(again.ok && again.serf.stats).toEqual(first.serf.stats); // no double roll
+  });
+
+  it("choosing a class adds its bonus once, then rolls class levels owed", async () => {
+    const { serfs, id } = await lucky(totalExpForLevel(7));
+    const before = await serfs.choose(1, id);
+    if (!before.ok) throw new Error(before.reason);
+    const chosen = await serfs.chooseClass(1, id, "barbarian");
+    if (!chosen.ok) throw new Error(chosen.reason);
+    // Barbarian HP is High: +10 bonus, then levels 6 and 7 roll 3–6 → 6 each.
+    expect(chosen.serf.stats.hp).toBe(before.serf.stats.hp + 10 + 6 + 6);
+    // MP is Low: no bonus, 1–2 per level → 2 each.
+    expect(chosen.serf.stats.mp).toBe(before.serf.stats.mp + 2 + 2);
+  });
+
+  it("dying earns no stat gains", async () => {
+    const { serfs, id } = await lucky(totalExpForLevel(2) - 1);
+    const death = { dungeon: "goblin-warrens" as const, killedBy: "grunt" };
+    const r = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "died",
+      run,
+      death,
+    );
+    expect(r?.statGains).toEqual(zeroStats());
+    expect(r?.serf.stats).toEqual(SERF_BASE);
   });
 });

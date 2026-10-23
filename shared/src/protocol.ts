@@ -1,5 +1,6 @@
 import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
 import { isClassId, type ClassId } from "./classes.ts";
+import { STAT_KEYS, type Stats } from "./stats.ts";
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import { isValidRoll, type PlaceholderReward } from "./reward.ts";
@@ -37,6 +38,8 @@ import {
  *          hazards and whether the exit portal is open.
  * v7 (6d): runEnded carries the server's per-player reward roll
  *          (placeholder until Phase 9), present only on completion.
+ * v12 (8c): serfs carry their rolled stats; runEnded carries statGains
+ *          (all zero unless the run completed).
  * v11 (8b): serfs and leaderboard entries carry classId; client
  *          chooseClass. Queueing requires a class from level 5 (D-073).
  * v10 (8a): serfs carry lifetime EXP; runEnded carries expGained;
@@ -47,7 +50,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -193,6 +196,8 @@ export type ServerMessage =
       serf: SerfSummary | null;
       /** EXP this run earned (completion only, D-069). */
       expGained: number;
+      /** Stats rolled for the levels this run gained (D-074); all zero otherwise. */
+      statGains: Stats;
     }
   /** Top serfs by lifetime EXP, living and dead. Names only: no account data. */
   | { type: "leaderboard"; entries: LeaderboardEntry[] }
@@ -438,6 +443,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "killedBy",
           "serf",
           "expGained",
+          "statGains",
         ])
       ) {
         return fail("runEnded: unexpected fields");
@@ -455,6 +461,14 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!result) return fail("runEnded: bad result");
       if (result !== "completed" && obj.expGained !== 0) {
         return fail("runEnded: EXP comes with completion only");
+      }
+      const statGains = parseStats(obj.statGains);
+      if (!statGains) return fail("runEnded: bad statGains");
+      if (
+        result !== "completed" &&
+        STAT_KEYS.some((key) => statGains[key] !== 0)
+      ) {
+        return fail("runEnded: stat gains come with completion only");
       }
       const stats = parseRunStats(obj.stats);
       if (!stats) return fail("runEnded: bad stats");
@@ -474,6 +488,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           killedBy: obj.killedBy,
           serf,
           expGained: obj.expGained,
+          statGains,
         },
       };
     }
@@ -606,6 +621,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
       "level",
       "exp",
       "classId",
+      "stats",
       "alive",
       "life",
       "death",
@@ -613,6 +629,8 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
   ) {
     return undefined;
   }
+  const stats = parseStats(v.stats);
+  if (!stats) return undefined;
   if (v.classId !== null && !isClassId(v.classId)) return undefined;
   if (!isPlayerId(v.id) || typeof v.name !== "string") return undefined;
   if (!isPlayerId(v.level) || typeof v.alive !== "boolean") return undefined;
@@ -638,6 +656,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
     level: v.level,
     exp: v.exp,
     classId: v.classId,
+    stats,
     alive: v.alive,
     life,
     death,
@@ -663,6 +682,18 @@ function parseLeaderboardEntry(v: unknown): LeaderboardEntry | null {
     classId: v.classId,
     alive: v.alive,
   };
+}
+
+/** Exactly the stat keys, each a whole number ≥ 0. */
+function parseStats(v: unknown): Stats | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, STAT_KEYS)) return null;
+  const stats: Partial<Stats> = {};
+  for (const key of STAT_KEYS) {
+    const n = v[key];
+    if (!isNonNegativeInt(n)) return null;
+    stats[key] = n;
+  }
+  return stats as Stats;
 }
 
 function parseLifeStats(v: unknown): LifeStats | null {

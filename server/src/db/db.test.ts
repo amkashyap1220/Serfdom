@@ -6,7 +6,7 @@ import {
   type AccountRepo,
 } from "../auth/account-repo.ts";
 import { AccountService } from "../auth/account-service.ts";
-import { newRunStats, type ServerMessage } from "@serfdom/shared";
+import { newRunStats, SERF_BASE, type ServerMessage } from "@serfdom/shared";
 import {
   MemorySerfRepo,
   PgSerfRepo,
@@ -276,12 +276,37 @@ function serfContract(
       const serf = await repo.create(a, `${name}Maud`, 2);
       if (typeof serf === "string") throw new Error(serf);
       expect(serf.classId).toBeNull();
-      expect(await repo.chooseClass(a, serf.id, "cleric", 500)).toBeNull();
+      expect(
+        await repo.chooseClass(
+          a,
+          serf.id,
+          "cleric",
+          500,
+          { ...SERF_BASE, hp: 33 },
+          1,
+        ),
+      ).toBeNull();
       await repo.recordRun(a, serf.id, "completed", run, null, 500);
-      const chosen = await repo.chooseClass(a, serf.id, "cleric", 500);
+      const chosen = await repo.chooseClass(
+        a,
+        serf.id,
+        "cleric",
+        500,
+        { ...SERF_BASE, hp: 33 },
+        1,
+      );
       expect(chosen).toMatchObject({ classId: "cleric", exp: 500 });
       // Permanent: a second pick changes nothing.
-      expect(await repo.chooseClass(a, serf.id, "rogue", 500)).toBeNull();
+      expect(
+        await repo.chooseClass(
+          a,
+          serf.id,
+          "rogue",
+          500,
+          { ...SERF_BASE, hp: 33 },
+          1,
+        ),
+      ).toBeNull();
       expect((await repo.find(a, serf.id))?.classId).toBe("cleric");
       expect(
         (await repo.leaderboard(100)).find((e) => e.name === `${name}Maud`),
@@ -298,8 +323,78 @@ function serfContract(
         { dungeon: "x", killedBy: null },
         500,
       );
-      expect(await repo.chooseClass(a, late.id, "bard", 500)).toBeNull();
-      expect(await repo.chooseClass(other, serf.id, "bard", 0)).toBeNull();
+      expect(
+        await repo.chooseClass(
+          a,
+          late.id,
+          "bard",
+          500,
+          { ...SERF_BASE, hp: 33 },
+          1,
+        ),
+      ).toBeNull();
+      expect(
+        await repo.chooseClass(
+          other,
+          serf.id,
+          "bard",
+          0,
+          { ...SERF_BASE, hp: 33 },
+          1,
+        ),
+      ).toBeNull();
+    });
+
+    it("stores rolled stats, saved only from the expected stats level", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Rolf`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      expect(serf.stats).toEqual(SERF_BASE);
+      expect(await repo.findWithStatsLevel(a, serf.id)).toMatchObject({
+        statsLevel: 1,
+      });
+      const rolled = { ...SERF_BASE, hp: 24, attack: 11 };
+      expect(await repo.saveStats(a, serf.id, rolled, 1, 3)).toMatchObject({
+        stats: rolled,
+      });
+      // Already at 3: a second save of "levels 2–3" is refused.
+      expect(
+        await repo.saveStats(a, serf.id, { ...rolled, hp: 99 }, 1, 3),
+      ).toBeNull();
+      const found = await repo.findWithStatsLevel(a, serf.id);
+      expect(found).toMatchObject({ statsLevel: 3, serf: { stats: rolled } });
+      expect((await repo.list(a))[0]?.stats).toEqual(rolled);
+      // Not someone else's, not the dead's.
+      const b = await account();
+      expect(await repo.saveStats(b, serf.id, SERF_BASE, 3, 4)).toBeNull();
+      await repo.recordRun(
+        a,
+        serf.id,
+        "died",
+        run,
+        { dungeon: "x", killedBy: null },
+        0,
+      );
+      expect(await repo.saveStats(a, serf.id, SERF_BASE, 3, 4)).toBeNull();
+    });
+
+    it("a class pick also saves the bonus stats, guarded on the stats level", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Bonus`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      await repo.recordRun(a, serf.id, "completed", run, null, 500);
+      const bonus = { ...SERF_BASE, hp: 40 };
+      expect(
+        await repo.chooseClass(a, serf.id, "druid", 500, bonus, 2),
+      ).toBeNull();
+      expect(
+        await repo.chooseClass(a, serf.id, "druid", 500, bonus, 1),
+      ).toMatchObject({
+        classId: "druid",
+        stats: bonus,
+      });
     });
 
     it("another account's serf does not exist for you", async () => {
