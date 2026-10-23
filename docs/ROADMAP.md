@@ -264,7 +264,7 @@ Status: **complete** (2026-10-23; closed by the user after the 10d checklist pas
 
 **Goal:** Expand from a tiny handcrafted test to reusable room-based dungeons.
 
-Status: in progress. 11a (procedural Warrens, seeds), 11b (11-room pool, two setups each), and 11c (entry rules, D-107) built; 11d difficulty loot pools.
+Status: **complete** (2026-10-23; closed by the user after the 11c checklist passed): 11a (procedural Warrens, seeds), 11b (11-room pool, two setups each), 11c (entry rules, D-107). Generated layouts pass validation (2,000 seeds, plus a wall-leak flood fill); any layout replays from its seed (`DUNGEON_SEED`, same seed same map); fixed dungeons remain (seed 0, the Training Yard); loot rolls from the run’s own dungeon pool (Warrens T0–T2 tested); queue requests for hidden fixtures are refused; free retreat through cleared rooms tested in the review. Loot pools are per dungeon only, with no pools by difficulty (D-016, clarified by the user), so there is no 11d. The server test of a locked listed dungeon waits for Phase 12's first new dungeon.
 
 Tasks:
 
@@ -275,7 +275,7 @@ Tasks:
 - Make seeds reproducible for debugging.
 - Implement open access for qualifying characters and free retreat through cleared rooms.
 - Decide and implement dungeon entry rules (open question 7, D-014, D-018): who may enter which dungeon, and how a party with different levels is handled.
-- Configure difficulty-specific reward pools.
+- Give each dungeon its own loot pool (D-016).
 
 Acceptance:
 

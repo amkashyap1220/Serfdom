@@ -219,6 +219,37 @@ describe("walking a party through the Goblin Warrens", () => {
     expect(progress[den]?.status).toBe("dormant");
   });
 
+  it("retreat is free: doors never close again, even while the next room fights", () => {
+    let sim = addPlayer(
+      createSimState([], { respawnSeconds: null }),
+      1,
+      GW.spawn,
+    );
+    let progress = newRunProgress(GW);
+    const step = (move: { x: number; y: number }, killAll: boolean) => {
+      const walls = blockingWalls(GW, closedDoorIds(progress, GW));
+      const input = { move, fire: { trigger: false, aim: null } };
+      sim = applyPlayerInput(sim, 1, input, walls, TICK_SECONDS).state;
+      if (killAll) sim = { ...sim, enemies: [] };
+      const r = stepRooms(progress, sim, GW);
+      progress = r.progress;
+      sim = spawnEnemies(sim, r.spawns);
+    };
+    // East through the tunnel (cleared as it wakes) into the goblin camp.
+    const at = () => sim.players[0]!.position;
+    for (let t = 0; t < 60 * 15 && roomAt(GW, at())?.id !== "camp"; t++) {
+      step({ x: 1, y: 0 }, true);
+    }
+    expect(roomAt(GW, at())?.id).toBe("camp");
+    step({ x: 0, y: 0 }, false); // the camp wakes; its enemies stay alive
+    expect(sim.enemies.length).toBeGreaterThan(0);
+    // Back west all the way to the entrance: both doors behind stay open.
+    for (let t = 0; t < 60 * 12; t++) step({ x: -1, y: 0 }, false);
+    expect(closedDoorIds(progress, GW)).not.toContain("entrance-tunnel");
+    expect(closedDoorIds(progress, GW)).not.toContain("tunnel-camp");
+    expect(roomAt(GW, at())?.id).toBe("entrance");
+  });
+
   it("a party member who leaves does not block progress", () => {
     let sim = addPlayer(
       createSimState([], { respawnSeconds: null }),

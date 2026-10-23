@@ -418,3 +418,9 @@ Keep this concise and update it after each meaningful milestone.
 - Shared `entryProblem` (the first completion can only be the Warrens, so lifetime clears > 0 is the check); `session.serfClears`; queue check with the shared reason; menu lock (nothing locked until a second listed dungeon exists).
 - Tests: the Warrens open at any level and clears; a non-Warrens dungeon locked with 0 clears and open with 1; a normal server refuses the Training Yard and queues a fresh serf for the Warrens; test servers opt in. `npm run check`: 339 shared, 172 server, 53 client, build. Not testable end to end yet: the lock on a listed dungeon (none exists; added to Phase 12 acceptance).
 - User ran the 11c checklist: all pass (2026-10-23). Committed and pushed 11c. Next: Phase 11 acceptance review.
+
+### Phase 11 acceptance review — 2026-10-23
+
+- Committed 11c as `bd3a5f4`. Reviewed every Phase 11 task and acceptance item against code and tests. One task had no direct test, free retreat through cleared rooms; added (walk into the camp while it fights, then back to the entrance: both doors behind stay open).
+- The user passed the retreat test and clarified that loot pools are per dungeon only (no pools by difficulty, D-016), so 11d is dropped; GDD, roadmap, and D-016 wording corrected. Phase 11 closed (2026-10-23). Committed and pushed.
+- Next step: orient Phase 12 (dungeon tiers and the endgame loop).
