@@ -56,6 +56,8 @@ export class PlayerPredictor {
     start: Vec2,
     walls: readonly Rect[],
     combat: PlayerCombat = combatFor(SERF_BASE),
+    /** Sludge pools (D-113): the same slowdown the server applies. */
+    private readonly sludge: readonly Rect[] = [],
   ) {
     this.combat = combat;
     this.me = {
@@ -130,6 +132,7 @@ export class PlayerPredictor {
       hazards: [],
       blasts: [],
       zones: [],
+      sludge: this.sludge,
     };
     const r = applyPlayerInput(solo, from.id, input, this.walls, TICK_SECONDS);
     return {

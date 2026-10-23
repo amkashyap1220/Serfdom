@@ -1,5 +1,6 @@
 import {
   layoutFor,
+  sludgePools,
   type DungeonLayout,
   blockingWalls,
   boxAround,
@@ -22,6 +23,7 @@ import {
   type CombatViewModel,
   type ProjectileView,
   serverProjectilesToDraw,
+  slitViews,
   type AuraView,
   type BlastView,
   type ChainView,
@@ -257,6 +259,7 @@ export class NetSync {
       blasts: this.blastViews(nowMs),
       chains: this.chainViews(nowMs),
       auras: this.auraViews(latest.snapshot, nowMs),
+      slits: slitViews(this.layout, latest.snapshot.traps),
       zones: latest.snapshot.zones.map((z) => ({
         ...z,
         remaining: Math.max(0, z.remaining - age),
@@ -352,6 +355,7 @@ export class NetSync {
             { x: p.x, y: p.y },
             this.walls,
             combatFor(this.myStats, weaponDamage(this.myWeaponTier)),
+            this.currentLayout ? sludgePools(this.currentLayout) : [],
           );
           this.predictorId = p.id;
           this.synced = false;

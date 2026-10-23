@@ -322,6 +322,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Major bosses use multiple phases, mechanics, and readable attacks.
 - Dungeon access is open to characters who meet that dungeon's eligibility rules. CONFIRMED (D-107): the Goblin Warrens is open to every serf; once a serf completes it, every other dungeon is open to that serf at any level. Serfs of any level play together in one queue.
 - Players may retreat freely through rooms they have already cleared.
+- Rooms can be rushed (D-114): doors are open from the start, but every room you enter wakes and its goblins follow you. Only gated rooms (the Ambush hall; in the Stronghold also the Barracks) shut their doors until cleared. The exit portal opens when the boss dies.
 - Each dungeon has its own loot pool (D-016); there are no pools by difficulty.
 - The first dungeon should be gentle enough to teach core play.
 
@@ -357,7 +358,8 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 
 - Built (12b): **leading slingers** (aim where you will be; drawn lighter): 1 in 3 in the Warrens, all in the Stronghold. **Falling boulders** (D-110, replacing spike traps): in rockfall rooms (Warrens Tunnel and Guard room; Stronghold also the Armory), while the room fights a boulder falls every 1.05 s, mostly anywhere on the floor, 1 in 4 near a player; its shadow grows for 1.2 s, then it lands (5 damage in the Warrens, 9 in the Stronghold, D-111). **Ambush holes**: the Ambush hall's second wave and the Barracks' reinforcements come out of holes in the walls, 2 every 4 s.
 - Built (12c, D-112): **obstacles and cover**: rubble in the Collapsed passage, pillars in the Guard room, barricades in the Gatehouse, bunks in the Barracks. Solid both ways for movement and shots; goblins walk round them, slingers step aside for a clear throw, and a brute that charges into one is dazed for 1.5 s.
-- Next: sweeping traps and slow or burning floor (12d), flankers, bombers, and shamans (12e), then fewer enemies per room (12f).
+- Built (12d, D-113): **arrow traps** in the Stronghold's Gatehouse (slits glow, then a volley crosses the room with a gap of 3 slits to stand in, every 3.5 s; 6 damage; barricades shelter you) and **sludge** in the Fungus grotto (60% speed for players; goblins wade through).
+- Next: flankers, bombers (their bombs leave burning floor), and shamans (12e), then fewer enemies per room (12f).
 
 ## 11. Multiplayer and reward rules
 

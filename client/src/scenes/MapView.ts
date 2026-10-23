@@ -22,6 +22,8 @@ const COLORS = {
   portalCore: 0xe8dcff,
   hole: 0x0d0b09,
   obstacle: 0x8a8378,
+  sludge: 0x4f6b2a,
+  sludgeEdge: 0x7a9a45,
   obstacleEdge: 0xb8b0a2,
   label: "#8a94a6",
 } as const;
@@ -83,6 +85,20 @@ export class MapView {
     this.objects.push(g);
     this.layer.add(g);
     for (const room of layout.rooms) this.drawRoom(g, room.bounds, room.name);
+    // Sludge pools (D-113): murky green on the floor.
+    for (const room of layout.rooms) {
+      for (const pool of room.sludge ?? []) {
+        g.fillStyle(COLORS.sludge, 0.55);
+        g.fillRect(pool.x, pool.y, pool.width, pool.height);
+        g.lineStyle(1, COLORS.sludgeEdge, 0.9);
+        g.strokeRect(
+          pool.x + 0.5,
+          pool.y + 0.5,
+          pool.width - 1,
+          pool.height - 1,
+        );
+      }
+    }
     // Door gaps are floor once open (closed doors are drawn over them).
     g.fillStyle(COLORS.floor);
     for (const door of layout.doors) {

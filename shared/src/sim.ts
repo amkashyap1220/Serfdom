@@ -1,4 +1,5 @@
-import { ROCKFALL } from "./dungeon-layout.ts";
+import type { Navigator } from "./pathing.ts";
+import { ARROWS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
 import { enemyAct } from "./enemy-ai.ts";
@@ -140,6 +141,8 @@ export interface SimState {
   blasts: readonly Blast[];
   /** Nature's Reach patches on the ground (D-097). */
   zones: readonly Zone[];
+  /** Sludge pools (D-113): a player whose centre is in one moves slower. */
+  sludge: readonly Rect[];
 }
 
 /** A warning circle that damages living players inside it when it lands. */
@@ -579,6 +582,7 @@ export function createSimState(
     hazards: [],
     blasts: [],
     zones: [],
+    sludge: [],
   };
   return spawnEnemies(
     empty,
@@ -689,13 +693,17 @@ export function applyPlayerInput(
   if (aim && !(Math.abs(Math.hypot(aim.x, aim.y) - 1) < 1e-6)) {
     throw new RangeError(`aim must be a unit vector, got (${aim.x}, ${aim.y})`);
   }
+  // Sludge slows the player wading in it (D-113); prediction runs this too.
+  const inSludge = (state.sludge ?? []).some((r) =>
+    insideRect(r, player.position),
+  );
   const position = stepMovement(
     player.position,
     input.move,
     PLAYER_BODY,
     walls,
     dtSeconds,
-    player.combat.moveSpeed,
+    player.combat.moveSpeed * (inSludge ? SLUDGE.speedFactor : 1),
   );
   // A vanished player's automatic shots hold fire, so Vanish lasts in the
   // auto modes; a click still shoots and ends it (D-101).
@@ -823,6 +831,8 @@ export function stepWorld(
   state: SimState,
   walls: readonly Rect[],
   dtSeconds: number,
+  /** The server's grid for `walls` (D-114); without it, enemies only corner-steer. */
+  navigator?: Navigator,
 ): { state: SimState; events: SimEvent[] } {
   const events: SimEvent[] = [];
   let players = state.players.map((p) => regenerate(p, dtSeconds));
@@ -854,6 +864,12 @@ export function stepWorld(
   const context = {
     aliveSummons: (id: number) =>
       state.enemies.filter((e) => e.summonerId === id && isAlive(e)).length,
+    ...(navigator
+      ? {
+          waypoint: (from: Vec2, to: Vec2, half: number) =>
+            navigator.next(from, to, half),
+        }
+      : {}),
   };
   enemies = enemies.map((enemy) => {
     // A vanished player is out of sight: not aimed at, chased, or touched.
@@ -1026,11 +1042,29 @@ export function stepWorld(
     } else if (outcome.kind === "blocked") {
       events.push({ type: "blocked", position: outcome.position });
     } else if (outcome.kind === "hit" && p.owner === "enemy") {
-      players = players.map((pl) =>
-        pl.id === outcome.targetId
-          ? damagePlayer(pl, p.ownerId, p.damage, outcome.position, events)
-          : pl,
-      );
+      players = players.map((pl) => {
+        if (pl.id !== outcome.targetId) return pl;
+        const before = events.length;
+        const hit = damagePlayer(
+          pl,
+          p.ownerId,
+          p.damage,
+          outcome.position,
+          events,
+        );
+        // A trap's arrow is the room's hit, not an enemy's (D-113).
+        const reported = events[before];
+        if (p.hazard && reported?.type === "playerHit") {
+          events[before] = {
+            type: "hazardHit",
+            playerId: pl.id,
+            hazard: p.hazard,
+            damage: reported.damage,
+            position: reported.position,
+          };
+        }
+        return hit;
+      });
     } else if (outcome.kind === "hit") {
       const i = enemies.findIndex((e) => e.id === outcome.targetId);
       const target = enemies[i];
@@ -1131,8 +1165,41 @@ function tickBuffs(buffs: PlayerBuffs, dtSeconds: number): PlayerBuffs {
  * the killing blow).
  */
 /** Room hazards that can hurt a player (D-110). */
-export const HAZARD_KINDS = ["rockfall"] as const;
+export const HAZARD_KINDS = ["rockfall", "arrows"] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
+
+/** Arrow traps' projectiles have this owner: no enemy has id 0 (D-113). */
+export const TRAP_OWNER_ID = 0;
+
+/**
+ * An arrow trap fires (D-113): each arrow flies across the room like an
+ * enemy bullet and stops at walls and obstacles; its hits are hazard hits.
+ */
+export function fireArrows(
+  state: SimState,
+  shots: readonly { at: Vec2; direction: Vec2; damage: number }[],
+  range: number,
+): SimState {
+  if (shots.length === 0) return state;
+  let nextProjectileId = state.nextProjectileId;
+  const arrows: Projectile[] = shots.map((s) => ({
+    id: nextProjectileId++,
+    owner: "enemy",
+    ownerId: TRAP_OWNER_ID,
+    position: { ...s.at },
+    direction: { ...s.direction },
+    speed: ARROWS.speed,
+    remaining: range,
+    damage: s.damage,
+    size: ARROWS.size,
+    hazard: "arrows",
+  }));
+  return {
+    ...state,
+    projectiles: [...state.projectiles, ...arrows],
+    nextProjectileId,
+  };
+}
 
 /**
  * Boulders start falling (D-110): each is a hazard that lands after
@@ -1222,4 +1289,11 @@ function targetsFor(
   return enemies
     .filter(isAlive)
     .map((e) => ({ id: e.id, box: boxAround(e.position, e.size) }));
+}
+
+/** Whether point `p` is inside `r` (edges included). */
+function insideRect(r: Rect, p: Vec2): boolean {
+  return (
+    p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
+  );
 }

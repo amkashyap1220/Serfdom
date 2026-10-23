@@ -1,5 +1,11 @@
 import {
+  type Rect,
+  Navigator,
+  arrowVolleys,
   dropBoulders,
+  fireArrows,
+  sludgePools,
+  trapWarnings,
   isDazed,
   rockfallDrops,
   seededRandom,
@@ -82,6 +88,9 @@ export interface RunEnd {
  * survivor (completed; T-031).
  */
 
+/** Far enough for a trap arrow to cross any room (walls stop it first). */
+const ARROW_RANGE = 1200;
+
 export class DungeonInstance {
   readonly id: number;
   readonly dungeon: DungeonId;
@@ -103,6 +112,8 @@ export class DungeonInstance {
   private age = 0;
   /** Where this run's boulders fall (D-110). */
   private readonly rockRandom: () => number;
+  private navigator: Navigator | null = null;
+  private navigatorKey = "";
 
   constructor(
     id: number,
@@ -126,7 +137,11 @@ export class DungeonInstance {
     this.maxQueuedInputs = options.maxQueuedInputs;
     this.joinWindowTicks = options.joinWindowTicks;
     // Enemies come from room waves and stay dead (no respawn).
-    this.sim = createSimState([], { respawnSeconds: null });
+    // Sludge slows players everywhere in this run (D-113).
+    this.sim = {
+      ...createSimState([], { respawnSeconds: null }),
+      sludge: sludgePools(this.layout),
+    };
     this.rooms = newRunProgress(this.layout);
     for (const playerId of playerIds) {
       this.join(playerId, options.loadoutFor?.(playerId) ?? FRESH);
@@ -186,7 +201,7 @@ export class DungeonInstance {
 
   /** Doors still closed right now. */
   get closedDoors(): string[] {
-    return closedDoorIds(this.rooms, this.layout);
+    return closedDoorIds(this.rooms, this.layout, this.sim.players);
   }
 
   /** Replaces the simulation (tests only). */
@@ -266,7 +281,12 @@ export class DungeonInstance {
 
     // Known before the tick, since a dead enemy may be gone after it.
     const kinds = new Map(this.sim.enemies.map((e) => [e.id, e.kind]));
-    const world = stepWorld(this.sim, walls, TICK_SECONDS);
+    const world = stepWorld(
+      this.sim,
+      walls,
+      TICK_SECONDS,
+      this.navigatorFor(walls),
+    );
     this.sim = world.state;
     this.collectEffects(world.events);
     for (const e of this.sim.enemies) kinds.set(e.id, e.kind);
@@ -310,6 +330,10 @@ export class DungeonInstance {
     );
     this.rooms = fall.progress;
     this.sim = dropBoulders(this.sim, fall.drops);
+    // Arrow traps in fighting rooms (D-113); arrows fly the room across.
+    const volley = arrowVolleys(this.rooms, this.layout, this.rockRandom);
+    this.rooms = volley.progress;
+    this.sim = fireArrows(this.sim, volley.shots, ARROW_RANGE);
 
     // Completion (D-057): with a portal, each living player completes by
     // stepping into it once it is open; without one, everyone at once.
@@ -326,6 +350,19 @@ export class DungeonInstance {
       }
     }
     return { ended, faulted };
+  }
+
+  /**
+   * The grid goblins find their way with (D-114), rebuilt only when doors
+   * open or shut (the walls change).
+   */
+  private navigatorFor(walls: readonly Rect[]): Navigator {
+    const key = this.closedDoors.join(",");
+    if (!this.navigator || this.navigatorKey !== key) {
+      this.navigator = new Navigator(walls);
+      this.navigatorKey = key;
+    }
+    return this.navigator;
   }
 
   /** The exit portal is open (every required room cleared). */
@@ -384,6 +421,7 @@ export class DungeonInstance {
         speed: p.speed,
         size: p.size,
         ability: p.fromAbility === true,
+        trap: p.hazard === "arrows",
       })),
       closedDoors: this.closedDoors,
       hazards: this.sim.hazards.map((h) => ({
@@ -392,6 +430,7 @@ export class DungeonInstance {
         radius: h.radius,
         landsIn: h.landsIn,
       })),
+      traps: trapWarnings(this.rooms, this.layout),
       portalOpen: this.portalOpen,
       // Each blast goes out in exactly one snapshot.
       blasts: this.blastsToSend.splice(0),

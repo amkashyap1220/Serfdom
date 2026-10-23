@@ -13,6 +13,7 @@ const base: SnapshotProjectile = {
   speed: 400,
   size: 4,
   ability: false,
+  trap: false,
 };
 
 describe("which server projectiles are drawn", () => {

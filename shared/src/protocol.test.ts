@@ -553,6 +553,7 @@ describe("snapshot messages", () => {
     speed: 400,
     size: 4,
     ability: false,
+    trap: false,
   };
 
   it("round-trips a full snapshot", () => {
@@ -567,6 +568,7 @@ describe("snapshot messages", () => {
       projectiles: [shot],
       closedDoors: ["tunnel-camp"],
       hazards: [{ x: 3700, y: 980, radius: 32, landsIn: 0.4 }],
+      traps: [],
       portalOpen: false,
       blasts: [{ kind: "arcaneBlast", by: 2, x: 1100.5, y: 990, radius: 40 }],
       chains: [
@@ -597,6 +599,7 @@ describe("snapshot messages", () => {
           projectiles: pr,
           closedDoors: [],
           hazards: [],
+          traps: [],
           portalOpen: true,
           blasts: [],
           chains: [],
@@ -628,6 +631,7 @@ describe("snapshot messages", () => {
       enemies: [],
       projectiles: [],
       hazards: [],
+      traps: [],
       portalOpen: false,
       blasts: [],
       chains: [],
@@ -652,6 +656,7 @@ describe("snapshot messages", () => {
       projectiles: [],
       closedDoors: [],
       hazards: [],
+      traps: [],
       portalOpen: false,
       blasts: [],
       chains: [],
@@ -892,6 +897,7 @@ describe("ability drawing in snapshots (v18, D-097)", () => {
     projectiles: [],
     closedDoors: [],
     hazards: [],
+    traps: [],
     portalOpen: false,
     blasts: [],
     chains: [],

@@ -34,6 +34,7 @@ describe("prediction uses your stats (8c-2)", () => {
       hazards: [],
       blasts: [],
       zones: [],
+      sludge: [],
     };
     for (let i = 0; i < 60; i++) {
       predictor.predict(RIGHT);
@@ -48,6 +49,48 @@ describe("prediction uses your stats (8c-2)", () => {
       x: me.position.x,
       y: me.position.y,
       ack: 29,
+      hp: me.hp,
+      maxHp: me.maxHp,
+      mp: me.mp,
+      maxMp: me.combat.maxMp,
+      buffs: [],
+      cooldown: me.fireCooldown,
+    });
+    expect(predictor.lastCorrection).toBe(0);
+  });
+});
+
+describe("prediction wades through sludge like the server (D-113)", () => {
+  it("slows in a pool exactly as the server does, so nothing snaps back", () => {
+    const pool = { x: 100, y: -50, width: 200, height: 100 };
+    const combat = combatFor(SERF_BASE);
+    const predictor = new PlayerPredictor(1, { x: 0, y: 0 }, [], combat, [
+      pool,
+    ]);
+    let server: SimState = {
+      players: [newPlayer(1, { x: 0, y: 0 })],
+      enemies: [],
+      projectiles: [],
+      nextProjectileId: 1,
+      nextEnemyId: 1,
+      hazards: [],
+      blasts: [],
+      zones: [],
+      sludge: [pool],
+    };
+    for (let i = 0; i < 120; i++) {
+      predictor.predict(RIGHT);
+      server = applyPlayerInput(server, 1, RIGHT, [], TICK_SECONDS).state;
+    }
+    const me = server.players[0]!;
+    // Slower than 2 s at full speed: part of the walk was in the sludge.
+    expect(me.position.x).toBeLessThan(2 * combat.moveSpeed - 1);
+    expect(predictor.position.x).toBeCloseTo(me.position.x, 9);
+    predictor.reconcile({
+      id: 1,
+      x: me.position.x,
+      y: me.position.y,
+      ack: 119,
       hp: me.hp,
       maxHp: me.maxHp,
       mp: me.mp,

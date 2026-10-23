@@ -39,7 +39,16 @@ const newRoom = (
   height: number,
   band: RoomBand,
   waves: Waves,
-  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave" | "obstacles"> = {},
+  traps: Pick<
+    RoomPiece,
+    | "rockfall"
+    | "holes"
+    | "holeWave"
+    | "obstacles"
+    | "sludge"
+    | "arrows"
+    | "gated"
+  > = {},
 ): RecipePiece => ({
   piece: { key, name, width, height, waves, ...traps },
   band,
@@ -81,8 +90,16 @@ export const STRONGHOLD_PIECES: readonly RecipePiece[] = [
         ]),
       ],
     ],
-    // Two barricades across the room, a gap between them (D-112).
+    // Two barricades across the room, a gap between them (D-112); arrow
+    // slits along one side wall fire across your path (D-113).
     {
+      arrows: {
+        slits: Array.from({ length: 15 }, (_, i) => ({
+          x: 40 + 40 * i,
+          y: 10,
+        })),
+        direction: { x: 0, y: 1 },
+      },
       obstacles: [
         { x: 420, y: 80, width: 24, height: 96 },
         { x: 420, y: 224, width: 24, height: 96 },
@@ -141,6 +158,8 @@ export const STRONGHOLD_PIECES: readonly RecipePiece[] = [
         { x: 560, y: 540 },
       ],
       holeWave: 1,
+      // Its doors shut behind you until it is cleared (D-114).
+      gated: true,
       // Three rows of bunks at the back (D-112).
       obstacles: [
         { x: 520, y: 120, width: 128, height: 32 },
@@ -203,6 +222,8 @@ export const STRONGHOLD_RECIPE: DungeonRecipe = {
   // D-109–D-111: every slinger leads its shots; a boulder does 9.
   leadShare: 1,
   rockfallDamage: 9,
+  // D-113: a trap arrow does 6.
+  arrowDamage: 6,
 };
 
 /** The Goblin Stronghold for `seed` (seed 0 is seed 1's map, kept fixed). */

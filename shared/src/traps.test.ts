@@ -51,7 +51,16 @@ describe("rockfall rooms (D-110)", () => {
   const rockRoom = room({ rockfall: { damage: 4 } });
   const fighting = (clock: number, dropped = 0) =>
     [
-      { status: "active", wave: 0, clock, released: 0, waveStart: 0, dropped },
+      {
+        status: "active",
+        wave: 0,
+        clock,
+        released: 0,
+        waveStart: 0,
+        dropped,
+        volleys: 0,
+        gap: -1,
+      },
     ] as RunProgress;
 
   it("drop a boulder every ROCKFALL.everySeconds of a fighting room's clock, the first at once", () => {

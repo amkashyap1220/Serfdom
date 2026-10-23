@@ -74,6 +74,11 @@ export interface EnemyAction {
 export interface AiContext {
   /** Living enemies summoned by each enemy id. */
   aliveSummons: (summonerId: number) => number;
+  /**
+   * Where to head to reach `to` round walls and doorways (D-114), from the
+   * server's grid; null if unreachable. Absent: corner steering only.
+   */
+  waypoint?: (from: Vec2, to: Vec2, half: number) => Vec2 | null;
 }
 
 const NO_MOVE = { x: 0, y: 0 };
@@ -119,11 +124,19 @@ export function enemyAct(
     case "dummy":
       return dummyAct(enemy, target, dtSeconds, result);
     case "grunt":
-      return gruntAct(enemy, target, walls, dtSeconds, result);
+      return gruntAct(enemy, target, walls, dtSeconds, result, context);
     case "slinger":
-      return slingerAct(enemy, target, walls, dtSeconds, result);
+      return slingerAct(enemy, target, walls, dtSeconds, result, context);
     case "brute":
-      return bruteAct(enemy, targets, target, walls, dtSeconds, result);
+      return bruteAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+      );
     case "warlord":
       return warlordAct(enemy, targets, target, dtSeconds, context, result);
   }
@@ -165,6 +178,7 @@ function gruntAct(
   walls: readonly Rect[],
   dt: number,
   result: Result,
+  context: AiContext = NO_CONTEXT,
 ): EnemyAction {
   const cooldown = Math.max(0, enemy.attackCooldown - dt);
   if (!target) return result({ ...enemy, attackCooldown: cooldown });
@@ -172,11 +186,12 @@ function gruntAct(
     enemy,
     toward(
       enemy.position,
-      steerToward(
+      route(
         enemy.position,
         target.target.position,
         enemy.size / 2,
         walls,
+        context,
       ),
     ),
     GRUNT.speed,
@@ -205,6 +220,7 @@ function slingerAct(
   walls: readonly Rect[],
   dt: number,
   result: Result,
+  context: AiContext = NO_CONTEXT,
 ): EnemyAction {
   if (!target) {
     return result({
@@ -236,7 +252,7 @@ function slingerAct(
   else if (target.distance > SLINGER.maxRange)
     direction = toward(
       enemy.position,
-      steerToward(enemy.position, at, enemy.size / 2, walls),
+      route(enemy.position, at, enemy.size / 2, walls, context),
     );
   const position = move(enemy, direction, SLINGER.speed, walls, dt);
 
@@ -268,6 +284,7 @@ function bruteAct(
   walls: readonly Rect[],
   dt: number,
   result: Result,
+  context: AiContext = NO_CONTEXT,
 ): EnemyAction {
   const ai = enemy.ai;
   if (ai.kind !== "brute") return result(enemy);
@@ -287,11 +304,12 @@ function bruteAct(
         enemy,
         toward(
           enemy.position,
-          steerToward(
+          route(
             enemy.position,
             target.target.position,
             enemy.size / 2,
             walls,
+            context,
           ),
         ),
         BRUTE.speed,
@@ -473,6 +491,24 @@ export function isTelegraphing(enemy: EnemyState): boolean {
 /** A brute that charged into a wall, standing dazed (D-112). */
 export function isDazed(enemy: EnemyState): boolean {
   return enemy.ai.kind === "brute" && enemy.ai.mode === "dazed";
+}
+
+/**
+ * Where to walk to reach `to` (D-112, D-114): straight there when nothing
+ * is in the way; otherwise along the server's grid path (through doorways,
+ * round obstacles), or, without a grid, round the nearest corner.
+ */
+function route(
+  from: Vec2,
+  to: Vec2,
+  half: number,
+  walls: readonly Rect[],
+  context: AiContext,
+): Vec2 {
+  if (!lineBlocked(from, to, half, walls)) return to;
+  return (
+    context.waypoint?.(from, to, half) ?? steerToward(from, to, half, walls)
+  );
 }
 
 /** Whether a box of half-size `half` moving from `from` to `to` hits any rect. */

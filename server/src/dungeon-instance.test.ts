@@ -1,4 +1,5 @@
 import {
+  buildStronghold,
   buildWarrens,
   GOBLIN_WARRENS,
   SERF_BASE,
@@ -100,6 +101,42 @@ describe("rockfall in a run (D-110)", () => {
   });
 });
 
+describe("arrow traps in a run (D-113)", () => {
+  it("a Gatehouse glows, then fires trap arrows, sent in snapshots", () => {
+    const seed = Array.from({ length: 300 }, (_, i) => i + 1).find((s) =>
+      buildStronghold(s).rooms.some((r) => r.id === "gatehouse"),
+    )!;
+    const gate = buildStronghold(seed).rooms.find((r) => r.id === "gatehouse")!;
+    const r = new DungeonInstance(1, "goblin-stronghold", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed,
+    });
+    r.setStateForTest({
+      ...r.state,
+      players: r.state.players.map((p) => ({
+        ...p,
+        hp: 5000,
+        maxHp: 5000,
+        position: { x: gate.bounds.x + 80, y: gate.bounds.y + 80 },
+      })),
+    });
+    r.tick();
+    const glowing = r.snapshot(1) as Snapshot;
+    expect(glowing.traps).toEqual([
+      { room: "gatehouse", gap: expect.any(Number), warn: expect.any(Number) },
+    ]);
+    let arrows = 0;
+    for (let t = 0; t < 60 && arrows === 0; t++) {
+      r.tick();
+      arrows = (r.snapshot(2) as Snapshot).projectiles.filter(
+        (p) => p.trap,
+      ).length;
+    }
+    expect(arrows).toBe(gate.arrows!.slits.length - 3);
+  });
+});
+
 describe("DungeonInstance layouts (D-104)", () => {
   it("builds the generated Warrens for its seed; seed 0 is the handcrafted one", () => {
     const seeded = new DungeonInstance(1, "goblin-warrens", [1], {
@@ -109,9 +146,9 @@ describe("DungeonInstance layouts (D-104)", () => {
     });
     const layout = buildWarrens(1234);
     expect(seeded.seed).toBe(1234);
-    expect([...seeded.closedDoors].sort()).toEqual(
-      layout.doors.map((d) => d.id).sort(),
-    );
+    // Doors start open (D-114): only a gated room, once it fights, shuts them.
+    expect(seeded.closedDoors).toEqual([]);
+    expect(layout.doors.length).toBeGreaterThan(0);
     expect(seeded.state.players[0]?.position).toEqual(layout.spawn);
     expect(run([1]).seed).toBe(0);
     expect(run([1]).state.players[0]?.position).toEqual(GW.spawn);
@@ -119,39 +156,40 @@ describe("DungeonInstance layouts (D-104)", () => {
 });
 
 describe("DungeonInstance in the Goblin Warrens", () => {
-  it("starts in the entrance; the first door opens on the first tick", () => {
+  it("starts in the entrance with every door open (D-114)", () => {
     const r = run([1]);
-    expect(r.closedDoors).toContain("entrance-tunnel");
     r.tick();
-    expect(r.closedDoors).not.toContain("entrance-tunnel");
     expect(r.state.enemies).toEqual([]);
-    const snap = r.snapshot(1) as Snapshot;
-    expect(snap.closedDoors).toEqual([
-      "tunnel-camp",
-      "camp-den",
-      "camp-ambush",
-      "ambush-guard",
-      "guard-throne",
-    ]);
+    expect((r.snapshot(1) as Snapshot).closedDoors).toEqual([]);
   });
 
-  it("a closed door stops a player the server moves", () => {
+  it("the ambush hall locks you in: back through its door, the server stops you", () => {
     const r = run([1]);
     r.tick();
-    // Put the player at the tunnel's east end, facing the closed camp door.
+    // Step into the ambush hall: it wakes and, once you are clear of the
+    // doorway, shuts both its doors.
     r.setStateForTest({
       ...r.state,
       players: r.state.players.map((p) => ({
         ...p,
-        position: { x: 1300, y: 1000 },
+        position: { x: 2080, y: 1000 },
       })),
     });
+    r.tick();
+    expect([...r.closedDoors].sort()).toEqual(["ambush-guard", "camp-ambush"]);
+    const west = { move: { x: -1, y: 0 }, fire: { trigger: false, aim: null } };
     for (let seq = 0; seq < 60; seq++) {
-      r.queueInput(1, seq, east);
+      r.queueInput(1, seq, west);
       r.tick();
+      // Its goblins live (so the hall keeps fighting) but hold their fire.
+      r.setStateForTest({
+        ...r.state,
+        enemies: r.state.enemies.map((e) => ({ ...e, attackCooldown: 99 })),
+        projectiles: [],
+      });
     }
-    // Body (16 px) flush against the door at x = 1332.
-    expect(r.state.players[0]?.position.x).toBeCloseTo(1332 - 8, 9);
+    // Body (16 px) flush against the shut door at x = 2036 (the hall's west edge).
+    expect(r.state.players[0]?.position.x).toBeCloseTo(2036 + 8, 6);
   });
 
   it("entering the tunnel spawns grunts, which come and hit the player", () => {

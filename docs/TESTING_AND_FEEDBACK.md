@@ -78,6 +78,28 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Rushing and gated rooms checklist (D-114)
+
+Restart `npm run dev` and reload.
+
+1. Every door is open from the start (HUD **Doors closed** 0). Run straight through rooms: each one wakes as you enter and its goblins follow you out through the doorways (none should stay pressed into a corner), so you gather a train.
+2. **Ambush hall** (and the Stronghold's Barracks): once you are inside and clear of the doorway, both its doors shut (Doors closed 2) until every goblin in it (including the ones from the holes) is dead.
+3. The boss room's door stays open. Kill the Warlord: the portal opens even if you rushed past earlier rooms. Step in to complete (EXP and chest as before).
+4. Retreat still works through any open door.
+
+Report: pass/fail per step, seeds, and how rushing feels.
+
+### Arrow traps and sludge checklist (Phase 12d, D-113)
+
+Restart `npm run dev` (protocol v24) and reload.
+
+1. **Sludge** (Fungus grotto, both dungeons): two murky green pools. Walk into one: you slow to about 60% (grunts keep their pace). No stutter or snap-back while wading (watch **Pending / correction** stay near 0.00 px).
+2. **Arrow traps** (Stronghold Gatehouse): small dark slits along one wall. While the room fights they glow orange, except three side by side; then arrows fly across the room. Stand in front of the dark slits (the gap) and the volley misses you. A new gap each volley, every 3.5 s.
+3. Arrows hurt (6, less with Defense), stop at the barricades (shelter behind one), and stop when the room is cleared.
+4. Death by arrows (optional): "Slain by an arrow trap".
+
+Report: pass/fail per step, seeds, and how the Gatehouse felt.
+
 ### Obstacles checklist (Phase 12c, D-112)
 
 Restart `npm run dev` (protocol v23) and reload.

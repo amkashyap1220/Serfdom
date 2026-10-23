@@ -52,6 +52,10 @@ const COLORS = {
   zone: 0x6fcf4f,
   leadingSlinger: 0xd7b8ec,
   dazed: 0x9fc6e8,
+  slit: 0x1a1410,
+  slitGlow: 0xff9f1c,
+  trapArrow: 0xd9c9a3,
+  trapArrowTip: 0xffffff,
   shadow: 0x000000,
   boulder: 0x8c7f6e,
   boulderEdge: 0x4a4238,
@@ -282,7 +286,29 @@ export class CombatView {
     }
 
     const g = this.projectiles.clear();
+    // Arrow slits (D-113): dark marks, glowing orange before a volley.
+    for (const s of view.slits) {
+      const across = { x: -s.dy, y: s.dx };
+      g.fillStyle(
+        s.glow > 0 ? COLORS.slitGlow : COLORS.slit,
+        s.glow > 0 ? s.glow : 1,
+      );
+      g.fillRect(
+        Math.round(s.x - 5 * Math.abs(across.x) - 2 * Math.abs(s.dx)),
+        Math.round(s.y - 5 * Math.abs(across.y) - 2 * Math.abs(s.dy)),
+        Math.round(10 * Math.abs(across.x) + 4 * Math.abs(s.dx)),
+        Math.round(10 * Math.abs(across.y) + 4 * Math.abs(s.dy)),
+      );
+    }
     for (const p of view.projectiles) {
+      if (p.trap) {
+        // A trap arrow: a shaft along its flight, its point leading.
+        g.lineStyle(2, COLORS.trapArrow, 1);
+        g.lineBetween(p.x - p.trap.dx * 12, p.y - p.trap.dy * 12, p.x, p.y);
+        g.fillStyle(COLORS.trapArrowTip);
+        g.fillRect(Math.round(p.x - 2), Math.round(p.y - 2), 4, 4);
+        continue;
+      }
       g.fillStyle(
         p.owner === "enemy"
           ? COLORS.enemyBullet

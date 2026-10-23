@@ -1,8 +1,11 @@
-import type {
-  BlastKind,
-  BuffKind,
-  EnemyKind,
-  SnapshotProjectile,
+import {
+  ARROWS,
+  type BlastKind,
+  type BuffKind,
+  type DungeonLayout,
+  type EnemyKind,
+  type SnapshotProjectile,
+  type TrapWarning,
 } from "@serfdom/shared";
 
 /**
@@ -43,6 +46,18 @@ export interface ProjectileView {
   size: number;
   /** An ability's projectile (Volley arrow), drawn in its own colour. */
   ability?: boolean;
+  /** A trap's arrow (D-113), drawn as a shaft along its flight. */
+  trap?: { dx: number; dy: number };
+}
+
+/** One arrow slit (D-113): dark, or glowing (0 → 1) before a volley. */
+export interface SlitView {
+  x: number;
+  y: number;
+  /** Direction its arrow flies. */
+  dx: number;
+  dy: number;
+  glow: number;
 }
 
 /** An ability blast shortly after it landed; `fade` runs 0 → 1. */
@@ -83,6 +98,7 @@ export interface CombatViewModel {
   chains: ChainView[];
   zones: ZoneView[];
   auras: AuraView[];
+  slits: SlitView[];
   portalOpen: boolean;
 }
 
@@ -94,8 +110,37 @@ export const EMPTY_VIEW: CombatViewModel = {
   chains: [],
   zones: [],
   auras: [],
+  slits: [],
   portalOpen: false,
 };
+
+/**
+ * Every arrow slit of the run (D-113): those of a trap about to fire glow,
+ * except the gap's, so players see where to stand.
+ */
+export function slitViews(
+  layout: DungeonLayout | null,
+  warnings: readonly TrapWarning[],
+): SlitView[] {
+  if (!layout) return [];
+  const out: SlitView[] = [];
+  for (const room of layout.rooms) {
+    const trap = room.arrows;
+    if (!trap) continue;
+    const w = warnings.find((x) => x.room === room.id);
+    trap.slits.forEach((at, k) => {
+      const inGap = w !== undefined && k >= w.gap && k < w.gap + ARROWS.gap;
+      out.push({
+        x: at.x,
+        y: at.y,
+        dx: trap.direction.x,
+        dy: trap.direction.y,
+        glow: w && !inGap ? 0.3 + 0.7 * w.warn : 0,
+      });
+    });
+  }
+  return out;
+}
 
 /**
  * The server's projectiles to draw, moved forward `ageSeconds` along their
@@ -115,5 +160,6 @@ export function serverProjectilesToDraw(
       y: p.y + p.dy * p.speed * ageSeconds,
       size: p.size,
       ability: p.ability,
+      ...(p.trap ? { trap: { dx: p.dx, dy: p.dy } } : {}),
     }));
 }

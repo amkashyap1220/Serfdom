@@ -50,6 +50,8 @@ export interface DungeonRecipe {
   leadShare: number;
   /** Damage of one falling boulder in this dungeon (D-110). */
   rockfallDamage: number;
+  /** Damage of one trap arrow in this dungeon (D-113). */
+  arrowDamage: number;
   /** The seed-0 layout and the fallback; generated from seed 1 if absent. */
   fixed?: DungeonLayout;
 }
@@ -97,6 +99,9 @@ function arm(
         ),
       ),
       ...(room.rockfall ? { rockfall: { damage: recipe.rockfallDamage } } : {}),
+      ...(room.arrows
+        ? { arrows: { ...room.arrows, damage: recipe.arrowDamage } }
+        : {}),
     })),
   };
 }

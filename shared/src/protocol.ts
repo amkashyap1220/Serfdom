@@ -1,3 +1,4 @@
+import type { TrapWarning } from "./dungeon-run.ts";
 import { HAZARD_KINDS, type HazardKind } from "./sim.ts";
 import { MAX_SEED } from "./seeded-random.ts";
 import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
@@ -61,6 +62,8 @@ import {
  *          runEnded's killedBy may be a room hazard ("rockfall", D-110).
  * v23 (12c): snapshot enemies say whether they are dazed (a brute that
  *          charged into a wall, D-112).
+ * v24 (12d): snapshots list arrow traps about to fire (room, gap, glow) and
+ *          mark trap arrows among projectiles; killedBy may be "arrows" (D-113).
  * v19 (10c): snapshot players list their buffs, enemies say whether
  *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
@@ -95,7 +98,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 23;
+export const PROTOCOL_VERSION = 24;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -294,6 +297,8 @@ export interface SnapshotProjectile {
    * the snapshot; its basic shots it predicts and draws itself.
    */
   ability: boolean;
+  /** A trap's arrow (D-113): drawn as an arrow. */
+  trap: boolean;
 }
 
 /** Server → client. */
@@ -381,6 +386,8 @@ export type ServerMessage =
       /** Ids of doors still closed in this run's dungeon (they block movement and shots). */
       closedDoors: string[];
       hazards: SnapshotHazard[];
+      /** Arrow traps glowing before a volley (D-113). */
+      traps: TrapWarning[];
       /** The exit portal is open: step into it to complete the run (D-057). */
       portalOpen: boolean;
       /** Ability blasts that landed since the last snapshot (drawing only). */
@@ -825,6 +832,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "projectiles",
           "closedDoors",
           "hazards",
+          "traps",
           "portalOpen",
           "blasts",
           "chains",
@@ -853,6 +861,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         return fail("snapshot: closedDoors must be door ids");
       }
       const closedDoors = obj.closedDoors as string[];
+      const traps = parseList(obj.traps, parseTrapWarning);
+      if (!traps) return fail("snapshot: bad trap entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -870,6 +880,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           projectiles,
           closedDoors: [...closedDoors],
           hazards,
+          traps,
           portalOpen: obj.portalOpen,
           blasts,
           chains,
@@ -1228,6 +1239,22 @@ function parseSnapshotZone(v: unknown): SnapshotZone | null {
   return { x: v.x, y: v.y, radius: v.radius, remaining: v.remaining };
 }
 
+function parseTrapWarning(v: unknown): TrapWarning | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["room", "gap", "warn"]))
+    return null;
+  if (typeof v.room !== "string" || v.room.length === 0 || v.room.length > 64) {
+    return null;
+  }
+  if (
+    !isNonNegativeInt(v.gap) ||
+    !isNonNegative(v.warn) ||
+    (v.warn as number) > 1
+  ) {
+    return null;
+  }
+  return { room: v.room, gap: v.gap as number, warn: v.warn as number };
+}
+
 function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
   if (
     !isPlainObject(v) ||
@@ -1306,11 +1333,13 @@ function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {
       "speed",
       "size",
       "ability",
+      "trap",
     ])
   ) {
     return null;
   }
-  if (typeof v.ability !== "boolean") return null;
+  if (typeof v.ability !== "boolean" || typeof v.trap !== "boolean")
+    return null;
   if (!isPlayerId(v.id) || (v.owner !== "player" && v.owner !== "enemy")) {
     return null;
   }
@@ -1328,6 +1357,7 @@ function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {
     speed: v.speed,
     size: v.size,
     ability: v.ability,
+    trap: v.trap,
   };
 }
 

@@ -113,6 +113,8 @@ const rooms: RoomDef[] = [
     id: "ambush",
     name: "Ambush hall",
     bounds: { x: 2036, y: 700, width: 720, height: 600 },
+    // The handcrafted ambush hall locks you in too (D-114).
+    gated: true,
     waves: [
       [
         ...spawns("grunt", [
@@ -291,7 +293,10 @@ const oldPiece = (
 /** Adds traps to a pool entry (the room's shape and setups unchanged). */
 const withTraps = (
   entry: RecipePiece,
-  traps: Pick<RoomPiece, "rockfall" | "holes" | "holeWave" | "obstacles">,
+  traps: Pick<
+    RoomPiece,
+    "rockfall" | "holes" | "holeWave" | "obstacles" | "sludge" | "arrows"
+  >,
   setups: Waves[] = [...entry.setups],
 ): RecipePiece => ({
   ...entry,
@@ -363,6 +368,8 @@ function ambushHall(): RecipePiece {
       ...asPiece("ambush"),
       holes: AMBUSH_HOLES,
       holeWave: 1,
+      // The ambush: its doors shut behind you until it is cleared (D-114).
+      gated: true,
       waves: setups[0]!,
     },
     band: "heavy",
@@ -447,36 +454,45 @@ export const WARRENS_PIECES: readonly WarrensPiece[] = [
       ],
     },
   ),
-  newPiece("grotto", "Fungus grotto", 480, 480, "light", [
-    [
+  // Two sludge pools slow you down; goblins wade through (D-113).
+  withTraps(
+    newPiece("grotto", "Fungus grotto", 480, 480, "light", [
       [
-        ...g([
-          [200, 120],
-          [200, 360],
-          [320, 200],
-          [320, 280],
-        ]),
-        ...s([
-          [420, 80],
-          [420, 400],
-        ]),
+        [
+          ...g([
+            [200, 120],
+            [200, 360],
+            [320, 200],
+            [320, 280],
+          ]),
+          ...s([
+            [420, 80],
+            [420, 400],
+          ]),
+        ],
       ],
-    ],
-    [
       [
-        ...g([
-          [240, 240],
-          [300, 160],
-          [300, 320],
-        ]),
-        ...s([
-          [420, 100],
-          [420, 240],
-          [420, 380],
-        ]),
+        [
+          ...g([
+            [240, 240],
+            [300, 160],
+            [300, 320],
+          ]),
+          ...s([
+            [420, 100],
+            [420, 240],
+            [420, 380],
+          ]),
+        ],
       ],
-    ],
-  ]),
+    ]),
+    {
+      sludge: [
+        { x: 80, y: 60, width: 128, height: 96 },
+        { x: 240, y: 300, width: 128, height: 96 },
+      ],
+    },
+  ),
   // Medium.
   oldPiece("camp", "medium", [
     [
@@ -752,6 +768,8 @@ export const WARRENS_RECIPE: DungeonRecipe = {
   // D-109–D-111: one slinger in three leads its shots; a boulder does 5.
   leadShare: 1 / 3,
   rockfallDamage: 5,
+  // D-113: no arrow rooms in the Warrens yet; the dungeon's number if any.
+  arrowDamage: 4,
   fixed: GOBLIN_WARRENS,
 };
 

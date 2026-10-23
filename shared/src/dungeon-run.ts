@@ -1,12 +1,14 @@
+import { boxAround } from "./collision.ts";
 import {
   contains,
+  ARROWS,
   ROCKFALL,
   type DungeonLayout,
   type RoomDef,
 } from "./dungeon-layout.ts";
 import { isAlive } from "./enemy.ts";
 import type { Rect, Vec2 } from "./geometry.ts";
-import { TICK_SECONDS } from "./movement-config.ts";
+import { PLAYER_BODY, TICK_SECONDS } from "./movement-config.ts";
 import {
   isPlayerAlive,
   type EnemySpawn,
@@ -31,6 +33,9 @@ export interface RoomProgress {
   waveStart: number;
   /** Boulders dropped so far (rockfall rooms, D-110). */
   dropped: number;
+  /** Arrow volleys fired so far, and the gap (first slit) of the next (D-113); -1 until chosen. */
+  volleys: number;
+  gap: number;
 }
 
 const DORMANT: RoomProgress = {
@@ -40,6 +45,8 @@ const DORMANT: RoomProgress = {
   released: 0,
   waveStart: 0,
   dropped: 0,
+  volleys: 0,
+  gap: -1,
 };
 
 /** One entry per room, in the layout's room order. */
@@ -231,24 +238,128 @@ export function rockfallDrops(
   return { progress: next, drops };
 }
 
-function isCleared(
-  progress: RunProgress,
-  layout: DungeonLayout,
-  roomId: string,
-): boolean {
-  const i = layout.rooms.findIndex((r) => r.id === roomId);
-  return progress[i]?.status === "cleared";
+/** An arrow to fire: from a slit, across the room. */
+export interface ArrowShot {
+  at: Vec2;
+  direction: Vec2;
+  damage: number;
 }
 
-/** Ids of doors still closed (their room is not cleared). */
+/**
+ * Arrow traps of fighting rooms (D-113): volley k fires at
+ * ARROWS.warnSeconds + k × ARROWS.everySeconds of the room's clock, from
+ * every slit but ARROWS.gap neighbours starting at the chosen gap. Each
+ * gap is chosen (from `random`, the run's stream) before its slits glow,
+ * so players see it coming.
+ */
+export function arrowVolleys(
+  progress: RunProgress,
+  layout: DungeonLayout,
+  random: () => number,
+): { progress: RunProgress; shots: ArrowShot[] } {
+  const shots: ArrowShot[] = [];
+  const next = layout.rooms.map((room, i): RoomProgress => {
+    let p = progress[i] ?? DORMANT;
+    const trap = room.arrows;
+    if (!trap || p.status !== "active") return p;
+    const pickGap = () =>
+      Math.floor(random() * (trap.slits.length - ARROWS.gap + 1));
+    if (p.gap < 0) p = { ...p, gap: pickGap() };
+    const due = ARROWS.warnSeconds + p.volleys * ARROWS.everySeconds;
+    if (p.clock + 1e-9 < due) return p;
+    trap.slits.forEach((at, k) => {
+      if (k >= p.gap && k < p.gap + ARROWS.gap) return;
+      shots.push({ at, direction: trap.direction, damage: trap.damage });
+    });
+    return { ...p, volleys: p.volleys + 1, gap: pickGap() };
+  });
+  return { progress: next, shots };
+}
+
+/** A trap about to fire: its room, the gap's first slit, and 0 → 1 through the glow. */
+export interface TrapWarning {
+  room: string;
+  gap: number;
+  warn: number;
+}
+
+/** Arrow traps glowing before their next volley (D-113), for drawing. */
+export function trapWarnings(
+  progress: RunProgress,
+  layout: DungeonLayout,
+): TrapWarning[] {
+  const out: TrapWarning[] = [];
+  layout.rooms.forEach((room, i) => {
+    const p = progress[i];
+    if (!room.arrows || p?.status !== "active" || p.gap < 0) return;
+    const due = ARROWS.warnSeconds + p.volleys * ARROWS.everySeconds;
+    const left = due - p.clock;
+    if (left <= ARROWS.warnSeconds + 1e-9) {
+      out.push({
+        room: room.id,
+        gap: p.gap,
+        warn: Math.min(1, Math.max(0, 1 - left / ARROWS.warnSeconds)),
+      });
+    }
+  });
+  return out;
+}
+
+/** For each door, the indexes of the two rooms it joins (cached per layout). */
+const doorRooms = new WeakMap<DungeonLayout, number[][]>();
+
+function roomsOfDoors(layout: DungeonLayout): number[][] {
+  let rooms = doorRooms.get(layout);
+  if (!rooms) {
+    rooms = layout.doors.map((d) =>
+      layout.rooms.flatMap((r, i) =>
+        touchesRect(r.bounds, d.rect) ? [i] : [],
+      ),
+    );
+    doorRooms.set(layout, rooms);
+  }
+  return rooms;
+}
+
+/**
+ * Ids of doors closed right now (D-114). Doors are open, so players may
+ * rush through rooms (dragging their goblins along), except round a gated
+ * room while it fights: every door of it shuts behind you until it is
+ * cleared. A door never shuts on a living player standing in it; it shuts
+ * once they are clear.
+ */
 export function closedDoorIds(
   progress: RunProgress,
   layout: DungeonLayout,
+  players: readonly PlayerState[] = [],
 ): string[] {
+  const joined = roomsOfDoors(layout);
   return layout.doors
-    .filter((d) => !isCleared(progress, layout, d.room))
+    .filter((d, k) => {
+      const locked = (joined[k] ?? []).some(
+        (i) => layout.rooms[i]?.gated && progress[i]?.status === "active",
+      );
+      if (!locked) return false;
+      return !players.some(
+        (p) =>
+          isPlayerAlive(p) &&
+          overlapsRect(d.rect, boxAround(p.position, PLAYER_BODY.width)),
+      );
+    })
     .map((d) => d.id);
 }
+
+const touchesRect = (a: Rect, b: Rect) =>
+  a.x <= b.x + b.width &&
+  b.x <= a.x + a.width &&
+  a.y <= b.y + b.height &&
+  b.y <= a.y + a.height;
+
+const overlapsRect = (a: Rect, b: Rect) =>
+  a.x < b.x + b.width &&
+  b.x < a.x + a.width &&
+  a.y < b.y + b.height &&
+  b.y < a.y + a.height;
 
 /** Everything that blocks movement right now: static walls plus closed doors. */
 export function blockingWalls(
@@ -262,11 +373,20 @@ export function blockingWalls(
   ];
 }
 
-/** Every required room is cleared: the exit portal opens (D-057), or, without a portal, the run is complete. */
+/**
+ * The run's goal is met: the exit portal opens (D-057) once the room
+ * holding it, the boss's, is cleared; rooms rushed past do not count
+ * (D-114). Without a portal (test fixtures), every required room.
+ */
 export function requiredRoomsCleared(
   progress: RunProgress,
   layout: DungeonLayout,
 ): boolean {
+  const portal = layout.exitPortal;
+  if (portal) {
+    const i = layout.rooms.findIndex((r) => contains(r.bounds, portal));
+    return progress[i]?.status === "cleared";
+  }
   return layout.rooms.every(
     (r, i) => !r.required || progress[i]?.status === "cleared",
   );

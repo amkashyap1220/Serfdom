@@ -20,6 +20,26 @@ export interface EnemySpawnDef {
  * `nearRadius` of a player in the room. Each shows its shadow for
  * `warnSeconds`, then lands, hitting everyone within `radius`.
  */
+/** Sludge slows players standing in it (D-113); goblins are used to it. */
+export const SLUDGE = { speedFactor: 0.6 } as const;
+
+/**
+ * Arrow traps (D-113): the slits glow for `warnSeconds`, then all fire at
+ * once except `gap` neighbouring slits; again every `everySeconds`.
+ */
+export const ARROWS = {
+  everySeconds: 3.5,
+  warnSeconds: 0.8,
+  gap: 3,
+  speed: 260,
+  size: 6,
+} as const;
+
+/** Every sludge pool in the dungeon (players' movement checks these). */
+export function sludgePools(layout: DungeonLayout): Rect[] {
+  return layout.rooms.flatMap((r) => [...(r.sludge ?? [])]);
+}
+
 /** Obstacles keep at least this far from a room's walls, so no doorway is blocked (D-112). */
 export const OBSTACLE_MARGIN = 64;
 
@@ -44,8 +64,13 @@ export interface RoomDef {
   /** Floor area (inside the walls). */
   bounds: Rect;
   waves: readonly (readonly EnemySpawnDef[])[];
-  /** The run completes when every required room is cleared (T-031). */
+  /**
+   * On the main path (T-031). Since D-114 only the boss room, the one holding
+   * the exit portal, must be cleared to complete; others can be rushed past.
+   */
   required: boolean;
+  /** Locks you in while it fights: all its doors shut until cleared (D-114). */
+  gated?: boolean;
   /** A rockfall room and the damage of one boulder (D-110). */
   rockfall?: { damage: number };
   /**
@@ -53,6 +78,14 @@ export interface RoomDef {
    * layout's walls), blocking movement and every shot.
    */
   obstacles?: readonly Rect[];
+  /** Sludge pools (D-113): players standing in one move at SLUDGE.speedFactor. */
+  sludge?: readonly Rect[];
+  /**
+   * An arrow trap (D-113): slits just inside one wall, all firing across the
+   * room in `direction` but for a gap, every ARROWS.everySeconds while it
+   * fights.
+   */
+  arrows?: { slits: readonly Vec2[]; direction: Vec2; damage: number };
   /**
    * Ambush holes (D-109): floor points just inside its walls. Wave
    * `holeWave` does not appear at once: its goblins come out of the holes,
@@ -231,6 +264,39 @@ export function validateLayout(layout: DungeonLayout): string[] {
         if (overlaps(o, boxAround(hole, 64))) {
           problems.push(
             `${room.id}: an obstacle blocks the hole at ${hole.x},${hole.y}`,
+          );
+        }
+      }
+    }
+    const b = room.bounds;
+    const within = (r: Rect) =>
+      r.x >= b.x &&
+      r.y >= b.y &&
+      r.x + r.width <= b.x + b.width &&
+      r.y + r.height <= b.y + b.height;
+    for (const pool of room.sludge ?? []) {
+      if (!within(pool)) problems.push(`${room.id}: sludge outside the room`);
+    }
+    if (room.arrows) {
+      const { slits, direction } = room.arrows;
+      if (Math.abs(Math.hypot(direction.x, direction.y) - 1) > 1e-9) {
+        problems.push(`${room.id}: arrow direction is not a unit vector`);
+      }
+      if (slits.length <= ARROWS.gap) {
+        problems.push(
+          `${room.id}: an arrow trap needs more slits than its gap`,
+        );
+      }
+      for (const s of slits) {
+        const edge = Math.min(
+          s.x - b.x,
+          s.y - b.y,
+          b.x + b.width - s.x,
+          b.y + b.height - s.y,
+        );
+        if (!contains(b, s) || edge > 20) {
+          problems.push(
+            `${room.id}: arrow slit at ${s.x},${s.y} is not just inside a wall`,
           );
         }
       }

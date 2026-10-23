@@ -38,8 +38,14 @@ export interface RoomPiece {
   waves: readonly (readonly EnemySpawnDef[])[];
   /** Boulders fall while it fights (D-110). */
   rockfall?: boolean;
+  /** Its doors shut behind you until it is cleared (D-114). */
+  gated?: boolean;
   /** Solid obstacles on its floor, relative like the spawns (D-112). */
   obstacles?: readonly Rect[];
+  /** Sludge pools, relative like the spawns (D-113). */
+  sludge?: readonly Rect[];
+  /** An arrow trap's slits and firing direction, relative (D-113). */
+  arrows?: { slits: readonly Vec2[]; direction: Vec2 };
   /** Ambush holes and the wave that comes out of them (D-109). */
   holes?: readonly Vec2[];
   holeWave?: number;
@@ -75,6 +81,8 @@ function orient(
   waves: EnemySpawnDef[][];
   holes: Vec2[];
   obstacles: Rect[];
+  sludge: Rect[];
+  arrows: { slits: Vec2[]; direction: Vec2 } | null;
 } {
   const { width: w, height: h } = piece;
   const map: Record<Side, (p: Vec2) => Vec2> = {
@@ -91,18 +99,31 @@ function orient(
       wave.map((s) => ({ ...s, at: map[entry](s.at) })),
     ),
     holes: (piece.holes ?? []).map((h) => map[entry](h)),
-    obstacles: (piece.obstacles ?? []).map((r) => {
-      // Turn two opposite corners, then take the box between them.
-      const a = map[entry]({ x: r.x, y: r.y });
-      const c = map[entry]({ x: r.x + r.width, y: r.y + r.height });
-      return {
-        x: Math.min(a.x, c.x),
-        y: Math.min(a.y, c.y),
-        width: Math.abs(a.x - c.x),
-        height: Math.abs(a.y - c.y),
-      };
-    }),
+    obstacles: (piece.obstacles ?? []).map(turnRect),
+    sludge: (piece.sludge ?? []).map(turnRect),
+    arrows: piece.arrows
+      ? {
+          slits: piece.arrows.slits.map((p) => map[entry](p)),
+          // A direction turns like the difference of two turned points.
+          direction: (() => {
+            const o = map[entry]({ x: 0, y: 0 });
+            const d = map[entry](piece.arrows.direction);
+            return { x: d.x - o.x, y: d.y - o.y };
+          })(),
+        }
+      : null,
   };
+  function turnRect(r: Rect): Rect {
+    // Turn two opposite corners, then take the box between them.
+    const a = map[entry]({ x: r.x, y: r.y });
+    const c = map[entry]({ x: r.x + r.width, y: r.y + r.height });
+    return {
+      x: Math.min(a.x, c.x),
+      y: Math.min(a.y, c.y),
+      width: Math.abs(a.x - c.x),
+      height: Math.abs(a.y - c.y),
+    };
+  }
 }
 
 interface Placed {
@@ -257,8 +278,21 @@ export class RoomAssembly {
           waves,
           required,
           ...traps(piece.rockfall === true, o.holes.map(shift), piece.holeWave),
+          ...(piece.gated ? { gated: true } : {}),
           ...(o.obstacles.length > 0
             ? { obstacles: o.obstacles.map((r) => ({ ...r, ...shift(r) })) }
+            : {}),
+          ...(o.sludge.length > 0
+            ? { sludge: o.sludge.map((r) => ({ ...r, ...shift(r) })) }
+            : {}),
+          ...(o.arrows
+            ? {
+                arrows: {
+                  slits: o.arrows.slits.map(shift),
+                  direction: o.arrows.direction,
+                  damage: 0,
+                },
+              }
             : {}),
         },
         used: new Set([OPPOSITE[side]]),
@@ -308,6 +342,10 @@ export class RoomAssembly {
         room.rockfall?.damage,
       ),
       ...(room.obstacles ? { obstacles: room.obstacles.map(moveRect) } : {}),
+      ...(room.sludge ? { sludge: room.sludge.map(moveRect) } : {}),
+      ...(room.arrows
+        ? { arrows: { ...room.arrows, slits: room.arrows.slits.map(move) } }
+        : {}),
     }));
     const doors = this.doors.map((d) => ({ ...d, rect: moveRect(d.rect) }));
     return {

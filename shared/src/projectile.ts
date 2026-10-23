@@ -18,6 +18,8 @@ export interface Projectile {
   size: number;
   /** Fired by an ability (Volley), not a basic shot: clients draw it from the server. */
   fromAbility?: boolean;
+  /** A room's arrow (D-113): its hits are hazard hits. */
+  hazard?: "arrows";
 }
 
 /** Something a projectile can hit: an id and its hit box. */
