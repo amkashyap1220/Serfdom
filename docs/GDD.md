@@ -114,24 +114,41 @@ The exact hexadecimal RGB palette entries and permitted color variants should be
 
 ## 4. Classes and abilities
 
-The launch roster is the **10 classes** below, chosen permanently at level 5 (D-072, D-073, CONFIRMED). Each has a class-specific active ability item. The ability items and core concepts are confirmed as the design direction; exact numbers, costs, cooldowns, and mechanics are not.
+The launch roster is the **10 classes** below, chosen permanently at level 5 (D-072, D-073, CONFIRMED). Each has a class-specific active ability item. All ten abilities are built (Phase 10) with confirmed, tunable numbers: D-096 to D-102. The Artifact twists are still concepts only.
 
 ### Class ability concepts
 
-| Draft class | Ability item | Core concept                                                                              | Draft Artifact twist                                                                                    |
-| ----------- | ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Fighter     | Shield       | Guard: briefly reduce incoming damage or use a defensive bash; implementation unresolved. | Aegis of the Last Stand: blocked damage powers a shockwave, capped.                                     |
-| Barbarian   | War Horn     | Battle Cry temporarily increases attack power.                                            | Horn of the Blood King: kills during the buff restore a small amount of health.                         |
-| Rogue       | Cloak        | Vanish disrupts targeting and grants evasiveness.                                         | Veil of the Unseen End: leaves a decoy/shadow that draws attacks before bursting.                       |
-| Ranger      | Quiver       | Volley fires a special arrow or small volley.                                             | Quiver of the Worldseeker: piercing special arrows trigger a secondary seeking arrow on elite/boss hit. |
-| Wizard      | Spellbook    | Arcane Blast detonates area damage.                                                       | Aetherion's Codex: pulls enemies together before detonating.                                            |
-| Cleric      | Tome         | Healing restores the user and nearby allies.                                              | The Tome of the First Dawn: healing also grants capped temporary shielding.                             |
-| Bard        | Instrument   | Inspiration temporarily buffs nearby allies.                                              | The Worldsong: pulse destroys or deflects a limited number of nearby enemy projectiles.                 |
-| Warlock     | Grimoire     | Curse marks enemies for increased damage.                                                 | The Black Testament: cursed kills leave fragments that restore mana and briefly extend nearby curses.   |
-| Druid       | Totem        | Nature's Reach creates a targeted damaging or entangling area.                            | The Worldroot Totem: periodically roots enemies and empowers the next hit against them.                 |
-| Sorcerer    | Scepter      | Chain Lightning jumps between enemies.                                                    | Eternity's Conduit: final strike creates a short-lived field that arcs between enemies entering it.     |
+| Class     | Ability item | Core concept                                                      | Draft Artifact twist                                                                                    |
+| --------- | ------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Fighter   | Shield       | Guard briefly reduces incoming damage (no defensive bash, D-100). | Aegis of the Last Stand: blocked damage powers a shockwave, capped.                                     |
+| Barbarian | War Horn     | Battle Cry temporarily increases attack power.                    | Horn of the Blood King: kills during the buff restore a small amount of health.                         |
+| Rogue     | Cloak        | Vanish disrupts targeting and grants evasiveness.                 | Veil of the Unseen End: leaves a decoy/shadow that draws attacks before bursting.                       |
+| Ranger    | Quiver       | Volley fires a special arrow or small volley.                     | Quiver of the Worldseeker: piercing special arrows trigger a secondary seeking arrow on elite/boss hit. |
+| Wizard    | Spellbook    | Arcane Blast detonates area damage.                               | Aetherion's Codex: pulls enemies together before detonating.                                            |
+| Cleric    | Tome         | Healing restores the user and nearby allies.                      | The Tome of the First Dawn: healing also grants capped temporary shielding.                             |
+| Bard      | Instrument   | Inspiration temporarily buffs nearby allies.                      | The Worldsong: pulse destroys or deflects a limited number of nearby enemy projectiles.                 |
+| Warlock   | Grimoire     | Curse marks enemies for increased damage.                         | The Black Testament: cursed kills leave fragments that restore mana and briefly extend nearby curses.   |
+| Druid     | Totem        | Nature's Reach creates a targeted damaging or entangling area.    | The Worldroot Totem: periodically roots enemies and empowers the next hit against them.                 |
+| Sorcerer  | Scepter      | Chain Lightning jumps between enemies.                            | Eternity's Conduit: final strike creates a short-lived field that arcs between enemies entering it.     |
 
-Confirmed for Phase 10 (D-092–D-095): the ability needs the class's ability item worn (a T0 one comes with the class choice); Space uses it for MP and a short cooldown, Wisdom regenerates MP; aimed abilities follow the fire mode; higher-tier ability items make the ability stronger. Still open: each ability's exact numbers and mechanics (drafted per class for approval).
+Confirmed for Phase 10 (D-092–D-095): the ability needs the class's ability item worn (a T0 one comes with the class choice); Space uses it for MP and a short cooldown, Wisdom regenerates MP; aimed abilities follow the fire mode; higher-tier ability items make the ability stronger.
+
+Built (CONFIRMED, numbers tunable; T = item tier):
+
+| Ability         | MP / cooldown | Effect                                                                                                                     | Decision    |
+| --------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Arcane Blast    | 15 / 1.5 s    | Area damage at a target point.                                                                                             | D-096       |
+| Volley          | 12 / 1.2 s    | A spread of arrows.                                                                                                        | D-097       |
+| Chain Lightning | 15 / 1.5 s    | Hits the enemy nearest the target, then jumps between enemies.                                                             | D-097       |
+| Nature's Reach  | 20 / 4 s      | A damaging area that pulses for a few seconds.                                                                             | D-097       |
+| Battle Cry      | 15 / 10 s     | You deal more damage for a few seconds.                                                                                    | D-098       |
+| Inspiration     | 20 / 12 s     | You and nearby allies deal more damage and heal faster.                                                                    | D-098       |
+| Curse           | 15 / 6 s      | Enemies in a small area take more damage from everyone.                                                                    | D-098       |
+| Guard           | 12 / 6 s      | 2.5 s of (50 + 3T)% less damage (max 80%), on top of Defense.                                                              | D-100       |
+| Vanish          | 15 / 8 s      | (2 + 0.2T) s out of enemy sight; flying bullets hit for half; a click or a cast ends it; automatic fire holds; Space only. | D-100–D-102 |
+| Healing         | 20 / 8 s      | You and allies within 160 px heal (10 + 3T) + 10% max HP.                                                                  | D-100       |
+
+The four fire modes on T (D-099) decide whether the ability needs Space: Full auto casts it by itself when an enemy is in reach, except movement abilities (Vanish).
 
 ## 5. Combat model
 
@@ -338,7 +355,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 
 ## 12. Economy and leaderboards
 
-Confirmed in Phase 9 (D-085–D-087): a shared account stash, account gold that survives death, and selling to the vendor for 50% of an item's reference value. Buying, the marketplace, and upgrades remain Phase 12.
+Confirmed in Phase 9 (D-085–D-087): a shared account stash, account gold that survives death, and selling to the vendor for 50% of an item's reference value. Buying, the marketplace, and upgrades remain Phase 14 (D-103).
 
 Prior economy direction:
 

@@ -374,3 +374,14 @@ Keep this concise and update it after each meaningful milestone.
 - User: Vanish is a movement ability, so Full auto must not cast it (D-102). `ABILITIES.vanish.movement = true`; the movement test now uses Vanish instead of a temporary stand-in.
 - User ran the 10d checklist (Edwin Fighter, Hamon Rogue, Maud Cleric): all pass (2026-10-23). Committed and pushed 10d. Next: Phase 10 acceptance review.
 - Harness note: the test-only ability swap changes only the server, so the client still aims the old ability; in Manual it needs the mouse over the game to send a cast.
+
+### Phase 10 acceptance review — 2026-10-23
+
+- Committed 10d as `1077c41`. Reviewed the three Phase 10 acceptance items:
+  - **Classes match approved docs:** all ten abilities follow D-092–D-102. The GDD §4 table was stale (it said numbers were open and Guard "implementation unresolved"); updated with a built-abilities table that has the real costs and cooldowns from the code.
+  - **Server validates ability use:** the input carries only a target, never which ability, so the worn item decides; casts need the item, MP, and a finished cooldown; targets are clamped to range in the sim and malformed ones refused by the parser; repeated inputs cannot cast faster (input credits). One gap had no test, a dead player casting; added (nothing spent, nobody healed).
+  - **No unapproved mechanics:** every number was drafted and approved per slice; Claude's own details are marked PROVISIONAL (T-049, fire-mode names).
+- Not built: the Artifact twists in GDD §4 (Phase 9 also deferred Artifacts to later phases; no phase owns them yet).
+- Next step: user decides whether to close Phase 10 with the Artifact twists deferred.
+- User closed Phase 10 (2026-10-23) and approved extending the roadmap to 18 phases (D-103): dungeon tiers and the endgame loop, rare loot, presentation, and Steam integration became their own phases; Artifact twists moved to Phase 13. Open questions 19 (sound) and 20 (Steam features) added. Forward references to old phase numbers updated (D-061, D-087, D-090, T-042, GDD §12).
+- Next step: orient Phase 11 (dungeon variety and procedural assembly).

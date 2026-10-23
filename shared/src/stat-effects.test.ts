@@ -602,6 +602,18 @@ describe("10d: Guard, Vanish, Healing (D-100)", () => {
     expect(findPlayer(s, 1)!.buffs.vanish).toBeUndefined();
   });
 
+  it("a dead player casts nothing: no MP spent, nobody healed", () => {
+    let s = withAbility("healing", 0, [], { hp: 60 });
+    s = addPlayer(s, 2, { x: 50, y: 0 }, { ...SERF_BASE, hp: 100 });
+    s = {
+      ...s,
+      players: s.players.map((p) => ({ ...p, hp: p.id === 1 ? 0 : 10 })),
+    };
+    const r = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS);
+    expect(r.state).toBe(s);
+    expect(r.events).toEqual([]);
+  });
+
   it("automatic shots hold fire while vanished; a click still ends it (D-101)", () => {
     const AUTO: PlayerInput = {
       move: { x: 0, y: 0 },

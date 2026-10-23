@@ -258,6 +258,8 @@ Acceptance:
 - The server validates ability use.
 - No unapproved mechanics are silently introduced.
 
+Status: **complete** (2026-10-23; closed by the user after the 10d checklist passed): all ten class abilities match D-092–D-102 (GDD §4 table updated in the review); the server checks the worn item, MP, cooldown, and range, refuses malformed targets, and a dead player casts nothing (test added in the review); every number was approved per slice. Not built, by decision: the Artifact twists, moved to Phase 13 (D-103).
+
 ## Phase 11 — Dungeon variety and procedural assembly
 
 **Goal:** Expand from a tiny handcrafted test to reusable room-based dungeons.
@@ -270,6 +272,7 @@ Tasks:
 - Validate connectivity, reachability, encounter ordering, and exits.
 - Make seeds reproducible for debugging.
 - Implement open access for qualifying characters and free retreat through cleared rooms.
+- Decide and implement dungeon entry rules (open question 7, D-014, D-018): who may enter which dungeon, and how a party with different levels is handled.
 - Configure difficulty-specific reward pools.
 
 Acceptance:
@@ -278,14 +281,51 @@ Acceptance:
 - A reported bad layout can be reproduced with a seed.
 - Fixed/special dungeons remain possible.
 - Dungeon-specific loot pools are respected.
+- Entry rules are enforced by the server, including a tampered queue request.
 
-## Phase 12 — Economy and account systems
+## Phase 12 — Dungeon tiers and the endgame loop
 
-**Goal:** Add the marketplace, buying, and upgrades (the shared stash, gold, and selling to the vendor arrive in Phase 9, D-085–D-087).
+**Goal:** Make the real grind exist (GDD §3: levels 1–20 are quick; the long game is stat potions and rare drops from high-tier dungeons).
 
 Tasks:
 
-- Confirm item loss, stash eligibility, pricing, and fees.
+- Add a second and third dungeon above the Goblin Warrens, each with its own level range, enemies, boss, and loot tiers (designs drafted for the user's approval, one dungeon at a time).
+- New enemy roles and boss mechanics, readable and tested like the Warlord.
+- Stat potions and the account potion rack (D-089, D-075): potion dungeons roll the potion chance once per Luck point; drink at once or send to the rack; potions raise a stat up to the class max.
+- EXP from the new dungeons fits the approved curve (less EXP below a dungeon's range).
+
+Acceptance:
+
+- Each new dungeon can be completed solo and by a party, and its loot and EXP match its approved tables.
+- Potions are granted exactly once per roll, never above the class max, and survive death in the rack.
+- The server decides every potion, drop, and EXP award.
+
+## Phase 13 — Rare loot
+
+**Goal:** The collectible chase: Artifacts and Shiny items.
+
+Tasks:
+
+- Reconcile the item Artifacts (GDD §9) and the class ability Artifact twists (GDD §4) with the 10-class roster, then draft each effect for approval.
+- Resurrection Necklace: the exact once-preservation rule (GDD §7) confirmed before building.
+- Shiny items: confirm the chance (1/2,000 is only a proposal) and what Shiny shows.
+- Weapon attack styles (deferred from Phase 9): each weapon type fires its own way, drafted for approval.
+- All rates in central configuration, never scattered.
+
+Acceptance:
+
+- Every Artifact effect matches its approved description and is tested, including caps.
+- Drop rates match configuration over many simulated rolls.
+- A Resurrection Necklace saves a serf exactly once under the confirmed rule.
+
+## Phase 14 — Economy and account systems
+
+**Goal:** Add the marketplace, buying, and upgrades (the shared stash, gold, and selling to the vendor arrived in Phase 9, D-085–D-087).
+
+Tasks:
+
+- Confirm the marketplace's launch scope (open question 9), item eligibility, pricing, and fees.
+- Account upgrades bought with gold: more serf slots (D-061), a bigger stash (D-090), a bigger potion rack; prices drafted for approval.
 - Implement atomic, server-side transactions.
 - Test simultaneous trades and duplicate/negative balance exploits.
 - Ensure browser and desktop users use the same economy.
@@ -295,9 +335,27 @@ Acceptance:
 - A trade cannot duplicate an item or gold.
 - Failed transactions leave both sides unchanged.
 - Shared storage works across characters on one account.
+- An upgrade is paid for exactly once and applies to the whole account.
 - Economy behavior is identical across platforms.
 
-## Phase 13 — Desktop wrapper and cross-play proof
+## Phase 15 — Presentation: art, HUD, and sound
+
+**Goal:** Replace placeholder squares and the debug HUD once the systems are stable.
+
+Tasks:
+
+- Original 16×16 pixel-art sprites for serfs (per class) and ordinary enemies, larger canvases for bosses, tiles, projectiles, and effects, per the confirmed art direction and `docs/ASSET_MANIFEST.md`.
+- Verify palette RGB values from a suitable reference before calling anything the Pokémon Emerald palette.
+- A real player HUD in the 240×640 panel (the debug readout moves behind a toggle).
+- Sound and music only if the user wants them (open question 19).
+
+Acceptance:
+
+- Every asset passes the manifest checks: canvas size, transparency, crisp edges, palette, frame layout.
+- Gameplay readability is no worse than with placeholders (bullets, telegraphs, and ability effects stay clear).
+- The HUD never covers the gameplay viewport.
+
+## Phase 16 — Desktop wrapper and cross-play proof
 
 **Goal:** Package the same client as a windowed desktop app and verify it plays with browser users.
 
@@ -307,7 +365,6 @@ Tasks:
 - Keep core gameplay/network code shared.
 - Add platform-specific features only when requested.
 - Test desktop and browser clients against the same backend.
-- Later, add Steamworks integration as a separate milestone.
 
 Acceptance:
 
@@ -316,15 +373,32 @@ Acceptance:
 - Both observe consistent game state and rewards.
 - Both use shared account progression and economy.
 
-## Phase 14 — Release hardening
+## Phase 17 — Steam integration
+
+**Goal:** Steamworks features as their own milestone (split out of the desktop phase).
+
+Tasks:
+
+- Decide with the user which Steamworks features launch needs (open question 20).
+- Integrate the Steamworks SDK in the desktop wrapper only; the browser client is unaffected.
+- Keep accounts, progression, and the economy shared with browser players.
+
+Acceptance:
+
+- The Steam build launches and plays with browser users against the same backend.
+- No Steam-only advantage in gameplay or economy.
+
+## Phase 18 — Release hardening
 
 Only after the game loop is fun and core systems are stable:
 
 - Security review and input validation.
+- wss:// (TLS) before any non-local play (T-042).
+- Disconnect, reconnect, session ownership, and party-leader rules (GDD §11) confirmed and tested.
 - Load and soak testing.
 - Database backups/migration strategy.
 - Error handling and useful diagnostics.
-- Accessibility and window-size testing, including the 960×640 container, 240-pixel HUD, 720×640 viewport, camera visibility, and resizing.
+- Accessibility and window-size testing, including the 960×640 container, 240-pixel HUD, 720×640 viewport, camera visibility, and resizing; minimum, responsive, and larger-window behavior decided first (open questions 11–13, 15).
 - Deployment, monitoring, and incident recovery.
 - Store page, onboarding, and release checklist.
 
