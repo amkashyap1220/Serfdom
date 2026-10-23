@@ -106,6 +106,7 @@ Ask these when needed by the current implementation phase, not all at once.
 13. **Larger windows/fullscreen:** Should extra space show more world or use margins/fixed visibility?
 14. **Camera edges:** Clamp to map boundaries or render beyond the playable map? _Answered: D-033._
 15. **Multiplayer visibility fairness:** Should larger displays be allowed more world visibility?
+16. **Network delay budget (raised by user 2026-10-22):** other players are visibly slightly behind (smooth but delayed). The user does not want lag to be an issue. Current sources: 100 ms interpolation delay + up to 50 ms snapshot interval (20 Hz) + server input queue (~1–4 ticks). Measure and tune (e.g. lower interpolation delay, higher snapshot rate, shorter input backlog) before Phase 5 combat depends on it; agree a target with the user.
 
 ## How to add a decision
 

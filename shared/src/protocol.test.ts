@@ -110,3 +110,96 @@ describe("parseServerMessage", () => {
     ).toBe(false);
   });
 });
+
+describe("input messages (v2)", () => {
+  const input = (seq: unknown, move: unknown) =>
+    JSON.stringify({ type: "input", seq, move });
+
+  it("accepts a unit or zero direction", () => {
+    expect(parseClientMessage(input(0, { x: 0, y: 0 }))).toEqual({
+      ok: true,
+      message: { type: "input", seq: 0, move: { x: 0, y: 0 } },
+    });
+    const d = Math.SQRT1_2;
+    expect(parseClientMessage(input(41, { x: d, y: -d })).ok).toBe(true);
+  });
+
+  it.each([
+    [
+      "a too-long direction (speed hack)",
+      input(1, { x: 1, y: 1 }),
+      "input: move must have length <= 1",
+    ],
+    [
+      "a huge direction",
+      input(1, { x: 1e9, y: 0 }),
+      "input: move must have length <= 1",
+    ],
+    [
+      "a string coordinate",
+      input(1, { x: "1", y: 0 }),
+      "input: move must be {x, y} numbers",
+    ],
+    [
+      "a missing coordinate",
+      input(1, { x: 1 }),
+      "input: move must be {x, y} numbers",
+    ],
+    [
+      "an extra coordinate",
+      input(1, { x: 0, y: 0, z: 1 }),
+      "input: move must be {x, y} numbers",
+    ],
+    [
+      "an array direction",
+      input(1, [1, 0]),
+      "input: move must be {x, y} numbers",
+    ],
+    [
+      "a negative seq",
+      input(-1, { x: 0, y: 0 }),
+      "input: seq must be a non-negative integer",
+    ],
+    [
+      "a fractional seq",
+      input(1.5, { x: 0, y: 0 }),
+      "input: seq must be a non-negative integer",
+    ],
+    [
+      "a position instead of a direction",
+      JSON.stringify({ type: "input", seq: 1, x: 500, y: 500 }),
+      "input: unexpected fields",
+    ],
+  ])("rejects %s", (_label, raw, error) => {
+    expect(parseClientMessage(raw)).toEqual({ ok: false, error });
+  });
+});
+
+describe("snapshot messages (v2)", () => {
+  it("round-trips a snapshot", () => {
+    const msg: ServerMessage = {
+      type: "snapshot",
+      tick: 120,
+      players: [
+        { id: 1, x: 1000, y: 1000, ack: -1 },
+        { id: 2, x: 1012.5, y: 990.25, ack: 57 },
+      ],
+    };
+    expect(parseServerMessage(encodeMessage(msg))).toEqual({
+      ok: true,
+      message: msg,
+    });
+  });
+
+  it("rejects malformed player entries", () => {
+    const bad = (p: unknown) =>
+      parseServerMessage(
+        JSON.stringify({ type: "snapshot", tick: 1, players: [p] }),
+      ).ok;
+    expect(bad({ id: 1, x: 0, y: 0 })).toBe(false);
+    expect(bad({ id: 0, x: 0, y: 0, ack: 0 })).toBe(false);
+    expect(bad({ id: 1, x: "0", y: 0, ack: 0 })).toBe(false);
+    expect(bad({ id: 1, x: 0, y: 0, ack: -2 })).toBe(false);
+    expect(bad({ id: 1, x: 0, y: 0, ack: 0, hp: 1 })).toBe(false);
+  });
+});

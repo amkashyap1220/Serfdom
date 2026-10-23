@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phases 0–3 are complete (setup, client skeleton, movement/camera, single-player combat prototype). Phase 4 (authoritative multiplayer) is in progress: slice 4a connects browsers to a Node game server that assigns guest ids and tracks who is online. Movement is not shared yet (4b); combat is still local to each browser (Phase 5). See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
+Phases 0–3 are complete (setup, client skeleton, movement/camera, single-player combat prototype). Phase 4 (authoritative multiplayer) is in progress: browsers connect to a Node game server (guest ids, presence, 4a) that owns every player's position (4b): you see other players as blue squares. Combat is still local to each browser until Phase 5. See [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
 
 ## Development setup
 
@@ -74,33 +74,35 @@ Run from the repository root:
 ### Repository layout
 
 ```
-shared/      pure game rules shared by client and (later) server (npm workspace @serfdom/shared)
-  src/movement.ts (+ .test.ts)    WASD direction, movement step, wall collision
-  src/fixed-step.ts (+ .test.ts)  fixed 60 Hz simulation timestep
-  src/movement-config.ts          PROVISIONAL speed / body / tick values
-client/      browser client (npm workspace @serfdom/client): Phaser 4 + TypeScript + Vite
-  index.html     page: #game-container = #hud (DOM) + #gameplay (Phaser canvas)
-  src/main.ts    creates the Phaser game; measures the layout into the HUD debug readout
-  src/layout.ts  approved CSS-pixel layout constants
-  src/camera-math.ts (+ .test.ts)  pure camera visibility rules
-  src/test-world.ts (+ .test.ts)  PROVISIONAL debug map: size, start, walls
-  src/input.ts       WASD key reader
-  src/debug-list.ts  HUD debug readout rows
-  src/scenes/WorldScene.ts  debug map, movement loop, placeholder player, camera
-docs/        design, roadmap, architecture, decisions, testing, work log
-CLAUDE.md    instructions for Claude as pair-programmer
+shared/   pure game rules and protocol, used by client AND server (@serfdom/shared)
+  src/movement.ts, fixed-step.ts, movement-config.ts   movement, collision, 60 Hz timestep
+  src/combat-config.ts, weapon.ts, projectile.ts, collision.ts, enemy.ts, health.ts
+  src/sim.ts             one combat tick (player, shots, enemy rings, prototype death)
+  src/protocol.ts        every network message + strict validators
+  src/test-world.ts      PROVISIONAL debug map (size, start, walls, dummy)
+server/   authoritative game server (@serfdom/server): Node 24 + ws, no build step
+  src/main.ts            entry point (PORT env, default 8080)
+  src/game-server.ts     connections, guest ids, presence, 60 Hz tick, snapshots
+  src/player-movement.ts per-player input queue, authoritative movement
+  src/rate-limit.ts      per-connection message rate limit
+  src/log.ts             logger (never logs IPs or private data)
+client/   browser client (@serfdom/client): Phaser 4 + TypeScript + Vite
+  index.html             #game-container = #hud (DOM) + #gameplay (Phaser canvas)
+  src/main.ts            creates the game; HUD debug readout
+  src/net.ts, net-sync.ts, prediction.ts, interpolation.ts   networking
+  src/input.ts, camera-math.ts, layout.ts, render-config.ts, debug-list.ts
+  src/scenes/WorldScene.ts       input → simulation → drawing; cameras
+  src/scenes/CombatView.ts       dummy, HP label, projectiles
+  src/scenes/RemotePlayersView.ts  other players
+docs/     design, roadmap, architecture, decisions, testing, work log
+CLAUDE.md instructions for Claude as pair-programmer
 ```
 
-server/ authoritative game server (npm workspace @serfdom/server): Node 24 + ws, TypeScript run directly via Node type stripping
-src/main.ts entry point (PORT env, default 8080)
-src/game-server.ts (+ .test.ts) connections, guest ids, presence, input validation
-src/log.ts logger (never logs IPs or private data)
+Tests sit next to the code they test (`*.test.ts`).
 
-Shared protocol: `shared/src/protocol.ts` (+ tests) defines and validates every network message.
+Configuration: optional root `.env` (git-ignored); copy `.env.example`, which documents `VITE_SERVER_URL` and `PORT` with placeholder defaults. Never commit real secrets.
 
-If `npm run dev` shows a blank game with `504 (Outdated Optimize Dep)` in the console after dependencies change, stop the server (`Ctrl+C`) and start it again.
-
-No environment variables or secrets are needed yet. When they are, a placeholder-only `.env.example` will be committed; real `.env` files are git-ignored.
+If `npm run dev` shows a blank game with `504 (Outdated Optimize Dep)` in the console after dependencies change, stop it (`Ctrl+C`) and start it again.
 
 ## Source-of-truth order
 

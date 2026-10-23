@@ -113,3 +113,14 @@ Keep this concise and update it after each meaningful milestone.
 - Checks: `npm run check` passed (111 shared, 11 server, 23 client tests; server tests passed 3 runs in a row). Live: two visible tabs plus the user's own open tab connected as #1–#3, joins/leaves propagated, no console errors, server log has guest ids only. Headless: offline on server stop, reconnected on restart.
 - User manual test passed (all steps: combined dev command, two tabs, join/leave, offline and reconnect). Slice 4a complete.
 - Next step: slice 4b (server-authoritative movement, other players visible).
+
+### Phase 4b — Server-authoritative movement, other players visible — 2026-10-22
+
+- Protocol v2: `input {seq, move}` and `snapshot {tick, players}`, strict validators + 12 new tests. Debug map moved to `shared/`.
+- Server: `player-movement.ts` (queue, one input per tick, seq checks, clamp), `rate-limit.ts`, 60 Hz real-time loop, 20 Hz snapshots, manual `tick()` for deterministic tests. 28 server tests (flood, speed-hack direction, position-instead-of-intent, replayed seq, disconnect removal, real-time loop).
+- Client: `prediction.ts`, `interpolation.ts` (11 tests), `net-sync.ts`, `RemotePlayersView`, HUD rows Movement / Pending-correction / Other players / Others (world).
+- Caught before testing: parser slack (1e-6) vs `stepMovement` limit (1e-9) could have let a crafted direction throw inside the server tick; server now normalizes, with a test.
+- Checks: `npm run check` passed (128 shared, 28 server, 29 client). Probed the user's running server with a v2 client (welcome + snapshot). Live: two visible Chrome windows on the user's 5173 + 8080: A moved to 1152.5 and B saw it at 1153; B moved to y 1075 and A saw it at 1075; prediction correction 0.00 px; no console errors.
+- Known/PROVISIONAL: combat still local per browser (each sees its own dummy); prototype respawn does not teleport online; everyone spawns on the same spot (labels overlap); no player-player collision; latency only tested on localhost.
+- User manual test passed (all steps). Feedback: other players look **slightly delayed but smooth**; the user does not want lag to become an issue. Recorded as open question 16.
+- Next step: 4c — measure and reduce remote-player delay, review Phase 4 acceptance.

@@ -1,19 +1,14 @@
-import type { Rect } from "@serfdom/shared";
+import type { Rect } from "./geometry.ts";
 
-// PROVISIONAL debug world for Phases 1–2. These values exist only to make
-// layout, movement, collision, and camera behavior testable; not game design.
+// PROVISIONAL debug world for Phases 1–4. These values exist only to make
+// layout, movement, collision, camera, and multiplayer behavior testable;
+// not game design. Shared so the server collides against the same walls.
 
 /** Size of the debug world in world pixels. Outside it is void (D-033). */
 export const TEST_WORLD = { width: 2000, height: 2000 } as const;
 
 /** Where the placeholder player starts (world pixels, body center). */
 export const PLAYER_START = { x: 1000, y: 1000 } as const;
-
-/** Source-pixel size of the player placeholder sprite (D-022). */
-export const PLAYER_SPRITE_SIZE = 16;
-
-/** Debug grid: thin line every minor step, brighter every major, coordinate label every `label`. */
-export const GRID = { minor: 50, major: 100, label: 200 } as const;
 
 const BORDER = 32;
 

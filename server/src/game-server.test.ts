@@ -80,6 +80,7 @@ beforeEach(async () => {
   server = await GameServer.start({
     port: 0,
     helloTimeoutMs: 200,
+    autoTick: false,
     log: silentLogger,
   });
   clients = [];
@@ -212,3 +213,120 @@ describe("startup", () => {
     ).rejects.toMatchObject({ code: "EADDRINUSE" });
   });
 });
+
+/** Skips messages until one of the given type arrives. */
+async function nextOfType<T extends ServerMessage["type"]>(
+  client: TestClient,
+  type: T,
+): Promise<Extract<ServerMessage, { type: T }>> {
+  for (let i = 0; i < 100; i++) {
+    const m = await client.next();
+    if (m.type === type) return m as Extract<ServerMessage, { type: T }>;
+  }
+  throw new Error(`no ${type} message`);
+}
+
+async function until(cond: () => boolean): Promise<void> {
+  for (let i = 0; i < 200 && !cond(); i++) {
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  expect(cond()).toBe(true);
+}
+
+const input = (seq: number, x: number, y: number) =>
+  JSON.stringify({ type: "input", seq, move: { x, y } });
+
+describe("authoritative movement (4b)", () => {
+  it("moves a player only by queued inputs, one per tick, and acks them", async () => {
+    const { client } = await joined();
+    for (let seq = 0; seq < 30; seq++) client.send(input(seq, 1, 0));
+    await until(() => server.queuedInputs(1) === 30);
+    for (let t = 0; t < 30; t++) server.tick();
+    // 30 ticks × 150 px/s × 1/60 s = 75 px.
+    expect(server.players[0]?.x).toBeCloseTo(1075, 9);
+    expect(server.players[0]?.ack).toBe(29);
+    const snap = await nextOfType(client, "snapshot");
+    expect(snap.players[0]).toMatchObject({ id: 1, y: 1000 });
+  });
+
+  it("sends snapshots every 3 ticks with every player in them", async () => {
+    const a = await joined();
+    await joined();
+    for (let t = 0; t < 2; t++) server.tick();
+    server.tick();
+    const snap = await nextOfType(a.client, "snapshot");
+    expect(snap.tick).toBe(3);
+    expect(snap.players.map((p) => p.id).sort()).toEqual([1, 2]);
+  });
+
+  it("rejects a too-long direction and does not move", async () => {
+    const { client } = await joined();
+    client.send(input(0, 2, 0));
+    expect(await nextOfType(client, "error")).toEqual({
+      type: "error",
+      reason: "input: move must have length <= 1",
+    });
+    server.tick();
+    expect(server.players[0]?.x).toBe(1000);
+  });
+
+  it("rejects a position sent instead of an intent", async () => {
+    const { client } = await joined();
+    client.send(JSON.stringify({ type: "input", seq: 0, x: 1900, y: 1900 }));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "input: unexpected fields",
+    );
+  });
+
+  it("rejects input before hello and replayed seq numbers", async () => {
+    const c = await connect(server.port);
+    clients.push(c);
+    c.send(input(0, 1, 0));
+    expect((await c.next()).type).toBe("error");
+    const { client } = await joined();
+    client.send(input(5, 1, 0));
+    client.send(input(5, 1, 0));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "input seq must increase",
+    );
+  });
+
+  it("drops a disconnected player from later snapshots", async () => {
+    const a = await joined();
+    const b = await joined();
+    b.client.socket.close();
+    await serverHasPlayers([1]);
+    for (let t = 0; t < 3; t++) server.tick();
+    const snap = await nextOfType(a.client, "snapshot");
+    expect(snap.players.map((p) => p.id)).toEqual([1]);
+  });
+
+  it("closes a client that floods messages", async () => {
+    const { client } = await joined();
+    for (let seq = 0; seq < 400; seq++) client.send(input(seq, 1, 0));
+    expect(await client.closed).toEqual({ code: 1008, reason: "rate limit" });
+  });
+});
+
+describe("real-time loop", () => {
+  it("processes queued inputs at about 60 ticks per second on its own", async () => {
+    const live = await GameServer.start({ port: 0, log: silentLogger });
+    try {
+      const c = await connect(live.port);
+      clients.push(c);
+      c.send(hello);
+      await nextOfType(c, "welcome");
+      for (let seq = 0; seq < 30; seq++) c.send(input(seq, 0, 1));
+      // 30 inputs need 0.5 s of ticks; allow generous slack for CI timing.
+      await new Promise((r) => setTimeout(r, 900));
+      expect(live.players[0]?.y).toBeCloseTo(1075, 6);
+      expect(live.players[0]?.ack).toBe(29);
+    } finally {
+      await live.close();
+    }
+  });
+});
+
+async function serverHasPlayers(ids: number[]): Promise<void> {
+  await until(() => server.playerIds.join() === ids.join());
+}

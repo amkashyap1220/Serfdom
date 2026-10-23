@@ -62,10 +62,18 @@ export {
 export {
   encodeMessage,
   MAX_MESSAGE_BYTES,
+  MAX_SERVER_MESSAGE_BYTES,
   parseClientMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
   type ClientMessage,
   type ParseResult,
   type ServerMessage,
+  type SnapshotPlayer,
 } from "./protocol.ts";
+export {
+  DUMMY_POSITIONS,
+  PLAYER_START,
+  TEST_WALLS,
+  TEST_WORLD,
+} from "./test-world.ts";

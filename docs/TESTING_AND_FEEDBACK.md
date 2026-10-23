@@ -70,6 +70,8 @@ Enemy attacks and death (Phase 3c): within 300 px the dummy fires 8 orange bulle
 
 Multiplayer presence (Phase 4a): with `npm run dev` running, each tab's HUD shows `Server: connected as #N` and `Online (guest ids)`. Opening a second tab adds an id in both tabs; closing it removes it. Stopping the server shows `offline (retrying)`; restarting it reconnects automatically within ~2 s. The server terminal prints `guest #N joined/left (K online)` and never IP addresses. Server integration tests (`server/src/game-server.test.ts`) cover handshake, presence, disconnect cleanup, protocol mismatch, malformed/unknown/binary/oversized messages, the invalid-message limit, hello timeout, and port-in-use.
 
+Shared movement (Phase 4b): with two **separate windows** side by side (browsers pause background tabs, so a hidden tab stops updating), each HUD shows `Movement: server-authoritative`. Other players are blue squares labelled `#id`; the HUD row `Others (world)` lists their positions. Moving in one window moves its blue square in the other within ~0.1 s. `Pending / correction` should stay at a few pending inputs and ~0.00 px correction; a growing correction means client and server disagree. Stopping the server switches back to `local (offline)` movement.
+
 Automated browser check used by Claude (not committed): headless Chrome driven via the DevTools protocol, holding keys and reading the HUD.
 
 ### B. Manual feature tests

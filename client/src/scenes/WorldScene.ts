@@ -1,6 +1,10 @@
 import * as Phaser from "phaser";
 import {
   aimTargets,
+  DUMMY_POSITIONS,
+  PLAYER_START,
+  TEST_WALLS,
+  TEST_WORLD,
   isPlayerAlive,
   consumeFixedSteps,
   createSimState,
@@ -29,15 +33,10 @@ import {
   type KeyState,
   type PointerInput,
 } from "../input";
-import {
-  DUMMY_POSITIONS,
-  GRID,
-  PLAYER_SPRITE_SIZE,
-  PLAYER_START,
-  TEST_WALLS,
-  TEST_WORLD,
-} from "../test-world";
+import { GRID, PLAYER_SPRITE_SIZE } from "../render-config";
+import { NetSync } from "../net-sync";
 import { CombatView, makeSquareTexture } from "./CombatView";
+import { RemotePlayersView } from "./RemotePlayersView";
 
 const PLAYER_TEXTURE = "player-placeholder";
 const PLAYER_HIT_TEXTURE = "player-placeholder-hit";
@@ -61,6 +60,8 @@ const COLORS = {
 
 export interface WorldDebugState {
   sim: SimState;
+  net: NetSync;
+  remotesVisible: number;
   /** Position actually drawn and centered on (whole world pixels). */
   renderPosition: Vec2;
   keys: KeyState;
@@ -81,6 +82,12 @@ interface Totals {
   defeats: number;
   playerHits: number;
   deaths: number;
+}
+
+const STILL: Vec2 = { x: 0, y: 0 };
+
+function withPlayerPosition(state: SimState, position: Vec2): SimState {
+  return { ...state, player: { ...state.player, position: { ...position } } };
 }
 
 const NO_KEYS: KeyState = {
@@ -105,6 +112,8 @@ export class WorldScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Image;
   private world!: Phaser.GameObjects.Layer;
   private combat!: CombatView;
+  private remotes!: RemotePlayersView;
+  private readonly net = new NetSync(PLAYER_START, TEST_WALLS);
   private readKeys: () => KeyState = () => NO_KEYS;
   private readPointer: () => PointerInput = () => ({
     screen: null,
@@ -137,6 +146,7 @@ export class WorldScene extends Phaser.Scene {
     this.drawFloorAndGrid();
     this.drawWalls();
     this.combat = new CombatView(this, this.world, DUMMY_ENEMY.size);
+    this.remotes = new RemotePlayersView(this, this.world, PLAYER_SPRITE_SIZE);
     makeSquareTexture(
       this,
       PLAYER_TEXTURE,
@@ -218,6 +228,15 @@ export class WorldScene extends Phaser.Scene {
 
     const events: SimEvent[] = [];
     for (let i = 0; i < steps; i++) {
+      // Online (T-023): movement is predicted locally and confirmed by the
+      // server; the local combat sim (T-024) just uses that position and is
+      // given no movement of its own. Offline: local movement as before.
+      const online = this.net.online;
+      if (online) {
+        const alive = isPlayerAlive(this.sim.player);
+        if (alive) this.net.tick(move);
+        this.sim = withPlayerPosition(this.sim, this.net.predictor.position);
+      }
       // Re-resolved every tick: auto aim follows the closest living enemy.
       const fire = resolveFireIntent(
         this.fireMode,
@@ -228,11 +247,15 @@ export class WorldScene extends Phaser.Scene {
       );
       const result = stepSim(
         this.sim,
-        { move, fire },
+        { move: online ? STILL : move, fire },
         TEST_WALLS,
         TICK_SECONDS,
       );
-      this.sim = result.state;
+      // PROVISIONAL: online, the prototype respawn restores HP in place;
+      // only the server may move the player, so its teleport is ignored.
+      this.sim = online
+        ? withPlayerPosition(result.state, this.net.predictor.position)
+        : result.state;
       events.push(...result.events);
     }
     this.countEvents(events);
@@ -242,6 +265,8 @@ export class WorldScene extends Phaser.Scene {
   getDebugState(): WorldDebugState {
     return {
       sim: this.sim,
+      net: this.net,
+      remotesVisible: this.remotes.count,
       renderPosition: this.renderPosition(),
       keys: this.lastKeys,
       pointer: this.lastPointer,
@@ -293,6 +318,10 @@ export class WorldScene extends Phaser.Scene {
       );
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
     this.combat.sync(this.sim, events, this.viewRotation, nowMs);
+    this.remotes.sync(
+      this.net.remotePositions(performance.now()),
+      this.viewRotation,
+    );
   }
 
   private renderPosition(): Vec2 {

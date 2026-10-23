@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { PLAYER_BODY, PLAYER_WEAPON, type Rect } from "@serfdom/shared";
+import { PLAYER_WEAPON } from "./combat-config.ts";
+import type { Rect } from "./geometry.ts";
+import { PLAYER_BODY } from "./movement-config.ts";
 import {
   DUMMY_POSITIONS,
   PLAYER_START,
   TEST_WALLS,
   TEST_WORLD,
-} from "./test-world";
+} from "./test-world.ts";
 
 function overlaps(a: Rect, b: Rect): boolean {
   return (

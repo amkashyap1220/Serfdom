@@ -4,13 +4,12 @@ import "./style.css";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
-import { Connection, type ConnectionStatus } from "./net";
+import type { ConnectionStatus } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
 
 const gameplay = requireElement("gameplay");
 const layoutList = new DebugList(requireElement("hud-layout"));
 const liveList = new DebugList(requireElement("hud-live"));
-const connection = new Connection();
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -88,6 +87,8 @@ function reportLive(game: Phaser.Game): void {
     viewRotation,
     fireMode,
     totals,
+    net,
+    remotesVisible,
   } = scene.getDebugState();
   const position = sim.player.position;
   const camera = scene.cameras.main;
@@ -122,14 +123,28 @@ function reportLive(game: Phaser.Game): void {
     )
     .join(", ");
 
-  const net = connection.snapshot;
+  const conn = net.connection.snapshot;
   liveList.set([
-    ["Server", describeStatus(net.status)],
+    ["Server", describeStatus(conn.status)],
     [
       "Online (guest ids)",
-      net.players.length > 0
-        ? net.players.map((id) => `#${id}`).join(" ")
+      conn.players.length > 0
+        ? conn.players.map((id) => `#${id}`).join(" ")
         : "—",
+    ],
+    ["Movement", net.online ? "server-authoritative" : "local (offline)"],
+    [
+      "Pending / correction",
+      net.online
+        ? `${net.predictor.pendingCount} / ${net.predictor.lastCorrection.toFixed(2)} px`
+        : "—",
+    ],
+    ["Other players drawn", String(remotesVisible)],
+    [
+      "Others (world)",
+      [...net.remotePositions(performance.now())]
+        .map(([id, p]) => `#${id} ${Math.round(p.x)},${Math.round(p.y)}`)
+        .join(" ") || "—",
     ],
     ["Player (world)", `${position.x.toFixed(1)}, ${position.y.toFixed(1)}`],
     ["Camera center (world)", `${camera.midPoint.x}, ${camera.midPoint.y}`],
