@@ -78,6 +78,18 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### New undead checklist (Phase 12j, D-122)
+
+Restart `npm run dev` (protocol v29) and reload. Forgotten Crypt.
+
+1. **Ghosts** (pale blue; Catacomb, Chapel, Hall of the dead) float straight through walls and pillars toward you. Every few seconds one turns see-through for 1.5 s: your shots pass through it, auto-aim ignores it, and it cannot hurt you. Visible, its touch hits for 10 before Defense.
+2. **Necromancers** (purple; Ossuary, Burial vault, Charnel pit, Tomb of kings) keep their distance and throw 3 slow skulls you can dodge (9 each). When a skeleton lies as a bone pile near one, a purple ring flashes and the skeleton stands up whole; shattering piles first stops this. A raised skeleton does not leave a second pile.
+3. **Grave knights** (dark steel, bigger; Embalming room, Charnel pit, Hall of the dead, Tomb of kings) show a white shield arc on the side facing you. Shots into the shield make a small spark and do nothing; circle round (it turns slowly) and shoot its back or side. Up close it flashes yellow, a red circle fills in front of it, and after 0.9 s it slams that circle for 18.
+4. Deaths name them ("Slain by a Ghost", "a Necromancer", "a Grave Knight").
+5. Time a full clear and tell me your level (expected about 7.5–8 min at level 12).
+
+Report: pass/fail per step, clear time and level, and whether each new enemy is readable and fair.
+
 ### Forgotten Crypt checklist (Phase 12i, D-120)
 
 Restart `npm run dev` (protocol v28) and reload. Any serf that has completed the Warrens can enter (it is aimed at levels 12–15).

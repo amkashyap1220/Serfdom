@@ -569,6 +569,8 @@ describe("snapshot messages", () => {
     dazed: false,
     chanted: false,
     pile: false,
+    faded: false,
+    facing: null,
   };
   const shot: SnapshotProjectile = {
     id: 5,

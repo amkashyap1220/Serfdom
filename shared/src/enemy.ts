@@ -5,6 +5,8 @@ import {
   type EnemyKind,
   WARCHIEF,
   SKELETON,
+  GHOST,
+  NECROMANCER,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -62,6 +64,27 @@ export type EnemyAi =
       hit: readonly number[];
     }
   | {
+      kind: "ghost";
+      /** Faded out: cannot hit or be hit (D-120). */
+      faded: boolean;
+      /** Seconds left in the current state (visible or faded). */
+      timer: number;
+    }
+  | {
+      kind: "necromancer";
+      /** Seconds until it can raise a bone pile. */
+      raise: number;
+    }
+  | {
+      kind: "knight";
+      mode: "walk" | "windup";
+      /** Where its shield faces (unit vector); turns at a limited rate. */
+      facing: Vec2;
+      timer: number;
+      /** Seconds until it may slam again. */
+      slam: number;
+    }
+  | {
       kind: "skeleton";
       /** Seconds until a bone pile stands up again, or null while standing (D-120). */
       pile: number | null;
@@ -112,6 +135,19 @@ function initialAi(kind: EnemyKind): EnemyAi {
       };
     case "skeleton":
       return { kind, pile: null, revived: false };
+    case "ghost":
+      return { kind, faded: false, timer: GHOST.visibleSeconds };
+    case "necromancer":
+      return { kind, raise: NECROMANCER.raiseIntervalSeconds / 2 };
+    case "knight":
+      // Facing west: a room's entrance is on its west side.
+      return {
+        kind,
+        mode: "walk",
+        facing: { x: -1, y: 0 },
+        timer: 0,
+        slam: FIRST_ATTACK_DELAY.knight,
+      };
     case "warchief":
       return {
         kind,
@@ -174,6 +210,19 @@ export function newEnemy(
 
 export function isAlive(enemy: EnemyState): boolean {
   return enemy.hp > 0;
+}
+
+/** A ghost faded out (D-120): shots pass through it and it cannot touch anyone. */
+export function isFaded(enemy: EnemyState): boolean {
+  return enemy.ai.kind === "ghost" && enemy.ai.faded;
+}
+
+/**
+ * Whether players' attacks can hit or target it: alive and not a faded
+ * ghost (D-122). Every shot, blast, zone, chain, curse, and auto-aim asks.
+ */
+export function isHittable(enemy: EnemyState): boolean {
+  return isAlive(enemy) && !isFaded(enemy);
 }
 
 /** A skeleton lying as a bone pile (D-120): alive, but it neither moves nor attacks. */

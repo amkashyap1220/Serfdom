@@ -1,14 +1,16 @@
-import { SHAMAN } from "./enemy-config.ts";
+import { SHAMAN, SKELETON } from "./enemy-config.ts";
 import type { Navigator } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
 import { ARROWS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
-import { enemyAct } from "./enemy-ai.ts";
+import { enemyAct, shieldBlocks } from "./enemy-ai.ts";
 import type { EnemyKind } from "./enemy-config.ts";
 import {
   damageEnemy,
   isAlive,
+  isHittable,
+  isPile,
   newEnemy,
   scaleEnemyForParty,
   stepRespawn,
@@ -402,7 +404,7 @@ function curse(
   const mark = { remaining: CURSE.seconds, bonus: curseBonus(tier) };
   return {
     enemies: enemies.map((e) =>
-      isAlive(e) &&
+      isHittable(e) &&
       Math.hypot(e.position.x - at.x, e.position.y - at.y) <= CURSE.radius
         ? { ...e, curse: mark }
         : e,
@@ -473,7 +475,7 @@ function chainLightning(
   ) => {
     let best: EnemyState | null = null;
     for (const e of enemies) {
-      if (!isAlive(e) || hit.has(e.id) || (also && !also(e))) continue;
+      if (!isHittable(e) || hit.has(e.id) || (also && !also(e))) continue;
       const d = dist(e.position, from);
       if (d > within) continue;
       if (
@@ -692,7 +694,7 @@ export function findPlayer(
 /** Living enemies as auto-aim candidates. */
 export function aimTargets(state: SimState): AimTarget[] {
   return state.enemies
-    .filter(isAlive)
+    .filter(isHittable)
     .map((e) => ({ id: e.id, position: e.position }));
 }
 
@@ -887,6 +889,8 @@ export function stepWorld(
   const newHazards: Hazard[] = [];
   const allies = state.enemies.filter(isAlive);
   const chants: { at: Vec2; radius: number }[] = [];
+  /** Bone piles necromancers raise this tick (D-122). */
+  const raises: number[] = [];
   const context = {
     allies: () => allies,
     aliveSummons: (id: number) =>
@@ -921,6 +925,16 @@ export function stepWorld(
         radius: action.sweep.radius,
       });
     }
+    if (action.slam) {
+      events.push({
+        type: "blast",
+        kind: action.slam.warning ? "slamWarning" : "slam",
+        playerId: GOBLIN_BLAST_BY,
+        at: { ...action.slam.at },
+        radius: action.slam.radius,
+      });
+    }
+    if (action.raise !== undefined) raises.push(action.raise);
     // A shaman's chant (D-115): everything this goblin deals is stronger.
     const boost = (enemy.chant ?? 0) > 0 ? 1 + SHAMAN.damageBonus : 1;
     for (const h of action.hazards) {
@@ -971,6 +985,28 @@ export function stepWorld(
           Object.entries(action.enemy).filter(([key]) => key !== "chant"),
         ) as unknown as EnemyState);
   });
+  // Raised bone piles stand up whole; their next death is final (D-122).
+  for (const id of raises) {
+    const pile = enemies.find((e) => e.id === id);
+    if (!pile || !isPile(pile)) continue;
+    enemies = enemies.map((e) =>
+      e.id === id
+        ? {
+            ...e,
+            hp: e.maxHp,
+            attackCooldown: SKELETON.contactCooldownSeconds / 2,
+            ai: { kind: "skeleton", pile: null, revived: true },
+          }
+        : e,
+    );
+    events.push({
+      type: "blast",
+      kind: "raise",
+      playerId: GOBLIN_BLAST_BY,
+      at: { ...pile.position },
+      radius: 18,
+    });
+  }
   // Chants land on every other goblin inside their circle (not shamans).
   for (const c of chants) {
     enemies = enemies.map((e) =>
@@ -1074,7 +1110,7 @@ export function stepWorld(
     });
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (!e || !isAlive(e)) continue;
+      if (!e || !isHittable(e)) continue;
       if (Math.hypot(e.position.x - b.at.x, e.position.y - b.at.y) > b.radius) {
         continue;
       }
@@ -1101,7 +1137,7 @@ export function stepWorld(
     if (pulseIn <= 1e-9) {
       for (let i = 0; i < enemies.length; i++) {
         const e = enemies[i];
-        if (!e || !isAlive(e)) continue;
+        if (!e || !isHittable(e)) continue;
         if (
           Math.hypot(e.position.x - z.at.x, e.position.y - z.at.y) > z.radius
         ) {
@@ -1169,6 +1205,17 @@ export function stepWorld(
       const i = enemies.findIndex((e) => e.id === outcome.targetId);
       const target = enemies[i];
       if (!target) continue;
+      // A grave knight's shield stops shots at its front (D-122).
+      if (shieldBlocks(target, p.direction)) {
+        events.push({
+          type: "blast",
+          kind: "shieldBlock",
+          playerId: GOBLIN_BLAST_BY,
+          at: { ...outcome.position },
+          radius: 6,
+        });
+        continue;
+      }
       const result = damageEnemy(target, p.damage);
       enemies[i] = result.enemy;
       events.push({
@@ -1391,7 +1438,7 @@ function targetsFor(
     }));
   }
   return enemies
-    .filter(isAlive)
+    .filter(isHittable)
     .map((e) => ({ id: e.id, box: boxAround(e.position, e.size) }));
 }
 

@@ -289,7 +289,7 @@ Acceptance:
 
 **Goal:** Make the real grind exist (GDD §3: levels 1–20 are quick; the long game is stat potions and rare drops from high-tier dungeons).
 
-Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, falling boulders, ambush holes, D-109–D-111), 12c (obstacles and cover, D-112), 12d (arrow traps and sludge, D-113), rushing with gated rooms (D-114), 12e (skulkers, bombers with burning floor, shamans, D-115), 12f (fewer goblins per room, D-116), 12g (the Goblin Warchief, D-117), 12h (stat potions and the potion rack, D-118), and 12i (the Forgotten Crypt with skeletons, archers, and sarcophagi, D-120) built; next 12j ghosts, necromancers, grave knights; 12k cursed runes and spirit braziers; 12l the Lich.
+Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, falling boulders, ambush holes, D-109–D-111), 12c (obstacles and cover, D-112), 12d (arrow traps and sludge, D-113), rushing with gated rooms (D-114), 12e (skulkers, bombers with burning floor, shamans, D-115), 12f (fewer goblins per room, D-116), 12g (the Goblin Warchief, D-117), 12h (stat potions and the potion rack, D-118), 12i (the Forgotten Crypt with skeletons, archers, and sarcophagi, D-120), and 12j (ghosts, necromancers, grave knights, D-122) built; next 12k cursed runes and spirit braziers; 12l the Lich.
 
 Tasks:
 

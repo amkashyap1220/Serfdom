@@ -21,6 +21,7 @@ import {
   isPlayerAlive,
   isTelegraphing,
   isPile,
+  isFaded,
   MAX_PARTY_SIZE,
   PORTAL_RADIUS,
   requiredRoomsCleared,
@@ -418,6 +419,11 @@ export class DungeonInstance {
         dazed: isDazed(e),
         chanted: (e.chant ?? 0) > 0,
         pile: isPile(e),
+        faded: isFaded(e),
+        facing:
+          e.ai.kind === "knight"
+            ? Math.round(Math.atan2(e.ai.facing.y, e.ai.facing.x) * 100) / 100
+            : null,
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,

@@ -33,6 +33,10 @@ export interface EnemyView {
   chanted: boolean;
   /** A skeleton's bone pile (D-120): drawn small and flat, labelled "bones". */
   pile: boolean;
+  /** A ghost faded out (D-122): drawn see-through. */
+  faded: boolean;
+  /** A grave knight's shield direction in radians (D-122), else null. */
+  facing: number | null;
 }
 
 /** Burning floor (D-115). */

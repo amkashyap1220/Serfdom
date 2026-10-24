@@ -285,8 +285,9 @@ export class WorldScene extends Phaser.Scene {
   private onlineTick(move: Vec2): void {
     const self = this.net.selfState;
     if (!self || self.hp > 0) {
+      // Auto-aim skips faded ghosts (D-122), as the server does.
       const targets: AimTarget[] = this.net.enemies
-        .filter((e) => e.hp > 0)
+        .filter((e) => e.hp > 0 && !e.faded)
         .map((e) => ({ id: e.id, position: { x: e.x, y: e.y } }));
       const fire = this.resolveFire(this.net.position, targets);
       // Space held: where to cast, by the fire mode (D-094); the server

@@ -4,6 +4,7 @@ import {
   ENEMY_STATS,
   rotateVec,
   type EnemyKind,
+  KNIGHT,
 } from "@serfdom/shared";
 import type { CombatViewModel } from "../combat-view-model";
 
@@ -37,7 +38,13 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   warchief: 0x6e0f1a,
   skeleton: 0xe8e2cf,
   archer: 0xb3a98a,
+  ghost: 0xa8d8ff,
+  necromancer: 0x6a3d9a,
+  knight: 0x5b6477,
 };
+
+/** A faded ghost's alpha (D-122): there, but plainly not hittable. */
+const FADED_ALPHA = 0.25;
 
 /** A skeleton's bone pile (D-120): a small dim square where it fell. */
 const PILE_TEXTURE = "enemy-skeleton-pile";
@@ -63,6 +70,8 @@ const COLORS = {
   leadingSlinger: 0xd7b8ec,
   dazed: 0x9fc6e8,
   bonePile: 0x8f897a,
+  shield: 0xdfe6f2,
+  raise: 0x9b59b6,
   slit: 0x1a1410,
   slitGlow: 0xff9f1c,
   trapArrow: 0xd9c9a3,
@@ -182,6 +191,7 @@ export class CombatView {
       const y = Math.round(enemy.y);
       const alive = enemy.hp > 0;
       sprite.image
+        .setAlpha(enemy.faded ? FADED_ALPHA : 1)
         .setVisible(alive)
         .setPosition(x, y)
         .setRotation(-viewRotation)
@@ -296,18 +306,42 @@ export class CombatView {
         bl.fillCircle(b.x, b.y, b.radius);
         continue;
       }
+      // A grave knight's slam (D-122): drawn like the sweep.
+      if (b.kind === "slamWarning") {
+        bl.fillStyle(COLORS.hazard, 0.15 + 0.25 * b.fade);
+        bl.fillCircle(b.x, b.y, b.radius * b.fade);
+        bl.lineStyle(2, COLORS.hazard, 0.9);
+        bl.strokeCircle(b.x, b.y, b.radius);
+        continue;
+      }
+      if (b.kind === "slam") {
+        bl.fillStyle(COLORS.flash, 0.6 * (1 - b.fade));
+        bl.fillCircle(b.x, b.y, b.radius);
+        continue;
+      }
+      // A shot stopped by a shield: a small white spark.
+      if (b.kind === "shieldBlock") {
+        bl.fillStyle(COLORS.flash, 1 - b.fade);
+        bl.fillCircle(b.x, b.y, b.radius * (1 - 0.5 * b.fade));
+        continue;
+      }
       const color =
         b.kind === "chant"
           ? COLORS.chant
-          : b.kind === "inspiration"
-            ? COLORS.inspire
-            : b.kind === "curse"
-              ? COLORS.curse
-              : b.kind === "heal" || b.kind === "healed"
-                ? COLORS.heal
-                : COLORS.blast;
+          : b.kind === "raise"
+            ? COLORS.raise
+            : b.kind === "inspiration"
+              ? COLORS.inspire
+              : b.kind === "curse"
+                ? COLORS.curse
+                : b.kind === "heal" || b.kind === "healed"
+                  ? COLORS.heal
+                  : COLORS.blast;
       const ring =
-        b.kind === "inspiration" || b.kind === "heal" || b.kind === "chant";
+        b.kind === "inspiration" ||
+        b.kind === "heal" ||
+        b.kind === "chant" ||
+        b.kind === "raise";
       if (!ring) {
         bl.fillStyle(color, 0.5 * (1 - b.fade));
         bl.fillCircle(b.x, b.y, b.radius);
@@ -334,6 +368,15 @@ export class CombatView {
           bl.lineStyle(buff === "guard" ? 3 : 2, color, 0.9);
           bl.strokeCircle(a.x, a.y, 12 + 4 * i);
         });
+    }
+    // Grave knights' shields (D-122): a bright arc on the front side.
+    for (const e of view.enemies) {
+      if (e.facing === null || e.hp <= 0) continue;
+      const half = ((KNIGHT.shieldArcDegrees / 2) * Math.PI) / 180;
+      bl.lineStyle(3, COLORS.shield, 1);
+      bl.beginPath();
+      bl.arc(e.x, e.y, e.size * 0.75, e.facing - half, e.facing + half);
+      bl.strokePath();
     }
     // Chanted goblins (D-115): a red glow.
     for (const e of view.enemies) {

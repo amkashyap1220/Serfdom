@@ -13,6 +13,9 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   warchief: "the Goblin Warchief",
   skeleton: "a Skeleton",
   archer: "a Skeleton Archer",
+  ghost: "a Ghost",
+  necromancer: "a Necromancer",
+  knight: "a Grave Knight",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
 };

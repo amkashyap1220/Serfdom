@@ -11,6 +11,7 @@ import {
   TICK_SECONDS,
   type BlastKind,
   WARCHIEF,
+  KNIGHT,
   type DungeonId,
   type PlayerInput,
   type Rect,
@@ -59,9 +60,9 @@ const BLAST_SHOW_MS = 350;
 
 /** How long a blast stays on screen: the sweep's warning lasts its whole windup. */
 function blastShowMs(kind: BlastKind): number {
-  return kind === "sweepWarning"
-    ? WARCHIEF.sweep.windupSeconds * 1000
-    : BLAST_SHOW_MS;
+  if (kind === "sweepWarning") return WARCHIEF.sweep.windupSeconds * 1000;
+  if (kind === "slamWarning") return KNIGHT.slam.windupSeconds * 1000;
+  return BLAST_SHOW_MS;
 }
 
 export class NetSync {
@@ -218,8 +219,9 @@ export class NetSync {
 
   /** Advances our own locally drawn shots one tick (they vanish on walls and enemies). */
   stepLocalShots(): void {
+    // Faded ghosts let shots through (D-122), as on the server.
     const targets = this.enemies
-      .filter((e) => e.hp > 0)
+      .filter((e) => e.hp > 0 && !e.faded)
       .map((e) => ({ id: e.id, box: boxAround({ x: e.x, y: e.y }, e.size) }));
     this.shots.step(TICK_SECONDS, this.walls, targets);
   }

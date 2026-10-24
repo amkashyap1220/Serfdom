@@ -356,7 +356,8 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Loot T3–T5; EXP base 200 up to level 15; stat potions at 30% per Luck point.
 - Undead hit harder than goblins (D-121): a skeleton's touch does 8, an archer's arrow 7.
 - Built (12i): **skeletons** fall into a **bone pile** the first time they die and stand up again at half HP after 4 s unless you shoot the pile; **skeleton archers** loose two arrows at where you are heading; **sarcophagi** along the walls of the Ossuary and the Burial vault open for a second wave. The Goblin Warchief stands in as the boss until the Lich.
-- Next: ghosts that pass through walls, necromancers that raise bone piles, shielded grave knights (12j); cursed runes and spirit braziers (12k); the Lich with its soul crystals (12l).
+- Built (12j, D-122): **ghosts** float through walls and fade out every few seconds (faded, they cannot hurt you or be hit); **necromancers** throw slow skulls and raise bone piles as whole skeletons, so shattering piles also starves them; **grave knights** carry a shield that stops your shots from the front and turns slowly, so circle round them, and they slam the ground in front after a 0.9 s warning.
+- Next: cursed runes and spirit braziers (12k); the Lich with its soul crystals (12l).
 
 ### Room mechanics (D-109)
 

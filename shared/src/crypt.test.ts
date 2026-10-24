@@ -63,7 +63,7 @@ describe("the Forgotten Crypt (D-120)", () => {
     expect(POTION_CHANCE["forgotten-crypt"]).toBe(0.3);
   });
 
-  it("11 rooms of undead only: skeletons and archers", () => {
+  it("11 rooms of undead only, with 12j's ghosts, necromancers, and knights where planned (D-122)", () => {
     expect(CRYPT_PIECES.map((p) => p.band)).toEqual([
       ...Array(3).fill("light"),
       ...Array(4).fill("medium"),
@@ -72,7 +72,45 @@ describe("the Forgotten Crypt (D-120)", () => {
     const kinds = new Set(
       CRYPT_PIECES.flatMap((p) => p.piece.waves.flat().map((s) => s.kind)),
     );
-    expect([...kinds].sort()).toEqual(["archer", "skeleton"]);
+    expect([...kinds].sort()).toEqual([
+      "archer",
+      "ghost",
+      "knight",
+      "necromancer",
+      "skeleton",
+    ]);
+    const count = (key: string, kind: string) =>
+      CRYPT_PIECES.find((p) => p.piece.key === key)!
+        .piece.waves.flat()
+        .filter((s) => s.kind === kind).length;
+    const planned: [string, number, number, number][] = [
+      // room, ghosts, necromancers, knights
+      ["stair", 0, 0, 0],
+      ["gallery", 0, 0, 0],
+      ["mourners", 0, 0, 0],
+      ["catacomb", 2, 0, 0],
+      ["chapel", 2, 0, 0],
+      ["ossuary", 0, 1, 0],
+      ["embalming", 0, 0, 1],
+      ["vault", 0, 1, 0],
+      ["charnel", 0, 2, 1],
+      ["deadhall", 3, 0, 1],
+      ["kings", 0, 1, 2],
+    ];
+    for (const [key, ghosts, necros, knights] of planned) {
+      expect(
+        [count(key, "ghost"), count(key, "necromancer"), count(key, "knight")],
+        key,
+      ).toEqual([ghosts, necros, knights]);
+    }
+    // Knights come at you: they take the skeletons nearest the entrance.
+    const kings = CRYPT_PIECES.find((p) => p.piece.key === "kings")!.piece;
+    const front = Math.min(
+      ...kings.waves[0]!.filter((s) => s.kind !== "archer").map((s) => s.at.x),
+    );
+    expect(
+      kings.waves[0]!.filter((s) => s.kind === "knight").map((s) => s.at.x),
+    ).toEqual([front, front]);
   });
 
   it("every possible main path lands inside the band (37,000–45,000 while the Warchief stands in)", () => {

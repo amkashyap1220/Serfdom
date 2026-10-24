@@ -68,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v29 (12j): ghosts, necromancers, grave knights (D-122): snapshot enemies
+ *          say whether a ghost is faded and which way a knight faces;
+ *          blasts may be a slam (warning, hit), a shield spark, a raise.
  * v28 (12i): the Forgotten Crypt (D-120): skeletons and skeleton archers;
  *          snapshot enemies say whether a skeleton lies as a bone pile.
  * v27 (12h): stat potions (D-118): runEnded carries potions, stash carries
@@ -109,7 +112,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 28;
+export const PROTOCOL_VERSION = 29;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -258,6 +261,10 @@ export interface SnapshotEnemy {
   chanted: boolean;
   /** A skeleton lying as a bone pile (D-120): one hit shatters it. */
   pile: boolean;
+  /** A ghost faded out (D-122): shots pass through it. */
+  faded: boolean;
+  /** Where a grave knight's shield faces, in radians; null for every other enemy. */
+  facing: number | null;
 }
 
 /** Burning floor left by a bomb (D-115). */
@@ -290,6 +297,13 @@ export const BLAST_KINDS = [
   /** The Warchief's axe sweep: where it will hit, then the hit (D-117). */
   "sweepWarning",
   "sweep",
+  /** A grave knight's slam, the same way (D-122). */
+  "slamWarning",
+  "slam",
+  /** A shot stopped by a grave knight's shield (a spark). */
+  "shieldBlock",
+  /** A necromancer raising a bone pile. */
+  "raise",
 ] as const;
 export type BlastKind = (typeof BLAST_KINDS)[number];
 
@@ -1404,6 +1418,8 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "dazed",
       "chanted",
       "pile",
+      "faded",
+      "facing",
     ])
   ) {
     return null;
@@ -1414,7 +1430,9 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     typeof v.leads !== "boolean" ||
     typeof v.dazed !== "boolean" ||
     typeof v.chanted !== "boolean" ||
-    typeof v.pile !== "boolean"
+    typeof v.pile !== "boolean" ||
+    typeof v.faded !== "boolean" ||
+    (v.facing !== null && !isFiniteNumber(v.facing))
   ) {
     return null;
   }
@@ -1444,6 +1462,8 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     dazed: v.dazed,
     chanted: v.chanted,
     pile: v.pile,
+    faded: v.faded,
+    facing: v.facing as number | null,
   };
 }
 

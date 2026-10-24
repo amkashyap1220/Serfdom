@@ -16,8 +16,8 @@ import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
  * opened by completing the Warrens (D-107). Undead instead of goblins:
  * skeletons that stand up again unless their bone pile is shattered, and
  * skeleton archers. Sarcophagi along some walls open when a wave starts
- * (ambush holes, D-109). 12j adds ghosts, necromancers, and grave knights;
- * 12k cursed runes and spirit braziers; 12l the Lich. Until then the Goblin
+ * (ambush holes, D-109). 12j adds ghosts, necromancers, and grave knights
+ * (D-122); 12k cursed runes and spirit braziers; 12l the Lich. Until then the Goblin
  * Warchief stands in as the boss.
  */
 
@@ -43,8 +43,8 @@ const room = (
   setups: [waves],
 });
 
-/** Crypt rooms: entrance on the west, positions relative to the floor. HP is solo. */
-export const CRYPT_PIECES: readonly RecipePiece[] = [
+/** Crypt rooms before 12j's undead: skeletons and archers only (D-120). */
+const BASE_PIECES: readonly RecipePiece[] = [
   // Light (2,300–2,420).
   // 2,360: a short stair down, archers at the bottom.
   room("stair", "Crypt stair", 560, 400, "light", [
@@ -363,6 +363,70 @@ export const CRYPT_PIECES: readonly RecipePiece[] = [
     },
   ),
 ];
+
+/**
+ * The undead swapped into each room's first wave (D-122): grave knights
+ * and ghosts take the skeletons nearest the entrance (they come at you),
+ * necromancers the archers farthest back (they hang back).
+ */
+const NEW_UNDEAD: Readonly<
+  Record<string, Partial<Record<"ghost" | "necromancer" | "knight", number>>>
+> = {
+  catacomb: { ghost: 2 },
+  chapel: { ghost: 2 },
+  ossuary: { necromancer: 1 },
+  embalming: { knight: 1 },
+  vault: { necromancer: 1 },
+  charnel: { necromancer: 2, knight: 1 },
+  deadhall: { ghost: 3, knight: 1 },
+  kings: { necromancer: 1, knight: 2 },
+};
+
+function withNewUndead(entry: RecipePiece): RecipePiece {
+  const swaps = NEW_UNDEAD[entry.piece.key];
+  if (!swaps) return entry;
+  const swapWave = (wave: readonly EnemySpawnDef[]): EnemySpawnDef[] => {
+    const out = wave.map((sp) => ({ ...sp }));
+    // By distance from the entrance side (x; the entrance is on the west).
+    const of = (kind: EnemyKind) =>
+      out
+        .map((sp, i) => ({ sp, i }))
+        .filter(({ sp }) => sp.kind === kind)
+        .sort((a, b) => a.sp.at.x - b.sp.at.x);
+    const take = (
+      pool: { i: number }[],
+      from: EnemyKind,
+      kind: EnemyKind,
+      n: number,
+    ) => {
+      for (let k = 0; k < n; k++) {
+        const found = pool.find(({ i }) => out[i]!.kind === from);
+        if (!found)
+          throw new Error(
+            `${entry.piece.key}: not enough ${from}s for ${kind}`,
+          );
+        out[found.i] = { ...out[found.i]!, kind };
+      }
+    };
+    take(of("skeleton"), "skeleton", "knight", swaps.knight ?? 0);
+    take(of("skeleton"), "skeleton", "ghost", swaps.ghost ?? 0);
+    take(
+      of("archer").reverse(),
+      "archer",
+      "necromancer",
+      swaps.necromancer ?? 0,
+    );
+    return out;
+  };
+  const setups = entry.setups.map((waves) =>
+    waves.map((wave, w) => (w === 0 ? swapWave(wave) : [...wave])),
+  );
+  return { ...entry, piece: { ...entry.piece, waves: setups[0]! }, setups };
+}
+
+/** Crypt rooms: entrance on the west, positions relative to the floor. HP is solo. */
+export const CRYPT_PIECES: readonly RecipePiece[] =
+  BASE_PIECES.map(withNewUndead);
 
 /**
  * The crypt's boss room. Until the Lich (12l) the Goblin Warchief stands in,

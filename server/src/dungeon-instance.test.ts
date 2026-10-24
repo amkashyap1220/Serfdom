@@ -3,6 +3,7 @@ import {
   buildStronghold,
   buildWarrens,
   damageEnemy,
+  spawnEnemies,
   GOBLIN_WARRENS,
   SERF_BASE,
   GRUNT,
@@ -252,6 +253,38 @@ describe("the Forgotten Crypt in a run (D-120)", () => {
     expect(
       parsed.message.enemies.filter((e) => e.id !== skeleton.id && e.pile),
     ).toEqual([]);
+  });
+});
+
+describe("the crypt's new undead in a run (D-122)", () => {
+  it("snapshots say which way a knight faces and whether a ghost is faded, and parse", () => {
+    const r = new DungeonInstance(1, "forgotten-crypt", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed: 3,
+    });
+    const at = r.state.players[0]!.position;
+    const added = spawnEnemies(r.state, [
+      { kind: "knight", at: { x: at.x + 200, y: at.y }, roomId: null },
+      { kind: "ghost", at: { x: at.x + 300, y: at.y }, roomId: null },
+    ]);
+    r.setStateForTest({
+      ...added,
+      enemies: added.enemies.map((e) =>
+        e.ai.kind === "ghost"
+          ? { ...e, ai: { ...e.ai, faded: true, timer: 99 } }
+          : e,
+      ),
+    });
+    const parsed = parseServerMessage(encodeMessage(r.snapshot(1)));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.message.type !== "snapshot") return;
+    const knight = parsed.message.enemies.find((e) => e.kind === "knight");
+    const ghost = parsed.message.enemies.find((e) => e.kind === "ghost");
+    // A new knight faces west (π radians), towards a room's entrance.
+    expect(knight?.facing).toBeCloseTo(Math.PI, 2);
+    expect(knight?.faded).toBe(false);
+    expect(ghost).toMatchObject({ faded: true, facing: null });
   });
 });
 

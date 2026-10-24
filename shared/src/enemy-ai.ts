@@ -10,13 +10,16 @@ import {
   WARCHIEF,
   SKELETON,
   ARCHER,
+  GHOST,
+  NECROMANCER,
+  KNIGHT,
   RING_BULLET,
   SLINGER,
   WARLORD,
   type EnemyBulletSpec,
   type EnemyKind,
 } from "./enemy-config.ts";
-import { isAlive, ringDirections, type EnemyState } from "./enemy.ts";
+import { isAlive, ringDirections, type EnemyState, isPile } from "./enemy.ts";
 import { rotateVec, type Rect, type Vec2 } from "./geometry.ts";
 import { stepMovement } from "./movement.ts";
 import { stepFireCooldown } from "./weapon.ts";
@@ -83,6 +86,10 @@ export interface EnemyAction {
    * (`warning`, when the axe goes up) and then the hit itself.
    */
   sweep?: { at: Vec2; radius: number; warning: boolean };
+  /** A grave knight's slam (D-122), like the sweep: where, then the hit. */
+  slam?: { at: Vec2; radius: number; warning: boolean };
+  /** A necromancer raises this bone pile (an enemy id) as a full skeleton (D-122). */
+  raise?: number;
 }
 
 /** What the AI knows about the world beyond the targets. */
@@ -148,6 +155,20 @@ export function enemyAct(
       return slingerAct(enemy, target, walls, dtSeconds, result, context);
     case "skeleton":
       return skeletonAct(enemy, target, walls, dtSeconds, result, context);
+    case "ghost":
+      return ghostAct(enemy, target, dtSeconds, result);
+    case "necromancer":
+      return necromancerAct(enemy, target, walls, dtSeconds, result, context);
+    case "knight":
+      return knightAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+      );
     case "archer":
       return slingerAct(
         enemy,
@@ -743,7 +764,230 @@ function warlordAct(
 }
 
 /** True while a brute is telegraphing its charge (drawn as a warning). */
+/**
+ * Ghost (D-122): floats straight at you, walls or not, fading out every
+ * few seconds; faded, it cannot touch anyone (and cannot be hit).
+ */
+function ghostAct(
+  enemy: EnemyState,
+  target: Nearest,
+  dt: number,
+  result: Result,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "ghost") return result(enemy);
+  let { faded, timer } = ai;
+  timer -= dt;
+  if (timer <= 1e-9) {
+    faded = !faded;
+    timer += faded ? GHOST.fadedSeconds : GHOST.visibleSeconds;
+  }
+  const cooldown = Math.max(0, enemy.attackCooldown - dt);
+  const next = {
+    ...enemy,
+    attackCooldown: cooldown,
+    ai: { kind: "ghost" as const, faded, timer },
+  };
+  if (!target) return result(next);
+  // Through walls and doors: it moves as if there were none.
+  const position = move(
+    enemy,
+    toward(enemy.position, target.target.position),
+    GHOST.speed,
+    [],
+    dt,
+  );
+  const hits =
+    !faded &&
+    touching(position, enemy.size, target.target.position) &&
+    cooldown <= 1e-9;
+  return result(
+    {
+      ...next,
+      position,
+      attackCooldown: hits ? GHOST.contactCooldownSeconds : cooldown,
+    },
+    {
+      contacts: hits
+        ? [{ playerId: target.target.id, damage: GHOST.contactDamage }]
+        : [],
+    },
+  );
+}
+
+/**
+ * Necromancer (D-122): a thrower (3 slow skulls) that also raises the
+ * nearest bone pile within reach whenever its raise is ready.
+ */
+function necromancerAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "necromancer") return result(enemy);
+  const thrown = slingerAct(
+    enemy,
+    target,
+    walls,
+    dt,
+    result,
+    context,
+    NECROMANCER,
+  );
+  let raise = Math.max(0, ai.raise - dt);
+  let raised: EnemyState | null = null;
+  if (raise <= 1e-9) {
+    const at = thrown.enemy.position;
+    for (const e of context.allies?.() ?? []) {
+      if (!isPile(e)) continue;
+      const d = Math.hypot(e.position.x - at.x, e.position.y - at.y);
+      if (d > NECROMANCER.raiseRange) continue;
+      if (
+        !raised ||
+        d < Math.hypot(raised.position.x - at.x, raised.position.y - at.y)
+      ) {
+        raised = e;
+      }
+    }
+    // Ready until a pile is in reach; the wait starts once it raises one.
+    if (raised) raise = NECROMANCER.raiseIntervalSeconds;
+  }
+  return {
+    ...thrown,
+    enemy: { ...thrown.enemy, ai: { kind: "necromancer", raise } },
+    ...(raised ? { raise: raised.id } : {}),
+  };
+}
+
+/** The middle of the circle a grave knight's slam hits (D-122). */
+export function slamCentre(position: Vec2, facing: Vec2): Vec2 {
+  return {
+    x: position.x + facing.x * KNIGHT.slam.reach,
+    y: position.y + facing.y * KNIGHT.slam.reach,
+  };
+}
+
+/** `facing` turned toward `want` by at most `maxTurn` radians. */
+function turnToward(facing: Vec2, want: Vec2, maxTurn: number): Vec2 {
+  if (want.x === 0 && want.y === 0) return facing;
+  const from = Math.atan2(facing.y, facing.x);
+  let diff = Math.atan2(want.y, want.x) - from;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+  const step = Math.max(-maxTurn, Math.min(maxTurn, diff));
+  return { x: Math.cos(from + step), y: Math.sin(from + step) };
+}
+
+/**
+ * Grave knight (D-122): walks at you, its shield turning toward you at a
+ * limited rate; up close it raises its weapon (the warning shows exactly
+ * where), then slams a circle in front of it.
+ */
+function knightAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "knight") return result(enemy);
+  const slam = Math.max(0, ai.slam - dt);
+  if (ai.mode === "windup") {
+    const timer = ai.timer - dt;
+    if (timer > 1e-9) {
+      return result({ ...enemy, ai: { ...ai, slam, timer } });
+    }
+    const at = slamCentre(enemy.position, ai.facing);
+    const contacts = targets
+      .filter(
+        (t) =>
+          Math.hypot(t.position.x - at.x, t.position.y - at.y) <=
+          KNIGHT.slam.radius,
+      )
+      .map((t) => ({ playerId: t.id, damage: KNIGHT.slam.damage }));
+    return result(
+      {
+        ...enemy,
+        ai: {
+          ...ai,
+          mode: "walk",
+          timer: 0,
+          slam: KNIGHT.slam.cooldownSeconds,
+        },
+      },
+      { contacts, slam: { at, radius: KNIGHT.slam.radius, warning: false } },
+    );
+  }
+  if (!target) return result({ ...enemy, ai: { ...ai, slam } });
+  const facing = turnToward(
+    ai.facing,
+    toward(enemy.position, target.target.position),
+    ((KNIGHT.turnDegreesPerSecond * Math.PI) / 180) * dt,
+  );
+  if (slam <= 1e-9 && target.distance <= KNIGHT.slam.triggerRange) {
+    // It swings the way it faces now: the warning is exactly where it lands.
+    return result(
+      {
+        ...enemy,
+        ai: {
+          ...ai,
+          mode: "windup",
+          facing,
+          timer: KNIGHT.slam.windupSeconds,
+          slam,
+        },
+      },
+      {
+        slam: {
+          at: slamCentre(enemy.position, facing),
+          radius: KNIGHT.slam.radius,
+          warning: true,
+        },
+      },
+    );
+  }
+  const position = move(
+    enemy,
+    toward(
+      enemy.position,
+      route(
+        enemy.position,
+        target.target.position,
+        enemy.size / 2,
+        walls,
+        context,
+      ),
+    ),
+    KNIGHT.speed,
+    walls,
+    dt,
+  );
+  return result({ ...enemy, position, ai: { ...ai, facing, slam } });
+}
+
+/**
+ * Whether a grave knight's shield stops a shot flying `direction` (D-122):
+ * it comes at the knight's front, within the shield's arc.
+ */
+export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
+  if (enemy.ai.kind !== "knight") return false;
+  const len = Math.hypot(direction.x, direction.y);
+  if (len === 0) return false;
+  // The shot travels against the facing when it hits the front.
+  const dot =
+    (-direction.x * enemy.ai.facing.x - direction.y * enemy.ai.facing.y) / len;
+  return dot >= Math.cos(((KNIGHT.shieldArcDegrees / 2) * Math.PI) / 180);
+}
+
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "knight") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "warchief") {
     return enemy.ai.mode === "sweepWindup" || enemy.ai.mode === "chargeWindup";
   }

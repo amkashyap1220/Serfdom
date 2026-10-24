@@ -17,6 +17,9 @@ export const ENEMY_KINDS = [
   "warchief",
   "skeleton",
   "archer",
+  "ghost",
+  "necromancer",
+  "knight",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -104,6 +107,64 @@ export const ARCHER = {
   /** D-121: was 4 per arrow. */
   rock: { damage: 7, speed: 230, size: 6, range: 450 },
 } as const satisfies { rock: EnemyBulletSpec } & Record<string, unknown>;
+
+/**
+ * Ghost (D-120, D-122): floats straight at you through walls, pillars, and
+ * closed doors. Every `visibleSeconds` it fades out for `fadedSeconds`:
+ * shots pass through it and it cannot touch you.
+ */
+export const GHOST = {
+  maxHp: 300,
+  size: 14,
+  speed: 55,
+  contactDamage: 10,
+  contactCooldownSeconds: 1.2,
+  visibleSeconds: 3,
+  fadedSeconds: 1.5,
+} as const;
+
+/**
+ * Necromancer (D-120, D-122): keeps its distance and throws 3 slow skulls;
+ * every 6 s it raises the nearest bone pile within 250 px as a full-HP
+ * skeleton (whose next death is final). Kill it first.
+ */
+export const NECROMANCER = {
+  maxHp: 400,
+  size: 14,
+  speed: 50,
+  minRange: 200,
+  maxRange: 260,
+  throwRange: 400,
+  throwIntervalSeconds: 3,
+  volley: 3,
+  spreadDegrees: 15,
+  rock: { damage: 9, speed: 150, size: 8, range: 450 },
+  raiseIntervalSeconds: 6,
+  raiseRange: 250,
+} as const satisfies { rock: EnemyBulletSpec } & Record<string, unknown>;
+
+/**
+ * Grave knight (D-120, D-122): slow and tough. Its shield faces the nearest
+ * player but turns only `turnDegreesPerSecond`, and stops player shots
+ * that hit its front `shieldArcDegrees`. Up close it raises its weapon
+ * for 0.9 s and slams a circle in front of it.
+ */
+export const KNIGHT = {
+  maxHp: 1200,
+  size: 22,
+  speed: 40,
+  turnDegreesPerSecond: 120,
+  shieldArcDegrees: 120,
+  slam: {
+    triggerRange: 70,
+    windupSeconds: 0.9,
+    /** Hits a circle this far in front, this wide. */
+    reach: 40,
+    radius: 50,
+    damage: 18,
+    cooldownSeconds: 3,
+  },
+} as const;
 
 /** Tough charger (6c): walks up, telegraphs, then charges in a straight line. Only the charge hurts. */
 export const BRUTE = {
@@ -284,6 +345,9 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   warchief: WARCHIEF,
   skeleton: SKELETON,
   archer: ARCHER,
+  ghost: GHOST,
+  necromancer: NECROMANCER,
+  knight: KNIGHT,
 };
 
 /**
@@ -305,6 +369,10 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   warchief: 1.5,
   skeleton: SKELETON.contactCooldownSeconds / 2,
   archer: ARCHER.throwIntervalSeconds / 2,
+  ghost: GHOST.contactCooldownSeconds / 2,
+  necromancer: NECROMANCER.throwIntervalSeconds / 2,
+  /** Before its first slam. */
+  knight: 1,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {
