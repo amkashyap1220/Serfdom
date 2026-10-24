@@ -8,7 +8,9 @@ import {
   KNIGHT,
   LICH,
 } from "@serfdom/shared";
-import type { CombatViewModel } from "../combat-view-model";
+import type { CombatViewModel, EnemyView } from "../combat-view-model";
+import { lichPose } from "../lich-pose";
+import { spriteKey } from "../sprites";
 
 const texture = (kind: EnemyKind) => `enemy-${kind}`;
 const flashTexture = (kind: EnemyKind) => `enemy-${kind}-flash`;
@@ -181,7 +183,13 @@ export class CombatView {
    * like the player, so they stay upright on screen; labels sit "above" the
    * enemy on screen whatever the view rotation.
    */
-  sync(view: CombatViewModel, viewRotation: number, nowMs: number): void {
+  sync(
+    view: CombatViewModel,
+    viewRotation: number,
+    nowMs: number,
+    /** The local player, whom the Lich looks at while it is not attacking. */
+    player: { x: number; y: number },
+  ): void {
     const present = new Set(view.enemies.map((e) => e.id));
     for (const [id, sprite] of this.enemies) {
       if (!present.has(id)) {
@@ -201,8 +209,11 @@ export class CombatView {
         .setAlpha(enemy.faded ? FADED_ALPHA : 1)
         .setVisible(alive)
         .setPosition(x, y)
-        .setRotation(-viewRotation)
-        .setTexture(
+        .setRotation(-viewRotation);
+      if (enemy.kind === "lich") {
+        this.drawLich(sprite, enemy, viewRotation, nowMs, player);
+      } else {
+        sprite.image.setTexture(
           enemy.pile
             ? PILE_TEXTURE
             : nowMs < sprite.flashUntil
@@ -215,6 +226,7 @@ export class CombatView {
                     ? LEADING_TEXTURE
                     : texture(enemy.kind),
         );
+      }
 
       const above = rotateVec(
         { x: 0, y: -(enemy.size / 2 + 3) },
@@ -488,6 +500,41 @@ export class CombatView {
         p.size,
         p.size,
       );
+    }
+  }
+
+  /**
+   * The Lich uses the user's art (the first real sprite): spinning in its
+   * attack pose, or idle facing the player while warded or stunned. Hits
+   * flash it white and the stun blinks it pale blue, as the squares do.
+   */
+  private drawLich(
+    sprite: EnemySprite,
+    enemy: EnemyView,
+    viewRotation: number,
+    nowMs: number,
+    player: { x: number; y: number },
+  ): void {
+    const pose = lichPose({
+      faded: enemy.faded,
+      dazed: enemy.dazed,
+      hp: enemy.hp,
+      maxHp: enemy.maxHp,
+      // A world angle shows on screen turned by the view's rotation.
+      towardPlayer:
+        Math.atan2(player.y - enemy.y, player.x - enemy.x) + viewRotation,
+      seconds: nowMs / 1000,
+    });
+    // 32×32 art on a 32 px body (D-128): one source pixel per world pixel.
+    const image = sprite.image.setTexture(
+      spriteKey("lich", pose.state, pose.direction),
+    );
+    if (nowMs < sprite.flashUntil) {
+      image.setTint(COLORS.flash).setTintMode(Phaser.TintModes.FILL);
+    } else if (enemy.dazed && Math.floor(nowMs / DAZED_BLINK_MS) % 2 === 0) {
+      image.setTint(COLORS.dazed).setTintMode(Phaser.TintModes.MULTIPLY);
+    } else {
+      image.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
   }
 

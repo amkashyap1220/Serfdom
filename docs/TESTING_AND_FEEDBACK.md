@@ -219,7 +219,7 @@ Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-autho
 Restart `npm run dev` (no protocol change) and reload.
 
 1. **View:** the camera shows about twice as much world as before; whole rooms fit on screen. The player stays centred. The debug box (green) is 300 CSS px across and the player sits in its middle.
-2. **Sizes:** the player and ordinary enemies (grunts, slingers, skeletons, archers, ghosts, …) are the same size; brutes and knights are a bit bigger; the Warchief and the Lich are large.
+2. **Sizes:** the player and ordinary enemies (grunts, slingers, skeletons, archers, ghosts, …) are the same size; brutes and knights are a bit bigger; the Warchief is large. The Lich is the player's size (D-128).
 3. **Readability:** HP numbers over enemies, room names, and other players' #ids read as before (not tiny); wall outlines and rings are as thick as before. Buff rings (Battle Cry, Guard, Inspiration) show just outside your square.
 4. **Walls and doors:** you and every enemy fit through every doorway; brutes and knights follow you between rooms when you rush.
 5. **Hazards:** a boulder, bomb, rune, sweep, or slam hits you if its circle touches any part of your square.
@@ -231,7 +231,7 @@ Report: pass/fail per step, and whether anything now looks too small (bullets ar
 
 Restart `npm run dev` (protocol v31) and reload. Play the Forgotten Crypt to its last room, the Sanctum.
 
-1. **Sanctum:** an open room, 4 dark sarcophagi in the walls, a large violet Lich in the middle. The bar reads "The Lich" with two notches (60% and 30%).
+1. **Sanctum:** an open room, 4 dark sarcophagi in the walls, the Lich in the middle, drawn with its crowned, robed sprite and the same size as your serf (D-128). While it fires its spiral it spins with its staff; warded or stunned it stands still and looks at you. The bar reads "The Lich" with two notches (60% and 30%).
 2. **Phase 1:** a two-armed spiral of bullets turns out of it (8 each); every 12 s two skeletons climb out of the sarcophagi (never more than 4).
 3. **Below 60%:** the bar says WARDED, the Lich turns see-through, and violet lines join it to 3 light-blue soul crystals. Your shots pass through it; it fires rings of 16. Break all 3 crystals: the bar says STUNNED for 4 s and it takes hits without attacking.
 4. **Below 30%:** the same again; after that stun the bar says ENRAGED, the spiral is faster, and red circles fill in under you and around it every 1.5 s (12 if you stay in one).

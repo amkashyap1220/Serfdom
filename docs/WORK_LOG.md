@@ -590,3 +590,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Tests: sizes per kind; `circleHitsPlayer` at the box edge and corner; a boulder hitting through the hurtbox edge; 44 px knights reach the boss room in all three dungeons; the zoomed view's extent (720 × 640, past 300) and `px`. `npm run check`: 457 shared, 196 server, 59 client, build.
 - Live (harness, **test** DB): the fixed Warrens' Tunnel with 32 px grunts, the Catacomb, and the Sanctum's 88 px Lich at the new zoom, labels readable, the corrected 300 px debug box. No console errors. Not play-tested: how fights feel with bigger hitboxes, and readability of the now half-size bullets.
 - User ran the D-127 checklist: pass (2026-10-24). Next: close Phase 12 (the user's call), then Phase 13 (tier 4: draft for approval).
+
+### The Lich's sprites (D-128) — 2026-10-24
+
+- The user supplied the Lich's art (8 directions × idle and a spinning attack, 32×32) and made the Lich human-sized: 32×32 (D-128, was 88).
+- First image pipeline: files under `client/src/assets/sprites/<character>/<state>/<direction>.png` load by themselves (`sprite-files.ts`, `WorldScene.preload`). The Lich spins through its attack frames with the spiral, and faces the player idle while warded or stunned (PROVISIONAL); hit flash and stun blink are tints.
+- Tests: file paths to keys (and bad paths refused), angles to the 8 directions, the Lich's pose per state and spin rate, the Lich's size. `npm run check`: 457 shared, 196 server, 65 client, build.
+- Live (headless Chrome, a throwaway page, not committed): all 16 frames loaded at zoom 0.5 beside a 32 px square, crisp, no console errors. Not checked live: the Lich in the Sanctum (spin, warded, stun), how the smaller Lich fights.
+- Extra Lich art made by Claude from the user's frames (warded outline, fade, death, spawn, bolts, soul crystal) is in the project files for review, not in the game.

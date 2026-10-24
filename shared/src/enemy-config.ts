@@ -174,10 +174,11 @@ export const KNIGHT = {
  * sarcophagi; below 60% and again below 30% it is warded (cannot be hit)
  * while 3 soul crystals stand, firing rings; breaking them stuns it for
  * 4 s. After the second ward its spiral is faster and runes burst round it.
+ * Human-sized: 32 px like a serf (D-128; was 88 under D-127).
  */
 export const LICH = {
   maxHp: 11000,
-  size: 88,
+  size: 32,
   wardBelow: [0.6, 0.3],
   spiral: {
     arms: 2,
