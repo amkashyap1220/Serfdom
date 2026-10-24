@@ -6,6 +6,7 @@ import { ENEMY_STATS } from "./enemy-config.ts";
 import {
   buildWarrens,
   GOBLIN_WARRENS,
+  WARRENS_BASE_PIECES,
   WARRENS_PIECES,
   WARRENS_RULES,
   type RoomBand,
@@ -137,7 +138,10 @@ describe("the 11b room pool (D-105)", () => {
   it("matches the approved table: bands and first-setup HP", () => {
     expect(
       Object.fromEntries(
-        WARRENS_PIECES.map((p) => [p.piece.key, [p.band, pieceHp(p.piece)]]),
+        WARRENS_BASE_PIECES.map((p) => [
+          p.piece.key,
+          [p.band, pieceHp(p.piece)],
+        ]),
       ),
     ).toEqual({
       tunnel: ["light", 850],
@@ -155,7 +159,7 @@ describe("the 11b room pool (D-105)", () => {
   });
 
   it("every room has two setups, the second within ±10% of the first and a different mix", () => {
-    for (const { piece, setups } of WARRENS_PIECES) {
+    for (const { piece, setups } of WARRENS_BASE_PIECES) {
       expect(setups, piece.key).toHaveLength(2);
       const first = pieceHp({ waves: setups[0]! });
       const second = pieceHp({ waves: setups[1]! });

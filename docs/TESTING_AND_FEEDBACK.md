@@ -78,6 +78,16 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Fewer goblins checklist (Phase 12f, D-116)
+
+Restart `npm run dev` and reload.
+
+1. Rooms with a mechanic (boulders, rubble, pillars, sludge, holes, arrows) have noticeably fewer grunts and slingers than before; brutes and the Stronghold's new goblins are all still there.
+2. Time a Warrens run solo (target 3–5 min) and a Stronghold run at about level 9 (target about 6 min). Tell me the times and your level.
+3. Rooms should still feel dangerous because of the mechanics, not because of the crowd. Tell me any room that now feels empty or still too crowded.
+
+Report: clear times, levels, and room-by-room impressions.
+
 ### New goblins checklist (Phase 12e, D-115)
 
 Restart `npm run dev` (protocol v25) and reload. Stronghold only.

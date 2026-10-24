@@ -3,6 +3,7 @@ import type { DungeonLayout, EnemySpawnDef } from "./dungeon-layout.ts";
 import {
   buildFromRecipe,
   combineSetups,
+  thinPiece,
   type DungeonRecipe,
   type RecipePiece,
   type RoomBand,
@@ -11,7 +12,8 @@ import {
 import type { EnemyKind } from "./enemy-config.ts";
 import {
   WARRENS_ENTRANCE,
-  WARRENS_PIECES,
+  MECHANIC_ROOMS,
+  WARRENS_BASE_PIECES,
   WARRENS_RULES,
   WARRENS_THRONE,
 } from "./goblin-warrens.ts";
@@ -62,7 +64,7 @@ const reinforced = ({ piece, band, setups }: RecipePiece): RecipePiece => {
 };
 
 const BASE_PIECES: readonly RecipePiece[] = [
-  ...WARRENS_PIECES.map(reinforced),
+  ...WARRENS_BASE_PIECES.map(reinforced),
   // 1,860: the gate's defenders.
   newRoom(
     "gatehouse",
@@ -255,8 +257,18 @@ function withNewGoblins(entry: RecipePiece): RecipePiece {
   return { ...entry, piece: { ...entry.piece, waves: setups[0]! }, setups };
 }
 
-export const STRONGHOLD_PIECES: readonly RecipePiece[] =
+/**
+ * The Stronghold's pool: new goblins in, then fewer of the rest (D-116):
+ * rooms with a mechanic lose 30% of their grunts and slingers, others 20%.
+ */
+/** The Stronghold's rooms at full strength, new goblins included (tests compare against these). */
+export const STRONGHOLD_FULL_PIECES: readonly RecipePiece[] =
   BASE_PIECES.map(withNewGoblins);
+
+export const STRONGHOLD_PIECES: readonly RecipePiece[] =
+  STRONGHOLD_FULL_PIECES.map((entry) =>
+    thinPiece(entry, MECHANIC_ROOMS.has(entry.piece.key) ? 0.3 : 0.2),
+  );
 
 export const STRONGHOLD_RECIPE: DungeonRecipe = {
   name: "Goblin Stronghold",
@@ -264,8 +276,9 @@ export const STRONGHOLD_RECIPE: DungeonRecipe = {
   boss: { ...WARRENS_THRONE, name: "War hall" },
   pieces: STRONGHOLD_PIECES,
   mainPath: ["light", "medium", "medium", "medium", "heavy", "heavy"],
-  // About 6 minutes for a level-9 serf (D-108).
-  requiredHp: { min: 30_000, max: 36_000 },
+  // About 6 minutes for a level-9 serf (D-108); D-116: was 30,000–36,000
+  // before rooms were thinned.
+  requiredHp: { min: 25_000, max: 31_000 },
   sideRooms: WARRENS_RULES.sideRooms,
   sideBands: WARRENS_RULES.sideBands,
   turnWeights: WARRENS_RULES.turnWeights,

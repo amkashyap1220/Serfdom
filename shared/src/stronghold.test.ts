@@ -4,17 +4,24 @@ import { dungeonInfo, entryProblem, layoutFor } from "./dungeons.ts";
 import { BOMBER, ENEMY_STATS, SHAMAN, SKULKER } from "./enemy-config.ts";
 import {
   buildStronghold,
+  STRONGHOLD_FULL_PIECES,
   STRONGHOLD_PIECES,
   STRONGHOLD_RECIPE,
 } from "./goblin-stronghold.ts";
-import { WARRENS_PIECES, WARRENS_THRONE } from "./goblin-warrens.ts";
+import {
+  MECHANIC_ROOMS,
+  WARRENS_BASE_PIECES,
+  WARRENS_PIECES,
+  WARRENS_THRONE,
+} from "./goblin-warrens.ts";
 import { LOOT_POOLS } from "./items.ts";
 import { findLeak, mainPath, recipeProblems } from "./layout-test-helpers.ts";
 import { clearExp } from "./progression.ts";
 
 const SEEDS = Array.from({ length: 1000 }, (_, i) => i + 1);
+/** HP of a Stronghold room at full strength (before D-116's thinning). */
 const hpOf = (key: string) =>
-  pieceHp(STRONGHOLD_PIECES.find((p) => p.piece.key === key)!.piece);
+  pieceHp(STRONGHOLD_FULL_PIECES.find((p) => p.piece.key === key)!.piece);
 
 describe("Goblin Stronghold (D-108)", () => {
   it("is listed after the Warrens and opens once the Warrens is completed", () => {
@@ -60,7 +67,7 @@ describe("Goblin Stronghold (D-108)", () => {
   };
 
   it("every Warrens room returns with both its setups at once; three new rooms; grunts swapped for new goblins (D-115)", () => {
-    for (const w of WARRENS_PIECES) {
+    for (const w of WARRENS_BASE_PIECES) {
       const both = w.setups.reduce((sum, waves) => sum + pieceHp({ waves }), 0);
       expect(hpOf(w.piece.key), w.piece.key).toBe(both + swapHp(w.piece.key));
     }
@@ -121,7 +128,7 @@ describe("Goblin Stronghold (D-108)", () => {
     }
   });
 
-  it("every possible main path lands inside 30,000–36,000 solo HP", () => {
+  it("every possible main path lands inside the 25,000–31,000 solo HP band (D-116)", () => {
     const band = (b: string) =>
       STRONGHOLD_PIECES.filter((p) => p.band === b).map((p) =>
         pieceHp(p.piece),
@@ -142,8 +149,10 @@ describe("Goblin Stronghold (D-108)", () => {
             mediums.reduce((a, b) => a + b, 0) +
             heavies.reduce((a, b) => a + b, 0) +
             boss;
-          expect(total).toBeGreaterThanOrEqual(30_000);
-          expect(total).toBeLessThanOrEqual(36_000);
+          expect(total).toBeGreaterThanOrEqual(
+            STRONGHOLD_RECIPE.requiredHp.min,
+          );
+          expect(total).toBeLessThanOrEqual(STRONGHOLD_RECIPE.requiredHp.max);
           paths++;
         }
     expect(paths).toBe(5 * 20 * 3);
@@ -170,6 +179,45 @@ describe("Goblin Stronghold (D-108)", () => {
   it("has no gaps in its walls", () => {
     for (const seed of SEEDS.slice(0, 60)) {
       expect(findLeak(buildStronghold(seed)), `seed ${seed}`).toBeNull();
+    }
+  });
+});
+
+describe("fewer goblins (D-116)", () => {
+  const fodder = (waves: readonly (readonly { kind: string }[])[]) =>
+    waves.map(
+      (w) => w.filter((s) => s.kind === "grunt" || s.kind === "slinger").length,
+    );
+  const others = (waves: readonly (readonly { kind: string }[])[]) =>
+    waves
+      .flat()
+      .filter((s) => s.kind !== "grunt" && s.kind !== "slinger")
+      .map((s) => s.kind)
+      .sort();
+
+  it("Warrens rooms with a mechanic lose 25% of grunts and slingers, wave by wave; plain rooms are unchanged", () => {
+    for (const [i, base] of WARRENS_BASE_PIECES.entries()) {
+      const now = WARRENS_PIECES[i]!;
+      const share = MECHANIC_ROOMS.has(base.piece.key) ? 0.25 : 0;
+      base.setups.forEach((waves, k) => {
+        expect(fodder(now.setups[k]!), base.piece.key).toEqual(
+          fodder(waves).map((n) => n - Math.round(n * share)),
+        );
+        expect(others(now.setups[k]!), base.piece.key).toEqual(others(waves));
+      });
+    }
+  });
+
+  it("Stronghold rooms lose 30% (with a mechanic) or 20% (without); brutes and the new goblins stay", () => {
+    for (const [i, full] of STRONGHOLD_FULL_PIECES.entries()) {
+      const now = STRONGHOLD_PIECES[i]!;
+      const share = MECHANIC_ROOMS.has(full.piece.key) ? 0.3 : 0.2;
+      expect(fodder(now.setups[0]!), full.piece.key).toEqual(
+        fodder(full.setups[0]!).map((n) => n - Math.round(n * share)),
+      );
+      expect(others(now.setups[0]!), full.piece.key).toEqual(
+        others(full.setups[0]!),
+      );
     }
   });
 });

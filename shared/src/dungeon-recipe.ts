@@ -208,6 +208,35 @@ function tryRecipe(
 }
 
 /**
+ * Fewer goblins (D-116): each wave loses `share` of its grunts and
+ * slingers, grunts first, picked evenly across the wave so the room keeps
+ * its shape. Brutes, skulkers, bombers, shamans, and bosses stay.
+ */
+export function thinPiece(entry: RecipePiece, share: number): RecipePiece {
+  const thinWave = (wave: readonly EnemySpawnDef[]): EnemySpawnDef[] => {
+    const fodder = wave.filter(
+      (s) => s.kind === "grunt" || s.kind === "slinger",
+    );
+    let remove = Math.round(fodder.length * share);
+    const gone = new Set<number>();
+    for (const kind of ["grunt", "slinger"] as const) {
+      const of = wave
+        .map((s, i) => ({ s, i }))
+        .filter(({ s }) => s.kind === kind);
+      const n = Math.min(remove, of.length);
+      // Evenly spaced through this kind's spawns.
+      for (let k = 0; k < n; k++) {
+        gone.add(of[Math.floor(((k + 0.5) * of.length) / n)]!.i);
+      }
+      remove -= n;
+    }
+    return wave.filter((_, i) => !gone.has(i));
+  };
+  const setups = entry.setups.map((waves) => waves.map(thinWave));
+  return { ...entry, piece: { ...entry.piece, waves: setups[0]! }, setups };
+}
+
+/**
  * Two setups of one room played together, wave by wave (the Stronghold's
  * denser rooms, D-108). A spawn that would overlap one already placed is
  * nudged to the nearest free spot inside the room, so no two enemies start

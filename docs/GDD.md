@@ -360,7 +360,7 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 - Built (12c, D-112): **obstacles and cover**: rubble in the Collapsed passage, pillars in the Guard room, barricades in the Gatehouse, bunks in the Barracks. Solid both ways for movement and shots; goblins walk round them, slingers step aside for a clear throw, and a brute that charges into one is dazed for 1.5 s.
 - Built (12d, D-113): **arrow traps** in the Stronghold's Gatehouse (slits glow, then a volley crosses the room with a gap of 3 slits to stand in, every 3.5 s; 6 damage; barricades shelter you) and **sludge** in the Fungus grotto (60% speed for players; goblins wade through).
 - Built (12e, D-115): **Goblin skulkers** cut you off by running to where you are heading; **Goblin bombers** lob bombs that leave burning floor; **Goblin shamans** never attack but chant, making goblins near them hit 50% harder for 5 s (kill them first). Stronghold only.
-- Next: fewer enemies per room (12f).
+- Built (12f, D-116): **fewer goblins** where rooms have a mechanic (Warrens 25%, Stronghold 30%, and 20% in the Stronghold's other rooms), so difficulty comes from the room, not the crowd.
 
 ## 11. Multiplayer and reward rules
 

@@ -475,4 +475,12 @@ Keep this concise and update it after each meaningful milestone.
 - Three new kinds and their AI; chants (damage ×1.5 for 5 s, a red glow), bombs that leave burning floor (`SimState.fires`), a gold chant ring; Stronghold rooms swap wave-0 grunts for the new goblins by role. Protocol v25.
 - Tests: a skulker gets ahead of a moving player where a grunt trails; it lunges and hits 3 once per 1.2 s; a bomb lands after 0.9 s for 4, then burns 2 every 0.5 s six times and goes out, credited to the bomber; a bomber backs off when you come close; a shaman never attacks, chants (only goblins within 120 px, not shamans, for 5 s), and keeps away from players; a chanted grunt hits 4.5; swaps land where planned (skulkers at the front) and nowhere in the Warrens; room HP equals both setups plus the swaps; the HP band and all layout rules still hold. `npm run check`: 389 shared, 177 server, 54 client, build.
 - Live (harness, **test** DB, Stronghold seed 2 after a seed-0 Warrens clear): War camp bombers glowing red beside their shaman, burning floor under the player; a Goblin kitchen bomber's fire.
-- User ran the 12e checklist: all pass (2026-10-23). Committed and pushed 12e. Next: draft 12f.
+- User ran the 12e checklist: all pass (2026-10-23). Committed and pushed 12e (`f12981c`). Next: draft 12f.
+
+### Phase 12f — Fewer goblins per room — 2026-10-23
+
+- Draft approved (D-116), computed from the real rooms before proposing.
+- `thinPiece` and full-strength base pools, so the Stronghold (built on the Warrens' rooms) is not thinned twice. HP bands lowered.
+- Tests: Warrens mechanic rooms lose exactly 25% of grunts and slingers per wave and everything else stays; plain rooms unchanged; Stronghold 30% / 20% with brutes and new goblins kept; the 11b table and the Stronghold composition tests now check the full-strength pools; every Stronghold path combination inside 25,000–31,000; the 2,000-seed rule check holds the Warrens' generated maps to 11,500–14,500. `npm run check`: 391 shared, 177 server, 54 client, build.
+- Measured over 1,000 seeds: Warrens main paths 12,060–13,640 HP (was 12,590–14,180), about 42 enemies (was 45); Stronghold 25,855–28,930 (was 30,750–33,455), about 112 enemies (was 140). Not play-tested: real clear times.
+- User ran the 12f checklist: pass (2026-10-23). Committed and pushed 12f. Next: draft the Goblin Warchief.

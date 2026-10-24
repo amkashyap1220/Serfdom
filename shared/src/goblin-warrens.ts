@@ -1,6 +1,7 @@
 import type { RoomPiece } from "./dungeon-gen.ts";
 import {
   buildFromRecipe,
+  thinPiece,
   type DungeonRecipe,
   type RecipePiece,
   type RoomBand,
@@ -239,7 +240,8 @@ export type WarrensPiece = RecipePiece;
 
 export const WARRENS_RULES = {
   mainPath: ["light", "medium", "medium", "heavy"] as readonly RoomBand[],
-  requiredHp: { min: 12_500, max: 15_000 },
+  // D-116: was 12,500–15,000 before rooms with mechanics were thinned.
+  requiredHp: { min: 11_500, max: 14_500 },
   sideRooms: { min: 0, max: 2 },
   sideBands: ["light", "medium"] as readonly RoomBand[],
   /** Main-path turns: east twice as likely as north or south. */
@@ -377,7 +379,11 @@ function ambushHall(): RecipePiece {
   };
 }
 
-export const WARRENS_PIECES: readonly WarrensPiece[] = [
+/**
+ * The Warrens' rooms at full strength: the Stronghold builds on these
+ * (D-108), the Warrens itself thins some of them (D-116).
+ */
+export const WARRENS_BASE_PIECES: readonly WarrensPiece[] = [
   // Light.
   // Boulders fall in the tunnel while it fights (D-110).
   withTraps(
@@ -758,6 +764,24 @@ export const WARRENS_PIECES: readonly WarrensPiece[] = [
     ],
   ]),
 ];
+
+/** Rooms with their own mechanic (D-109–D-114) need fewer goblins (D-116). */
+export const MECHANIC_ROOMS: ReadonlySet<string> = new Set([
+  "tunnel",
+  "guard",
+  "passage",
+  "grotto",
+  "ambush",
+  "gatehouse",
+  "barracks",
+  "armory",
+]);
+
+/** The Warrens' pool (D-105): rooms with a mechanic lose 25% of their grunts and slingers (D-116). */
+export const WARRENS_PIECES: readonly WarrensPiece[] = WARRENS_BASE_PIECES.map(
+  (entry) =>
+    MECHANIC_ROOMS.has(entry.piece.key) ? thinPiece(entry, 0.25) : entry,
+);
 
 export const WARRENS_RECIPE: DungeonRecipe = {
   name: "Goblin Warrens",

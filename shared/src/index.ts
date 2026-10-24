@@ -127,6 +127,8 @@ export {
 export {
   buildWarrens,
   GOBLIN_WARRENS,
+  MECHANIC_ROOMS,
+  WARRENS_BASE_PIECES,
   WARRENS_PIECES,
   WARRENS_RECIPE,
   WARRENS_RULES,
@@ -143,11 +145,13 @@ export { MAX_SEED, seededRandom } from "./seeded-random.ts";
 export {
   buildFromRecipe,
   combineSetups,
+  thinPiece,
   type DungeonRecipe,
   type RecipePiece,
 } from "./dungeon-recipe.ts";
 export {
   buildStronghold,
+  STRONGHOLD_FULL_PIECES,
   STRONGHOLD_PIECES,
   STRONGHOLD_RECIPE,
 } from "./goblin-stronghold.ts";
