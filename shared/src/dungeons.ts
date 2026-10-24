@@ -1,6 +1,7 @@
 import type { DungeonLayout } from "./dungeon-layout.ts";
 import { buildForge } from "./ember-forge.ts";
 import { buildTemple } from "./sunken-temple.ts";
+import { buildHollow } from "./frost-hollow.ts";
 import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
@@ -25,6 +26,8 @@ export interface DungeonInfo {
   layout: DungeonLayout;
   /** Builds the layout for a run's seed (D-104); absent for fixed dungeons. */
   generate?: (seed: number) => DungeonLayout;
+  /** Only serfs of at least this level may enter (the endgame dungeons: 20, D-136). */
+  minLevel?: number;
 }
 
 /**
@@ -101,6 +104,16 @@ export const DUNGEONS = [
     generate: buildTemple,
   },
   {
+    // D-136: the first endgame dungeon, for level-20 serfs (D-126).
+    id: "frost-hollow",
+    name: "Frost Hollow",
+    blurb: "Level 20 · 8 min · endgame",
+    listed: true,
+    layout: buildHollow(0),
+    generate: buildHollow,
+    minLevel: 20,
+  },
+  {
     id: "training",
     name: "Training Yard",
     blurb: "Test fixture: the debug map and its dummy",
@@ -133,16 +146,22 @@ export const INTRO_DUNGEON: DungeonId = "goblin-warrens";
 /**
  * Why this serf may not enter `dungeon`, or null if it may (D-107): the
  * Goblin Warrens is always open, and once a serf has completed it every
- * other dungeon opens, at any level. A serf's first completion can only be
- * the Warrens, so "at least one completion" is the check. Shown to the
- * player as is.
+ * other dungeon opens, at any level, except the endgame dungeons, which
+ * also need level 20 (D-136). A serf's first completion can only be the
+ * Warrens, so "at least one completion" is the check. Shown to the player
+ * as is.
  */
 export function entryProblem(
   dungeon: DungeonId,
   serfClears: number,
+  serfLevel = 1,
 ): string | null {
-  if (dungeon === INTRO_DUNGEON || serfClears > 0) return null;
-  return `Complete the ${dungeonInfo(INTRO_DUNGEON).name} first.`;
+  if (dungeon === INTRO_DUNGEON) return null;
+  if (serfClears <= 0) {
+    return `Complete the ${dungeonInfo(INTRO_DUNGEON).name} first.`;
+  }
+  const min = dungeonInfo(dungeon).minLevel ?? 1;
+  return serfLevel >= min ? null : `Reach level ${min} first.`;
 }
 
 export function dungeonInfo(id: DungeonId): DungeonInfo {

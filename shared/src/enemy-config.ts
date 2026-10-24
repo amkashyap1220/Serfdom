@@ -33,6 +33,11 @@ export const ENEMY_KINDS = [
   "spearman",
   "eelpriest",
   "tidepriest",
+  "wraith",
+  "yeti",
+  "frostarcher",
+  "iceimp",
+  "wyrm",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -413,7 +418,85 @@ export const BOSS_KINDS: readonly EnemyKind[] = [
   "lich",
   "forgemaster",
   "tidepriest",
+  "wyrm",
 ];
+
+/** Ice wraith (D-136): walks at you like a grunt and leaves a trail of frost that slows you. */
+export const WRAITH = {
+  maxHp: 520,
+  size: 32,
+  speed: 70,
+  contactDamage: 13,
+  contactCooldownSeconds: 1.2,
+  trail: { everySeconds: 3, radius: 48, seconds: 4 },
+} as const;
+
+/** Yeti (D-136): a big, slow, hard-hitting walker. */
+export const YETI = {
+  maxHp: 1100,
+  size: 40,
+  speed: 55,
+  contactDamage: 16,
+  contactCooldownSeconds: 1.4,
+} as const;
+
+/** Frost archer (D-136): the slinger's band, volleys of three icy arrows. */
+export const FROSTARCHER = {
+  maxHp: 300,
+  size: 32,
+  speed: 55,
+  minRange: 160,
+  maxRange: 280,
+  throwRange: 400,
+  throwIntervalSeconds: 2.4,
+  rock: { damage: 12, speed: 230, size: 6, range: 440 },
+  volley: 3,
+  spreadDegrees: 10,
+} as const;
+
+/** Ice imp (D-136): the skulker's flanking, quick and cold. */
+export const ICEIMP = {
+  maxHp: 340,
+  size: 32,
+  speed: 105,
+  leadSeconds: 0.8,
+  lungeRange: 60,
+  contactDamage: 13,
+  contactCooldownSeconds: 1.2,
+} as const;
+
+/**
+ * The Frost Wyrm (D-136), Frost Hollow's boss: frost-breath cones; a tail
+ * sweep round itself that leaves frost; below `summonBelow` ice wraiths;
+ * below `enragedBelow` its breath comes faster.
+ */
+export const WYRM = {
+  maxHp: 20000,
+  size: 96,
+  speed: 30,
+  keep: 140,
+  summonBelow: 0.5,
+  enragedBelow: 0.25,
+  breath: {
+    intervalSeconds: 4,
+    enragedIntervalSeconds: 2.5,
+    warnSeconds: 1,
+    range: 280,
+    halfAngleDegrees: 35,
+    damage: 16,
+    frostRadius: 90,
+    frostSeconds: 4,
+  },
+  tail: {
+    intervalSeconds: 3,
+    triggerRange: 130,
+    windupSeconds: 0.6,
+    radius: 120,
+    damage: 14,
+    frostSeconds: 4,
+  },
+  summon: { intervalSeconds: 12, count: 2, maxAlive: 3, kind: "wraith" },
+} as const;
 
 /** Drowned acolyte (D-135): walks at you and hits, like a grunt. */
 export const ACOLYTE = {
@@ -644,6 +727,11 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   spearman: SPEARMAN,
   eelpriest: EELPRIEST,
   tidepriest: TIDEPRIEST,
+  wraith: WRAITH,
+  yeti: YETI,
+  frostarcher: FROSTARCHER,
+  iceimp: ICEIMP,
+  wyrm: WYRM,
 };
 
 /**
@@ -683,6 +771,11 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   spearman: 0,
   eelpriest: EELPRIEST.pull.intervalSeconds / 2,
   tidepriest: 1.5,
+  wraith: WRAITH.contactCooldownSeconds / 2,
+  yeti: YETI.contactCooldownSeconds / 2,
+  frostarcher: FROSTARCHER.throwIntervalSeconds / 2,
+  iceimp: ICEIMP.contactCooldownSeconds / 2,
+  wyrm: 2,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

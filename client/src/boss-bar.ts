@@ -3,6 +3,7 @@ import {
   LICH,
   TIDEPRIEST,
   WARCHIEF,
+  WYRM,
   WARLORD,
   type EnemyKind,
 } from "@serfdom/shared";
@@ -62,6 +63,14 @@ export function bossBar(
           : fraction < LICH.wardBelow[1]!
             ? "  — ENRAGED"
             : "",
+    };
+  }
+  if (kind === "wyrm") {
+    return {
+      name: "The Frost Wyrm",
+      notches: [WYRM.summonBelow, WYRM.enragedBelow],
+      angry: fraction < WYRM.summonBelow,
+      suffix: fraction < WYRM.enragedBelow ? "  — ENRAGED" : "",
     };
   }
   if (kind === "tidepriest") {

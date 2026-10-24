@@ -321,6 +321,15 @@ export class NetSync {
       plates: latest.snapshot.plates.map((p) => ({ ...p })),
       // The water, at the clock of "now" (D-135).
       ...this.waterViews(latest.snapshot, age),
+      // Frost and breath cones (D-136).
+      frost: latest.snapshot.frost.filter((f) => {
+        const clock = latest.snapshot.clock + age;
+        return clock >= f.from && clock < f.until;
+      }),
+      cones: latest.snapshot.cones.map((c) => ({
+        ...c,
+        startsIn: Math.max(0, c.startsIn - age),
+      })),
     };
   }
 
@@ -484,6 +493,12 @@ export class NetSync {
             radius: w.radius,
             from: w.from,
             until: w.until,
+          })),
+          snapshot.frost.map((f) => ({
+            at: { x: f.x, y: f.y },
+            radius: f.radius,
+            from: f.from,
+            until: f.until,
           })),
         );
         if (this.synced) {

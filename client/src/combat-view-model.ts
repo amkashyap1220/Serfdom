@@ -63,7 +63,7 @@ export interface HazardView {
   radius: number;
   /** Seconds until it lands (estimated for now). */
   landsIn: number;
-  kind: "boulder" | "bomb" | "rune" | "slag";
+  kind: "boulder" | "bomb" | "rune" | "slag" | "icicle";
 }
 
 export interface ProjectileView {
@@ -143,6 +143,23 @@ export interface SurgeView {
   gaps: { from: number; to: number }[];
 }
 
+/** Frost on the floor (D-136). */
+export interface FrostView {
+  x: number;
+  y: number;
+  radius: number;
+}
+
+/** A breath cone (D-136): filling in while it warns. */
+export interface ConeView {
+  x: number;
+  y: number;
+  angle: number;
+  range: number;
+  halfAngle: number;
+  startsIn: number;
+}
+
 /** An eel-priest's tether (D-135): from the player to where they are pulled. */
 export interface TetherView {
   x1: number;
@@ -219,6 +236,8 @@ export interface CombatViewModel {
   whirlpools: WhirlpoolView[];
   surges: SurgeView[];
   tethers: TetherView[];
+  frost: FrostView[];
+  cones: ConeView[];
   portalOpen: boolean;
 }
 
@@ -240,6 +259,8 @@ export const EMPTY_VIEW: CombatViewModel = {
   whirlpools: [],
   surges: [],
   tethers: [],
+  frost: [],
+  cones: [],
   portalOpen: false,
 };
 

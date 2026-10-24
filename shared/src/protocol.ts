@@ -68,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v38 (13f): Frost Hollow (D-136): snapshots list `frost` (it slows
+ *          players, so prediction needs it) and breath `cones`; hazards may
+ *          be an icicle; killedBy may be "icicles".
  * v37 (13e): the Sunken Temple (D-135): snapshots carry the run's
  *          `clock` (tides, pulls, and whirlpools keep to it, so prediction
  *          matches), players their `pull`, and the Tide Priest's
@@ -135,7 +138,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 37;
+export const PROTOCOL_VERSION = 38;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -278,6 +281,25 @@ export interface SnapshotWhirlpool {
   radius: number;
   from: number;
   until: number;
+}
+
+/** Frost on the floor (D-136): slows players within `radius` from `from` until `until` (run clock). */
+export interface SnapshotFrost {
+  x: number;
+  y: number;
+  radius: number;
+  from: number;
+  until: number;
+}
+
+/** A breath cone (D-136): warning while `startsIn` > 0, then landed. */
+export interface SnapshotCone {
+  x: number;
+  y: number;
+  angle: number;
+  range: number;
+  halfAngle: number;
+  startsIn: number;
 }
 
 /** A tidal surge (D-135) across its arena. */
@@ -434,8 +456,8 @@ export interface SnapshotHazard {
   y: number;
   radius: number;
   landsIn: number;
-  /** A falling boulder, a goblin's bomb (D-115), a rune, or a slag spill (D-133). */
-  kind: "boulder" | "bomb" | "rune" | "slag";
+  /** A falling boulder, a goblin's bomb (D-115), a rune, a slag spill (D-133), or an icicle (D-136). */
+  kind: "boulder" | "bomb" | "rune" | "slag" | "icicle";
 }
 
 export interface SnapshotProjectile {
@@ -565,6 +587,9 @@ export type ServerMessage =
       /** The Tide Priest's whirlpools and surges (D-135). */
       whirlpools: SnapshotWhirlpool[];
       surges: SnapshotSurge[];
+      /** Frost and breath cones (D-136). */
+      frost: SnapshotFrost[];
+      cones: SnapshotCone[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
       /** Rune columns glowing before they burst (D-123). */
@@ -1068,6 +1093,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "clock",
           "whirlpools",
           "surges",
+          "frost",
+          "cones",
           "traps",
           "runes",
           "portalOpen",
@@ -1115,6 +1142,10 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!whirlpools) return fail("snapshot: bad whirlpool entry");
       const surges = parseList(obj.surges, parseSnapshotSurge);
       if (!surges) return fail("snapshot: bad surge entry");
+      const frost = parseList(obj.frost, parseSnapshotFrost);
+      if (!frost) return fail("snapshot: bad frost entry");
+      const cones = parseList(obj.cones, parseSnapshotCone);
+      if (!cones) return fail("snapshot: bad cone entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -1139,6 +1170,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           clock: obj.clock,
           whirlpools,
           surges,
+          frost,
+          cones,
           traps,
           runes,
           portalOpen: obj.portalOpen,
@@ -1493,6 +1526,44 @@ function parsePull(v: unknown): SnapshotPlayer["pull"] | undefined {
   return { x: v.x, y: v.y, from: v.from, speed: v.speed, left: v.left };
 }
 
+function parseSnapshotFrost(v: unknown): SnapshotFrost | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "radius", "from", "until"]) ||
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isNonNegative(v.radius) ||
+    !isNonNegative(v.from) ||
+    !isNonNegative(v.until)
+  ) {
+    return null;
+  }
+  return { x: v.x, y: v.y, radius: v.radius, from: v.from, until: v.until };
+}
+
+function parseSnapshotCone(v: unknown): SnapshotCone | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "angle", "range", "halfAngle", "startsIn"]) ||
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isFiniteNumber(v.angle) ||
+    !isNonNegative(v.range) ||
+    !isNonNegative(v.halfAngle) ||
+    !isNonNegative(v.startsIn)
+  ) {
+    return null;
+  }
+  return {
+    x: v.x,
+    y: v.y,
+    angle: v.angle,
+    range: v.range,
+    halfAngle: v.halfAngle,
+    startsIn: v.startsIn,
+  };
+}
+
 function parseSnapshotWhirlpool(v: unknown): SnapshotWhirlpool | null {
   if (
     !isPlainObject(v) ||
@@ -1734,7 +1805,8 @@ function parseSnapshotHazard(v: unknown): SnapshotHazard | null {
     v.kind !== "boulder" &&
     v.kind !== "bomb" &&
     v.kind !== "rune" &&
-    v.kind !== "slag"
+    v.kind !== "slag" &&
+    v.kind !== "icicle"
   )
     return null;
   return { x: v.x, y: v.y, radius: v.radius, landsIn: v.landsIn, kind: v.kind };

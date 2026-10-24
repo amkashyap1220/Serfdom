@@ -29,6 +29,11 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   spearman: "a Fishfolk Spearman",
   eelpriest: "an Eel-priest",
   tidepriest: "the Tide Priest",
+  wraith: "an Ice Wraith",
+  yeti: "a Yeti",
+  frostarcher: "a Frost Archer",
+  iceimp: "an Ice Imp",
+  wyrm: "the Frost Wyrm",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
   braziers: "a spirit brazier",
@@ -36,4 +41,5 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   lava: "lava",
   jets: "a fire jet",
   slag: "a slag spill",
+  icicles: "a falling icicle",
 };

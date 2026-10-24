@@ -12,6 +12,7 @@ import {
   type SnapshotPlayer,
   type Vec2,
   type WhirlpoolShape,
+  type FrostPatch,
 } from "@serfdom/shared";
 
 export interface PendingInput {
@@ -59,10 +60,18 @@ export class PlayerPredictor {
   /** The Tide Priest's whirlpools, as the latest snapshot has them. */
   private whirlpools: readonly WhirlpoolShape[] = [];
 
-  /** The latest snapshot's clock and whirlpools; call before `reconcile` or `reset`. */
-  setWater(clock: number, whirlpools: readonly WhirlpoolShape[]): void {
+  /** Frost on the floor (D-136), as the latest snapshot has it. */
+  private frost: readonly FrostPatch[] = [];
+
+  /** The latest snapshot's clock, whirlpools, and frost; call before `reconcile` or `reset`. */
+  setWater(
+    clock: number,
+    whirlpools: readonly WhirlpoolShape[],
+    frost: readonly FrostPatch[] = [],
+  ): void {
     this.snapshotClock = clock;
     this.whirlpools = whirlpools;
+    this.frost = frost;
   }
   private snapshotClock = 0;
 
@@ -162,6 +171,7 @@ export class PlayerPredictor {
       fires: [],
       clock,
       tides: this.tides,
+      frost: this.frost,
       whirlpools: this.whirlpools.map((w) => ({
         ...w,
         nextTick: w.from,

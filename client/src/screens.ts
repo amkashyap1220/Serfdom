@@ -27,6 +27,7 @@ import {
   type ClassId,
   DUNGEON_EXP,
   entryProblem,
+  levelForExp,
   LISTED_DUNGEONS,
   levelProgress,
   normalizeSerfName,
@@ -418,7 +419,9 @@ export class ScreenView {
         const card = el("div", "dungeon-card");
         // Locked until this serf completes the Warrens (D-107); the server
         // checks the same rule.
-        const locked = playing ? entryProblem(d.id, playing.life.clears) : null;
+        const locked = playing
+          ? entryProblem(d.id, playing.life.clears, levelForExp(playing.exp))
+          : null;
         card.append(
           el("h2", "", d.name),
           el("p", "hint", d.blurb),

@@ -42,6 +42,11 @@ describe("32×32 serfs and enemies (D-127)", () => {
       spearman: 32,
       eelpriest: 32,
       tidepriest: 56,
+      wraith: 32,
+      yeti: 40,
+      frostarcher: 32,
+      iceimp: 32,
+      wyrm: 96,
       forgemaster: 88,
       lich: 32,
     });

@@ -495,11 +495,13 @@ export class DungeonInstance {
           landsIn: h.landsIn,
           kind: h.rune
             ? ("rune" as const)
-            : h.hazard === "slag"
-              ? ("slag" as const)
-              : h.fire
-                ? ("bomb" as const)
-                : ("boulder" as const),
+            : h.hazard === "icicles"
+              ? ("icicle" as const)
+              : h.hazard === "slag"
+                ? ("slag" as const)
+                : h.fire
+                  ? ("bomb" as const)
+                  : ("boulder" as const),
         })),
       fires: this.sim.fires.map((f) => ({
         x: roundCoord(f.position.x),
@@ -555,6 +557,22 @@ export class DungeonInstance {
           to: roundCoord(g.to),
         })),
         startsIn: roundCoord(s.startsIn),
+      })),
+      // Exact: prediction slows the player on it (D-136).
+      frost: (this.sim.frost ?? []).map((f) => ({
+        x: f.at.x,
+        y: f.at.y,
+        radius: f.radius,
+        from: f.from,
+        until: f.until,
+      })),
+      cones: (this.sim.cones ?? []).map((c) => ({
+        x: roundCoord(c.at.x),
+        y: roundCoord(c.at.y),
+        angle: Math.round(c.angle * 1000) / 1000,
+        range: c.range,
+        halfAngle: Math.round(c.halfAngle * 1000) / 1000,
+        startsIn: roundCoord(c.startsIn),
       })),
       traps: trapWarnings(this.rooms, this.layout),
       runes: runeWarnings(this.rooms, this.layout),

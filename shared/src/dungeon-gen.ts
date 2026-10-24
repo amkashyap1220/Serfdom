@@ -37,8 +37,11 @@ export interface RoomPiece {
   height: number;
   /** Spawn points relative to the floor's top-left corner. */
   waves: readonly (readonly EnemySpawnDef[])[];
-  /** Boulders fall while it fights (D-110); "slag": slag spills instead (D-133). */
-  rockfall?: boolean | "slag";
+  /**
+   * Boulders fall while it fights (D-110); "slag": slag spills instead
+   * (D-133); "icicle": icicles that leave frost (D-136).
+   */
+  rockfall?: boolean | "slag" | "icicle";
   /** Its doors shut behind you until it is cleared (D-114). */
   gated?: boolean;
   /** Solid obstacles on its floor, relative like the spawns (D-112). */
@@ -168,14 +171,20 @@ interface Placed {
  * set per dungeon once the map is built, D-110).
  */
 function traps(
-  rockfall: false | { slag?: boolean },
+  rockfall: false | { slag?: boolean; icicle?: boolean },
   holes: Vec2[],
   holeWave: number | undefined,
   damage = 0,
 ): Pick<RoomDef, "rockfall" | "holes" | "holeWave"> {
   return {
     ...(rockfall
-      ? { rockfall: { damage, ...(rockfall.slag ? { slag: true } : {}) } }
+      ? {
+          rockfall: {
+            damage,
+            ...(rockfall.slag ? { slag: true } : {}),
+            ...(rockfall.icicle ? { icicle: true } : {}),
+          },
+        }
       : {}),
     ...(holes.length > 0 ? { holes } : {}),
     ...(holeWave !== undefined ? { holeWave } : {}),
@@ -310,7 +319,12 @@ export class RoomAssembly {
           waves,
           required,
           ...traps(
-            piece.rockfall ? { slag: piece.rockfall === "slag" } : false,
+            piece.rockfall
+              ? {
+                  slag: piece.rockfall === "slag",
+                  icicle: piece.rockfall === "icicle",
+                }
+              : false,
             o.holes.map(shift),
             piece.holeWave,
           ),

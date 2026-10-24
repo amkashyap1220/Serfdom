@@ -4,12 +4,9 @@ import {
   buildFromRecipe,
   type DungeonRecipe,
   type RecipePiece,
-  type RoomBand,
 } from "./dungeon-recipe.ts";
-import type { EnemyKind } from "./enemy-config.ts";
-import type { Rect } from "./geometry.ts";
 import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
-import { fillRoom } from "./room-fill.ts";
+import { mixedRoom, type Mix } from "./room-fill.ts";
 
 /*
  * The Sunken Temple (D-135, Phase 13e): the fifth dungeon, levels 18–20,
@@ -19,12 +16,6 @@ import { fillRoom } from "./room-fill.ts";
  * eel-priests that pull you; tide pools that turn deep and slow you on the
  * run's tide cycle. The Tide Priest waits in the Drowned sanctum.
  */
-
-/** A band's enemies: those in front, and those along the back. */
-interface Mix {
-  front: [EnemyKind, number][];
-  back: [EnemyKind, number][];
-}
 
 /** Light rooms: 4,280 HP. */
 const LIGHT: Mix = {
@@ -60,23 +51,7 @@ const HEAVY: Mix = {
   ],
 };
 
-const room = (
-  key: string,
-  name: string,
-  width: number,
-  height: number,
-  band: RoomBand,
-  mix: Mix,
-  terrain: Pick<RoomPiece, "obstacles" | "tides"> = {},
-): RecipePiece => {
-  const blocked: Rect[] = [...(terrain.obstacles ?? [])];
-  const waves = [fillRoom(width, height, mix.front, mix.back, blocked)];
-  return {
-    piece: { key, name, width, height, waves, ...terrain },
-    band,
-    setups: [waves],
-  };
-};
+const room = mixedRoom;
 
 /** Temple rooms: entrance on the west, positions relative to the floor. HP is solo. */
 export const TEMPLE_PIECES: readonly RecipePiece[] = [

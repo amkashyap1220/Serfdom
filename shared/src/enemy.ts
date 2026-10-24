@@ -11,6 +11,7 @@ import {
   GOLEM,
   FORGEMASTER,
   TIDEPRIEST,
+  WRAITH,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -67,6 +68,21 @@ export type EnemyAi =
       direction: Vec2;
       /** Players already hit by the current charge. */
       hit: readonly number[];
+    }
+  | {
+      kind: "wraith";
+      /** Seconds until it leaves its next patch of frost (D-136). */
+      trail: number;
+    }
+  | {
+      kind: "wyrm";
+      /** Walking, breathing (holding still while the cone warns), or raising its tail. */
+      mode: "walk" | "breath" | "tail";
+      timer: number;
+      breath: number;
+      tail: number;
+      summon: number;
+      called: number;
     }
   | {
       kind: "eelpriest";
@@ -220,6 +236,18 @@ function initialAi(kind: EnemyKind): EnemyAi {
         timer: 0,
         direction: { x: 0, y: 0 },
         hit: [],
+      };
+    case "wraith":
+      return { kind, trail: WRAITH.trail.everySeconds / 2 };
+    case "wyrm":
+      return {
+        kind,
+        mode: "walk",
+        timer: 0,
+        breath: FIRST_ATTACK_DELAY.wyrm,
+        tail: 0,
+        summon: 0,
+        called: 0,
       };
     case "eelpriest":
       return {

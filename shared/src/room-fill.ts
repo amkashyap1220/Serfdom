@@ -1,4 +1,6 @@
+import type { RoomPiece } from "./dungeon-gen.ts";
 import type { EnemySpawnDef } from "./dungeon-layout.ts";
+import type { RecipePiece, RoomBand } from "./dungeon-recipe.ts";
 import { ENEMY_STATS, type EnemyKind } from "./enemy-config.ts";
 import type { Rect } from "./geometry.ts";
 
@@ -102,4 +104,41 @@ export function fillRoom(
     ...pick(frontSpots, interleave(front)),
     ...pick(backSpots, interleave(back)),
   ];
+}
+
+/** A band's enemies (D-135): those in front, and those along the back. */
+export interface Mix {
+  front: [EnemyKind, number][];
+  back: [EnemyKind, number][];
+}
+
+/** A room's terrain and traps, relative like the spawns. */
+export type Terrain = Omit<
+  RoomPiece,
+  "key" | "name" | "width" | "height" | "waves"
+>;
+
+/**
+ * A generated room filled with one band's mix (the Sunken Temple and the
+ * endgame dungeons): spawns kept clear of its obstacles and lava.
+ */
+export function mixedRoom(
+  key: string,
+  name: string,
+  width: number,
+  height: number,
+  band: RoomBand,
+  mix: Mix,
+  terrain: Terrain = {},
+): RecipePiece {
+  const blocked: Rect[] = [
+    ...(terrain.obstacles ?? []),
+    ...(terrain.lava ?? []),
+  ];
+  const waves = [fillRoom(width, height, mix.front, mix.back, blocked)];
+  return {
+    piece: { key, name, width, height, waves, ...terrain },
+    band,
+    setups: [waves],
+  };
 }

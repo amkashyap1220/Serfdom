@@ -182,3 +182,56 @@ describe("prediction follows the Sunken Temple's water (D-135)", () => {
     expect(predictor.position.x).toBeCloseTo(server.players[0]!.position.x, 9);
   });
 });
+
+describe("prediction follows Frost Hollow's frost (D-136)", () => {
+  it("slowing on frost replays exactly: no correction", () => {
+    const frost = [{ at: { x: 160, y: 0 }, radius: 60, from: 0.2, until: 0.9 }];
+    const predictor = new PlayerPredictor(
+      1,
+      { x: 100, y: 0 },
+      [],
+      combatFor(SERF_BASE),
+    );
+    let server: SimState = {
+      players: [newPlayer(1, { x: 100, y: 0 }, SERF_BASE)],
+      enemies: [],
+      projectiles: [],
+      nextProjectileId: 1,
+      nextEnemyId: 1,
+      hazards: [],
+      blasts: [],
+      zones: [],
+      sludge: [],
+      fires: [],
+      frost,
+      clock: 0,
+    };
+    predictor.setWater(0, [], frost);
+    const states: SimState[] = [];
+    for (let i = 0; i < 60; i++) {
+      predictor.predict(RIGHT);
+      server = applyPlayerInput(server, 1, RIGHT, [], TICK_SECONDS).state;
+      server = { ...server, clock: server.clock! + TICK_SECONDS };
+      states.push(server);
+    }
+    const at = states[19]!;
+    const me = at.players[0]!;
+    predictor.setWater(at.clock!, [], frost);
+    predictor.reconcile({
+      id: 1,
+      x: me.position.x,
+      y: me.position.y,
+      ack: 19,
+      hp: me.hp,
+      maxHp: me.maxHp,
+      mp: me.mp,
+      maxMp: me.combat.maxMp,
+      buffs: [],
+      cooldown: me.fireCooldown,
+      pull: null,
+    });
+    expect(predictor.lastCorrection).toBeCloseTo(0, 9);
+    // Slower than a straight walk: the frost really slowed it.
+    expect(server.players[0]!.position.x).toBeLessThan(100 + 150 - 1);
+  });
+});

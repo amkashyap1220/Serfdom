@@ -64,6 +64,11 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   spearman: 0x2f6f8f,
   eelpriest: 0x6b4f9a,
   tidepriest: 0x1f4e79,
+  wraith: 0xcfe8ff,
+  yeti: 0xe8eef2,
+  frostarcher: 0x8fb8d8,
+  iceimp: 0x5fa8d8,
+  wyrm: 0x6f9fc8,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -126,6 +131,10 @@ const COLORS = {
   whirl: 0x5fd0ff,
   surge: 0x9fe0ff,
   tether: 0x7fffd4,
+  frost: 0xcfefff,
+  breath: 0x9fdcff,
+  icicle: 0xdff4ff,
+  icicleEdge: 0x7fb0d0,
   beamCore: 0xfff0a0,
   boulderEdge: 0x4a4238,
 } as const;
@@ -307,12 +316,20 @@ export class CombatView {
         rocks.fillCircle(hz.x + 4, hz.y - lift * 0.6 - 7, 2);
         continue;
       }
-      // A slag spill (D-133) is a molten boulder.
+      // A slag spill (D-133) is a molten boulder; an icicle (D-136) pale ice.
       const slag = hz.kind === "slag";
+      const ice = hz.kind === "icicle";
       const size = hz.radius * 0.6;
-      rocks.fillStyle(slag ? COLORS.slag : COLORS.boulder, 1);
+      rocks.fillStyle(
+        slag ? COLORS.slag : ice ? COLORS.icicle : COLORS.boulder,
+        1,
+      );
       rocks.fillCircle(hz.x, hz.y - lift, size);
-      rocks.lineStyle(px(2), slag ? COLORS.slagEdge : COLORS.boulderEdge, 1);
+      rocks.lineStyle(
+        px(2),
+        slag ? COLORS.slagEdge : ice ? COLORS.icicleEdge : COLORS.boulderEdge,
+        1,
+      );
       rocks.strokeCircle(hz.x, hz.y - lift, size);
     }
     // Burning floor (D-115): flickering, fading as it goes out.
@@ -401,6 +418,37 @@ export class CombatView {
         }
         at = Math.max(at, g.to);
       }
+    }
+    // Frost (D-136): pale patches that slow you.
+    for (const f of view.frost) {
+      h.fillStyle(COLORS.frost, 0.3);
+      h.fillCircle(f.x, f.y, f.radius);
+      h.lineStyle(px(1), COLORS.frost, 0.7);
+      h.strokeCircle(f.x, f.y, f.radius);
+    }
+    // Breath cones: the wedge fills in as it warns, then flashes.
+    for (const c of view.cones) {
+      const warn = 1 - Math.min(1, c.startsIn / 1);
+      h.fillStyle(COLORS.breath, c.startsIn > 0 ? 0.12 + 0.3 * warn : 0.7);
+      h.slice(
+        c.x,
+        c.y,
+        c.range,
+        c.angle - c.halfAngle,
+        c.angle + c.halfAngle,
+        false,
+      );
+      h.fillPath();
+      h.lineStyle(px(2), COLORS.breath, 0.9);
+      h.slice(
+        c.x,
+        c.y,
+        c.range,
+        c.angle - c.halfAngle,
+        c.angle + c.halfAngle,
+        false,
+      );
+      h.strokePath();
     }
     // Eel-priests' tethers: thin while they warn, thick once pulling.
     for (const t of view.tethers) {

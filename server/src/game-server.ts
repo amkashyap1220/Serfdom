@@ -1,5 +1,6 @@
 import {
   entryProblem,
+  levelForExp,
   dungeonInfo,
   MAX_SEED,
   consumeFixedSteps,
@@ -94,6 +95,8 @@ interface Session {
   serfBlocked: boolean;
   /** The chosen serf's lifetime completions: none yet means only the Warrens (D-107). */
   serfClears: number;
+  /** The serf's level, from its lifetime EXP (the endgame dungeons need 20, D-136). */
+  serfLevel: number;
   /** The chosen serf's stats with gear and weapon, kept current at the same moments (D-077, D-083). */
   serfLoadout: Loadout;
 }
@@ -303,6 +306,7 @@ export class GameServer {
       serfNeedsClass: false,
       serfBlocked: false,
       serfClears: 0,
+      serfLevel: 1,
       serfLoadout: { stats: SERF_BASE, weaponTier: null, ability: null },
     };
     this.sessions.set(socket, session);
@@ -390,7 +394,11 @@ export class GameServer {
             return;
           }
         } else {
-          const problem = entryProblem(message.dungeon, session.serfClears);
+          const problem = entryProblem(
+            message.dungeon,
+            session.serfClears,
+            session.serfLevel,
+          );
           if (problem) {
             this.reject(socket, session, problem);
             return;
@@ -719,6 +727,7 @@ export class GameServer {
         if (serf && nowSession && nowSession.serfId === serf.id) {
           nowSession.serfNeedsClass = needsClass(serf);
           nowSession.serfClears = serf.life.clears;
+          nowSession.serfLevel = levelForExp(serf.exp);
           nowSession.serfLoadout = loadoutOf(serf);
           // A reward that did not fit blocks the next dungeon (D-088, D-118).
           if (
@@ -955,6 +964,7 @@ export class GameServer {
         session.serfBlocked = blocked;
         session.serfNeedsClass = needsClass(result.serf);
         session.serfClears = result.serf.life.clears;
+        session.serfLevel = levelForExp(result.serf.exp);
         session.serfLoadout = loadoutOf(result.serf);
         this.log.info(
           message.type === "chooseClass"

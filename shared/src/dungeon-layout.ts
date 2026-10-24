@@ -146,7 +146,7 @@ export interface RoomDef {
    * A rockfall room and the damage of one boulder (D-110); `slag`: slag
    * spills instead, slower and leaving fire (D-133).
    */
-  rockfall?: { damage: number; slag?: boolean };
+  rockfall?: { damage: number; slag?: boolean; icicle?: boolean };
   /**
    * Obstacles on its floor (D-112): solid like walls (they are also in the
    * layout's walls), blocking movement and every shot.

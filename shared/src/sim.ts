@@ -7,6 +7,14 @@ import {
 } from "./enemy-config.ts";
 import { burningStrips, waveHits } from "./forge-boss.ts";
 import {
+  FROST,
+  ICICLES,
+  coneHits,
+  onFrost,
+  type ConeShape,
+  type FrostPatch,
+} from "./frost.ts";
+import {
   SURGE,
   TIDES,
   WHIRLPOOL,
@@ -198,6 +206,23 @@ export interface SimState {
   whirlpools?: readonly Whirlpool[];
   /** The Tide Priest's tidal surges (D-135). */
   surges?: readonly Surge[];
+  /** Frost on the floor (D-136): it slows players. */
+  frost?: readonly FrostPatch[];
+  /** Breath cones waiting to land, or just landed (drawn a moment, D-136). */
+  cones?: readonly Cone[];
+}
+
+/** A breath cone (D-136): lands once `startsIn` runs out, hitting every player it touches. */
+export interface Cone extends ConeShape {
+  startsIn: number;
+  /** After landing: how much longer it is drawn. */
+  shownLeft: number;
+  damage: number;
+  ownerId: number;
+  /** Frost it leaves along its middle. */
+  frost?: { radius: number; seconds: number };
+  /** Its arena: players outside are not hit. */
+  area?: Rect;
 }
 
 /** A whirlpool (D-135): drags players in while active; its core hurts every tick. */
@@ -265,6 +290,8 @@ export interface Hazard {
   ownerId: number;
   /** Set for a room's hazard (D-110): its hits are hazard hits. */
   hazard?: HazardKind;
+  /** An icicle (D-136): it leaves frost where it lands. */
+  frost?: { radius: number; seconds: number };
   /** A bomb (D-115): it leaves burning floor where it lands. */
   fire?: { seconds: number; tickSeconds: number; damage: number };
   /** Drawn as a rune (the Lich's, D-125). */
@@ -834,9 +861,12 @@ export function applyPlayerInput(
     (state.tides ?? []).length > 0 &&
     tideAt(clock) === "deep" &&
     (state.tides ?? []).some((r) => insideRect(r, player.position));
+  // Frost slows too (D-136).
+  const frozen = onFrost(player.position, clock, state.frost ?? []);
   const slow = Math.min(
     inSludge ? SLUDGE.speedFactor : 1,
     inDeep ? TIDES.speedFactor : 1,
+    frozen ? FROST.speedFactor : 1,
   );
   const walked = stepMovement(
     player.position,
@@ -1052,6 +1082,9 @@ export function stepWorld(
   const clock = state.clock ?? 0;
   const newWhirlpools: Whirlpool[] = [];
   const newSurges: Surge[] = [];
+  /** Frost and breath cones made this tick (D-136). */
+  const newFrost: FrostPatch[] = [];
+  const newCones: Cone[] = [];
   const pulls: { playerId: number; pull: Pull & { by: number } }[] = [];
   const context = {
     allies: () => allies,
@@ -1121,6 +1154,29 @@ export function stepWorld(
           left: EELPRIEST.pull.seconds,
           by: enemy.id,
         },
+      });
+    }
+    for (const f of action.frost ?? []) {
+      newFrost.push({
+        at: { ...f.at },
+        radius: f.radius,
+        from: clock,
+        until: clock + f.seconds,
+      });
+    }
+    if (action.cone) {
+      const c = action.cone;
+      newCones.push({
+        at: { ...c.at },
+        angle: c.angle,
+        range: c.range,
+        halfAngle: c.halfAngle,
+        startsIn: c.startsIn,
+        shownLeft: 0.25,
+        damage: c.damage,
+        ownerId: enemy.id,
+        ...(c.frost ? { frost: c.frost } : {}),
+        ...(c.area ? { area: c.area } : {}),
       });
     }
     for (const at of action.whirlpools ?? []) {
@@ -1364,6 +1420,38 @@ export function stepWorld(
     }
     return pl;
   });
+  // Breath cones land once their warning ends (D-136), leaving frost.
+  const cones: Cone[] = [];
+  for (const c of [...(state.cones ?? []), ...newCones]) {
+    if (c.startsIn > 1e-9) {
+      const startsIn = c.startsIn - dtSeconds;
+      if (startsIn <= 1e-9) {
+        players = players.map((pl) =>
+          isPlayerAlive(pl) &&
+          (!c.area || inside(c.area, pl.position)) &&
+          coneHits(c, pl.position)
+            ? damagePlayer(pl, c.ownerId, c.damage, pl.position, events)
+            : pl,
+        );
+        if (c.frost) {
+          const mid = c.range * 0.6;
+          newFrost.push({
+            at: {
+              x: c.at.x + Math.cos(c.angle) * mid,
+              y: c.at.y + Math.sin(c.angle) * mid,
+            },
+            radius: c.frost.radius,
+            from: clock,
+            until: clock + c.frost.seconds,
+          });
+        }
+      }
+      cones.push({ ...c, startsIn: Math.max(0, startsIn) });
+      continue;
+    }
+    const shownLeft = c.shownLeft - dtSeconds;
+    if (shownLeft > 1e-9) cones.push({ ...c, shownLeft });
+  }
   // Whirlpools' cores hurt each tick while they turn (D-135).
   const whirlpools: Whirlpool[] = [];
   for (const w of [...(state.whirlpools ?? []), ...newWhirlpools]) {
@@ -1463,6 +1551,15 @@ export function stepWorld(
         playerId: GOBLIN_BLAST_BY,
         at: { ...h.position },
         radius: h.radius,
+      });
+    }
+    // An icicle leaves frost (D-136).
+    if (h.frost) {
+      newFrost.push({
+        at: { ...h.position },
+        radius: h.frost.radius,
+        from: clock,
+        until: clock + h.frost.seconds,
       });
     }
     // A bomb leaves burning floor (D-115).
@@ -1667,6 +1764,11 @@ export function stepWorld(
       clock: clock + dtSeconds,
       whirlpools,
       surges,
+      cones,
+      // Frost lasts until its time (D-136).
+      frost: [...(state.frost ?? []), ...newFrost].filter(
+        (f) => clock + dtSeconds < f.until - 1e-9,
+      ),
       hazards,
       fires: burning,
       blasts: [],
@@ -1729,6 +1831,7 @@ export const HAZARD_KINDS = [
   "lava",
   "jets",
   "slag",
+  "icicles",
 ] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
@@ -1809,7 +1912,12 @@ export function burstRunes(
 
 export function dropBoulders(
   state: SimState,
-  drops: readonly { at: Vec2; damage: number; slag?: boolean }[],
+  drops: readonly {
+    at: Vec2;
+    damage: number;
+    slag?: boolean;
+    icicle?: boolean;
+  }[],
 ): SimState {
   if (drops.length === 0) return state;
   return {
@@ -1825,7 +1933,15 @@ export function dropBoulders(
         // A slag spill leaves burning floor where it lands (D-133).
         ...(d.slag
           ? { hazard: "slag" as const, fire: { ...SLAG.fire } }
-          : { hazard: "rockfall" as const }),
+          : d.icicle
+            ? {
+                hazard: "icicles" as const,
+                frost: {
+                  radius: ICICLES.frostRadius,
+                  seconds: ICICLES.frostSeconds,
+                },
+              }
+            : { hazard: "rockfall" as const }),
       })),
     ],
   };

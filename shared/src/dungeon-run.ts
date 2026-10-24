@@ -12,6 +12,7 @@ import {
   type RuneSpot,
 } from "./dungeon-layout.ts";
 import { isAlive } from "./enemy.ts";
+import { ICICLES } from "./frost.ts";
 import { sweepIndex, type Rect, type Vec2 } from "./geometry.ts";
 import { PLAYER_BODY, TICK_SECONDS } from "./movement-config.ts";
 import {
@@ -195,6 +196,8 @@ export interface BoulderDrop {
   damage: number;
   /** A slag spill (D-133): it leaves burning floor. */
   slag?: boolean;
+  /** An icicle (D-136): it leaves frost. */
+  icicle?: boolean;
 }
 
 /**
@@ -216,7 +219,9 @@ export function rockfallDrops(
     if (!room.rockfall || p.status !== "active") return p;
     const every = room.rockfall.slag
       ? SLAG.everySeconds
-      : ROCKFALL.everySeconds;
+      : room.rockfall.icicle
+        ? ICICLES.everySeconds
+        : ROCKFALL.everySeconds;
     const due = Math.floor(p.clock / every + 1e-9) + 1;
     if (p.dropped >= due) return p;
     const b = room.bounds;
@@ -248,6 +253,7 @@ export function rockfallDrops(
         at,
         damage: room.rockfall.damage,
         ...(room.rockfall.slag ? { slag: true } : {}),
+        ...(room.rockfall.icicle ? { icicle: true } : {}),
       });
     }
     return { ...p, dropped: due };

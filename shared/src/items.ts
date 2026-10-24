@@ -233,6 +233,15 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
+  // D-136: T6 30%, T7 45%, T8 25% (the first T8).
+  "frost-hollow": {
+    tiers: [
+      [6, 30],
+      [7, 45],
+      [8, 25],
+    ],
+    slots: SLOT_WEIGHTS,
+  },
   training: {
     tiers: [
       [0, 50],

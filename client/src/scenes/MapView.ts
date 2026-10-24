@@ -46,6 +46,17 @@ const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
     obstacleEdge: 0x7d7472,
     hole: 0x0a0605,
   },
+  // D-136: blue-white ice.
+  "frost-hollow": {
+    floor: 0x1a2230,
+    gridMinor: 0x26324a,
+    gridMajor: 0x3a4a66,
+    wall: 0x9fbcd8,
+    wallEdge: 0xdcecff,
+    obstacle: 0x6f94b8,
+    obstacleEdge: 0xb8d8f0,
+    hole: 0x05080d,
+  },
   // D-135: wet green-grey stone, a teal floor.
   "sunken-temple": {
     floor: 0x132126,

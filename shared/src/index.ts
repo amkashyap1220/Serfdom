@@ -64,6 +64,11 @@ export {
   SPEARMAN,
   EELPRIEST,
   TIDEPRIEST,
+  WRAITH,
+  YETI,
+  FROSTARCHER,
+  ICEIMP,
+  WYRM,
   CASTER,
   GHOST,
   NECROMANCER,
@@ -221,6 +226,7 @@ export {
   type PlateBurst,
   type Whirlpool,
   type Surge,
+  type Cone,
   burstRunes,
   TRAP_OWNER_ID,
   GOBLIN_BLAST_BY,
@@ -479,3 +485,17 @@ export {
   type SurgeShape,
 } from "./temple-water.ts";
 export { fillRoom } from "./room-fill.ts";
+export {
+  HOLLOW_LAIR,
+  HOLLOW_PIECES,
+  HOLLOW_RECIPE,
+  buildHollow,
+} from "./frost-hollow.ts";
+export {
+  FROST,
+  ICICLES,
+  coneHits,
+  type ConeShape,
+  type FrostPatch,
+} from "./frost.ts";
+export { mixedRoom, type Mix, type Terrain } from "./room-fill.ts";

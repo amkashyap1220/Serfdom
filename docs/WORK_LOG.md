@@ -669,3 +669,13 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - `npm run check`: 517 shared, 199 server, 66 client, build.
 - Live (harness, **test** DB, seed 2, headless): tide pools turned deep, eel-priests tethered and pulled, surges swept the sanctum both ways, two whirlpools below 50%.
 - Known issue: a full heavy room's snapshots are about 9.6 KB (640 KB/s); recorded for Phase 19.
+
+### Phase 13f — Frost Hollow, the first endgame dungeon — 2026-10-24
+
+- Level-20 entry for the endgame dungeons: `minLevel`, checked by the server and shown on the menu.
+- Frost Hollow (D-136, PROVISIONAL): ice imps, ice wraiths (frost trails), yetis, frost archers; icicle rooms; the Frost Wyrm (breath cones, tail sweep, wraiths).
+- Frost slows players, so it rides the run clock like the temple's water; a client test confirms a zero correction on frost.
+- The temple's room builder became the shared `mixedRoom` (the temple's rooms are byte-identical).
+- Found live: the Wyrm's breath could reach past its lair's wall; it now only hits players inside its arena (tested).
+- `npm run check`: 530 shared, 199 server, 67 client, build.
+- Live (harness, **test** DB, seed 2, headless): the card unlocked at level 20; icicles left frost; the breath cone filled in and frosted the floor; two wraiths came out below 50%.

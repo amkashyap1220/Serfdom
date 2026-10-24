@@ -25,6 +25,11 @@ import {
   SPEARMAN,
   EELPRIEST,
   TIDEPRIEST,
+  WRAITH,
+  YETI,
+  FROSTARCHER,
+  ICEIMP,
+  WYRM,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -122,6 +127,20 @@ export interface EnemyAction {
   pull?: { playerId: number; to: Vec2; startsIn: number };
   /** The Tide Priest's whirlpools (D-135), starting after their warning. */
   whirlpools?: Vec2[];
+  /** Frost left on the floor (D-136): an ice wraith's trail, the Frost Wyrm's tail. */
+  frost?: { at: Vec2; radius: number; seconds: number }[];
+  /** The Frost Wyrm's breath (D-136): a cone that lands after `startsIn`. */
+  cone?: {
+    at: Vec2;
+    angle: number;
+    range: number;
+    halfAngle: number;
+    startsIn: number;
+    damage: number;
+    frost?: { radius: number; seconds: number };
+    /** Its arena: players outside are not hit (no breathing through walls). */
+    area?: Rect;
+  };
   /** The Tide Priest's tidal surge (D-135) across `area`. */
   surge?: {
     area: Rect;
@@ -254,6 +273,32 @@ export function enemyAct(
       );
     case "golem":
       return golemAct(enemy, target, walls, dtSeconds, result, context);
+    case "wraith":
+      return wraithAct(enemy, target, walls, dtSeconds, result, context);
+    case "yeti":
+      return gruntAct(enemy, target, walls, dtSeconds, result, context, YETI);
+    case "frostarcher":
+      return slingerAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        FROSTARCHER,
+      );
+    case "iceimp":
+      return skulkerAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        ICEIMP,
+      );
+    case "wyrm":
+      return wyrmAct(enemy, targets, target, walls, dtSeconds, result, context);
     case "acolyte":
       return gruntAct(
         enemy,
@@ -810,6 +855,155 @@ function elementalAct(
     dt,
   );
   return result({ ...enemy, position });
+}
+
+/** Ice wraith (D-136): a grunt's walk that leaves frost behind it every few seconds. */
+function wraithAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "wraith") return result(enemy);
+  const walked = gruntAct(enemy, target, walls, dt, result, context, WRAITH);
+  let trail = ai.trail - dt;
+  const frost: EnemyAction["frost"] = [];
+  if (trail <= 1e-9) {
+    trail += WRAITH.trail.everySeconds;
+    frost.push({
+      at: { ...walked.enemy.position },
+      radius: WRAITH.trail.radius,
+      seconds: WRAITH.trail.seconds,
+    });
+  }
+  return {
+    ...walked,
+    ...(frost.length > 0 ? { frost } : {}),
+    enemy: { ...walked.enemy, ai: { kind: "wraith", trail } },
+  };
+}
+
+/**
+ * The Frost Wyrm (D-136): walks after the nearest player, stopping short;
+ * breathes a cone of frost (it holds still while the cone warns); sweeps
+ * its tail round itself when a player comes close, leaving frost; calls ice
+ * wraiths below half HP; enraged, breathes more often.
+ */
+function wyrmAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "wyrm") return result(enemy);
+  const W = WYRM;
+  const fraction = enemy.hp / enemy.maxHp;
+  const summoning = fraction < W.summonBelow;
+  const enraged = fraction < W.enragedBelow;
+  const tick = (t: number) => Math.max(0, t - dt);
+  let next = {
+    ...ai,
+    breath: tick(ai.breath),
+    tail: tick(ai.tail),
+    summon: summoning ? tick(ai.summon) : ai.summon,
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  const area = enemy.roomId ? context.boundsOf?.(enemy.roomId) : undefined;
+  let position = enemy.position;
+  if (target && summoning && next.summon <= 1e-9) {
+    next.summon = W.summon.intervalSeconds;
+    const room = W.summon.maxAlive - context.aliveSummons(enemy.id);
+    const n = Math.min(W.summon.count, Math.max(0, room));
+    for (let i = 0; i < n; i++) {
+      action.summons.push({
+        kind: W.summon.kind,
+        at: {
+          x: enemy.position.x + (i % 2 ? 90 : -90),
+          y: enemy.position.y + 60,
+        },
+      });
+    }
+    next.called += n;
+  }
+  if (next.mode === "walk" && target) {
+    if (next.tail <= 1e-9 && target.distance <= W.tail.triggerRange) {
+      next = { ...next, mode: "tail", timer: W.tail.windupSeconds };
+      action.slam = {
+        at: { ...enemy.position },
+        radius: W.tail.radius,
+        warning: true,
+      };
+    } else if (next.breath <= 1e-9) {
+      const aim = toward(enemy.position, target.target.position);
+      next = {
+        ...next,
+        mode: "breath",
+        timer: W.breath.warnSeconds,
+        breath: enraged
+          ? W.breath.enragedIntervalSeconds
+          : W.breath.intervalSeconds,
+      };
+      action.cone = {
+        at: { ...enemy.position },
+        angle: Math.atan2(aim.y, aim.x),
+        range: W.breath.range,
+        halfAngle: (W.breath.halfAngleDegrees * Math.PI) / 180,
+        startsIn: W.breath.warnSeconds,
+        damage: W.breath.damage,
+        frost: { radius: W.breath.frostRadius, seconds: W.breath.frostSeconds },
+        ...(area ? { area } : {}),
+      };
+    } else if (target.distance > W.keep) {
+      position = move(
+        enemy,
+        toward(
+          enemy.position,
+          route(
+            enemy.position,
+            target.target.position,
+            enemy.size / 2,
+            walls,
+            context,
+          ),
+        ),
+        W.speed,
+        walls,
+        dt,
+      );
+    }
+  } else if (next.mode !== "walk") {
+    const timer = next.timer - dt;
+    if (timer > 1e-9) {
+      next = { ...next, timer };
+    } else if (next.mode === "tail") {
+      const at = { ...enemy.position };
+      for (const t of targets) {
+        if (circleHitsPlayer(at, W.tail.radius, t.position)) {
+          action.contacts.push({ playerId: t.id, damage: W.tail.damage });
+        }
+      }
+      action.slam = { at, radius: W.tail.radius, warning: false };
+      action.frost = [
+        { at, radius: W.tail.radius, seconds: W.tail.frostSeconds },
+      ];
+      next = { ...next, mode: "walk", timer: 0, tail: W.tail.intervalSeconds };
+    } else {
+      next = { ...next, mode: "walk", timer: 0 };
+    }
+  }
+  return result({ ...enemy, position, ai: next }, action);
 }
 
 /** An eel-priest's movement: a slinger's that never throws (D-135). */
@@ -1759,6 +1953,7 @@ export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
 }
 
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "wyrm") return enemy.ai.mode !== "walk";
   if (enemy.ai.kind === "forgemaster") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "elemental") return enemy.ai.fuse !== null;
   if (enemy.ai.kind === "knight") return enemy.ai.mode === "windup";

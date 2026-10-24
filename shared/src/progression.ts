@@ -32,6 +32,9 @@ export const DUNGEON_EXP: Record<DungeonId, DungeonExp> = {
   "ember-forge": { base: 240, topLevel: 18 },
   // D-135: aimed at levels 18–20; about 3 clears take a serf from 18 to 20.
   "sunken-temple": { base: 280, topLevel: 20 },
+  // D-136: the endgame dungeons are for level 20, where EXP only counts
+  // towards the lifetime total.
+  "frost-hollow": { base: 300, topLevel: 20 },
   training: { base: 100, topLevel: 9 },
 };
 
