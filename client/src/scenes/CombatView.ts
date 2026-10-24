@@ -183,13 +183,7 @@ export class CombatView {
    * like the player, so they stay upright on screen; labels sit "above" the
    * enemy on screen whatever the view rotation.
    */
-  sync(
-    view: CombatViewModel,
-    viewRotation: number,
-    nowMs: number,
-    /** The local player, whom the Lich looks at while it is not attacking. */
-    player: { x: number; y: number },
-  ): void {
+  sync(view: CombatViewModel, viewRotation: number, nowMs: number): void {
     const present = new Set(view.enemies.map((e) => e.id));
     for (const [id, sprite] of this.enemies) {
       if (!present.has(id)) {
@@ -211,7 +205,7 @@ export class CombatView {
         .setPosition(x, y)
         .setRotation(-viewRotation);
       if (enemy.kind === "lich") {
-        this.drawLich(sprite, enemy, viewRotation, nowMs, player);
+        this.drawLich(sprite, enemy, viewRotation, nowMs);
       } else {
         sprite.image.setTexture(
           enemy.pile
@@ -505,7 +499,8 @@ export class CombatView {
 
   /**
    * The Lich uses the user's art (the first real sprite): spinning in its
-   * attack pose while it fires its spiral, else idle facing the player. Hits
+   * attack pose while it attacks, else idle facing the player the server
+   * picked. Hits
    * flash it white and the stun blinks it pale blue, as the squares do.
    */
   private drawLich(
@@ -513,13 +508,11 @@ export class CombatView {
     enemy: EnemyView,
     viewRotation: number,
     nowMs: number,
-    player: { x: number; y: number },
   ): void {
     const pose = lichPose({
-      spin: enemy.facing === null ? null : enemy.facing + viewRotation,
+      spinning: enemy.spinning,
       // A world angle shows on screen turned by the view's rotation.
-      towardPlayer:
-        Math.atan2(player.y - enemy.y, player.x - enemy.x) + viewRotation,
+      facing: enemy.facing === null ? null : enemy.facing + viewRotation,
     });
     // 32×32 art on a 32 px body (D-128): one source pixel per world pixel.
     const image = sprite.image.setTexture(

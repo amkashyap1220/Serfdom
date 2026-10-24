@@ -384,7 +384,7 @@ export class WorldScene extends Phaser.Scene {
     this.lastView = this.net.viewModel(performance.now());
     this.map.syncPortal(this.lastView.portalOpen, nowMs);
     this.syncBossBar();
-    this.combat.sync(this.lastView, this.viewRotation, nowMs, { x, y });
+    this.combat.sync(this.lastView, this.viewRotation, nowMs);
     this.remotes.sync(
       this.net.remotePositions(performance.now()),
       this.viewRotation,

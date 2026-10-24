@@ -392,7 +392,7 @@ describe("the Lich in a run (D-125)", () => {
 });
 
 describe("the Lich's pose in a snapshot (D-129)", () => {
-  it("sends its spiral angle as `facing` while it fires, null while idle", () => {
+  it("idle, it faces the nearest player; spinning, `facing` is its spiral angle", () => {
     const r = new DungeonInstance(1, "forgotten-crypt", [1], {
       maxQueuedInputs: 30,
       joinWindowTicks: 900,
@@ -404,15 +404,16 @@ describe("the Lich's pose in a snapshot (D-129)", () => {
         { kind: "lich", at: { x: at.x + 250, y: at.y }, roomId: null },
       ]),
     );
-    const lichFacing = () => {
+    const lich = () => {
       const parsed = parseServerMessage(encodeMessage(r.snapshot(1)));
       if (!parsed.ok || parsed.message.type !== "snapshot")
         throw new Error("no snapshot");
-      return parsed.message.enemies.find((e) => e.kind === "lich")?.facing;
+      return parsed.message.enemies.find((e) => e.kind === "lich")!;
     };
     r.tick();
-    // Its first volley is still 1.5 s off: standing idle.
-    expect(lichFacing()).toBe(null);
+    // Its first volley is still 1.5 s off: idle, looking west at the player.
+    expect(lich().spinning).toBe(false);
+    expect(Math.abs(lich().facing!)).toBeCloseTo(Math.PI, 1);
     r.setStateForTest({
       ...r.state,
       enemies: r.state.enemies.map((e) =>
@@ -420,7 +421,8 @@ describe("the Lich's pose in a snapshot (D-129)", () => {
       ),
     });
     r.tick();
-    expect(lichFacing()).toBeCloseTo(1, 1);
+    expect(lich().spinning).toBe(true);
+    expect(lich().facing).toBeCloseTo(1, 1);
   });
 });
 

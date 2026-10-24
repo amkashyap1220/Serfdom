@@ -7,18 +7,19 @@ export interface LichPose {
 
 /**
  * Which Lich image to show (cosmetic only; the server decides the fight).
- * It spins only while it fires its spiral, turning with the spiral itself
- * (the snapshot's `facing`); otherwise it stands idle, looking at the
- * player (D-129).
+ * It spins only while it attacks, turning with its spiral; otherwise it
+ * stands idle facing the nearest player. The server picks both, so every
+ * player sees the same (D-129).
  */
 export function lichPose(input: {
-  /** Screen angle of its spiral while it fires, else null. */
-  spin: number | null;
-  /** Screen angle from the Lich to the local player, radians. */
-  towardPlayer: number;
+  /** The snapshot's `spinning`. */
+  spinning: boolean;
+  /** The snapshot's `facing`, turned to screen space; null if unknown. */
+  facing: number | null;
 }): LichPose {
-  if (input.spin === null) {
-    return { state: "idle", direction: directionFromAngle(input.towardPlayer) };
-  }
-  return { state: "attacking", direction: directionFromAngle(input.spin) };
+  return {
+    state: input.spinning ? "attacking" : "idle",
+    // South, toward the viewer, until the server says otherwise.
+    direction: directionFromAngle(input.facing ?? Math.PI / 2),
+  };
 }

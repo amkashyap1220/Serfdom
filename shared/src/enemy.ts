@@ -77,6 +77,8 @@ export type EnemyAi =
       shot: number;
       /** Spinning while it attacks (its spiral, or a ring's quick turn), else standing idle (D-129). */
       firing: boolean;
+      /** Radians toward the nearest player, whom it faces while idle (D-129); the same on every screen. */
+      look: number;
       ring: number;
       ringTurn: number;
       rise: number;
@@ -167,6 +169,7 @@ function initialAi(kind: EnemyKind): EnemyAi {
         spin: 0,
         shot: FIRST_ATTACK_DELAY.lich,
         firing: false,
+        look: Math.PI / 2,
         ring: 0,
         ringTurn: 0,
         rise: LICH.rise.intervalSeconds / 2,

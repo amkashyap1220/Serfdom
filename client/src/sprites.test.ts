@@ -39,24 +39,21 @@ describe("directionFromAngle", () => {
 });
 
 describe("lichPose (cosmetic, D-129)", () => {
-  it("spins with its spiral while it fires", () => {
-    const at = (spin: number) => lichPose({ spin, towardPlayer: 0 });
-    expect(at(0)).toEqual({ state: "attacking", direction: "east" });
-    expect(at(Math.PI / 4)).toEqual({
+  it("spins in its attack pose by the server's angle", () => {
+    expect(lichPose({ spinning: true, facing: 0 })).toEqual({
       state: "attacking",
-      direction: "south-east",
+      direction: "east",
     });
-    expect(at(Math.PI / 2).direction).toBe("south");
+    expect(lichPose({ spinning: true, facing: Math.PI / 4 }).direction).toBe(
+      "south-east",
+    );
   });
 
-  it("otherwise stands idle, facing the player", () => {
-    expect(lichPose({ spin: null, towardPlayer: Math.PI / 2 })).toEqual({
-      state: "idle",
-      direction: "south",
-    });
-    expect(lichPose({ spin: null, towardPlayer: Math.PI })).toEqual({
+  it("otherwise stands idle, facing the way the server says", () => {
+    expect(lichPose({ spinning: false, facing: Math.PI })).toEqual({
       state: "idle",
       direction: "west",
     });
+    expect(lichPose({ spinning: false, facing: null }).direction).toBe("south");
   });
 });

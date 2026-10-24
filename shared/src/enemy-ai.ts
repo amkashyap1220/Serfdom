@@ -806,6 +806,10 @@ function lichAct(
     hazards: [],
   };
   let next = { ...ai, timer: ai.timer + dt, firing: false };
+  if (target) {
+    const to = target.target.position;
+    next.look = Math.atan2(to.y - enemy.position.y, to.x - enemy.position.x);
+  }
   const mine = (kind: string) =>
     (context.allies?.() ?? []).filter(
       (e) => e.summonerId === enemy.id && e.kind === kind && isAlive(e),
