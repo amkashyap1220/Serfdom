@@ -53,6 +53,8 @@ export {
   SLINGER,
   WARLORD,
   SKELETON,
+  IMP,
+  CASTER,
   GHOST,
   NECROMANCER,
   KNIGHT,
@@ -117,6 +119,8 @@ export {
   OBSTACLE_MARGIN,
   SLUDGE,
   sludgePools,
+  lavaPools,
+  LAVA,
   ROCKFALL,
   wallsAroundRooms,
   WALL_THICKNESS,
@@ -421,3 +425,9 @@ export {
   CRYPT_SANCTUM,
 } from "./forgotten-crypt.ts";
 export { DEFENSE_SCALE } from "./stats.ts";
+export {
+  buildForge,
+  FORGE_HEART,
+  FORGE_PIECES,
+  FORGE_RECIPE,
+} from "./ember-forge.ts";

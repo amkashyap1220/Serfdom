@@ -14,6 +14,8 @@ import {
   NECROMANCER,
   KNIGHT,
   LICH,
+  IMP,
+  CASTER,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -202,6 +204,18 @@ export function enemyAct(
       return skulkerAct(enemy, target, walls, dtSeconds, result, context);
     case "bomber":
       return bomberAct(enemy, target, walls, dtSeconds, result, context);
+    case "imp":
+      return skulkerAct(enemy, target, walls, dtSeconds, result, context, IMP);
+    case "caster":
+      return bomberAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        CASTER,
+      );
     case "shaman":
       return shamanAct(enemy, target, walls, dtSeconds, result, context);
     case "warchief":
@@ -419,6 +433,15 @@ function ahead(target: AiTarget, seconds: number): Vec2 {
   };
 }
 
+/** A flanker's numbers: skulkers, and forge imps (D-128). */
+interface FlankerSpec {
+  speed: number;
+  leadSeconds: number;
+  lungeRange: number;
+  contactDamage: number;
+  contactCooldownSeconds: number;
+}
+
 function skulkerAct(
   enemy: EnemyState,
   target: Nearest,
@@ -426,13 +449,14 @@ function skulkerAct(
   dt: number,
   result: Result,
   context: AiContext,
+  spec: FlankerSpec = SKULKER,
 ): EnemyAction {
   const cooldown = Math.max(0, enemy.attackCooldown - dt);
   if (!target) return result({ ...enemy, attackCooldown: cooldown });
   // Cut you off: run to where you are heading, then lunge (D-115).
   const goal =
-    target.distance > SKULKER.lungeRange
-      ? ahead(target.target, SKULKER.leadSeconds)
+    target.distance > spec.lungeRange
+      ? ahead(target.target, spec.leadSeconds)
       : target.target.position;
   const position = move(
     enemy,
@@ -440,7 +464,7 @@ function skulkerAct(
       enemy.position,
       route(enemy.position, goal, enemy.size / 2, walls, context),
     ),
-    SKULKER.speed,
+    spec.speed,
     walls,
     dt,
   );
@@ -450,14 +474,28 @@ function skulkerAct(
     {
       ...enemy,
       position,
-      attackCooldown: hits ? SKULKER.contactCooldownSeconds : cooldown,
+      attackCooldown: hits ? spec.contactCooldownSeconds : cooldown,
     },
     {
       contacts: hits
-        ? [{ playerId: target.target.id, damage: SKULKER.contactDamage }]
+        ? [{ playerId: target.target.id, damage: spec.contactDamage }]
         : [],
     },
   );
+}
+
+/** A lobber's numbers: bombers, and ember casters (D-128). */
+interface LobberSpec {
+  speed: number;
+  minRange: number;
+  maxRange: number;
+  throwRange: number;
+  throwIntervalSeconds: number;
+  leadSeconds: number;
+  flightSeconds: number;
+  radius: number;
+  damage: number;
+  fire: { seconds: number; tickSeconds: number; damage: number };
 }
 
 function bomberAct(
@@ -467,6 +505,7 @@ function bomberAct(
   dt: number,
   result: Result,
   context: AiContext,
+  spec: LobberSpec = BOMBER,
 ): EnemyAction {
   if (!target) {
     return result({
@@ -476,18 +515,18 @@ function bomberAct(
   }
   const at = target.target.position;
   let direction = NO_MOVE;
-  if (target.distance < BOMBER.minRange) direction = toward(at, enemy.position);
-  else if (target.distance > BOMBER.maxRange)
+  if (target.distance < spec.minRange) direction = toward(at, enemy.position);
+  else if (target.distance > spec.maxRange)
     direction = toward(
       enemy.position,
       route(enemy.position, at, enemy.size / 2, walls, context),
     );
-  const position = move(enemy, direction, BOMBER.speed, walls, dt);
+  const position = move(enemy, direction, spec.speed, walls, dt);
   const attack = stepFireCooldown(
     enemy.attackCooldown,
     dt,
-    target.distance <= BOMBER.throwRange,
-    1 / BOMBER.throwIntervalSeconds,
+    target.distance <= spec.throwRange,
+    1 / spec.throwIntervalSeconds,
   );
   // Lobbed over everything: lands where you will be (D-115).
   return result(
@@ -496,11 +535,11 @@ function bomberAct(
       hazards: attack.fired
         ? [
             {
-              at: ahead(target.target, BOMBER.leadSeconds),
-              radius: BOMBER.radius,
-              damage: BOMBER.damage,
-              delaySeconds: BOMBER.flightSeconds,
-              fire: BOMBER.fire,
+              at: ahead(target.target, spec.leadSeconds),
+              radius: spec.radius,
+              damage: spec.damage,
+              delaySeconds: spec.flightSeconds,
+              fire: spec.fire,
             },
           ]
         : [],

@@ -25,6 +25,8 @@ const COLORS = {
   obstacle: 0x8a8378,
   sludge: 0x4f6b2a,
   sludgeEdge: 0x7a9a45,
+  lava: 0xd9541e,
+  lavaEdge: 0xffb347,
   obstacleEdge: 0xb8b0a2,
   label: "#8a94a6",
 };
@@ -33,6 +35,17 @@ type Palette = typeof COLORS;
 
 /** A dungeon's own look over the default (D-120). Placeholder colors only. */
 const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
+  // D-128: dark iron floor, red-brown brick walls.
+  "ember-forge": {
+    floor: 0x1c1a1a,
+    gridMinor: 0x2b2524,
+    gridMajor: 0x44383a,
+    wall: 0x7a3b2a,
+    wallEdge: 0xb5654a,
+    obstacle: 0x4a4646,
+    obstacleEdge: 0x7d7472,
+    hole: 0x0a0605,
+  },
   "forgotten-crypt": {
     floor: 0x1a1f2a,
     gridMinor: 0x262d3b,
@@ -117,6 +130,15 @@ export class MapView {
           pool.width - 1,
           pool.height - 1,
         );
+      }
+    }
+    // Lava channels (D-128): glowing orange strips.
+    for (const room of layout.rooms) {
+      for (const l of room.lava ?? []) {
+        g.fillStyle(this.colors.lava, 0.85);
+        g.fillRect(l.x, l.y, l.width, l.height);
+        g.lineStyle(px(2), this.colors.lavaEdge, 0.9);
+        g.strokeRect(l.x + 1, l.y + 1, l.width - 2, l.height - 2);
       }
     }
     // Door gaps are floor once open (closed doors are drawn over them).

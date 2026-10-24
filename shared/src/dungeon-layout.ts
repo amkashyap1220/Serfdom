@@ -67,6 +67,17 @@ export interface RuneSpot {
   column: number;
 }
 
+/**
+ * Lava channels (D-128): a player whose hurtbox touches one burns for
+ * `damage` every `tickSeconds`; enemies treat lava as wall and walk round.
+ */
+export const LAVA = { tickSeconds: 0.5, damage: 4 } as const;
+
+/** Every lava channel in the dungeon (D-128). */
+export function lavaPools(layout: DungeonLayout): Rect[] {
+  return layout.rooms.flatMap((r) => [...(r.lava ?? [])]);
+}
+
 /** Every sludge pool in the dungeon (players' movement checks these). */
 export function sludgePools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.sludge ?? [])]);
@@ -112,6 +123,8 @@ export interface RoomDef {
   obstacles?: readonly Rect[];
   /** Sludge pools (D-113): players standing in one move at SLUDGE.speedFactor. */
   sludge?: readonly Rect[];
+  /** Lava channels (D-128): burn players, block enemies. */
+  lava?: readonly Rect[];
   /**
    * An arrow trap (D-113): slits just inside one wall, all firing across the
    * room in `direction` but for a gap, every ARROWS.everySeconds while it
@@ -267,6 +280,10 @@ export function validateLayout(layout: DungeonLayout): string[] {
           problems.push(
             `${room.id} wave ${i}: ${s.kind} at ${s.at.x},${s.at.y} overlaps a wall`,
           );
+        } else if ((room.lava ?? []).some((l) => overlaps(l, box))) {
+          problems.push(
+            `${room.id} wave ${i}: ${s.kind} at ${s.at.x},${s.at.y} starts in lava`,
+          );
         }
       }
     });
@@ -316,6 +333,20 @@ export function validateLayout(layout: DungeonLayout): string[] {
       r.y + r.height <= b.y + b.height;
     for (const pool of room.sludge ?? []) {
       if (!within(pool)) problems.push(`${room.id}: sludge outside the room`);
+    }
+    // Lava keeps clear of the walls (so doorways stay open), like obstacles.
+    for (const l of room.lava ?? []) {
+      const m = OBSTACLE_MARGIN;
+      if (
+        l.x < b.x + m ||
+        l.y < b.y + m ||
+        l.x + l.width > b.x + b.width - m ||
+        l.y + l.height > b.y + b.height - m
+      ) {
+        problems.push(
+          `${room.id}: lava at ${l.x},${l.y} is too close to a wall`,
+        );
+      }
     }
     if (room.arrows) {
       const { slits, direction } = room.arrows;

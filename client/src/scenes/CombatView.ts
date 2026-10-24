@@ -45,6 +45,8 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   knight: 0x5b6477,
   lich: 0x5b2a86,
   crystal: 0x7fe3ff,
+  imp: 0xd9541e,
+  caster: 0xf2a33a,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */

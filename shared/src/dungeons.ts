@@ -1,4 +1,5 @@
 import type { DungeonLayout } from "./dungeon-layout.ts";
+import { buildForge } from "./ember-forge.ts";
 import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
@@ -79,6 +80,15 @@ export const DUNGEONS = [
     listed: true,
     layout: buildCrypt(0),
     generate: buildCrypt,
+  },
+  {
+    // D-128: the fourth dungeon; opens on the same rule (D-107).
+    id: "ember-forge",
+    name: "Ember Forge",
+    blurb: "Levels 15–18 · 7–8 min · opens after the Warrens",
+    listed: true,
+    layout: buildForge(0),
+    generate: buildForge,
   },
   {
     id: "training",

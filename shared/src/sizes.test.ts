@@ -27,6 +27,8 @@ describe("32×32 serfs and enemies (D-127)", () => {
       archer: 32,
       ghost: 32,
       necromancer: 32,
+      imp: 32,
+      caster: 32,
       brute: 40,
       knight: 44,
       crystal: 40,

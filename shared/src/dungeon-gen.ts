@@ -45,6 +45,8 @@ export interface RoomPiece {
   obstacles?: readonly Rect[];
   /** Sludge pools, relative like the spawns (D-113). */
   sludge?: readonly Rect[];
+  /** Lava channels, relative like the spawns (D-128). */
+  lava?: readonly Rect[];
   /** An arrow trap's slits and firing direction, relative (D-113); `fire`: spirit braziers (D-123). */
   arrows?: { slits: readonly Vec2[]; direction: Vec2; fire?: boolean };
   /** Cursed runes on the floor, relative, each in a column (D-123). */
@@ -85,6 +87,7 @@ function orient(
   holes: Vec2[];
   obstacles: Rect[];
   sludge: Rect[];
+  lava: Rect[];
   arrows: { slits: Vec2[]; direction: Vec2; fire?: boolean } | null;
   runes: RuneSpot[];
 } {
@@ -105,6 +108,7 @@ function orient(
     holes: (piece.holes ?? []).map((h) => map[entry](h)),
     obstacles: (piece.obstacles ?? []).map(turnRect),
     sludge: (piece.sludge ?? []).map(turnRect),
+    lava: (piece.lava ?? []).map(turnRect),
     arrows: piece.arrows
       ? {
           slits: piece.arrows.slits.map((p) => map[entry](p)),
@@ -293,6 +297,9 @@ export class RoomAssembly {
           ...(o.sludge.length > 0
             ? { sludge: o.sludge.map((r) => ({ ...r, ...shift(r) })) }
             : {}),
+          ...(o.lava.length > 0
+            ? { lava: o.lava.map((r) => ({ ...r, ...shift(r) })) }
+            : {}),
           ...(o.arrows
             ? {
                 arrows: {
@@ -355,6 +362,7 @@ export class RoomAssembly {
       ),
       ...(room.obstacles ? { obstacles: room.obstacles.map(moveRect) } : {}),
       ...(room.sludge ? { sludge: room.sludge.map(moveRect) } : {}),
+      ...(room.lava ? { lava: room.lava.map(moveRect) } : {}),
       ...(room.arrows
         ? { arrows: { ...room.arrows, slits: room.arrows.slits.map(move) } }
         : {}),

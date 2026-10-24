@@ -18,8 +18,11 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   knight: "a Grave Knight",
   lich: "the Lich",
   crystal: "a soul crystal",
+  imp: "a Forge Imp",
+  caster: "an Ember Caster",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
   braziers: "a spirit brazier",
   runes: "a cursed rune",
+  lava: "lava",
 };

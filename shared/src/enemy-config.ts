@@ -22,6 +22,8 @@ export const ENEMY_KINDS = [
   "knight",
   "lich",
   "crystal",
+  "imp",
+  "caster",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -290,6 +292,20 @@ export const SKULKER = {
   contactCooldownSeconds: 1.2,
 } as const;
 
+/**
+ * Forge imp (D-128, the Ember Forge): the skulker's flanking on the
+ * forge's scale: fast, runs to where you are heading, lunges.
+ */
+export const IMP = {
+  maxHp: 300,
+  size: 32,
+  speed: 100,
+  leadSeconds: 0.8,
+  lungeRange: 60,
+  contactDamage: 10,
+  contactCooldownSeconds: 1.2,
+} as const;
+
 /** Lobs bombs that leave burning floor (D-115). */
 export const BOMBER = {
   maxHp: 140,
@@ -306,6 +322,25 @@ export const BOMBER = {
   radius: 40,
   damage: 4,
   fire: { seconds: 3, tickSeconds: 0.5, damage: 2 },
+} as const;
+
+/**
+ * Ember caster (D-128): the bomber's lob on the forge's scale: a fireball
+ * that lands where you will be, then burning floor.
+ */
+export const CASTER = {
+  maxHp: 280,
+  size: 32,
+  speed: 50,
+  minRange: 180,
+  maxRange: 300,
+  throwRange: 380,
+  throwIntervalSeconds: 3.6,
+  leadSeconds: 0.5,
+  flightSeconds: 0.9,
+  radius: 40,
+  damage: 10,
+  fire: { seconds: 3, tickSeconds: 0.5, damage: 3 },
 } as const;
 
 /** Never attacks; strengthens goblins near it (D-108, D-115). */
@@ -396,6 +431,8 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   knight: KNIGHT,
   lich: LICH,
   crystal: CRYSTAL,
+  imp: IMP,
+  caster: CASTER,
 };
 
 /**
@@ -424,6 +461,8 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   /** Before its spiral starts. */
   lich: 1.5,
   crystal: 0,
+  imp: IMP.contactCooldownSeconds / 2,
+  caster: CASTER.throwIntervalSeconds / 2,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

@@ -1,5 +1,7 @@
 import {
   buildCrypt,
+  buildForge,
+  lavaPools,
   buildStronghold,
   buildWarrens,
   damageEnemy,
@@ -388,6 +390,36 @@ describe("the Lich in a run (D-125)", () => {
     expect(
       parsed.message.enemies.filter((e) => e.kind === "crystal"),
     ).toHaveLength(3);
+  });
+});
+
+describe("the Ember Forge in a run (D-128)", () => {
+  it("loads the dungeon's lava, and a player standing in it burns", () => {
+    const seed = Array.from({ length: 50 }, (_, i) => i + 1).find(
+      (n) => lavaPools(buildForge(n)).length > 0,
+    )!;
+    const r = new DungeonInstance(1, "ember-forge", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed,
+    });
+    const lava = lavaPools(buildForge(seed));
+    expect(r.state.lava).toEqual(lava);
+    const strip = lava[0]!;
+    r.setStateForTest({
+      ...r.state,
+      players: r.state.players.map((p) => ({
+        ...p,
+        hp: 1000,
+        maxHp: 1000,
+        position: {
+          x: strip.x + strip.width / 2,
+          y: strip.y + strip.height / 2,
+        },
+      })),
+    });
+    for (let t = 0; t < 70; t++) r.tick();
+    expect(r.state.players[0]!.hp).toBeLessThan(1000);
   });
 });
 

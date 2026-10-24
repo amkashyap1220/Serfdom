@@ -518,8 +518,12 @@ describe("menu, queue, and run messages (v4)", () => {
     expect(
       server({ ...ended, result: "died", stats, killedBy: "rockfall" }).ok,
     ).toBe(true);
+    // v32: lava is a room hazard too (D-128); a made-up one is not.
     expect(
       server({ ...ended, result: "died", stats, killedBy: "lava" }).ok,
+    ).toBe(true);
+    expect(
+      server({ ...ended, result: "died", stats, killedBy: "quicksand" }).ok,
     ).toBe(false);
     // v21: the layout seed, an unsigned 32-bit whole number (D-104).
     expect(server({ ...started, seed: 4294967295 }).ok).toBe(true);

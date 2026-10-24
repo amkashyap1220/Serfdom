@@ -9,6 +9,7 @@ import {
   runeBursts,
   runeWarnings,
   sludgePools,
+  lavaPools,
   trapWarnings,
   isDazed,
   rockfallDrops,
@@ -147,6 +148,7 @@ export class DungeonInstance {
     this.sim = {
       ...createSimState([], { respawnSeconds: null }),
       sludge: sludgePools(this.layout),
+      lava: lavaPools(this.layout),
     };
     this.rooms = newRunProgress(this.layout);
     for (const playerId of playerIds) {
@@ -374,7 +376,8 @@ export class DungeonInstance {
   private navigatorFor(walls: readonly Rect[]): SizedNavigator {
     const key = this.closedDoors.join(",");
     if (!this.navigator || this.navigatorKey !== key) {
-      this.navigator = new SizedNavigator(walls);
+      // Enemies path round lava (D-128).
+      this.navigator = new SizedNavigator([...walls, ...(this.sim.lava ?? [])]);
       this.navigatorKey = key;
     }
     return this.navigator;

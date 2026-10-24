@@ -1,7 +1,7 @@
 import { SHAMAN, SKELETON } from "./enemy-config.ts";
 import type { Waypoints } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
-import { ARROWS, BRAZIERS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
+import { ARROWS, BRAZIERS, LAVA, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
 import { circleHitsPlayer, enemyAct, shieldBlocks } from "./enemy-ai.ts";
@@ -149,6 +149,10 @@ export interface SimState {
   sludge: readonly Rect[];
   /** Burning floor left by bombs (D-115). */
   fires: readonly Fire[];
+  /** Lava channels (D-128): they burn players and block enemies. */
+  lava?: readonly Rect[];
+  /** Seconds until lava next burns (every LAVA.tickSeconds). */
+  lavaIn?: number;
 }
 
 /** A warning circle that damages living players inside it when it lands. */
@@ -890,6 +894,9 @@ export function stepWorld(
   const summons: EnemySpawn[] = [];
   const newHazards: Hazard[] = [];
   const allies = state.enemies.filter(isAlive);
+  // Enemies walk round lava as if it were wall (D-128).
+  const enemyWalls =
+    state.lava && state.lava.length > 0 ? [...walls, ...state.lava] : walls;
   const chants: { at: Vec2; radius: number }[] = [];
   /** Bone piles necromancers raise this tick (D-122). */
   const raises: number[] = [];
@@ -910,7 +917,7 @@ export function stepWorld(
     const action = enemyAct(
       enemy,
       alivePlayers().filter((p) => !isVanished(p)),
-      walls,
+      enemyWalls,
       dtSeconds,
       context,
     );
@@ -1032,6 +1039,37 @@ export function stepWorld(
     const added = spawnEnemies({ ...state, enemies, nextEnemyId }, summons);
     enemies = [...added.enemies];
     nextEnemyId = added.nextEnemyId;
+  }
+
+  // 2a. Lava burns every player whose hurtbox touches it (D-128).
+  let lavaIn = state.lavaIn ?? LAVA.tickSeconds;
+  if (state.lava && state.lava.length > 0) {
+    lavaIn -= dtSeconds;
+    if (lavaIn <= 1e-9) {
+      lavaIn += LAVA.tickSeconds;
+      players = players.map((pl) => {
+        const box = boxAround(pl.position, PLAYER_HEALTH.hurtboxSize);
+        if (
+          !isPlayerAlive(pl) ||
+          !state.lava!.some((l) => overlapsBox(l, box))
+        ) {
+          return pl;
+        }
+        const before = events.length;
+        const hit = damagePlayer(pl, -1, LAVA.damage, pl.position, events);
+        const reported = events[before];
+        if (reported?.type === "playerHit") {
+          events[before] = {
+            type: "hazardHit",
+            playerId: pl.id,
+            hazard: "lava",
+            damage: reported.damage,
+            position: reported.position,
+          };
+        }
+        return hit;
+      });
+    }
   }
 
   // 2b. Hazards: existing ones count down and land; new ones wait a full delay.
@@ -1268,6 +1306,7 @@ export function stepWorld(
       projectiles: surviving,
       nextProjectileId: nextId,
       nextEnemyId,
+      lavaIn,
       hazards,
       fires: burning,
       blasts: [],
@@ -1327,6 +1366,7 @@ export const HAZARD_KINDS = [
   "arrows",
   "braziers",
   "runes",
+  "lava",
 ] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
@@ -1494,5 +1534,15 @@ function targetsFor(
 function insideRect(r: Rect, p: Vec2): boolean {
   return (
     p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
+  );
+}
+
+/** Whether two rectangles overlap (edges touching do not count). */
+function overlapsBox(a: Rect, b: Rect): boolean {
+  return (
+    a.x < b.x + b.width &&
+    b.x < a.x + a.width &&
+    a.y < b.y + b.height &&
+    b.y < a.y + a.height
   );
 }

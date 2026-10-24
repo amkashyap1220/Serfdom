@@ -595,3 +595,12 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 
 - The user closed Phase 12 after the acceptance review (all four criteria passed; the two-window party clear stays covered by the automated two-client tests).
 - Next step: Phase 13, starting with the tier-4 dungeon (about levels 15–18): theme first, then a draft for approval.
+
+### Phase 13a — The Ember Forge — 2026-10-24
+
+- Asked the theme first (D-126 left it open): the user chose a burning forge. Drafted from the real formulas (975 EXP from 15 to 18; a level-15 serf with T4 deals about 1.29× a level-12 serf with T3) and approved as is (D-128), with four build slices and the first reusable building blocks.
+- 13a: `ember-forge.ts` (11 rooms with spawns placed by `fill`, the Lich standing in), registered with EXP, loot, potions; imps and casters reuse the skulker and bomber behaviours through specs; lava channels (room geometry like sludge, a burn on the world step, wall for enemies, path grid built round it, validation); protocol v32; the forge palette and lava drawing.
+- Slip on my side: one edit script stopped at an anchor Prettier had re-wrapped; I checked which files it had already written and reran only the rest.
+- Tests: listed with the entry rule; EXP 240 to 18 then less; loot only T4–T6; potions 40%; 11 rooms of imps and casters at their band HPs; every main path 54,060 (inside 49,000–59,000, and 57,060 with the Forgemaster, inside 52,000–62,000); 1,000 seeds follow the rules (no spawn in lava or an obstacle); no wall gaps; seeds rebuild; an imp hits 10 per 1.2 s and gets ahead of a runner where a grunt trails; a caster's lob (10, then 3 every 0.5 s for 3 s); lava burns a player whose hurtbox reaches its edge twice in a second and nobody clear of it; an imp chasing across a strip never enters it; a forge run loads its lava and a player standing in it burns. Measured: imps from both corners of every room on six seeds all reach the boss room, none ever in lava. `npm run check`: 466 shared, 197 server, 59 client, build.
+- Live (harness, **test** DB, forge seed 2 after a Warrens clear): the Ember Forge card; the Foundry's two lava strips with imps and casters; the Slag pit's imps flowing round its lava cross and a caster's fire under the player. No console errors. Not play-tested: clear time; imps' red-orange is close to the lava's orange.
+- Next step: user runs the 13a checklist; then 13b.

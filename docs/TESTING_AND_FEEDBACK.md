@@ -214,6 +214,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+#### Ember Forge checklist (Phase 13a, D-128)
+
+Restart `npm run dev` (protocol v32) and reload. Any serf that has completed the Warrens can enter (it is aimed at levels 15–18).
+
+1. The Dungeons tab lists **Ember Forge**, "Levels 15–18 · 7–8 min · opens after the Warrens"; a serf that has not completed the Warrens sees it locked.
+2. The forge looks different: dark iron floor, red-brown brick walls; the first room is the Forge gate.
+3. **Forge imps** (red-orange) run to where you are heading and hit for 10 before Defense; they are faster than skulkers.
+4. **Ember casters** (amber) hang back and lob fireballs (10) that leave burning floor for 3 s.
+5. **Lava channels** (Smelter, Quench room, Slag pit, Crucible hall, Foundry): glowing orange strips. Touching one burns you for 4 every 0.5 s ("Slain by lava"); imps and casters walk round them and never stand in them.
+6. The last room is the Forge heart with the Lich standing in; its death opens the portal. Rewards: T4–T6 items, and sometimes a potion.
+7. Time a full clear and tell me your level (expected about 7.5 min at level 15, a little less until the Forgemaster).
+
+Report: pass/fail per step, clear time and level, and whether imps are easy to tell apart from lava.
+
 #### 32×32 and the zoomed-out view checklist (D-127)
 
 Restart `npm run dev` (no protocol change) and reload.
