@@ -113,7 +113,7 @@ describe("the Forgotten Crypt (D-120)", () => {
     ).toEqual([front, front]);
   });
 
-  it("every possible main path lands inside the band (37,000–45,000 while the Warchief stands in)", () => {
+  it("every possible main path lands inside 40,000–48,000 with the Lich (D-120, D-125)", () => {
     const band = (b: string) =>
       CRYPT_PIECES.filter((p) => p.band === b).map((p) => pieceHp(p.piece));
     const choose = (xs: number[], k: number): number[][] =>
@@ -134,9 +134,6 @@ describe("the Forgotten Crypt (D-120)", () => {
             boss;
           expect(total).toBeGreaterThanOrEqual(CRYPT_RECIPE.requiredHp.min);
           expect(total).toBeLessThanOrEqual(CRYPT_RECIPE.requiredHp.max);
-          // With the Lich (11,000) instead, it fits D-120's 40,000–48,000.
-          expect(total + 3_000).toBeGreaterThanOrEqual(40_000);
-          expect(total + 3_000).toBeLessThanOrEqual(48_000);
           paths++;
         }
     expect(paths).toBe(3 * 4 * 4);
@@ -157,7 +154,7 @@ describe("the Forgotten Crypt (D-120)", () => {
         .at(-1)
         ?.waves.flat()
         .map((s) => s.kind),
-    ).toEqual(["warchief"]);
+    ).toEqual(["lich"]);
   });
 
   it("a seed always rebuilds the same map; seed 0 is seed 1's; no gaps in the walls", () => {

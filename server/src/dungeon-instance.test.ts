@@ -343,6 +343,53 @@ describe("the crypt's runes and braziers in a run (D-123)", () => {
   });
 });
 
+describe("the Lich in a run (D-125)", () => {
+  it("a warded Lich is sent as not hittable, and its runes as rune hazards", () => {
+    const r = new DungeonInstance(1, "forgotten-crypt", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed: 4,
+    });
+    const at = r.state.players[0]!.position;
+    const added = spawnEnemies(r.state, [
+      { kind: "lich", at: { x: at.x + 250, y: at.y }, roomId: null },
+    ]);
+    r.setStateForTest({
+      ...added,
+      players: added.players.map((p) => ({ ...p, hp: 1e6, maxHp: 1e6 })),
+      enemies: added.enemies.map((e) =>
+        e.ai.kind === "lich"
+          ? { ...e, hp: e.maxHp * 0.5, ai: { ...e.ai, wards: 2, runes: 0 } }
+          : e,
+      ),
+    });
+    r.tick();
+    let parsed = parseServerMessage(encodeMessage(r.snapshot(1)));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.message.type !== "snapshot") return;
+    expect(parsed.message.hazards.filter((h) => h.kind === "rune").length).toBe(
+      5,
+    );
+    // Ward it: crossing the first line with no ward used yet.
+    r.setStateForTest({
+      ...r.state,
+      enemies: r.state.enemies.map((e) =>
+        e.ai.kind === "lich" ? { ...e, ai: { ...e.ai, wards: 0 } } : e,
+      ),
+    });
+    r.tick();
+    r.tick();
+    parsed = parseServerMessage(encodeMessage(r.snapshot(2)));
+    if (!parsed.ok || parsed.message.type !== "snapshot")
+      throw new Error("no snapshot");
+    const lich = parsed.message.enemies.find((e) => e.kind === "lich");
+    expect(lich?.faded).toBe(true);
+    expect(
+      parsed.message.enemies.filter((e) => e.kind === "crystal"),
+    ).toHaveLength(3);
+  });
+});
+
 describe("DungeonInstance layouts (D-104)", () => {
   it("builds the generated Warrens for its seed; seed 0 is the handcrafted one", () => {
     const seeded = new DungeonInstance(1, "goblin-warrens", [1], {

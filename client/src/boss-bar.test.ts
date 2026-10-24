@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WARCHIEF, WARLORD } from "@serfdom/shared";
+import { LICH, WARCHIEF, WARLORD } from "@serfdom/shared";
 import { bossBar } from "./boss-bar";
 
 describe("boss bar (D-117)", () => {
@@ -38,5 +38,26 @@ describe("boss bar (D-117)", () => {
       angry: true,
       suffix: "  — ENRAGED",
     });
+  });
+
+  it("the Lich shows its two ward lines and says when it is warded, stunned, or enraged (D-125)", () => {
+    const max = LICH.maxHp;
+    expect(bossBar("lich", max, max)).toEqual({
+      name: "The Lich",
+      notches: [0.6, 0.3],
+      angry: false,
+      suffix: "",
+    });
+    expect(bossBar("lich", max * 0.5, max, { faded: true })).toMatchObject({
+      angry: true,
+      suffix: "  — WARDED",
+    });
+    expect(bossBar("lich", max * 0.5, max, { dazed: true })).toMatchObject({
+      suffix: "  — STUNNED",
+    });
+    expect(bossBar("lich", max * 0.2, max)).toMatchObject({
+      suffix: "  — ENRAGED",
+    });
+    expect(bossBar("crystal", 600, 600)).toBeUndefined();
   });
 });

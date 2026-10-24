@@ -455,7 +455,11 @@ export class DungeonInstance {
           y: roundCoord(h.position.y),
           radius: h.radius,
           landsIn: h.landsIn,
-          kind: h.fire ? ("bomb" as const) : ("boulder" as const),
+          kind: h.rune
+            ? ("rune" as const)
+            : h.fire
+              ? ("bomb" as const)
+              : ("boulder" as const),
         })),
       fires: this.sim.fires.map((f) => ({
         x: roundCoord(f.position.x),

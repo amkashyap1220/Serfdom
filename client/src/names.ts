@@ -16,6 +16,8 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   ghost: "a Ghost",
   necromancer: "a Necromancer",
   knight: "a Grave Knight",
+  lich: "the Lich",
+  crystal: "a soul crystal",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
   braziers: "a spirit brazier",

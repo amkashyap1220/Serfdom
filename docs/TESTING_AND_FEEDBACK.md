@@ -214,6 +214,19 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+#### The Lich checklist (Phase 12l, D-125)
+
+Restart `npm run dev` (protocol v31) and reload. Play the Forgotten Crypt to its last room, the Sanctum.
+
+1. **Sanctum:** an open room, 4 dark sarcophagi in the walls, a large violet Lich in the middle. The bar reads "The Lich" with two notches (60% and 30%).
+2. **Phase 1:** a two-armed spiral of bullets turns out of it (8 each); every 12 s two skeletons climb out of the sarcophagi (never more than 4).
+3. **Below 60%:** the bar says WARDED, the Lich turns see-through, and violet lines join it to 3 light-blue soul crystals. Your shots pass through it; it fires rings of 16. Break all 3 crystals: the bar says STUNNED for 4 s and it takes hits without attacking.
+4. **Below 30%:** the same again; after that stun the bar says ENRAGED, the spiral is faster, and red circles fill in under you and around it every 1.5 s (12 if you stay in one).
+5. When it dies the portal opens where it floated. Deaths name it ("Slain by the Lich").
+6. Time a full clear and tell me your level (expected about 7–8 min at level 12).
+
+Report: pass/fail per step, clear time and level, and whether each phase is readable and fair.
+
 #### Runes and braziers checklist (Phase 12k, D-123)
 
 Restart `npm run dev` (protocol v30) and reload. Forgotten Crypt.

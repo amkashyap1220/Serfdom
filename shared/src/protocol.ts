@@ -68,6 +68,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v31 (12l): the Lich and its soul crystals (D-125): hazards may be a rune
+ *          (drawn filling in red); `faded` also means the Lich is warded.
  * v30 (12k): cursed runes and spirit braziers (D-123): snapshots list rune
  *          columns about to burst; trap projectiles say whether they are
  *          fireballs; blasts may be a rune's burst; killedBy may be
@@ -116,7 +118,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 30;
+export const PROTOCOL_VERSION = 31;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -265,7 +267,7 @@ export interface SnapshotEnemy {
   chanted: boolean;
   /** A skeleton lying as a bone pile (D-120): one hit shatters it. */
   pile: boolean;
-  /** A ghost faded out (D-122): shots pass through it. */
+  /** Cannot be hit: a ghost faded out (D-122), or the Lich warded (D-125). */
   faded: boolean;
   /** Where a grave knight's shield faces, in radians; null for every other enemy. */
   facing: number | null;
@@ -342,7 +344,7 @@ export interface SnapshotHazard {
   radius: number;
   landsIn: number;
   /** A falling boulder, or a goblin's bomb (D-115). */
-  kind: "boulder" | "bomb";
+  kind: "boulder" | "bomb" | "rune";
 }
 
 export interface SnapshotProjectile {
@@ -1507,7 +1509,8 @@ function parseSnapshotHazard(v: unknown): SnapshotHazard | null {
   }
   if (!isFiniteNumber(v.x) || !isFiniteNumber(v.y)) return null;
   if (!isNonNegative(v.radius) || !isNonNegative(v.landsIn)) return null;
-  if (v.kind !== "boulder" && v.kind !== "bomb") return null;
+  if (v.kind !== "boulder" && v.kind !== "bomb" && v.kind !== "rune")
+    return null;
   return { x: v.x, y: v.y, radius: v.radius, landsIn: v.landsIn, kind: v.kind };
 }
 

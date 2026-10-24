@@ -5,6 +5,7 @@ import {
   rotateVec,
   type EnemyKind,
   KNIGHT,
+  LICH,
 } from "@serfdom/shared";
 import type { CombatViewModel } from "../combat-view-model";
 
@@ -41,6 +42,8 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   ghost: 0xa8d8ff,
   necromancer: 0x6a3d9a,
   knight: 0x5b6477,
+  lich: 0x5b2a86,
+  crystal: 0x7fe3ff,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -235,6 +238,15 @@ export class CombatView {
     const rocks = this.boulders.clear();
     this.layer.bringToTop(this.boulders);
     for (const hz of view.hazards) {
+      // The Lich's runes (D-125): a red circle filling in as it comes.
+      if (hz.kind === "rune") {
+        const fill = 1 - Math.min(1, hz.landsIn / LICH.runes.warnSeconds);
+        h.lineStyle(2, COLORS.rune, 0.6 + 0.4 * fill);
+        h.strokeCircle(hz.x, hz.y, hz.radius);
+        h.fillStyle(COLORS.hazard, 0.15 + 0.35 * fill);
+        h.fillCircle(hz.x, hz.y, hz.radius * fill);
+        continue;
+      }
       const fall = 1 - Math.min(1, hz.landsIn / BOULDER_FALL_SECONDS);
       h.fillStyle(COLORS.shadow, 0.2 + 0.4 * fall);
       h.fillEllipse(
@@ -373,6 +385,15 @@ export class CombatView {
           bl.lineStyle(buff === "guard" ? 3 : 2, color, 0.9);
           bl.strokeCircle(a.x, a.y, 12 + 4 * i);
         });
+    }
+    // The Lich warded (D-125): a violet line to each of its soul crystals.
+    const lich = view.enemies.find((e) => e.kind === "lich" && e.hp > 0);
+    if (lich?.faded) {
+      bl.lineStyle(2, COLORS.raise, 0.5 + 0.3 * Math.sin(nowMs / 150));
+      for (const c of view.enemies) {
+        if (c.kind === "crystal" && c.hp > 0)
+          bl.lineBetween(lich.x, lich.y, c.x, c.y);
+      }
     }
     // Grave knights' shields (D-122): a bright arc on the front side.
     for (const e of view.enemies) {

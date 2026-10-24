@@ -4,38 +4,38 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 
 ## Where things stand
 
-**Current phase: 12, next slice 12l (the Lich).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
+**Current phase: 12, all slices built (12a–12l); next the Phase 12 acceptance review.** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
 
-| Phase | Name                                               | Status                                   |
-| ----- | -------------------------------------------------- | ---------------------------------------- |
-| 0     | Repository orientation and development environment | Complete                                 |
-| 1     | Playable local client skeleton                     | Complete                                 |
-| 2     | Movement, collision, and camera following          | Complete                                 |
-| 3     | Combat prototype                                   | Complete                                 |
-| 4     | Authoritative multiplayer foundation               | Complete                                 |
-| 5     | Shared combat and enemies                          | Complete                                 |
-| 6     | Dungeon vertical slice                             | Complete                                 |
-| 7     | Account and persistent data                        | Complete                                 |
-| 8     | Progression and permadeath                         | Complete                                 |
-| 9     | Equipment and rewards                              | Complete                                 |
-| 10    | Classes and class abilities                        | Complete                                 |
-| 11    | Dungeon variety and procedural assembly            | Complete                                 |
-| 12    | Dungeon tiers and the endgame loop                 | **In progress:** 12a–12k built; next 12l |
-| 13    | Ten dungeons: tiers 4 and 5 and more               | Not started                              |
-| 14    | Partying up                                        | Not started                              |
-| 15    | Home screen, HUD, minimap, and leaderboards        | Not started                              |
-| 16    | Rare loot                                          | Not started                              |
-| 17    | Economy and account systems                        | Not started                              |
-| 18    | Onboarding and settings                            | Not started                              |
-| 19    | Production hosting                                 | Not started                              |
-| 20    | Accounts, sessions, and player safety              | Not started                              |
-| 21    | **Website alpha**                                  | Not started                              |
-| 22    | Alpha content: toward 40 dungeons                  | Not started                              |
-| 23    | Presentation: art and sound                        | Not started                              |
-| 24    | Beta polish                                        | Not started                              |
-| 25    | Desktop wrapper and cross-play proof               | Not started                              |
-| 26    | Steam integration                                  | Not started                              |
-| 27    | Steam launch                                       | Not started                              |
+| Phase | Name                                               | Status                                                 |
+| ----- | -------------------------------------------------- | ------------------------------------------------------ |
+| 0     | Repository orientation and development environment | Complete                                               |
+| 1     | Playable local client skeleton                     | Complete                                               |
+| 2     | Movement, collision, and camera following          | Complete                                               |
+| 3     | Combat prototype                                   | Complete                                               |
+| 4     | Authoritative multiplayer foundation               | Complete                                               |
+| 5     | Shared combat and enemies                          | Complete                                               |
+| 6     | Dungeon vertical slice                             | Complete                                               |
+| 7     | Account and persistent data                        | Complete                                               |
+| 8     | Progression and permadeath                         | Complete                                               |
+| 9     | Equipment and rewards                              | Complete                                               |
+| 10    | Classes and class abilities                        | Complete                                               |
+| 11    | Dungeon variety and procedural assembly            | Complete                                               |
+| 12    | Dungeon tiers and the endgame loop                 | **In progress:** 12a–12l built; acceptance review next |
+| 13    | Ten dungeons: tiers 4 and 5 and more               | Not started                                            |
+| 14    | Partying up                                        | Not started                                            |
+| 15    | Home screen, HUD, minimap, and leaderboards        | Not started                                            |
+| 16    | Rare loot                                          | Not started                                            |
+| 17    | Economy and account systems                        | Not started                                            |
+| 18    | Onboarding and settings                            | Not started                                            |
+| 19    | Production hosting                                 | Not started                                            |
+| 20    | Accounts, sessions, and player safety              | Not started                                            |
+| 21    | **Website alpha**                                  | Not started                                            |
+| 22    | Alpha content: toward 40 dungeons                  | Not started                                            |
+| 23    | Presentation: art and sound                        | Not started                                            |
+| 24    | Beta polish                                        | Not started                                            |
+| 25    | Desktop wrapper and cross-play proof               | Not started                                            |
+| 26    | Steam integration                                  | Not started                                            |
+| 27    | Steam launch                                       | Not started                                            |
 
 When a slice or phase finishes, update this table, the phase's Status line, `docs/WORK_LOG.md`, and the README status in the same commit.
 
@@ -342,7 +342,7 @@ Acceptance:
 
 **Goal:** Make the real grind exist (GDD §3: levels 1–20 are quick; the long game is stat potions and rare drops from high-tier dungeons).
 
-Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, falling boulders, ambush holes, D-109–D-111), 12c (obstacles and cover, D-112), 12d (arrow traps and sludge, D-113), rushing with gated rooms (D-114), 12e (skulkers, bombers with burning floor, shamans, D-115), 12f (fewer goblins per room, D-116), 12g (the Goblin Warchief, D-117), 12h (stat potions and the potion rack, D-118), 12i (the Forgotten Crypt with skeletons, archers, and sarcophagi, D-120), 12j (ghosts, necromancers, grave knights, D-122), and 12k (cursed runes and spirit braziers, D-123) built; next 12l the Lich.
+Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, falling boulders, ambush holes, D-109–D-111), 12c (obstacles and cover, D-112), 12d (arrow traps and sludge, D-113), rushing with gated rooms (D-114), 12e (skulkers, bombers with burning floor, shamans, D-115), 12f (fewer goblins per room, D-116), 12g (the Goblin Warchief, D-117), 12h (stat potions and the potion rack, D-118), 12i (the Forgotten Crypt with skeletons, archers, and sarcophagi, D-120), 12j (ghosts, necromancers, grave knights, D-122), 12k (cursed runes and spirit braziers, D-123), and 12l (the Lich, D-125) built: the Forgotten Crypt is complete. Next: the Phase 12 acceptance review.
 
 Tasks:
 

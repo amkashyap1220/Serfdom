@@ -24,7 +24,7 @@ What exists today:
 - **Progression and gear (Phases 8–9):** EXP and levels 1–20, the lifetime EXP leaderboard, a permanent class at level 5 (10 classes), rolled stats, Luck, reward chests into a shared 20-slot stash, gold from selling, and equipping.
 - **Abilities (Phase 10):** MP and one ability per class on Space, four fire modes on T.
 - **Dungeon variety (Phase 11):** a new procedural Goblin Warrens every run from a seed shown in the HUD; finishing the Warrens opens every other dungeon.
-- **Phase 12 so far (12a–12k):** the Goblin Stronghold (levels 9–12) with room mechanics (falling boulders, ambush holes, cover, arrow traps, sludge), new goblin kinds, and its boss the Goblin Warchief; rooms can be rushed; stat potions and the potion rack; the Forgotten Crypt (levels 12–15) with skeletons, archers, ghosts, necromancers, grave knights, cursed runes, and spirit braziers. Next: 12l the Lich.
+- **Phase 12 (12a–12l):** the Goblin Stronghold (levels 9–12) with room mechanics (falling boulders, ambush holes, cover, arrow traps, sludge), new goblin kinds, and its boss the Goblin Warchief; rooms can be rushed; stat potions and the potion rack; the Forgotten Crypt (levels 12–15) with skeletons, archers, ghosts, necromancers, grave knights, cursed runes, and spirit braziers, and its boss the Lich. Next: the Phase 12 acceptance review.
 
 ## Development setup
 

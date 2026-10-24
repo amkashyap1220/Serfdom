@@ -14,7 +14,6 @@ import {
   type Waves,
 } from "./dungeon-recipe.ts";
 import type { EnemyKind } from "./enemy-config.ts";
-import { WAR_HALL } from "./goblin-stronghold.ts";
 import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
 
 /*
@@ -23,8 +22,8 @@ import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
  * skeletons that stand up again unless their bone pile is shattered, and
  * skeleton archers. Sarcophagi along some walls open when a wave starts
  * (ambush holes, D-109). 12j adds ghosts, necromancers, and grave knights
- * (D-122); 12k cursed runes and spirit braziers; 12l the Lich. Until then the Goblin
- * Warchief stands in as the boss.
+ * (D-122); 12k cursed runes and spirit braziers (D-123); 12l its boss,
+ * the Lich (D-125).
  */
 
 const at = (kind: EnemyKind, points: [number, number][]): EnemySpawnDef[] =>
@@ -551,13 +550,22 @@ export const CRYPT_PIECES: readonly RecipePiece[] = BASE_PIECES.map(
 );
 
 /**
- * The crypt's boss room. Until the Lich (12l) the Goblin Warchief stands in,
- * in a copy of its War hall (pillars and holes included).
+ * The Sanctum (D-125): the Lich in the middle (where the portal opens), four
+ * sarcophagi its skeletons rise from, and no pillars: dodging its spiral is
+ * the fight.
  */
 export const CRYPT_SANCTUM: RoomPiece = {
-  ...WAR_HALL,
   key: "sanctum",
   name: "Sanctum",
+  width: 640,
+  height: 600,
+  waves: [at("lich", [[320, 300]])],
+  holes: [
+    { x: 200, y: 20 },
+    { x: 440, y: 20 },
+    { x: 200, y: 580 },
+    { x: 440, y: 580 },
+  ],
 };
 
 export const CRYPT_RECIPE: DungeonRecipe = {
@@ -566,9 +574,9 @@ export const CRYPT_RECIPE: DungeonRecipe = {
   boss: CRYPT_SANCTUM,
   pieces: CRYPT_PIECES,
   mainPath: ["light", "medium", "medium", "medium", "heavy", "heavy", "heavy"],
-  // D-120: 40,000–48,000 with the Lich (11,000); 3,000 less while the
-  // Warchief (8,000) stands in. About 7 minutes for a level-12 serf.
-  requiredHp: { min: 37_000, max: 45_000 },
+  // D-120: 40,000–48,000 with the Lich (D-125). About 7 minutes for a
+  // level-12 serf.
+  requiredHp: { min: 40_000, max: 48_000 },
   sideRooms: WARRENS_RULES.sideRooms,
   sideBands: WARRENS_RULES.sideBands,
   turnWeights: WARRENS_RULES.turnWeights,

@@ -550,7 +550,7 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Tests: the sweep order 0,1,2,1,0,1,2; a column glows 1 s then bursts 12 within 32 px of each of its runes, the next 1.2 s later, nothing between steps, nothing while dormant; a burst hits only the player on the rune, as a `runes` hazard hit, flashes, and leaves no hazard; braziers glow 0.8 s, fire evens then odds every 3 s, flagged fire, 10 damage; fireballs fly at 140, size 10, and hit as `braziers`; the six rooms carry exactly the planned runes and braziers; runes clear of the entrance side and every obstacle, in columns from the west; the Charnel pit loses exactly 4 of its 21 skeletons and archers, skeletons first, keeping its knight and necromancers; the Hall of the dead is unthinned; generated crypts carry them turned with their rooms; a run's snapshots send the glowing rune column and fireballs, and rune bursts are not drawn as boulders. `npm run check`: 442 shared, 192 server, 57 client, build.
 - Measured over 500 seeds: no rule problems; main paths 37,980–41,300 HP.
 - Live (harness, **test** DB, crypt seed 2): the Chapel's rune grid with a column filling red; the Catacomb's fireballs crossing the corridor (and its braziers visible through the wall from the Chapel). No console errors. Not play-tested: clear time and readability in a full fight.
-- User ran the 12k checklist: pass (2026-10-24). Next: 12l (the Lich: draft for approval).
+- User ran the 12k checklist: pass (2026-10-24). Committed and pushed 12k (`eaba87a`). Next: 12l (the Lich: draft for approval).
 
 ### Planning docs reconciled — 2026-10-24
 
@@ -558,3 +558,12 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Restructured: a status table at the top of the roadmap; the architecture doc opens with a current code map, with the phase-by-phase notes moved to an appendix; the testing guide keeps the workflow up front and the feature checklists in an appendix. Nothing was deleted.
 - User shaped a 27-phase roadmap (D-124): a website alpha (Phase 21) before Steam; at least 10 dungeons, partying up, the home screen, a minimap, more leaderboards, rare loot, and the player-driven economy before the alpha; growth to 40 dungeons and new item kinds during it; then beta polish and Steam. New open questions 21–26.
 - No code changed. Next: 12l, the Lich.
+
+### Phase 12l — The Lich — 2026-10-24
+
+- Draft (D-120's Lich on D-121's scale, with the details D-120 left open) approved (D-125; numbered after the reconciled roadmap's D-124, which landed on GitHub while 12l was being built).
+- `lichAct` with spiral / warded / stunned and two ward lines; crystals as summons; warded counts as faded for every attack; the stun reuses dazed; final-phase runes as rune-look hazards; the Sanctum; the crypt band back to 40,000–48,000; protocol v31; boss bar labels.
+- Tests: the spiral fires two arms every 0.15 s and turns 270° in 3 s; skeletons from the holes, at most 4; below 60% three crystals at their spots belonging to the Lich, the Lich not hittable or auto-aimed, rings of 16 at 0 s and 2.5 s, a 500-damage shot through it does nothing; breaking the crystals stuns it 4 s (hittable, silent), then the spiral returns with no new crystals; below 30% crystals again, then 5 runes (12, radius 32) at 160, 160, 260, 260 px and under the player, and a volley every 0.1 s; the Sanctum's layout and portal; every main path inside 40,000–48,000; boss bar labels; a run's snapshot sends rune hazards and a warded Lich with its crystals. `npm run check`: 448 shared, 193 server, 58 client, build.
+- Live (harness, **test** DB, crypt seed 2, phases staged with test-only commands): the spiral; WARDED with the tethers, crystals, a ring going out, and a crystal shot down while the Lich took nothing; ENRAGED with the faster spiral and five filling runes. No console errors. Not play-tested: the fight's length and difficulty.
+- User ran the 12l checklist: pass (2026-10-24), and asked for the roadmap updates on GitHub (PR #1, the 27-phase roadmap) to be reviewed. 12l's docs were rewritten into the reconciled structure.
+- Next step: the Phase 12 acceptance review against the roadmap.

@@ -164,6 +164,8 @@ export interface Hazard {
   hazard?: HazardKind;
   /** A bomb (D-115): it leaves burning floor where it lands. */
   fire?: { seconds: number; tickSeconds: number; damage: number };
+  /** Drawn as a rune (the Lich's, D-125). */
+  rune?: boolean;
 }
 
 /** Burning floor (D-115): hurts every player inside, each tick, until it goes out. */
@@ -947,6 +949,7 @@ export function stepWorld(
         ...(h.fire
           ? { fire: { ...h.fire, damage: h.fire.damage * boost } }
           : {}),
+        ...(h.rune ? { rune: true } : {}),
       });
     }
     for (const { direction, spec } of action.bullets) {

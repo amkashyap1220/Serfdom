@@ -20,6 +20,8 @@ export const ENEMY_KINDS = [
   "ghost",
   "necromancer",
   "knight",
+  "lich",
+  "crystal",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -164,6 +166,50 @@ export const KNIGHT = {
     damage: 18,
     cooldownSeconds: 3,
   },
+} as const;
+
+/**
+ * The Lich (D-120, D-125), the crypt's boss: it floats at the centre of the
+ * Sanctum. Phase 1, a two-armed bullet spiral and skeletons from the
+ * sarcophagi; below 60% and again below 30% it is warded (cannot be hit)
+ * while 3 soul crystals stand, firing rings; breaking them stuns it for
+ * 4 s. After the second ward its spiral is faster and runes burst round it.
+ */
+export const LICH = {
+  maxHp: 11000,
+  size: 44,
+  wardBelow: [0.6, 0.3],
+  spiral: {
+    arms: 2,
+    degreesPerSecond: 90,
+    intervalSeconds: 0.15,
+    bullet: { damage: 8, speed: 150, size: 8, range: 520 },
+  },
+  /** After the second ward. */
+  finalSpiral: { degreesPerSecond: 135, intervalSeconds: 0.1 },
+  rise: { intervalSeconds: 12, count: 2, maxAlive: 4, kind: "skeleton" },
+  ward: {
+    crystals: 3,
+    crystalDistance: 200,
+    ringIntervalSeconds: 2.5,
+    ringBullets: 16,
+    bullet: { damage: 8, speed: 120, size: 8, range: 520 },
+  },
+  stunSeconds: 4,
+  runes: {
+    intervalSeconds: 1.5,
+    warnSeconds: 1,
+    radius: 32,
+    damage: 12,
+    /** Besides one under each player: two at each distance, turning 45° each time. */
+    distances: [160, 260],
+  },
+} as const;
+
+/** A soul crystal (D-125): stands still; while any stands, the Lich is warded. */
+export const CRYSTAL = {
+  maxHp: 600,
+  size: 20,
 } as const;
 
 /** Tough charger (6c): walks up, telegraphs, then charges in a straight line. Only the charge hurts. */
@@ -348,6 +394,8 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   ghost: GHOST,
   necromancer: NECROMANCER,
   knight: KNIGHT,
+  lich: LICH,
+  crystal: CRYSTAL,
 };
 
 /**
@@ -373,6 +421,9 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   necromancer: NECROMANCER.throwIntervalSeconds / 2,
   /** Before its first slam. */
   knight: 1,
+  /** Before its spiral starts. */
+  lich: 1.5,
+  crystal: 0,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

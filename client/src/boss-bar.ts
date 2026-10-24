@@ -1,6 +1,6 @@
-import { WARCHIEF, WARLORD, type EnemyKind } from "@serfdom/shared";
+import { LICH, WARCHIEF, WARLORD, type EnemyKind } from "@serfdom/shared";
 
-/** What the boss bar shows for one boss (D-102, D-117). */
+/** What the boss bar shows for one boss (D-102, D-117, D-125). */
 export interface BossBar {
   name: string;
   /** HP fractions where a new phase begins, drawn as notches. */
@@ -16,6 +16,8 @@ export function bossBar(
   kind: EnemyKind,
   hp: number,
   maxHp: number,
+  /** The Lich: warded (`faded`) or stunned (`dazed`), as the snapshot says. */
+  state: { faded?: boolean; dazed?: boolean } = {},
 ): BossBar | undefined {
   const fraction = hp / maxHp;
   if (kind === "warlord") {
@@ -39,6 +41,20 @@ export function bossBar(
       notches: [WARCHIEF.phaseTwoBelow, WARCHIEF.phaseThreeBelow],
       angry: phase > 1,
       suffix: phase === 3 ? "  — ENRAGED" : phase === 2 ? "  — WAR CRY" : "",
+    };
+  }
+  if (kind === "lich") {
+    return {
+      name: "The Lich",
+      notches: LICH.wardBelow,
+      angry: fraction < LICH.wardBelow[0]!,
+      suffix: state.faded
+        ? "  — WARDED"
+        : state.dazed
+          ? "  — STUNNED"
+          : fraction < LICH.wardBelow[1]!
+            ? "  — ENRAGED"
+            : "",
     };
   }
   return undefined;

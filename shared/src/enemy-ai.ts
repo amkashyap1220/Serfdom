@@ -13,6 +13,7 @@ import {
   GHOST,
   NECROMANCER,
   KNIGHT,
+  LICH,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -67,6 +68,8 @@ export interface HazardSpec {
   delaySeconds: number;
   /** A bomb (D-115): where it lands burns for a while. */
   fire?: { seconds: number; tickSeconds: number; damage: number };
+  /** Drawn as a rune filling in red (the Lich's, D-125), not a falling boulder. */
+  rune?: boolean;
 }
 
 /** One enemy's decision for one tick. */
@@ -157,6 +160,10 @@ export function enemyAct(
       return skeletonAct(enemy, target, walls, dtSeconds, result, context);
     case "ghost":
       return ghostAct(enemy, target, dtSeconds, result);
+    case "lich":
+      return lichAct(enemy, targets, target, dtSeconds, result, context);
+    case "crystal":
+      return result(enemy);
     case "necromancer":
       return necromancerAct(enemy, target, walls, dtSeconds, result, context);
     case "knight":
@@ -764,6 +771,154 @@ function warlordAct(
 }
 
 /** True while a brute is telegraphing its charge (drawn as a warning). */
+/** Where the Lich's soul crystals stand (D-125): evenly round it, the first straight up. */
+export function crystalSpots(at: Vec2): Vec2[] {
+  return Array.from({ length: LICH.ward.crystals }, (_, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / LICH.ward.crystals;
+    return {
+      x: at.x + Math.cos(a) * LICH.ward.crystalDistance,
+      y: at.y + Math.sin(a) * LICH.ward.crystalDistance,
+    };
+  });
+}
+
+/**
+ * The Lich (D-125). It never moves. Spiral mode fires its spiral and calls
+ * skeletons from the room's holes; crossing 60% (then 30%) of its HP it is
+ * warded while its 3 crystals stand, firing rings; once they are broken it
+ * is stunned, then back to the spiral (faster, with runes, after the
+ * second ward).
+ */
+function lichAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "lich") return result(enemy);
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  let next = { ...ai, timer: ai.timer + dt };
+  const mine = (kind: string) =>
+    (context.allies?.() ?? []).filter(
+      (e) => e.summonerId === enemy.id && e.kind === kind && isAlive(e),
+    ).length;
+  const share = enemy.hp / enemy.maxHp;
+
+  if (next.mode === "warded") {
+    // Its crystals appear on the step after it calls them: wait a moment.
+    if (next.timer > 0.2 && mine("crystal") === 0) {
+      next = { ...next, mode: "stunned", timer: 0 };
+    } else {
+      next.ring = Math.max(0, next.ring - dt);
+      if (target && next.ring <= 1e-9) {
+        next.ring = LICH.ward.ringIntervalSeconds;
+        const offset =
+          next.ringTurn % 2 === 1 ? Math.PI / LICH.ward.ringBullets : 0;
+        next.ringTurn += 1;
+        for (const d of ringDirections(LICH.ward.ringBullets)) {
+          action.bullets.push({
+            direction: rotateVec(d, offset),
+            spec: LICH.ward.bullet,
+          });
+        }
+      }
+    }
+    return result({ ...enemy, ai: next }, action);
+  }
+  if (next.mode === "stunned") {
+    if (next.timer >= LICH.stunSeconds - 1e-9) {
+      next = { ...next, mode: "spiral", timer: 0, shot: 0 };
+    }
+    return result({ ...enemy, ai: next }, action);
+  }
+
+  // Crossing a ward line: crystals up, no more spiral until they break.
+  const due = LICH.wardBelow[next.wards];
+  if (due !== undefined && share < due) {
+    for (const at of crystalSpots(enemy.position)) {
+      action.summons.push({ kind: "crystal", at });
+    }
+    next = {
+      ...next,
+      mode: "warded",
+      timer: 0,
+      wards: next.wards + 1,
+      ring: 0,
+    };
+    return result({ ...enemy, ai: next }, action);
+  }
+  if (!target) return result({ ...enemy, ai: next }, action);
+
+  const final = next.wards >= LICH.wardBelow.length;
+  const spiral = final ? LICH.finalSpiral : LICH.spiral;
+  next.spin += ((spiral.degreesPerSecond * Math.PI) / 180) * dt;
+  next.shot = Math.max(0, next.shot - dt);
+  if (next.shot <= 1e-9) {
+    next.shot = spiral.intervalSeconds;
+    for (let arm = 0; arm < LICH.spiral.arms; arm++) {
+      const a = next.spin + (arm * 2 * Math.PI) / LICH.spiral.arms;
+      action.bullets.push({
+        direction: { x: Math.cos(a), y: Math.sin(a) },
+        spec: LICH.spiral.bullet,
+      });
+    }
+  }
+  // Skeletons out of the sarcophagi, two at a time, at most four alive.
+  next.rise = Math.max(0, next.rise - dt);
+  if (next.rise <= 1e-9) {
+    next.rise = LICH.rise.intervalSeconds;
+    const holes = enemy.roomId ? (context.holesOf?.(enemy.roomId) ?? []) : [];
+    const room = LICH.rise.maxAlive - mine(LICH.rise.kind);
+    const n = Math.min(LICH.rise.count, Math.max(0, room));
+    for (let i = 0; i < n; i++) {
+      const hole = holes[(next.ringTurn + i) % Math.max(1, holes.length)];
+      action.summons.push({
+        kind: LICH.rise.kind,
+        at: hole
+          ? { ...hole }
+          : { x: enemy.position.x + (i % 2 ? 80 : -80), y: enemy.position.y },
+      });
+    }
+    next.ringTurn += n;
+  }
+  // Final phase: runes under every player and round the Lich.
+  if (final) {
+    next.runes = Math.max(0, next.runes - dt);
+    if (next.runes <= 1e-9) {
+      next.runes = LICH.runes.intervalSeconds;
+      const rune = (at: Vec2) =>
+        action.hazards.push({
+          at,
+          radius: LICH.runes.radius,
+          damage: LICH.runes.damage,
+          delaySeconds: LICH.runes.warnSeconds,
+          rune: true,
+        });
+      for (const t of targets) rune({ ...t.position });
+      const turn = (next.runeTurn * Math.PI) / 4;
+      next.runeTurn += 1;
+      LICH.runes.distances.forEach((d, i) => {
+        for (const side of [0, Math.PI]) {
+          const a = turn + side + (i * Math.PI) / 2;
+          rune({
+            x: enemy.position.x + Math.cos(a) * d,
+            y: enemy.position.y + Math.sin(a) * d,
+          });
+        }
+      });
+    }
+  }
+  return result({ ...enemy, ai: next }, action);
+}
+
 /**
  * Ghost (D-122): floats straight at you, walls or not, fading out every
  * few seconds; faded, it cannot touch anyone (and cannot be hit).
@@ -996,6 +1151,7 @@ export function isTelegraphing(enemy: EnemyState): boolean {
 
 /** A brute that charged into a wall, standing dazed (D-112). */
 export function isDazed(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "lich") return enemy.ai.mode === "stunned";
   return (
     (enemy.ai.kind === "brute" || enemy.ai.kind === "warchief") &&
     enemy.ai.mode === "dazed"

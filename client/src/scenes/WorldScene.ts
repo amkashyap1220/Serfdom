@@ -400,7 +400,7 @@ export class WorldScene extends Phaser.Scene {
     const g = this.bossBar.clear();
     this.bossLabel.setVisible(boss !== undefined);
     if (!boss) return;
-    const bar = bossBar(boss.kind, boss.hp, boss.maxHp)!;
+    const bar = bossBar(boss.kind, boss.hp, boss.maxHp, boss)!;
     const x = (this.scale.width - BOSS_BAR.width) / 2;
     const fraction = boss.hp / boss.maxHp;
     g.fillStyle(0x000000, 0.7);

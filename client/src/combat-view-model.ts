@@ -55,7 +55,7 @@ export interface HazardView {
   radius: number;
   /** Seconds until it lands (estimated for now). */
   landsIn: number;
-  kind: "boulder" | "bomb";
+  kind: "boulder" | "bomb" | "rune";
 }
 
 export interface ProjectileView {

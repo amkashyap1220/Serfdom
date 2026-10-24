@@ -7,6 +7,7 @@ import {
   SKELETON,
   GHOST,
   NECROMANCER,
+  LICH,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -62,6 +63,24 @@ export type EnemyAi =
       direction: Vec2;
       /** Players already hit by the current charge. */
       hit: readonly number[];
+    }
+  | {
+      kind: "lich";
+      /** spiral: attacking; warded: crystals up, cannot be hit; stunned: crystals broken. */
+      mode: "spiral" | "warded" | "stunned";
+      /** Wards begun so far (0, 1, 2): two means its final phase. */
+      wards: number;
+      /** Seconds in the current mode (the ward waits for its crystals to appear). */
+      timer: number;
+      /** The spiral's angle (radians), and seconds to its next shot. */
+      spin: number;
+      shot: number;
+      ring: number;
+      ringTurn: number;
+      rise: number;
+      /** Final phase: seconds to the next runes, and how far they have turned. */
+      runes: number;
+      runeTurn: number;
     }
   | {
       kind: "ghost";
@@ -137,6 +156,20 @@ function initialAi(kind: EnemyKind): EnemyAi {
       return { kind, pile: null, revived: false };
     case "ghost":
       return { kind, faded: false, timer: GHOST.visibleSeconds };
+    case "lich":
+      return {
+        kind,
+        mode: "spiral",
+        wards: 0,
+        timer: 0,
+        spin: 0,
+        shot: FIRST_ATTACK_DELAY.lich,
+        ring: 0,
+        ringTurn: 0,
+        rise: LICH.rise.intervalSeconds / 2,
+        runes: LICH.runes.intervalSeconds,
+        runeTurn: 0,
+      };
     case "necromancer":
       return { kind, raise: NECROMANCER.raiseIntervalSeconds / 2 };
     case "knight":
@@ -212,9 +245,15 @@ export function isAlive(enemy: EnemyState): boolean {
   return enemy.hp > 0;
 }
 
-/** A ghost faded out (D-120): shots pass through it and it cannot touch anyone. */
+/**
+ * Cannot be hit right now: a ghost faded out (D-122), or the Lich warded
+ * by its soul crystals (D-125). Shots pass through; nothing targets it.
+ */
 export function isFaded(enemy: EnemyState): boolean {
-  return enemy.ai.kind === "ghost" && enemy.ai.faded;
+  return (
+    (enemy.ai.kind === "ghost" && enemy.ai.faded) ||
+    (enemy.ai.kind === "lich" && enemy.ai.mode === "warded")
+  );
 }
 
 /**
