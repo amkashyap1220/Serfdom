@@ -78,6 +78,17 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### New goblins checklist (Phase 12e, D-115)
+
+Restart `npm run dev` (protocol v25) and reload. Stronghold only.
+
+1. **Skulkers** (dark teal; Gatehouse, Goblin kitchen, Armory): run in a line and they come at you from the front, not from behind.
+2. **Bombers** (rust brown; Goblin kitchen, War camp): they hang back and lob a small sparking bomb at where you are going; a shadow shows where it lands. It hits (4) and leaves a flickering patch of fire for 3 s that hurts while you stand in it.
+3. **Shamans** (pale gold; War camp, Barracks, Brute pit): they never attack and keep their distance. A gold ring pulses from them; goblins near them glow red and hit harder. Kill the shaman and the glow fades within 5 s.
+4. Deaths name the goblin ("Slain by a Goblin Bomber", which includes its fire).
+
+Report: pass/fail per step, seeds, and whether each new goblin is readable.
+
 ### Rushing and gated rooms checklist (D-114)
 
 Restart `npm run dev` and reload.

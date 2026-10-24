@@ -1,3 +1,4 @@
+import { SHAMAN } from "./enemy-config.ts";
 import type { Navigator } from "./pathing.ts";
 import { ARROWS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
@@ -143,6 +144,8 @@ export interface SimState {
   zones: readonly Zone[];
   /** Sludge pools (D-113): a player whose centre is in one moves slower. */
   sludge: readonly Rect[];
+  /** Burning floor left by bombs (D-115). */
+  fires: readonly Fire[];
 }
 
 /** A warning circle that damages living players inside it when it lands. */
@@ -156,6 +159,22 @@ export interface Hazard {
   ownerId: number;
   /** Set for a room's hazard (D-110): its hits are hazard hits. */
   hazard?: HazardKind;
+  /** A bomb (D-115): it leaves burning floor where it lands. */
+  fire?: { seconds: number; tickSeconds: number; damage: number };
+}
+
+/** Burning floor (D-115): hurts every player inside, each tick, until it goes out. */
+export interface Fire {
+  position: Vec2;
+  radius: number;
+  /** Seconds until it goes out. */
+  remaining: number;
+  /** Seconds until it burns again. */
+  nextTick: number;
+  tickSeconds: number;
+  damage: number;
+  /** The bomber that made it (named on a death). */
+  ownerId: number;
 }
 
 /** An enemy to add to the simulation (dungeon room waves, boss summons). */
@@ -548,7 +567,8 @@ export type SimEvent =
   /** An ability landed (drawn by every client). */
   | {
       type: "blast";
-      kind: "arcaneBlast" | "inspiration" | "curse" | "heal" | "healed";
+      kind:
+        "arcaneBlast" | "inspiration" | "curse" | "heal" | "healed" | "chant";
       playerId: number;
       at: Vec2;
       radius: number;
@@ -583,6 +603,7 @@ export function createSimState(
     blasts: [],
     zones: [],
     sludge: [],
+    fires: [],
   };
   return spawnEnemies(
     empty,
@@ -861,7 +882,10 @@ export function stepWorld(
   // player killed by one enemy is not targeted by the next.
   const summons: EnemySpawn[] = [];
   const newHazards: Hazard[] = [];
+  const allies = state.enemies.filter(isAlive);
+  const chants: { at: Vec2; radius: number }[] = [];
   const context = {
+    allies: () => allies,
     aliveSummons: (id: number) =>
       state.enemies.filter((e) => e.summonerId === id && isAlive(e)).length,
     ...(navigator
@@ -883,13 +907,19 @@ export function stepWorld(
     for (const s of action.summons) {
       summons.push({ ...s, roomId: enemy.roomId, summonerId: enemy.id });
     }
+    if (action.chant) chants.push(action.chant);
+    // A shaman's chant (D-115): everything this goblin deals is stronger.
+    const boost = (enemy.chant ?? 0) > 0 ? 1 + SHAMAN.damageBonus : 1;
     for (const h of action.hazards) {
       newHazards.push({
         position: h.at,
         radius: h.radius,
-        damage: h.damage,
+        damage: h.damage * boost,
         landsIn: h.delaySeconds,
         ownerId: enemy.id,
+        ...(h.fire
+          ? { fire: { ...h.fire, damage: h.fire.damage * boost } }
+          : {}),
       });
     }
     for (const { direction, spec } of action.bullets) {
@@ -901,7 +931,7 @@ export function stepWorld(
         direction,
         speed: spec.speed,
         remaining: spec.range,
-        damage: spec.damage,
+        damage: spec.damage * boost,
         size: spec.size,
       });
     }
@@ -915,12 +945,36 @@ export function stepWorld(
     for (const { playerId, damage } of action.contacts) {
       players = players.map((pl) =>
         pl.id === playerId
-          ? damagePlayer(pl, enemy.id, damage, pl.position, events)
+          ? damagePlayer(pl, enemy.id, damage * boost, pl.position, events)
           : pl,
       );
     }
-    return action.enemy;
+    // A chant runs down.
+    const left = (action.enemy.chant ?? 0) - dtSeconds;
+    if (left > 1e-9) return { ...action.enemy, chant: left };
+    return action.enemy.chant === undefined
+      ? action.enemy
+      : (Object.fromEntries(
+          Object.entries(action.enemy).filter(([key]) => key !== "chant"),
+        ) as unknown as EnemyState);
   });
+  // Chants land on every other goblin inside their circle (not shamans).
+  for (const c of chants) {
+    enemies = enemies.map((e) =>
+      isAlive(e) &&
+      e.kind !== "shaman" &&
+      Math.hypot(e.position.x - c.at.x, e.position.y - c.at.y) <= c.radius
+        ? { ...e, chant: SHAMAN.chantSeconds }
+        : e,
+    );
+    events.push({
+      type: "blast",
+      kind: "chant",
+      playerId: -1,
+      at: { ...c.at },
+      radius: c.radius,
+    });
+  }
   let nextEnemyId = state.nextEnemyId;
   if (summons.length > 0) {
     const added = spawnEnemies({ ...state, enemies, nextEnemyId }, summons);
@@ -930,6 +984,8 @@ export function stepWorld(
 
   // 2b. Hazards: existing ones count down and land; new ones wait a full delay.
   const hazards: Hazard[] = [];
+  // Fires from earlier bombs, plus any lit this tick.
+  const fires: Fire[] = [...(state.fires ?? [])];
   for (const h of state.hazards) {
     const landsIn = h.landsIn - dtSeconds;
     if (landsIn > 1e-9) {
@@ -959,8 +1015,39 @@ export function stepWorld(
       }
       return hit;
     });
+    // A bomb leaves burning floor (D-115).
+    if (h.fire) {
+      fires.push({
+        position: { ...h.position },
+        radius: h.radius,
+        remaining: h.fire.seconds,
+        nextTick: h.fire.tickSeconds,
+        tickSeconds: h.fire.tickSeconds,
+        damage: h.fire.damage,
+        ownerId: h.ownerId,
+      });
+    }
   }
   hazards.push(...newHazards);
+  // Burning floor hurts whoever stands in it, every tick of the fire.
+  const burning: Fire[] = [];
+  for (const f of fires) {
+    const remaining = f.remaining - dtSeconds;
+    let nextTick = f.nextTick - dtSeconds;
+    if (nextTick <= 1e-9) {
+      nextTick += f.tickSeconds;
+      players = players.map((pl) =>
+        isPlayerAlive(pl) &&
+        Math.hypot(
+          pl.position.x - f.position.x,
+          pl.position.y - f.position.y,
+        ) <= f.radius
+          ? damagePlayer(pl, f.ownerId, f.damage, pl.position, events)
+          : pl,
+      );
+    }
+    if (remaining > 1e-9) burning.push({ ...f, remaining, nextTick });
+  }
 
   // 2c. Blasts cast since the last step hit every living enemy in their
   // area once (D-096), credited to the caster like a shot.
@@ -1113,6 +1200,7 @@ export function stepWorld(
       nextProjectileId: nextId,
       nextEnemyId,
       hazards,
+      fires: burning,
       blasts: [],
       zones,
     },

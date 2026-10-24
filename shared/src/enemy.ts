@@ -33,6 +33,8 @@ export interface EnemyState {
   summonerId: number | null;
   /** A slinger that aims where its target will be (D-109). */
   leads: boolean;
+  /** Seconds left of a shaman's chant: it deals more damage (D-115). */
+  chant?: number;
   /** Per-kind behavior state (enemy-ai.ts). */
   ai: EnemyAi;
   /** Inside a Nature's Reach this tick: moves at half speed (D-097). Set by the world step. */

@@ -289,7 +289,7 @@ Acceptance:
 
 **Goal:** Make the real grind exist (GDD §3: levels 1–20 are quick; the long game is stat potions and rare drops from high-tier dungeons).
 
-Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, falling boulders, ambush holes, D-109–D-111), 12c (obstacles and cover, D-112), 12d (arrow traps and sludge, D-113), and rushing with gated rooms (D-114) built; next 12e flankers, bombers (their bombs leave burning floor), shamans; 12f rebalance room enemy counts; then the Goblin Warchief, stat potions and the potion rack, the third dungeon.
+Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, falling boulders, ambush holes, D-109–D-111), 12c (obstacles and cover, D-112), 12d (arrow traps and sludge, D-113), rushing with gated rooms (D-114), and 12e (skulkers, bombers with burning floor, shamans, D-115) built; next 12f rebalance room enemy counts; then the Goblin Warchief, stat potions and the potion rack, the third dungeon.
 
 Tasks:
 

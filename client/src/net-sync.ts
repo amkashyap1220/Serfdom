@@ -260,6 +260,10 @@ export class NetSync {
       chains: this.chainViews(nowMs),
       auras: this.auraViews(latest.snapshot, nowMs),
       slits: slitViews(this.layout, latest.snapshot.traps),
+      fires: latest.snapshot.fires.map((f) => ({
+        ...f,
+        remaining: Math.max(0, f.remaining - age),
+      })),
       zones: latest.snapshot.zones.map((z) => ({
         ...z,
         remaining: Math.max(0, z.remaining - age),

@@ -64,6 +64,9 @@ import {
  *          charged into a wall, D-112).
  * v24 (12d): snapshots list arrow traps about to fire (room, gap, glow) and
  *          mark trap arrows among projectiles; killedBy may be "arrows" (D-113).
+ * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
+ *          chant strengthens them, hazards say boulder or bomb, snapshots
+ *          list burning floor, and blasts may be a shaman's chant (D-115).
  * v19 (10c): snapshot players list their buffs, enemies say whether
  *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
@@ -98,7 +101,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 24;
+export const PROTOCOL_VERSION = 25;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -227,6 +230,16 @@ export interface SnapshotEnemy {
   leads: boolean;
   /** A brute dazed after charging into a wall (D-112). */
   dazed: boolean;
+  /** Strengthened by a shaman's chant (D-115): drawn with a red glow. */
+  chanted: boolean;
+}
+
+/** Burning floor left by a bomb (D-115). */
+export interface SnapshotFire {
+  x: number;
+  y: number;
+  radius: number;
+  remaining: number;
 }
 
 /** An ability's flash on the ground, drawn once. */
@@ -246,6 +259,8 @@ export const BLAST_KINDS = [
   "curse",
   "heal",
   "healed",
+  /** A goblin shaman's chant (D-115). */
+  "chant",
 ] as const;
 export type BlastKind = (typeof BLAST_KINDS)[number];
 
@@ -277,6 +292,8 @@ export interface SnapshotHazard {
   y: number;
   radius: number;
   landsIn: number;
+  /** A falling boulder, or a goblin's bomb (D-115). */
+  kind: "boulder" | "bomb";
 }
 
 export interface SnapshotProjectile {
@@ -386,6 +403,8 @@ export type ServerMessage =
       /** Ids of doors still closed in this run's dungeon (they block movement and shots). */
       closedDoors: string[];
       hazards: SnapshotHazard[];
+      /** Burning floor (D-115). */
+      fires: SnapshotFire[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
       /** The exit portal is open: step into it to complete the run (D-057). */
@@ -832,6 +851,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "projectiles",
           "closedDoors",
           "hazards",
+          "fires",
           "traps",
           "portalOpen",
           "blasts",
@@ -863,6 +883,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       const closedDoors = obj.closedDoors as string[];
       const traps = parseList(obj.traps, parseTrapWarning);
       if (!traps) return fail("snapshot: bad trap entry");
+      const fires = parseList(obj.fires, parseSnapshotFire);
+      if (!fires) return fail("snapshot: bad fire entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -880,6 +902,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           projectiles,
           closedDoors: [...closedDoors],
           hazards,
+          fires,
           traps,
           portalOpen: obj.portalOpen,
           blasts,
@@ -1271,6 +1294,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "cursed",
       "leads",
       "dazed",
+      "chanted",
     ])
   ) {
     return null;
@@ -1279,7 +1303,8 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
   if (
     typeof v.cursed !== "boolean" ||
     typeof v.leads !== "boolean" ||
-    typeof v.dazed !== "boolean"
+    typeof v.dazed !== "boolean" ||
+    typeof v.chanted !== "boolean"
   ) {
     return null;
   }
@@ -1307,16 +1332,33 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     cursed: v.cursed,
     leads: v.leads,
     dazed: v.dazed,
+    chanted: v.chanted,
   };
 }
 
 function parseSnapshotHazard(v: unknown): SnapshotHazard | null {
-  if (!isPlainObject(v) || !hasExactKeys(v, ["x", "y", "radius", "landsIn"])) {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "radius", "landsIn", "kind"])
+  ) {
     return null;
   }
   if (!isFiniteNumber(v.x) || !isFiniteNumber(v.y)) return null;
   if (!isNonNegative(v.radius) || !isNonNegative(v.landsIn)) return null;
-  return { x: v.x, y: v.y, radius: v.radius, landsIn: v.landsIn };
+  if (v.kind !== "boulder" && v.kind !== "bomb") return null;
+  return { x: v.x, y: v.y, radius: v.radius, landsIn: v.landsIn, kind: v.kind };
+}
+
+function parseSnapshotFire(v: unknown): SnapshotFire | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "radius", "remaining"])
+  ) {
+    return null;
+  }
+  if (!isFiniteNumber(v.x) || !isFiniteNumber(v.y)) return null;
+  if (!isNonNegative(v.radius) || !isNonNegative(v.remaining)) return null;
+  return { x: v.x, y: v.y, radius: v.radius, remaining: v.remaining };
 }
 
 function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {

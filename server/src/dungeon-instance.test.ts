@@ -357,7 +357,7 @@ describe("DungeonInstance in the Goblin Warrens", () => {
     });
     const snap = r.snapshot(1) as Snapshot;
     expect(snap.hazards).toEqual([
-      { x: 3600, y: 1000, radius: 32, landsIn: 1 },
+      { x: 3600, y: 1000, radius: 32, landsIn: 1, kind: "boulder" },
     ]);
     expect(snap.enemies.find((e) => e.kind === "warlord")?.alert).toBe(false);
   });

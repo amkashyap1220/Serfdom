@@ -2,8 +2,11 @@ import { boxAround, segmentHitTime } from "./collision.ts";
 import { NATURES_REACH } from "./abilities.ts";
 import { ENEMY_RING_ATTACK, PLAYER_HEALTH } from "./combat-config.ts";
 import {
+  BOMBER,
   BRUTE,
   GRUNT,
+  SHAMAN,
+  SKULKER,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -56,6 +59,8 @@ export interface HazardSpec {
   radius: number;
   damage: number;
   delaySeconds: number;
+  /** A bomb (D-115): where it lands burns for a while. */
+  fire?: { seconds: number; tickSeconds: number; damage: number };
 }
 
 /** One enemy's decision for one tick. */
@@ -68,6 +73,8 @@ export interface EnemyAction {
   /** Enemies to add, belonging to this enemy (they die with it). */
   summons: { kind: EnemyKind; at: Vec2 }[];
   hazards: HazardSpec[];
+  /** A shaman's chant (D-115): goblins inside the circle are strengthened. */
+  chant?: { at: Vec2; radius: number };
 }
 
 /** What the AI knows about the world beyond the targets. */
@@ -79,6 +86,8 @@ export interface AiContext {
    * server's grid; null if unreachable. Absent: corner steering only.
    */
   waypoint?: (from: Vec2, to: Vec2, half: number) => Vec2 | null;
+  /** Living enemies at the start of the tick (shamans look for them, D-115). */
+  allies?: () => readonly EnemyState[];
 }
 
 const NO_MOVE = { x: 0, y: 0 };
@@ -139,6 +148,12 @@ export function enemyAct(
       );
     case "warlord":
       return warlordAct(enemy, targets, target, dtSeconds, context, result);
+    case "skulker":
+      return skulkerAct(enemy, target, walls, dtSeconds, result, context);
+    case "bomber":
+      return bomberAct(enemy, target, walls, dtSeconds, result, context);
+    case "shaman":
+      return shamanAct(enemy, target, walls, dtSeconds, result, context);
   }
 }
 
@@ -274,6 +289,160 @@ function slingerAct(
           ? [{ direction: aim, spec: SLINGER.rock }]
           : [],
     },
+  );
+}
+
+/** Ahead of a moving target by `seconds` (where it is heading). */
+function ahead(target: AiTarget, seconds: number): Vec2 {
+  const v = target.velocity ?? NO_MOVE;
+  return {
+    x: target.position.x + v.x * seconds,
+    y: target.position.y + v.y * seconds,
+  };
+}
+
+function skulkerAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const cooldown = Math.max(0, enemy.attackCooldown - dt);
+  if (!target) return result({ ...enemy, attackCooldown: cooldown });
+  // Cut you off: run to where you are heading, then lunge (D-115).
+  const goal =
+    target.distance > SKULKER.lungeRange
+      ? ahead(target.target, SKULKER.leadSeconds)
+      : target.target.position;
+  const position = move(
+    enemy,
+    toward(
+      enemy.position,
+      route(enemy.position, goal, enemy.size / 2, walls, context),
+    ),
+    SKULKER.speed,
+    walls,
+    dt,
+  );
+  const hits =
+    touching(position, enemy.size, target.target.position) && cooldown <= 1e-9;
+  return result(
+    {
+      ...enemy,
+      position,
+      attackCooldown: hits ? SKULKER.contactCooldownSeconds : cooldown,
+    },
+    {
+      contacts: hits
+        ? [{ playerId: target.target.id, damage: SKULKER.contactDamage }]
+        : [],
+    },
+  );
+}
+
+function bomberAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  if (!target) {
+    return result({
+      ...enemy,
+      attackCooldown: Math.max(0, enemy.attackCooldown - dt),
+    });
+  }
+  const at = target.target.position;
+  let direction = NO_MOVE;
+  if (target.distance < BOMBER.minRange) direction = toward(at, enemy.position);
+  else if (target.distance > BOMBER.maxRange)
+    direction = toward(
+      enemy.position,
+      route(enemy.position, at, enemy.size / 2, walls, context),
+    );
+  const position = move(enemy, direction, BOMBER.speed, walls, dt);
+  const attack = stepFireCooldown(
+    enemy.attackCooldown,
+    dt,
+    target.distance <= BOMBER.throwRange,
+    1 / BOMBER.throwIntervalSeconds,
+  );
+  // Lobbed over everything: lands where you will be (D-115).
+  return result(
+    { ...enemy, position, attackCooldown: attack.remaining },
+    {
+      hazards: attack.fired
+        ? [
+            {
+              at: ahead(target.target, BOMBER.leadSeconds),
+              radius: BOMBER.radius,
+              damage: BOMBER.damage,
+              delaySeconds: BOMBER.flightSeconds,
+              fire: BOMBER.fire,
+            },
+          ]
+        : [],
+    },
+  );
+}
+
+function shamanAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const near = (context.allies?.() ?? []).filter(
+    (e) =>
+      e.id !== enemy.id &&
+      e.kind !== "shaman" &&
+      isAlive(e) &&
+      Math.hypot(
+        e.position.x - enemy.position.x,
+        e.position.y - enemy.position.y,
+      ) <= SHAMAN.seekRange,
+  );
+  // Keep away from players; otherwise go to the thick of the goblins.
+  let direction = NO_MOVE;
+  if (target && target.distance < SHAMAN.keepAway) {
+    direction = toward(target.target.position, enemy.position);
+  } else if (near.length > 0) {
+    const centre = {
+      x: near.reduce((s, e) => s + e.position.x, 0) / near.length,
+      y: near.reduce((s, e) => s + e.position.y, 0) / near.length,
+    };
+    if (
+      Math.hypot(centre.x - enemy.position.x, centre.y - enemy.position.y) > 24
+    ) {
+      direction = toward(
+        enemy.position,
+        route(enemy.position, centre, enemy.size / 2, walls, context),
+      );
+    }
+  }
+  const position = move(enemy, direction, SHAMAN.speed, walls, dt);
+  const inReach = near.some(
+    (e) =>
+      Math.hypot(e.position.x - position.x, e.position.y - position.y) <=
+      SHAMAN.chantRadius,
+  );
+  const chant = stepFireCooldown(
+    enemy.attackCooldown,
+    dt,
+    inReach,
+    1 / SHAMAN.chantIntervalSeconds,
+  );
+  return result(
+    { ...enemy, position, attackCooldown: chant.remaining },
+    chant.fired
+      ? { chant: { at: { ...position }, radius: SHAMAN.chantRadius } }
+      : {},
   );
 }
 

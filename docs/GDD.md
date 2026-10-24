@@ -359,7 +359,8 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 - Built (12b): **leading slingers** (aim where you will be; drawn lighter): 1 in 3 in the Warrens, all in the Stronghold. **Falling boulders** (D-110, replacing spike traps): in rockfall rooms (Warrens Tunnel and Guard room; Stronghold also the Armory), while the room fights a boulder falls every 1.05 s, mostly anywhere on the floor, 1 in 4 near a player; its shadow grows for 1.2 s, then it lands (5 damage in the Warrens, 9 in the Stronghold, D-111). **Ambush holes**: the Ambush hall's second wave and the Barracks' reinforcements come out of holes in the walls, 2 every 4 s.
 - Built (12c, D-112): **obstacles and cover**: rubble in the Collapsed passage, pillars in the Guard room, barricades in the Gatehouse, bunks in the Barracks. Solid both ways for movement and shots; goblins walk round them, slingers step aside for a clear throw, and a brute that charges into one is dazed for 1.5 s.
 - Built (12d, D-113): **arrow traps** in the Stronghold's Gatehouse (slits glow, then a volley crosses the room with a gap of 3 slits to stand in, every 3.5 s; 6 damage; barricades shelter you) and **sludge** in the Fungus grotto (60% speed for players; goblins wade through).
-- Next: flankers, bombers (their bombs leave burning floor), and shamans (12e), then fewer enemies per room (12f).
+- Built (12e, D-115): **Goblin skulkers** cut you off by running to where you are heading; **Goblin bombers** lob bombs that leave burning floor; **Goblin shamans** never attack but chant, making goblins near them hit 50% harder for 5 s (kill them first). Stronghold only.
+- Next: fewer enemies per room (12f).
 
 ## 11. Multiplayer and reward rules
 

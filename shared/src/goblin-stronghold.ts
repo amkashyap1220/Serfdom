@@ -61,7 +61,7 @@ const reinforced = ({ piece, band, setups }: RecipePiece): RecipePiece => {
   return { piece: { ...piece, waves }, band, setups: [waves] };
 };
 
-export const STRONGHOLD_PIECES: readonly RecipePiece[] = [
+const BASE_PIECES: readonly RecipePiece[] = [
   ...WARRENS_PIECES.map(reinforced),
   // 1,860: the gate's defenders.
   newRoom(
@@ -207,6 +207,56 @@ export const STRONGHOLD_PIECES: readonly RecipePiece[] = [
     { rockfall: true },
   ),
 ];
+
+/**
+ * Grunts swapped for the Stronghold's new goblins (D-115), in wave 0 of
+ * each room: skulkers take the grunts nearest the entrance (they come at
+ * you), bombers and shamans the ones farthest back (they hang back).
+ */
+const NEW_GOBLINS: Readonly<
+  Record<string, Partial<Record<"skulker" | "bomber" | "shaman", number>>>
+> = {
+  gatehouse: { skulker: 2 },
+  kitchen: { bomber: 1, skulker: 2 },
+  warcamp: { bomber: 2, shaman: 1 },
+  barracks: { shaman: 1 },
+  pit: { shaman: 1 },
+  armory: { skulker: 2 },
+};
+
+function withNewGoblins(entry: RecipePiece): RecipePiece {
+  const swaps = NEW_GOBLINS[entry.piece.key];
+  if (!swaps) return entry;
+  const swapWave = (wave: readonly EnemySpawnDef[]): EnemySpawnDef[] => {
+    const out = wave.map((s) => ({ ...s }));
+    // Grunts by distance from the entrance side (x, entrance on the west).
+    const grunts = out
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => s.kind === "grunt")
+      .sort((a, b) => a.s.at.x - b.s.at.x);
+    const front = [...grunts];
+    const back = [...grunts].reverse();
+    const take = (pool: typeof grunts, kind: EnemyKind, n: number) => {
+      for (let k = 0; k < n; k++) {
+        const g = pool.find(({ i }) => out[i]!.kind === "grunt");
+        if (!g)
+          throw new Error(`${entry.piece.key}: not enough grunts for ${kind}`);
+        out[g.i] = { ...out[g.i]!, kind };
+      }
+    };
+    take(front, "skulker", swaps.skulker ?? 0);
+    take(back, "bomber", swaps.bomber ?? 0);
+    take(back, "shaman", swaps.shaman ?? 0);
+    return out;
+  };
+  const setups = entry.setups.map((waves) =>
+    waves.map((wave, w) => (w === 0 ? swapWave(wave) : [...wave])),
+  );
+  return { ...entry, piece: { ...entry.piece, waves: setups[0]! }, setups };
+}
+
+export const STRONGHOLD_PIECES: readonly RecipePiece[] =
+  BASE_PIECES.map(withNewGoblins);
 
 export const STRONGHOLD_RECIPE: DungeonRecipe = {
   name: "Goblin Stronghold",

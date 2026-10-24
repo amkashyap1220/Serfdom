@@ -7,6 +7,9 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   slinger: "a Goblin Slinger",
   brute: "a Goblin Brute",
   warlord: "the Goblin Warlord",
+  skulker: "a Goblin Skulker",
+  bomber: "a Goblin Bomber",
+  shaman: "a Goblin Shaman",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
 };

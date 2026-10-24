@@ -133,6 +133,7 @@ export class PlayerPredictor {
       blasts: [],
       zones: [],
       sludge: this.sludge,
+      fires: [],
     };
     const r = applyPlayerInput(solo, from.id, input, this.walls, TICK_SECONDS);
     return {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pieceHp } from "./dungeon-gen.ts";
 import { dungeonInfo, entryProblem, layoutFor } from "./dungeons.ts";
-import { ENEMY_STATS } from "./enemy-config.ts";
+import { BOMBER, ENEMY_STATS, SHAMAN, SKULKER } from "./enemy-config.ts";
 import {
   buildStronghold,
   STRONGHOLD_PIECES,
@@ -40,14 +40,63 @@ describe("Goblin Stronghold (D-108)", () => {
     ]);
   });
 
-  it("every Warrens room returns with both its setups at once; three new rooms", () => {
+  // HP change of each D-115 swap of a grunt (170) for a new goblin.
+  const swapHp = (key: string) => {
+    const swaps: Record<string, [number, number, number]> = {
+      // [skulkers, bombers, shamans]
+      gatehouse: [2, 0, 0],
+      kitchen: [2, 1, 0],
+      warcamp: [0, 2, 1],
+      barracks: [0, 0, 1],
+      pit: [0, 0, 1],
+      armory: [2, 0, 0],
+    };
+    const [sk, bo, sh] = swaps[key] ?? [0, 0, 0];
+    return (
+      sk * (SKULKER.maxHp - 170) +
+      bo * (BOMBER.maxHp - 170) +
+      sh * (SHAMAN.maxHp - 170)
+    );
+  };
+
+  it("every Warrens room returns with both its setups at once; three new rooms; grunts swapped for new goblins (D-115)", () => {
     for (const w of WARRENS_PIECES) {
       const both = w.setups.reduce((sum, waves) => sum + pieceHp({ waves }), 0);
-      expect(hpOf(w.piece.key), w.piece.key).toBe(both);
+      expect(hpOf(w.piece.key), w.piece.key).toBe(both + swapHp(w.piece.key));
     }
-    expect(hpOf("gatehouse")).toBe(1860);
-    expect(hpOf("barracks")).toBe(3780);
-    expect(hpOf("armory")).toBe(3910);
+    expect(hpOf("gatehouse")).toBe(1860 + swapHp("gatehouse"));
+    expect(hpOf("barracks")).toBe(3780 + swapHp("barracks"));
+    expect(hpOf("armory")).toBe(3910 + swapHp("armory"));
+  });
+
+  it("puts each new goblin where it belongs: skulkers up front, bombers and shamans at the back", () => {
+    const kinds = (key: string) =>
+      STRONGHOLD_PIECES.find((p) => p.piece.key === key)!.piece.waves[0]!;
+    const count = (key: string, kind: string) =>
+      kinds(key).filter((s) => s.kind === kind).length;
+    expect(count("gatehouse", "skulker")).toBe(2);
+    expect(count("kitchen", "bomber")).toBe(1);
+    expect(count("kitchen", "skulker")).toBe(2);
+    expect(count("warcamp", "bomber")).toBe(2);
+    expect(count("warcamp", "shaman")).toBe(1);
+    expect(count("barracks", "shaman")).toBe(1);
+    expect(count("pit", "shaman")).toBe(1);
+    expect(count("armory", "skulker")).toBe(2);
+    const gate = kinds("gatehouse");
+    const front = Math.max(
+      ...gate.filter((s) => s.kind === "skulker").map((s) => s.at.x),
+    );
+    const grunts = gate.filter((s) => s.kind === "grunt").map((s) => s.at.x);
+    expect(front).toBeLessThanOrEqual(Math.min(...grunts));
+    // Nowhere in the Warrens.
+    const warrensKinds = WARRENS_PIECES.flatMap((p) =>
+      p.setups.flat(2).map((s) => s.kind),
+    );
+    expect(
+      warrensKinds.some(
+        (k) => k === "skulker" || k === "bomber" || k === "shaman",
+      ),
+    ).toBe(false);
   });
 
   it("no two goblins start on top of each other, and all start inside", () => {

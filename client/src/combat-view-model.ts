@@ -29,6 +29,16 @@ export interface EnemyView {
   leads: boolean;
   /** A brute dazed after charging into a wall (D-112): blinks pale blue. */
   dazed: boolean;
+  /** Strengthened by a shaman's chant (D-115): a red glow. */
+  chanted: boolean;
+}
+
+/** Burning floor (D-115). */
+export interface FireView {
+  x: number;
+  y: number;
+  radius: number;
+  remaining: number;
 }
 
 export interface HazardView {
@@ -37,6 +47,7 @@ export interface HazardView {
   radius: number;
   /** Seconds until it lands (estimated for now). */
   landsIn: number;
+  kind: "boulder" | "bomb";
 }
 
 export interface ProjectileView {
@@ -99,6 +110,7 @@ export interface CombatViewModel {
   zones: ZoneView[];
   auras: AuraView[];
   slits: SlitView[];
+  fires: FireView[];
   portalOpen: boolean;
 }
 
@@ -111,6 +123,7 @@ export const EMPTY_VIEW: CombatViewModel = {
   zones: [],
   auras: [],
   slits: [],
+  fires: [],
   portalOpen: false,
 };
 

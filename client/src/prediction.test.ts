@@ -35,6 +35,7 @@ describe("prediction uses your stats (8c-2)", () => {
       blasts: [],
       zones: [],
       sludge: [],
+      fires: [],
     };
     for (let i = 0; i < 60; i++) {
       predictor.predict(RIGHT);
@@ -77,6 +78,7 @@ describe("prediction wades through sludge like the server (D-113)", () => {
       blasts: [],
       zones: [],
       sludge: [pool],
+      fires: [],
     };
     for (let i = 0; i < 120; i++) {
       predictor.predict(RIGHT);

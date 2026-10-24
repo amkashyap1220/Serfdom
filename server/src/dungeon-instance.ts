@@ -409,6 +409,7 @@ export class DungeonInstance {
         cursed: e.curse !== undefined,
         leads: e.leads,
         dazed: isDazed(e),
+        chanted: (e.chant ?? 0) > 0,
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,
@@ -429,6 +430,13 @@ export class DungeonInstance {
         y: roundCoord(h.position.y),
         radius: h.radius,
         landsIn: h.landsIn,
+        kind: h.fire ? ("bomb" as const) : ("boulder" as const),
+      })),
+      fires: this.sim.fires.map((f) => ({
+        x: roundCoord(f.position.x),
+        y: roundCoord(f.position.y),
+        radius: f.radius,
+        remaining: roundCoord(f.remaining),
       })),
       traps: trapWarnings(this.rooms, this.layout),
       portalOpen: this.portalOpen,

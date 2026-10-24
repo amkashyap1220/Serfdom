@@ -31,6 +31,9 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   slinger: 0x9b59b6,
   brute: 0xd35400,
   warlord: 0x8b1a1a,
+  skulker: 0x1f6f6a,
+  bomber: 0x8a4b2a,
+  shaman: 0xe6cf7a,
 };
 
 const COLORS = {
@@ -57,6 +60,12 @@ const COLORS = {
   trapArrow: 0xd9c9a3,
   trapArrowTip: 0xffffff,
   shadow: 0x000000,
+  bomb: 0x2a2420,
+  bombSpark: 0xffd34d,
+  fire: 0xff7a1a,
+  fireCore: 0xffd34d,
+  chanted: 0xff4a3d,
+  chant: 0xe6cf7a,
   boulder: 0x8c7f6e,
   boulderEdge: 0x4a4238,
 } as const;
@@ -204,12 +213,29 @@ export class CombatView {
       );
       h.lineStyle(2, COLORS.hazard, 0.5 + 0.4 * fall);
       h.strokeCircle(hz.x, hz.y, hz.radius);
-      const size = hz.radius * 0.6;
       const lift = (1 - fall) * BOULDER_DROP_PX;
+      if (hz.kind === "bomb") {
+        // A lobbed bomb: small, dark, its fuse sparking (D-115).
+        rocks.fillStyle(COLORS.bomb, 1);
+        rocks.fillCircle(hz.x, hz.y - lift * 0.6, 7);
+        rocks.fillStyle(COLORS.bombSpark, Math.floor(nowMs / 90) % 2 ? 1 : 0.4);
+        rocks.fillCircle(hz.x + 4, hz.y - lift * 0.6 - 7, 2);
+        continue;
+      }
+      const size = hz.radius * 0.6;
       rocks.fillStyle(COLORS.boulder, 1);
       rocks.fillCircle(hz.x, hz.y - lift, size);
       rocks.lineStyle(2, COLORS.boulderEdge, 1);
       rocks.strokeCircle(hz.x, hz.y - lift, size);
+    }
+    // Burning floor (D-115): flickering, fading as it goes out.
+    for (const f of view.fires) {
+      const flicker = 0.8 + 0.2 * Math.sin(nowMs / 60 + f.x);
+      const life = Math.min(1, f.remaining / 1);
+      h.fillStyle(COLORS.fire, (0.25 + 0.25 * life) * flicker);
+      h.fillCircle(f.x, f.y, f.radius);
+      h.fillStyle(COLORS.fireCore, (0.2 + 0.3 * life) * flicker);
+      h.fillCircle(f.x, f.y, f.radius * 0.5);
     }
 
     const bl = this.blasts.clear();
@@ -238,14 +264,17 @@ export class CombatView {
     // Cleric's green ring widen out.
     for (const b of view.blasts) {
       const color =
-        b.kind === "inspiration"
-          ? COLORS.inspire
-          : b.kind === "curse"
-            ? COLORS.curse
-            : b.kind === "heal" || b.kind === "healed"
-              ? COLORS.heal
-              : COLORS.blast;
-      const ring = b.kind === "inspiration" || b.kind === "heal";
+        b.kind === "chant"
+          ? COLORS.chant
+          : b.kind === "inspiration"
+            ? COLORS.inspire
+            : b.kind === "curse"
+              ? COLORS.curse
+              : b.kind === "heal" || b.kind === "healed"
+                ? COLORS.heal
+                : COLORS.blast;
+      const ring =
+        b.kind === "inspiration" || b.kind === "heal" || b.kind === "chant";
       if (!ring) {
         bl.fillStyle(color, 0.5 * (1 - b.fade));
         bl.fillCircle(b.x, b.y, b.radius);
@@ -272,6 +301,12 @@ export class CombatView {
           bl.lineStyle(buff === "guard" ? 3 : 2, color, 0.9);
           bl.strokeCircle(a.x, a.y, 12 + 4 * i);
         });
+    }
+    // Chanted goblins (D-115): a red glow.
+    for (const e of view.enemies) {
+      if (!e.chanted || e.hp <= 0) continue;
+      bl.lineStyle(2, COLORS.chanted, 0.6 + 0.4 * Math.sin(nowMs / 120));
+      bl.strokeCircle(e.x, e.y, e.size * 0.9);
     }
     // Cursed enemies: a violet outline.
     for (const e of view.enemies) {

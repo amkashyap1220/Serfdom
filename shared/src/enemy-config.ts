@@ -11,6 +11,9 @@ export const ENEMY_KINDS = [
   "slinger",
   "brute",
   "warlord",
+  "skulker",
+  "bomber",
+  "shaman",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -123,6 +126,54 @@ export const WARLORD = {
   },
 } as const;
 
+/** Flanker (D-115): runs to where you are heading, then lunges. */
+export const SKULKER = {
+  maxHp: 150,
+  size: 14,
+  /** Faster than a grunt (76), slower than the player (150). */
+  speed: 95,
+  /** Aims this far ahead of a moving player. */
+  leadSeconds: 0.8,
+  /** Within this distance it goes straight for you. */
+  lungeRange: 60,
+  contactDamage: 3,
+  contactCooldownSeconds: 1.2,
+} as const;
+
+/** Lobs bombs that leave burning floor (D-115). */
+export const BOMBER = {
+  maxHp: 140,
+  size: 16,
+  speed: 50,
+  minRange: 180,
+  maxRange: 300,
+  throwRange: 380,
+  throwIntervalSeconds: 3.6,
+  /** Aims this far ahead of a moving player. */
+  leadSeconds: 0.5,
+  /** The bomb's shadow grows this long before it lands. */
+  flightSeconds: 0.9,
+  radius: 40,
+  damage: 4,
+  fire: { seconds: 3, tickSeconds: 0.5, damage: 2 },
+} as const;
+
+/** Never attacks; strengthens goblins near it (D-108, D-115). */
+export const SHAMAN = {
+  maxHp: 200,
+  size: 16,
+  speed: 60,
+  /** Looks for goblins to strengthen this far away… */
+  seekRange: 300,
+  /** …while keeping at least this far from the nearest player. */
+  keepAway: 200,
+  chantIntervalSeconds: 4,
+  chantRadius: 120,
+  chantSeconds: 5,
+  /** Chanted goblins deal this much more damage. */
+  damageBonus: 0.5,
+} as const;
+
 export const RING_BULLET: EnemyBulletSpec = {
   damage: ENEMY_RING_ATTACK.damage,
   speed: ENEMY_RING_ATTACK.speed,
@@ -136,6 +187,9 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   slinger: SLINGER,
   brute: BRUTE,
   warlord: WARLORD,
+  skulker: SKULKER,
+  bomber: BOMBER,
+  shaman: SHAMAN,
 };
 
 /**
@@ -150,6 +204,9 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   brute: 1,
   /** Before its first spread and ring. */
   warlord: 1,
+  skulker: SKULKER.contactCooldownSeconds / 2,
+  bomber: BOMBER.throwIntervalSeconds / 2,
+  shaman: SHAMAN.chantIntervalSeconds / 2,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {
