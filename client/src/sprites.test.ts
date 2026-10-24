@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DIRECTIONS, directionFromAngle, spriteKeyFromPath } from "./sprites";
+import { directionFromAngle, spriteKeyFromPath } from "./sprites";
 import { lichPose } from "./lich-pose";
 
 describe("sprite files", () => {
@@ -38,40 +38,25 @@ describe("directionFromAngle", () => {
   });
 });
 
-describe("lichPose (cosmetic)", () => {
-  const base = {
-    faded: false,
-    dazed: false,
-    hp: 11000,
-    maxHp: 11000,
-    towardPlayer: Math.PI / 2,
-    seconds: 0,
-  };
-
-  it("spins clockwise in its attack pose at the spiral's 90°/s", () => {
-    const at = (seconds: number) => lichPose({ ...base, seconds });
+describe("lichPose (cosmetic, D-129)", () => {
+  it("spins with its spiral while it fires", () => {
+    const at = (spin: number) => lichPose({ spin, towardPlayer: 0 });
     expect(at(0)).toEqual({ state: "attacking", direction: "east" });
-    expect(at(0.5)).toEqual({ state: "attacking", direction: "south-east" });
-    expect(at(1)).toEqual({ state: "attacking", direction: "south" });
-    // One full turn in 4 s visits all 8 directions.
-    const seen = new Set(
-      Array.from({ length: 8 }, (_, i) => at(i * 0.5).direction),
-    );
-    expect(seen.size).toBe(DIRECTIONS.length);
+    expect(at(Math.PI / 4)).toEqual({
+      state: "attacking",
+      direction: "south-east",
+    });
+    expect(at(Math.PI / 2).direction).toBe("south");
   });
 
-  it("spins at 135°/s once enraged (below 30%)", () => {
-    const enraged = lichPose({ ...base, hp: 3000, seconds: 1 });
-    expect(enraged.direction).toBe("south-west");
-  });
-
-  it("warded or stunned, it stops attacking and faces the player", () => {
-    expect(lichPose({ ...base, faded: true, seconds: 3 })).toEqual({
+  it("otherwise stands idle, facing the player", () => {
+    expect(lichPose({ spin: null, towardPlayer: Math.PI / 2 })).toEqual({
       state: "idle",
       direction: "south",
     });
-    expect(
-      lichPose({ ...base, dazed: true, towardPlayer: Math.PI, seconds: 3 }),
-    ).toEqual({ state: "idle", direction: "west" });
+    expect(lichPose({ spin: null, towardPlayer: Math.PI })).toEqual({
+      state: "idle",
+      direction: "west",
+    });
   });
 });

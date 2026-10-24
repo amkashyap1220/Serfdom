@@ -193,6 +193,8 @@ export const LICH = {
     crystals: 3,
     crystalDistance: 200,
     ringIntervalSeconds: 2.5,
+    /** Each ring comes with one quick full turn of the Lich, this long (D-129). */
+    ringSpinSeconds: 0.5,
     ringBullets: 16,
     bullet: { damage: 8, speed: 120, size: 8, range: 520 },
   },

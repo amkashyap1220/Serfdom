@@ -805,7 +805,7 @@ function lichAct(
     summons: [],
     hazards: [],
   };
-  let next = { ...ai, timer: ai.timer + dt };
+  let next = { ...ai, timer: ai.timer + dt, firing: false };
   const mine = (kind: string) =>
     (context.allies?.() ?? []).filter(
       (e) => e.summonerId === enemy.id && e.kind === kind && isAlive(e),
@@ -818,6 +818,12 @@ function lichAct(
       next = { ...next, mode: "stunned", timer: 0 };
     } else {
       next.ring = Math.max(0, next.ring - dt);
+      // A quick full turn with each ring (D-129).
+      const { ringIntervalSeconds, ringSpinSeconds } = LICH.ward;
+      if (ringIntervalSeconds - next.ring < ringSpinSeconds - 1e-9) {
+        next.firing = true;
+        next.spin += ((2 * Math.PI) / ringSpinSeconds) * dt;
+      }
       if (target && next.ring <= 1e-9) {
         next.ring = LICH.ward.ringIntervalSeconds;
         const offset =
@@ -861,6 +867,8 @@ function lichAct(
   const spiral = final ? LICH.finalSpiral : LICH.spiral;
   next.spin += ((spiral.degreesPerSecond * Math.PI) / 180) * dt;
   next.shot = Math.max(0, next.shot - dt);
+  // It spins with its spiral once the spiral has started (D-129).
+  next.firing = ai.firing || next.shot <= 1e-9;
   if (next.shot <= 1e-9) {
     next.shot = spiral.intervalSeconds;
     for (let arm = 0; arm < LICH.spiral.arms; arm++) {

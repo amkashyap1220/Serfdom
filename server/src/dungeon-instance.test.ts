@@ -391,6 +391,39 @@ describe("the Lich in a run (D-125)", () => {
   });
 });
 
+describe("the Lich's pose in a snapshot (D-129)", () => {
+  it("sends its spiral angle as `facing` while it fires, null while idle", () => {
+    const r = new DungeonInstance(1, "forgotten-crypt", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed: 4,
+    });
+    const at = r.state.players[0]!.position;
+    r.setStateForTest(
+      spawnEnemies(r.state, [
+        { kind: "lich", at: { x: at.x + 250, y: at.y }, roomId: null },
+      ]),
+    );
+    const lichFacing = () => {
+      const parsed = parseServerMessage(encodeMessage(r.snapshot(1)));
+      if (!parsed.ok || parsed.message.type !== "snapshot")
+        throw new Error("no snapshot");
+      return parsed.message.enemies.find((e) => e.kind === "lich")?.facing;
+    };
+    r.tick();
+    // Its first volley is still 1.5 s off: standing idle.
+    expect(lichFacing()).toBe(null);
+    r.setStateForTest({
+      ...r.state,
+      enemies: r.state.enemies.map((e) =>
+        e.ai.kind === "lich" ? { ...e, ai: { ...e.ai, shot: 0, spin: 1 } } : e,
+      ),
+    });
+    r.tick();
+    expect(lichFacing()).toBeCloseTo(1, 1);
+  });
+});
+
 describe("DungeonInstance layouts (D-104)", () => {
   it("builds the generated Warrens for its seed; seed 0 is the handcrafted one", () => {
     const seeded = new DungeonInstance(1, "goblin-warrens", [1], {

@@ -75,6 +75,8 @@ export type EnemyAi =
       /** The spiral's angle (radians), and seconds to its next shot. */
       spin: number;
       shot: number;
+      /** Spinning while it attacks (its spiral, or a ring's quick turn), else standing idle (D-129). */
+      firing: boolean;
       ring: number;
       ringTurn: number;
       rise: number;
@@ -164,6 +166,7 @@ function initialAi(kind: EnemyKind): EnemyAi {
         timer: 0,
         spin: 0,
         shot: FIRST_ATTACK_DELAY.lich,
+        firing: false,
         ring: 0,
         ringTurn: 0,
         rise: LICH.rise.intervalSeconds / 2,

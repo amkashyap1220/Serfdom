@@ -68,6 +68,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v32 (D-129): `facing` is also the Lich's spiral angle while it spins and
+ *          fires, null while it stands idle.
  * v31 (12l): the Lich and its soul crystals (D-125): hazards may be a rune
  *          (drawn filling in red); `faded` also means the Lich is warded.
  * v30 (12k): cursed runes and spirit braziers (D-123): snapshots list rune
@@ -118,7 +120,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 31;
+export const PROTOCOL_VERSION = 32;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -269,7 +271,10 @@ export interface SnapshotEnemy {
   pile: boolean;
   /** Cannot be hit: a ghost faded out (D-122), or the Lich warded (D-125). */
   faded: boolean;
-  /** Where a grave knight's shield faces, in radians; null for every other enemy. */
+  /**
+   * Radians: where a grave knight's shield faces, or the Lich's spiral angle
+   * while it spins and fires (D-129); null otherwise.
+   */
   facing: number | null;
 }
 

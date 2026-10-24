@@ -411,7 +411,7 @@ export class CombatView {
     }
     // Grave knights' shields (D-122): a bright arc on the front side.
     for (const e of view.enemies) {
-      if (e.facing === null || e.hp <= 0) continue;
+      if (e.kind !== "knight" || e.facing === null || e.hp <= 0) continue;
       const half = ((KNIGHT.shieldArcDegrees / 2) * Math.PI) / 180;
       bl.lineStyle(px(3), COLORS.shield, 1);
       bl.beginPath();
@@ -505,7 +505,7 @@ export class CombatView {
 
   /**
    * The Lich uses the user's art (the first real sprite): spinning in its
-   * attack pose, or idle facing the player while warded or stunned. Hits
+   * attack pose while it fires its spiral, else idle facing the player. Hits
    * flash it white and the stun blinks it pale blue, as the squares do.
    */
   private drawLich(
@@ -516,14 +516,10 @@ export class CombatView {
     player: { x: number; y: number },
   ): void {
     const pose = lichPose({
-      faded: enemy.faded,
-      dazed: enemy.dazed,
-      hp: enemy.hp,
-      maxHp: enemy.maxHp,
+      spin: enemy.facing === null ? null : enemy.facing + viewRotation,
       // A world angle shows on screen turned by the view's rotation.
       towardPlayer:
         Math.atan2(player.y - enemy.y, player.x - enemy.x) + viewRotation,
-      seconds: nowMs / 1000,
     });
     // 32×32 art on a 32 px body (D-128): one source pixel per world pixel.
     const image = sprite.image.setTexture(

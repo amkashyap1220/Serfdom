@@ -430,7 +430,9 @@ export class DungeonInstance {
         facing:
           e.ai.kind === "knight"
             ? Math.round(Math.atan2(e.ai.facing.y, e.ai.facing.x) * 100) / 100
-            : null,
+            : e.ai.kind === "lich" && e.ai.firing
+              ? Math.round(e.ai.spin * 100) / 100
+              : null,
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,

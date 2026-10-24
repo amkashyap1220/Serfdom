@@ -37,7 +37,10 @@ export interface EnemyView {
   pile: boolean;
   /** A ghost faded out (D-122): drawn see-through. */
   faded: boolean;
-  /** A grave knight's shield direction in radians (D-122), else null. */
+  /**
+   * A grave knight's shield direction (D-122), or the Lich's spiral angle
+   * while it spins and fires (D-129), in radians; else null.
+   */
   facing: number | null;
 }
 

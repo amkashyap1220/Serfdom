@@ -594,7 +594,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 ### The Lich's sprites (D-128) — 2026-10-24
 
 - The user supplied the Lich's art (8 directions × idle and a spinning attack, 32×32) and made the Lich human-sized: 32×32 (D-128, was 88).
-- First image pipeline: files under `client/src/assets/sprites/<character>/<state>/<direction>.png` load by themselves (`sprite-files.ts`, `WorldScene.preload`). The Lich spins through its attack frames with the spiral, and faces the player idle while warded or stunned (PROVISIONAL); hit flash and stun blink are tints.
-- Tests: file paths to keys (and bad paths refused), angles to the 8 directions, the Lich's pose per state and spin rate, the Lich's size. `npm run check`: 457 shared, 196 server, 65 client, build.
+- First image pipeline: files under `client/src/assets/sprites/<character>/<state>/<direction>.png` load by themselves (`sprite-files.ts`, `WorldScene.preload`). Hit flash and stun blink are tints.
+- The user: he spins only during his attack, otherwise stands idle (D-129), keeping the nonstop spiral. The server marks the Lich `firing` while its spiral fires and for a 0.5 s turn with each ring, and sends its spiral angle as `facing` (protocol v32); the client spins through the attack frames by that angle, else shows idle facing the player.
+- Tests: file paths to keys (and bad paths refused), angles to the 8 directions, the Lich's pose, the Lich's size, idle before its first volley then spinning, a quick turn with each ring then idle, idle while stunned, `facing` in the snapshot. `npm run check`: 459 shared, 197 server, 64 client, build.
 - Live (headless Chrome, a throwaway page, not committed): all 16 frames loaded at zoom 0.5 beside a 32 px square, crisp, no console errors. Not checked live: the Lich in the Sanctum (spin, warded, stun), how the smaller Lich fights.
 - Extra Lich art made by Claude from the user's frames (warded outline, fade, death, spawn, bolts, soul crystal) is in the project files for review, not in the game.
