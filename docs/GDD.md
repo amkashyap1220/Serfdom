@@ -366,6 +366,8 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 
 ### Toward 40 dungeons
 
+- How they spread (D-126): the **first 5 dungeons cover levels 1–20**; **every dungeon after that is for level 20 and up**, an endgame dungeon for level-20 serfs.
+
 - The user wants **at least 10 dungeons before the website alpha** (Phase 13) and **at least 40 before the Steam release** (D-124), the rest added in batches during the alpha (Phase 22) together with more item kinds and other content. How the 40 are spread (several per level band, endgame and special dungeons) is open question 24.
 
 ### Room mechanics (D-109)

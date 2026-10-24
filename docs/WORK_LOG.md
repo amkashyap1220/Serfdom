@@ -567,3 +567,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Live (harness, **test** DB, crypt seed 2, phases staged with test-only commands): the spiral; WARDED with the tethers, crystals, a ring going out, and a crystal shot down while the Lich took nothing; ENRAGED with the faster spiral and five filling runes. No console errors. Not play-tested: the fight's length and difficulty.
 - User ran the 12l checklist: pass (2026-10-24), and asked for the roadmap updates on GitHub (PR #1, the 27-phase roadmap) to be reviewed. 12l's docs were rewritten into the reconciled structure.
 - Next step: the Phase 12 acceptance review against the roadmap.
+
+### Roadmap review — 2026-10-24
+
+- Reviewed PR #1's 27-phase roadmap against the code. User's answers (D-126): potion wording corrected to the serf's max (D-119); Phase 12 acceptance includes a two-player clear; Phase 14 builds minimal party screens, polished in Phase 15; the first 5 dungeons cover levels 1–20 and every later one is for level 20 and up (answers open question 24); Phase 13 builds reusable building blocks for Phase 22's dungeons.
+- Next step: the Phase 12 acceptance review, with a two-player clear of the Stronghold and the Crypt.

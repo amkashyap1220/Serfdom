@@ -349,24 +349,26 @@ Tasks:
 - Add a second and third dungeon above the Goblin Warrens (tiers 4 and 5 and more dungeons are Phase 13, D-124), each with its own level range, enemies, boss, and loot tiers (designs drafted for the user's approval, one dungeon at a time).
 - New enemy roles and boss mechanics, readable and tested like the Warlord.
 - Room mechanics so rooms cannot all be beaten by running in a circle (D-109): traps, obstacles, floors, and enemies that punish circling.
-- Stat potions and the account potion rack (D-089, D-075): potion dungeons roll the potion chance once per Luck point; drink at once or send to the rack; potions raise a stat up to the class max.
+- Stat potions and the account potion rack (D-089, D-075): potion dungeons roll the potion chance once per Luck point; drink at once or send to the rack; potions raise a stat up to the serf's max (the class max, or the Serf max before a class, D-119).
 - EXP from the new dungeons fits the approved curve (less EXP above a dungeon's range, D-071).
 
 Acceptance:
 
 - Each new dungeon can be completed solo and by a party, and its loot and EXP match its approved tables.
 - The server refuses a serf that has not completed the Goblin Warrens when it queues for a new dungeon, including a tampered queue request (D-107; the first listed non-Warrens dungeon makes this testable end to end).
-- Potions are granted exactly once per roll, never above the class max, and survive death in the rack.
+- Potions are granted exactly once per roll, never above the serf's max (D-119), and survive death in the rack.
+- The party clear is checked with two players in the Stronghold and the Crypt (D-126).
 - The server decides every potion, drop, and EXP award.
 
 ## Phase 13 — Ten dungeons: tiers 4 and 5 and more
 
-**Goal:** At least **10 dungeons** before the alpha (the user, D-124), including tiers 4 and 5 for levels 15–20, which finish D-108's ladder of about five tiers. Three exist (the Warrens, the Stronghold, the Crypt).
+**Goal:** At least **10 dungeons** before the alpha (the user, D-124): tiers 4 and 5 for levels 15–20, which finish the first five dungeons' ladder from level 1 to 20, then **five endgame dungeons for level 20 and up** (D-126). Three exist (the Warrens, the Stronghold, the Crypt).
 
 Tasks:
 
 - Draft tier 4 (about levels 15–18) and tier 5 (about levels 18–20), one dungeon at a time, for the user's approval: theme, level range, rooms, enemies, room mechanics, boss, EXP base, loot tiers, and potion chance. The ranges here are placeholders until each draft is approved.
-- Draft the other new dungeons to reach 10, following the plan for how dungeons spread across levels (open question 24), for example a second dungeon in some level bands or a special format (D-013).
+- Draft dungeons 6–10, the first endgame dungeons, all for level 20 and up (D-126): how each one differs (enemies, mechanics, loot, a special format, D-013) is drafted per dungeon.
+- Build reusable building blocks along the way (D-126): enemy roles, room mechanics, and boss patterns defined so new dungeons can recombine them, so most of Phase 22's dungeons are new mixes rather than new code.
 - Loot continues upward (T5 and above), so the top tiers' items, including the T10 chase of GDD §9, become reachable.
 - Check the whole EXP path against D-071: progressing through the five tiers reaches level 20 in about five dungeons' worth of clears.
 - Decide with the user whether higher tiers need any entry rule beyond D-107.
@@ -387,6 +389,7 @@ Tasks:
 - A party's members enter the same run together; the 15-second join window and the 10-player cap (D-012, D-052) still apply.
 - Decide whether launch needs a friends list or chat (open question 22); chat would need moderation (Phase 20).
 - Mixed-level parties follow the entry rules (D-107).
+- Party screens stay minimal here (invite, accept, leave, who is in the party); their final look comes with the home screen in Phase 15 (D-126).
 
 Acceptance:
 
@@ -400,7 +403,7 @@ Acceptance:
 
 Tasks:
 
-- Finalize the home (main menu) layout: serfs, stash, potion rack, dungeons, leaderboards, party, and settings, drafted for approval.
+- Finalize the home (main menu) layout: serfs, stash, potion rack, dungeons, leaderboards, party, and settings, drafted for approval; this polishes Phase 14's minimal party screens (D-126).
 - A real player HUD in the 240×640 panel; the debug readout moves behind a toggle.
 - A minimap: how much it shows (rooms visited, the whole layout, other players, the portal) and where it sits without covering gameplay, drafted for approval.
 - More leaderboards than lifetime EXP, chosen with the user (GDD §12).
@@ -534,7 +537,7 @@ Acceptance:
 
 Tasks:
 
-- Follow the agreed spread of the 40 (open question 24): for example several dungeons per level band, endgame dungeons, and special formats (D-013).
+- Follow the agreed spread (D-126): the first five dungeons cover levels 1–20, and every one after that is an endgame dungeon for level 20 and up, built mostly from Phase 13's reusable building blocks.
 - Ship dungeons in batches; each dungeon is drafted for approval like D-108 and D-120 (theme, rooms, enemies, mechanics, boss, EXP, loot, potions).
 - New item kinds beyond base tiers and Artifacts, drafted for approval one kind at a time, with their place in the economy.
 - Keep drops, rates, and EXP in central configuration, and re-check the EXP pace (D-071) as dungeons are added.
