@@ -1,6 +1,6 @@
 # Serfdom — Technical Architecture
 
-**Status:** Proposed direction; verify against the actual repository before implementation.
+**Status:** Describes the code as built through Phase 12k (2026-10-24). Verify against the repository before relying on a detail.
 
 ## 1. Product architecture
 
@@ -11,53 +11,153 @@ Serfdom is one online game with two planned clients:
 
 Both clients connect to the same authoritative multiplayer service and persistent data store. Do not build a separate game backend or progression database for Steam.
 
-## 2. Proposed stack
+## 2. Stack
 
-- Client: Phaser + TypeScript.
-- Desktop wrapper: Electron, later.
-- Real-time transport: WebSockets.
-- Server: TypeScript/JavaScript runtime with a small authoritative game-server process.
-- Database: PostgreSQL, when persistent account/game data is introduced.
+- Client: Phaser 4 + TypeScript (T-001).
+- Desktop wrapper: Electron or similar, Phase 25 (T-002, still PROPOSED).
+- Real-time transport: WebSockets (`ws`, T-020).
+- Server: Node.js 24 running TypeScript directly, one small authoritative game-server process.
+- Database: PostgreSQL 17 (D-059), since Phase 7.
 - Build/dev server: Vite (Phase 1).
 - Testing: Vitest (Phase 1); document commands in the root README.
 - Formatting: Prettier, pinned exact version (Phase 0). Linting: ESLint (Phase 1). Type checks: `tsc` (Phase 1).
 
-### Current repository tooling
+### Repository tooling
 
 - Runtime: Node.js 24 LTS (`.nvmrc`; `package.json` `engines`; `.npmrc` `engine-strict=true` makes npm refuse other versions).
 - Package manager: npm. `.npmrc` `save-exact=true` records exact versions; `package-lock.json` is committed.
-- Monorepo: npm workspaces. Current workspaces: `shared` (`@serfdom/shared`) and `client` (`@serfdom/client`). `server` is added in Phase 4.
+- Monorepo: npm workspaces. Workspaces: `shared` (`@serfdom/shared`), `client` (`@serfdom/client`), and `server` (`@serfdom/server`, since Phase 4).
 - `@serfdom/shared` is consumed as TypeScript source (its `exports` points at `src/index.ts`); Vite compiles it for the client. It has no DOM types (`lib: ["ES2022"]`), so browser-only code there is a type error. Internal imports use explicit `.ts` paths so Node can later run it directly; the client tsconfig sets `allowImportingTsExtensions` because it type-checks that source.
 - Line endings: LF everywhere (`.gitattributes` `eol=lf`, `.editorconfig`, Prettier `endOfLine`).
 - Pinned versions (Phase 1): Phaser 4.2.1, Vite 8.3.5, Vitest 5.0.5, TypeScript 6.0.3, ESLint 10.13.0 with typescript-eslint 8.72.0, Prettier 3.9.10.
   - TypeScript is held at 6.0.x because typescript-eslint 8.72 supports only `typescript <6.1.0`. Revisit TypeScript 7 when typescript-eslint supports it.
 - Tool locations: shared tooling (TypeScript, ESLint, Prettier) is installed at the root; Vite/Vitest/Phaser belong to `client`. ESLint uses one flat config at the root (`eslint.config.mjs`).
 
-### Current server structure (Phase 4a)
+### Code map (current)
 
-- `server/` workspace: Node 24 runs `src/main.ts` directly (type stripping; `erasableSyntaxOnly` keeps the code strippable; `--watch` restarts on change in dev). No build step.
-- `GameServer` (`server/src/game-server.ts`) wraps a `ws` `WebSocketServer`. Per connection it keeps a session: guest id (null until a valid hello), invalid-message count, hello timer.
-- Handshake: client sends `hello {protocol}`; the server refuses a different `PROTOCOL_VERSION` (error + close 1008), otherwise assigns the next guest id (never reused), replies `welcome {playerId, players}`, and broadcasts `playerJoined`. On close it broadcasts `playerLeft`. The server's session map is the canonical list of who is online.
-- Trust boundary: `ws` `maxPayload` (1 KB) closes oversized frames (1009) before decoding; binary frames and anything `parseClientMessage` rejects get an `error` reply; 5 invalid messages or no hello within 5 s closes the connection (1008).
-- Protocol: `shared/src/protocol.ts` holds message types, strict parsers (exact keys, typed fields), and `PROTOCOL_VERSION`. The client validates server messages with the same module.
-- Movement authority (Phase 4b, T-023): clients send `input {seq, move}` once per 60 Hz tick (a direction, never a position). The server queues up to 30 per player and applies **at most one per tick** with the shared `stepMovement` and `TEST_WALLS` (`server/src/player-movement.ts`), so sending more messages cannot make anyone faster; with no queued input the player stands still. Seq numbers must strictly increase; directions over length 1 are rejected by the parser and anything a hair over is normalized. More than 180 messages in a second closes the connection. The server loop runs ticks from measured real time (fixed-step accumulator, like the client) and broadcasts `snapshot {tick, players:[{id,x,y,ack}]}` (every tick since 4c). `ack` is the last input seq applied for that player.
-- Latency tuning (Phase 4c, T-026, target D-042): snapshots are sent **every tick** (60 Hz). Per player the server earns one move credit per tick (saved up to 4) and spends one per applied input, so a late input followed by two at once is caught up without ever exceeding PLAYER_SPEED over time; after applying, any waiting inputs beyond 1 are dropped (counted as processed in `ack`). Without that limit the queue only ever grows, because client and server tick at the same rate. Remote players are interpolated **50 ms** behind.
-- Client sync (`client/src/net-sync.ts`): the local player uses **prediction + reconciliation** (`prediction.ts`): each tick it moves immediately with the same shared rule and stores the input; on each snapshot it snaps to the server position and replays inputs newer than `ack`. Other players use **interpolation** (`interpolation.ts`): drawn 50 ms in the past (100 ms before 4c), blended between the two surrounding snapshots, never extrapolated. Until the first snapshot arrives (or while offline) movement is local as before. Online, the local combat sim is fed the predicted position and no movement of its own; the prototype respawn restores HP in place because only the server may move the player (PROVISIONAL).
-- The debug map (`shared/src/test-world.ts`) moved to `shared/` so the server collides against the same walls. Everyone spawns at (1000, 1000); players do not collide with each other (PROVISIONAL).
-- Client: `client/src/net.ts` `Connection` keeps one socket, mirrors presence from the server, and retries every 2 s when disconnected. The game keeps running locally while offline.
-- Config: root `.env` (optional, git-ignored; see `.env.example`) is read by Vite (`envDir: ".."`, `VITE_SERVER_URL`) and by Node (`--env-file-if-exists`, `PORT`).
+Every consequential rule lives in `shared/` as pure TypeScript, so the server runs it authoritatively and the client runs the same code to predict. The server owns all state; the client draws it.
 
-### Current client structure (Phases 1–2)
+**`shared/src/` (pure rules, no DOM, no I/O)**
 
-- `client/index.html`: `#game-container` (960×640) is a flex row of `#hud` (240×640, plain DOM) and `#gameplay` (720×640, holds the Phaser canvas). Both use `flex: 0 0 <width>` so neither can grow or shrink into the other.
-- The HUD is DOM, outside Phaser entirely, so it is outside the world camera's coordinate space by construction (PROVISIONAL, T-011).
-- Phaser canvas = 720×640 with `Scale.NONE` and camera zoom 1: one world pixel is one CSS pixel. At `devicePixelRatio` 1 that is also one device pixel. Higher DPR or browser zoom makes the browser upscale the canvas; CSS `image-rendering: pixelated` keeps that blocky, but non-integer ratios (e.g. 1.25, 1.5) can make pixel widths uneven. Not yet addressed.
-- `pixelArt: true` disables texture smoothing/antialiasing and rounds texture positions to whole pixels.
-- Pure rules live in Phaser-free modules with Vitest unit tests: client `layout.ts`, `camera-math.ts`; shared `movement.ts`, `fixed-step.ts`, `movement-config.ts`. `WorldScene.ts` wires input → simulation → rendering and holds no rules of its own.
-- Simulation loop (Phase 2): each rendered frame, `consumeFixedSteps` converts elapsed time into whole 1/60 s ticks (remainder carried, stalls capped at 0.25 s). Input is sampled once per frame; each tick calls `stepMovement`. The sprite and camera then use the same rounded position, so the player is always exactly centered (D-028, D-033) and texture-aligned.
-- Collision (`shared/src/movement.ts`): body = axis-aligned box around the player center. X then Y are resolved separately against wall rectangles (sliding). Each axis is swept, so no tunneling at any step size. Touching edges do not count as overlap.
-- Combat simulation (Phase 3b, `shared/src/sim.ts`): `stepSim(state, {move, fire}, walls, dt)` is one pure tick: move the player, maybe fire (cooldown in `weapon.ts`), advance every projectile (`projectile.ts`, swept hits via `collision.ts`), apply damage and respawn timers (`enemy.ts`). It returns the new state plus events (shot/hit/blocked/defeated/respawned) that the client uses only for presentation (hit flash, HUD counters). Fire intent per tick comes from `resolveFireIntent(mode, pointer, playerPos, targets, range)`. All tuning is in `shared/src/combat-config.ts`. This is the code the Phase 5 server is meant to run.
-- Simultaneous attacks (Phase 5c, T-028): projectiles resolve in id order within a tick; ids follow input-application order (connection order on the server). A shared killing blow goes to the lower id; the other shot finds no target and continues. `shared/src/simultaneous.test.ts` proves determinism, single defeat credit, and no negative HP under a 4-player burst.
+- Movement and time: `movement.ts`, `movement-config.ts`, `fixed-step.ts` (60 Hz), `geometry.ts`, `collision.ts`.
+- Combat: `sim.ts` (`applyPlayerInput` per player input, `stepWorld` once per tick), `weapon.ts`, `projectile.ts`, `health.ts`, `combat-config.ts`, `abilities.ts`, `party-scaling.ts`.
+- Enemies: `enemy.ts`, `enemy-config.ts`, `enemy-ai.ts` (one behaviour per kind), `pathing.ts` (`Navigator` grid path finding).
+- Dungeons: `dungeons.ts` (the list, entry rules, `MAX_PARTY_SIZE`), `dungeon-layout.ts` (rooms, doors, validation), `dungeon-gen.ts` (placing room pieces), `dungeon-recipe.ts` (`buildFromRecipe`), `dungeon-run.ts` (room progress, waves, doors, traps), `seeded-random.ts`, and one file per dungeon: `goblin-warrens.ts`, `goblin-stronghold.ts`, `forgotten-crypt.ts`. `test-world.ts` is the Training Yard fixture.
+- Progression and items: `progression.ts` (EXP, levels), `classes.ts`, `stats.ts` (growth, maxes, formulas), `items.ts` (gear, loot pools, values), `potions.ts`, `serf-rules.ts`, `account-rules.ts`, `run-stats.ts`.
+- `protocol.ts`: every network message, its strict parser, and `PROTOCOL_VERSION`.
+
+**`server/src/` (Node 24 + `ws`, no build step)**
+
+- `main.ts` (start-up, env), `game-server.ts` (connections, sessions, routing, the 60 Hz loop), `matchmaking.ts` (open queue), `dungeon-instance.ts` (one run: its own simulation, members, results), `input-queue.ts` (move-credit rule), `rate-limit.ts`, `log.ts` (never logs IPs or private data).
+- `auth/`: passwords (scrypt), accounts, sessions, login throttle. `serfs/`: serf storage and the service for runs, stats, loot, stash, gold, equipping, and potions. Each repo has a PostgreSQL version and an in-memory twin that pass the same contract tests.
+- `db/migrate.ts` applies `server/migrations/NNN_*.sql` in order on start.
+
+**`client/src/` (Phaser 4 + Vite; draws, never decides)**
+
+- `main.ts` (start-up, HUD readouts), `app-state.ts` (screen state machine), `screens.ts` / `screens.css` (menu, tabs, queue, death and results screens), `auth-store.ts`.
+- Networking: `net.ts` (socket), `net-sync.ts`, `prediction.ts` (local player), `interpolation.ts` (other players), `local-shots.ts`.
+- Drawing: `scenes/WorldScene.ts` (input → prediction → drawing, cameras), `scenes/MapView.ts`, `scenes/CombatView.ts`, `scenes/RemotePlayersView.ts`, `combat-view-model.ts`, `boss-bar.ts`, `wall-outline.ts`, `names.ts`.
+- Layout and input: `layout.ts`, `camera-math.ts`, `render-config.ts`, `input.ts`, `debug-list.ts`.
+
+The protocol version goes up with every change to a message's shape; client and server must match exactly (the server refuses any other version). How each part was built, phase by phase, is in Appendix A.
+
+Add a dependency only when the current phase needs it, and explain why first.
+
+## 3. Trust boundaries
+
+The client is untrusted. It may send intentions such as “move,” “attempt attack,” “activate ability,” or “use item.” It must not be allowed to dictate consequential results.
+
+The server owns and validates:
+
+- Player session and party membership.
+- Legal movement and collisions, to the degree needed by the game model.
+- Attack eligibility, damage, enemy HP, and enemy defeat.
+- Ability costs and cooldowns.
+- HP/MP and death.
+- Resurrection.
+- Inventory/equipment ownership.
+- Dungeon state and completion eligibility.
+- Loot rolls, XP, gold, and persistent progression.
+- Market transactions and shared storage.
+
+Client prediction may be used for responsiveness, but authoritative state comes from the server.
+
+## 4. Suggested separation of concerns
+
+Do not force this folder structure if the chosen framework suggests a better one, but preserve these boundaries:
+
+- `client/`: Phaser scene, rendering, input, UI, sound, visual effects.
+- `server/`: sessions, authoritative simulation, message handlers, party/dungeon state.
+- `shared/`: message types, validated schemas, pure game rules/config shared where safe.
+- Tests sit beside the code they test (`*.test.ts`); there is no separate `tests/` folder.
+- `docs/`: design, architecture, roadmap, decisions, testing, work log.
+
+Keep pure deterministic rules (such as tier lookup or XP calculations) separate from Phaser rendering and network I/O so they can be tested quickly.
+
+## 5. Network protocol principles
+
+- Define typed messages with explicit schemas.
+- Validate every incoming message and enforce reasonable limits.
+- Version the protocol or otherwise establish a compatibility policy before release.
+- Avoid trusting client timestamps or client-provided outcome values.
+- Make disconnect and reconnect behavior explicit.
+- Keep message handlers small and route requests to authoritative game services.
+- Do not expose database internals or secrets to clients.
+
+Do not finalize the protocol before the first multiplayer milestone. Start small and evolve it deliberately.
+
+## 6. Persistence principles
+
+### Current database (Phase 7)
+
+PostgreSQL 17 (D-059), reached through `pg` with one connection pool per server process. Tables:
+
+- `schema_migrations`: which migration files have run.
+- `accounts`: id, normalized unique email, scrypt `password_hash`, created_at.
+- `sessions`: SHA-256 `token_hash` (the token itself is never stored), account_id (cascade delete), expires_at.
+- `serfs`: id, account_id (cascade delete), name (unique among living, case-insensitive, partial index), level, died_at / death_dungeon / killed_by (set once), lifetime stat columns.
+
+Rules in code: every serf query is scoped by `account_id`; slot-limited creation locks the account row; a run is recorded with one `update … where died_at is null`; all SQL uses parameters (no string-built queries). Migrations since then (003–010) add EXP, classes, stats, items, the stash and gold, ability grants, accessory bases, and potions; see `server/migrations/`. Not yet done: backups and restore drills (before real players' data matters, Phase 19).
+
+When persistence is introduced:
+
+- Use migrations.
+- Keep credentials and secrets in environment variables.
+- Commit `.env.example` only with placeholders.
+- Use database transactions for operations that must be atomic.
+- Add authorization checks for every account-owned resource.
+- Test concurrent or duplicate requests for inventory and economy operations.
+- Plan for backups before real players' data matters.
+
+## 7. Cross-platform principles
+
+- Share the core client code and server protocol.
+- Platform-specific Steam integrations belong behind a narrow adapter/module.
+- Steam account linking should connect to the canonical Serfdom account, not create an independent character system by default.
+- Ensure browser and desktop builds remain protocol-compatible.
+- Test mixed-platform play against the same backend before release.
+
+## 8. Avoid premature complexity
+
+Do not begin with microservices, Kubernetes, elaborate matchmaking, a large content pipeline, or production-scale infrastructure. Build the smallest architecture that proves the next game loop and can evolve safely.
+
+## 9. Approved browser layout and camera constraints
+
+- Initial desktop game container is 960×640 CSS pixels: 240×640 fixed HUD on the left and 720×640 gameplay viewport on the right.
+- Keep HUD layout outside the Phaser world-camera coordinate space. The camera centers the player within the gameplay viewport.
+- Camera must show at least 300 world pixels from the player center in each cardinal direction during normal play.
+- At 1 CSS pixel per world pixel, 720×640 viewport yields 360 horizontal and 320 vertical world pixels from center.
+- Source sprite size is 16×16 pixels for players and player-sized ordinary enemies. Larger enemies/bosses may vary.
+- Explicitly distinguish world coordinates, render resolution, CSS layout, device pixel ratio, and Phaser zoom/scale; disable texture smoothing.
+- Prefer a simple DOM layout (HUD sibling of the game canvas) or an equivalent clear separation. Verify actual canvas bounds before choosing implementation details.
+- Camera edges are decided: no clamping, space beyond the map is empty void (D-033). Minimum window size and multiplayer visibility fairness remain unresolved (open questions 11–13, 15). Do not finalize these silently.
+
+## Appendix A — Implementation notes by phase
+
+Kept as the record of how and why each part was built. The current shape of the code is the code map in §2.
+
+### A.1 Phase 5a onward (newest first)
+
 - **Phase 12k: cursed runes and spirit braziers (D-123).** Rooms and pieces gain `runes` (`RuneSpot` = point + column, turned with the room but keeping its column) and `arrows.fire`. `RUNES` and `BRAZIERS` (dungeon-layout.ts) hold the numbers. `runeBursts` / `runeWarnings` (dungeon-run.ts) run on the room clock with a new `RoomProgress.runeSteps`; `runeColumn` is the ping-pong sweep. Braziers reuse `arrowVolleys` / `trapWarnings` with their own timing and `firesThisVolley` (alternate halves instead of a random gap); `fireArrows` makes slow, bigger `braziers` projectiles. `burstRunes` adds zero-delay hazards tagged `runes`, so hits, Defense, death names, and stats come from the hazard path; a landing rune emits a `rune` blast, and the snapshot leaves rune hazards out. `thinPiece` takes the kinds to thin (the crypt thins skeletons and archers in `CRYPT_MECHANIC_ROOMS`). Protocol v30: snapshot `runes`, projectile `fireball`, blast `rune`, hazard kinds `braziers` and `runes`. Client: rune circles that fill red, round braziers that glow, blue-white fireballs.
 - **Phase 12j: ghosts, necromancers, grave knights (D-122).** New kinds `ghost`, `necromancer`, `knight` with configs and AI: `ghostAct` moves with no walls and toggles `faded`; `necromancerAct` reuses the thrower behaviour (`NECROMANCER` spec) and returns `EnemyAction.raise` (a pile's id) that the world step applies (full HP, `revived`, a `raise` blast); `knightAct` turns `facing` at a capped rate, and its slam returns `EnemyAction.slam` (warning, then hit, `slamCentre`) like the Warchief's sweep. `isHittable` (alive and not faded) replaces `isAlive` wherever a player's attack picks or hits an enemy (shot targets, blasts, zones, chain, curse, `aimTargets`); `shieldBlocks(enemy, shotDirection)` stops a player shot at a knight's front in the world step (a `shieldBlock` blast). The crypt's rooms get the new undead by swapping wave-0 skeletons and archers (`NEW_UNDEAD`, like the Stronghold's `NEW_GOBLINS`). Protocol v29: enemies `faded` and `facing`; blasts `slamWarning`, `slam`, `shieldBlock`, `raise`. Client: names, colours, see-through faded ghosts, a shield arc, slam drawing (like the sweep), sparks, raise rings; auto-aim and local shot prediction skip faded ghosts.
 - **Defense curve (D-121).** `combatFor`'s `damageTakenFactor` is `DEFENSE_SCALE / (DEFENSE_SCALE + DEF)` with `DEFENSE_SCALE` 40 (stats.ts); tests compute their expectations from it.
@@ -96,6 +196,34 @@ Both clients connect to the same authoritative multiplayer service and persisten
 - **Phase 6a: menu, queue, and dungeon instances** (D-048, D-050–D-052, T-030–T-033). Protocol v4: client `queue {dungeon}`, `leaveQueue`, `exitDungeon` (R); server `queueStatus {dungeon, queued, startsIn}`, `runStarted {dungeon, players}`, `runEnded {dungeon, result: completed|died|left, stats}`; `playAgain` removed. Shared `dungeons.ts` lists dungeons and their layouts (walls, spawn, enemy spawns); `run-stats.ts` counts a player's stats from sim events (server-side only). Server: `matchmaking.ts` (`Matchmaker`, pure, tick-based queue rule) and `dungeon-instance.ts` (`DungeonInstance`: own `SimState` with no respawns, a 15 s join window (`canJoin`/`join`, never-rejoin; `GameServer.joinOpenRuns` fills the fullest open run first), members' input queues and stats; ends runs on death, on clearing every enemy, on R, or on disconnect). `GameServer` keeps each joined player in exactly one place (menu, queue, or one instance), ticks every instance, and sends each instance's snapshots to its members only. Late inputs after a run ended are ignored, not errors. Client: `app-state.ts` (pure screen reducer: connecting → menu → queued → inRun → results), `screens.ts`/`screens.css` (DOM screens over the container), `NetSync` resets its predictor and views on every `runStarted`/`runEnded` (seqs restart at 0; the server makes a new input queue). The offline mode is gone.
 - **Phase 5b: server-run combat** (D-043, D-044, T-027). `GameServer` owns one `SimState`: a player is added on hello, removed on disconnect, and reset on `playAgain` (only allowed while dead). Each tick, per player, `takeInputsForTick` (`server/src/input-queue.ts`, the move-credit/backlog rule) picks 0–4 queued inputs, each run through `applyPlayerInput` (movement + fire cooldown + maybe a shot); then `stepWorld` runs once; then a snapshot is broadcast. Protocol v3: `input {seq, move, fire:{trigger, aim}}`, `playAgain`, and `snapshot {tick, players:[{id,x,y,ack,hp,maxHp,cooldown}], enemies:[...], projectiles:[{id,owner,by,x,y,dx,dy,speed,size}]}`.
 - Client online path: `PlayerPredictor` (`client/src/prediction.ts`) runs `applyPlayerInput` on a one-player state, so it predicts position **and** shots exactly as the server will (proven by a parity test); reconciliation adopts the server's position, cooldown, and HP and replays pending inputs without re-firing. Predicted shots fly locally (`local-shots.ts`) and are purely visual; the server's copies of our own shots are not drawn. Enemy bullets and other players' shots are drawn from the latest snapshot extrapolated along their path to "now" (capped at 0.1 s). Enemies and HP come only from snapshots. `CombatView` draws a `CombatViewModel` built from either the offline sim or `NetSync`, and flashes on any HP drop. Dead players are not drawn for others.
+
+### A.2 Phases 1–5 (foundations)
+
+#### Server structure (Phase 4)
+
+- `server/` workspace: Node 24 runs `src/main.ts` directly (type stripping; `erasableSyntaxOnly` keeps the code strippable; `--watch` restarts on change in dev). No build step.
+- `GameServer` (`server/src/game-server.ts`) wraps a `ws` `WebSocketServer`. Per connection it keeps a session: guest id (null until a valid hello), invalid-message count, hello timer.
+- Handshake: client sends `hello {protocol}`; the server refuses a different `PROTOCOL_VERSION` (error + close 1008), otherwise assigns the next guest id (never reused), replies `welcome {playerId, players}`, and broadcasts `playerJoined`. On close it broadcasts `playerLeft`. The server's session map is the canonical list of who is online.
+- Trust boundary: `ws` `maxPayload` (1 KB) closes oversized frames (1009) before decoding; binary frames and anything `parseClientMessage` rejects get an `error` reply; 5 invalid messages or no hello within 5 s closes the connection (1008).
+- Protocol: `shared/src/protocol.ts` holds message types, strict parsers (exact keys, typed fields), and `PROTOCOL_VERSION`. The client validates server messages with the same module.
+- Movement authority (Phase 4b, T-023): clients send `input {seq, move}` once per 60 Hz tick (a direction, never a position). The server queues up to 30 per player and applies **at most one per tick** with the shared `stepMovement` and `TEST_WALLS` (`server/src/player-movement.ts`), so sending more messages cannot make anyone faster; with no queued input the player stands still. Seq numbers must strictly increase; directions over length 1 are rejected by the parser and anything a hair over is normalized. More than 180 messages in a second closes the connection. The server loop runs ticks from measured real time (fixed-step accumulator, like the client) and broadcasts `snapshot {tick, players:[{id,x,y,ack}]}` (every tick since 4c). `ack` is the last input seq applied for that player.
+- Latency tuning (Phase 4c, T-026, target D-042): snapshots are sent **every tick** (60 Hz). Per player the server earns one move credit per tick (saved up to 4) and spends one per applied input, so a late input followed by two at once is caught up without ever exceeding PLAYER_SPEED over time; after applying, any waiting inputs beyond 1 are dropped (counted as processed in `ack`). Without that limit the queue only ever grows, because client and server tick at the same rate. Remote players are interpolated **50 ms** behind.
+- Client sync (`client/src/net-sync.ts`): the local player uses **prediction + reconciliation** (`prediction.ts`): each tick it moves immediately with the same shared rule and stores the input; on each snapshot it snaps to the server position and replays inputs newer than `ack`. Other players use **interpolation** (`interpolation.ts`): drawn 50 ms in the past (100 ms before 4c), blended between the two surrounding snapshots, never extrapolated. Until the first snapshot arrives (or while offline) movement is local as before. Online, the local combat sim is fed the predicted position and no movement of its own; the prototype respawn restores HP in place because only the server may move the player (PROVISIONAL).
+- The debug map (`shared/src/test-world.ts`) moved to `shared/` so the server collides against the same walls. Everyone spawns at (1000, 1000); players do not collide with each other (PROVISIONAL).
+- Client: `client/src/net.ts` `Connection` keeps one socket, mirrors presence from the server, and retries every 2 s when disconnected. The game keeps running locally while offline.
+- Config: root `.env` (optional, git-ignored; see `.env.example`) is read by Vite (`envDir: ".."`, `VITE_SERVER_URL`) and by Node (`--env-file-if-exists`, `PORT`).
+
+#### Client structure (Phases 1–2)
+
+- `client/index.html`: `#game-container` (960×640) is a flex row of `#hud` (240×640, plain DOM) and `#gameplay` (720×640, holds the Phaser canvas). Both use `flex: 0 0 <width>` so neither can grow or shrink into the other.
+- The HUD is DOM, outside Phaser entirely, so it is outside the world camera's coordinate space by construction (PROVISIONAL, T-011).
+- Phaser canvas = 720×640 with `Scale.NONE` and camera zoom 1: one world pixel is one CSS pixel. At `devicePixelRatio` 1 that is also one device pixel. Higher DPR or browser zoom makes the browser upscale the canvas; CSS `image-rendering: pixelated` keeps that blocky, but non-integer ratios (e.g. 1.25, 1.5) can make pixel widths uneven. Not yet addressed.
+- `pixelArt: true` disables texture smoothing/antialiasing and rounds texture positions to whole pixels.
+- Pure rules live in Phaser-free modules with Vitest unit tests: client `layout.ts`, `camera-math.ts`; shared `movement.ts`, `fixed-step.ts`, `movement-config.ts`. `WorldScene.ts` wires input → simulation → rendering and holds no rules of its own.
+- Simulation loop (Phase 2): each rendered frame, `consumeFixedSteps` converts elapsed time into whole 1/60 s ticks (remainder carried, stalls capped at 0.25 s). Input is sampled once per frame; each tick calls `stepMovement`. The sprite and camera then use the same rounded position, so the player is always exactly centered (D-028, D-033) and texture-aligned.
+- Collision (`shared/src/movement.ts`): body = axis-aligned box around the player center. X then Y are resolved separately against wall rectangles (sliding). Each axis is swept, so no tunneling at any step size. Touching edges do not count as overlap.
+- Combat simulation (Phase 3b, `shared/src/sim.ts`): `stepSim(state, {move, fire}, walls, dt)` is one pure tick: move the player, maybe fire (cooldown in `weapon.ts`), advance every projectile (`projectile.ts`, swept hits via `collision.ts`), apply damage and respawn timers (`enemy.ts`). It returns the new state plus events (shot/hit/blocked/defeated/respawned) that the client uses only for presentation (hit flash, HUD counters). Fire intent per tick comes from `resolveFireIntent(mode, pointer, playerPos, targets, range)`. All tuning is in `shared/src/combat-config.ts`. This is the code the Phase 5 server is meant to run.
+- Simultaneous attacks (Phase 5c, T-028): projectiles resolve in id order within a tick; ids follow input-application order (connection order on the server). A shared killing blow goes to the lower id; the other shot finds no target and continues. `shared/src/simultaneous.test.ts` proves determinism, single defeat credit, and no negative HP under a 4-player burst.
 - **Phase 5a: multiplayer simulation** (`shared/src/sim.ts`). `SimState` holds any number of `players` (id, position, fire cooldown, HP). Two clocks: `applyPlayerInput(state, id, input)` advances one player's movement and fire cooldown per input that player sent (the server may apply 0–4 per tick under the move-credit rule, so nobody moves or fires faster than allowed); `stepWorld(state)` advances everything else exactly once per tick: party HP scaling (`party-scaling.ts`, D-045, keeps the HP fraction), enemy rings (aggro on any living player), projectiles (player shots → enemies, credited to `ownerId`; enemy bullets → any living player's hurtbox, D-044), enemy respawns. `stepSim(state, inputs)` = one input per player + one world tick, for the offline client and tests. A player at 0 HP stays in the state as dead (no auto-respawn); `addPlayer` resets them (D-046 "play again"), `removePlayer` handles disconnects. In 5a the client still runs combat locally for its one player (id 1); 5b moves it to the server.
 - Phase 3c additions (superseded in part by 5a): projectiles carry an `owner` (player shots hit enemies; enemy bullets hit only the player's 15×15 hurtbox, separate from the 16×16 wall body). Tick order: player moves/fires (only while alive) → enemies within aggro range of a living player fire rings (cooldown reuses `stepFireCooldown` at 1 ring / 2 s) → projectiles resolve → enemy respawn timers → prototype player respawn. HP rules for players and enemies share `shared/src/health.ts`. The prototype respawn resets the whole encounter (player at spawn with full HP, projectiles cleared, enemies full HP with fresh attack timers); it is deliberately isolated in `stepPlayerRespawn` so the real death rules can replace it.
 - Client combat drawing lives in `client/src/scenes/CombatView.ts` (no rules). The mouse is converted to world coordinates with `screenToWorld` (client `camera-math.ts`), the exact inverse of the camera transform, rather than Phaser `getWorldPoint`, which uses the previous frame's camera matrix.
@@ -103,94 +231,3 @@ Both clients connect to the same authoritative multiplayer service and persisten
 - View rotation (Phase 3a): `stepViewRotation` (client `camera-math.ts`) advances the angle at 120°/s while Q/E is held (Q = positive = world turns clockwise on screen), and Z resets it to 0. It is presentation only and follows frame time, not simulation ticks. `worldDirectionFromInput` (shared) rotates the screen-space WASD direction by −angle, so W is always "up the screen"; `stepMovement` receives only that unit vector and rejects any longer one.
 - Rendering under rotation: world objects live in one Phaser `Layer` drawn by the rotating main camera. A second, never-rotating "overlay" camera draws the screen-fixed debug marks (a single camera would rotate them too). The player sprite is counter-rotated so it stays upright and pixel-aligned (PROVISIONAL, T-017); floor, walls, and labels rotate and look jagged at non-right angles.
 - `main.ts` measures the real DOM after the first frame and on every window resize, printing it in the HUD "Layout" readout (and `console.table` once); mismatches against `layout.ts` produce `[layout]` console warnings. The HUD "Live" readout updates every frame: player position, camera center, player on-screen position, keys held.
-
-These are proposals, not permission to install every dependency immediately. Inspect the repository and choose the minimum needed for the current phase.
-
-## 3. Trust boundaries
-
-The client is untrusted. It may send intentions such as “move,” “attempt attack,” “activate ability,” or “use item.” It must not be allowed to dictate consequential results.
-
-The server owns and validates:
-
-- Player session and party membership.
-- Legal movement and collisions, to the degree needed by the game model.
-- Attack eligibility, damage, enemy HP, and enemy defeat.
-- Ability costs and cooldowns.
-- HP/MP and death.
-- Resurrection.
-- Inventory/equipment ownership.
-- Dungeon state and completion eligibility.
-- Loot rolls, XP, gold, and persistent progression.
-- Market transactions and shared storage.
-
-Client prediction may be used for responsiveness, but authoritative state comes from the server.
-
-## 4. Suggested separation of concerns
-
-Do not force this folder structure if the chosen framework suggests a better one, but preserve these boundaries:
-
-- `client/`: Phaser scene, rendering, input, UI, sound, visual effects.
-- `server/`: sessions, authoritative simulation, message handlers, party/dungeon state.
-- `shared/`: message types, validated schemas, pure game rules/config shared where safe.
-- `tests/`: unit and integration tests, or tests beside the code if that fits the tooling.
-- `docs/`: design, architecture, roadmap, decisions, testing, work log.
-
-Keep pure deterministic rules (such as tier lookup or XP calculations) separate from Phaser rendering and network I/O so they can be tested quickly.
-
-## 5. Network protocol principles
-
-- Define typed messages with explicit schemas.
-- Validate every incoming message and enforce reasonable limits.
-- Version the protocol or otherwise establish a compatibility policy before release.
-- Avoid trusting client timestamps or client-provided outcome values.
-- Make disconnect and reconnect behavior explicit.
-- Keep message handlers small and route requests to authoritative game services.
-- Do not expose database internals or secrets to clients.
-
-Do not finalize the protocol before the first multiplayer milestone. Start small and evolve it deliberately.
-
-## 6. Persistence principles
-
-### Current database (Phase 7)
-
-PostgreSQL 17 (D-059), reached through `pg` with one connection pool per server process. Tables:
-
-- `schema_migrations`: which migration files have run.
-- `accounts`: id, normalized unique email, scrypt `password_hash`, created_at.
-- `sessions`: SHA-256 `token_hash` (the token itself is never stored), account_id (cascade delete), expires_at.
-- `serfs`: id, account_id (cascade delete), name (unique among living, case-insensitive, partial index), level, died_at / death_dungeon / killed_by (set once), lifetime stat columns.
-
-Rules in code: every serf query is scoped by `account_id`; slot-limited creation locks the account row; a run is recorded with one `update … where died_at is null`; all SQL uses parameters (no string-built queries). Not yet done: backups and restore drills (before real players' data matters, Phase 14).
-
-When persistence is introduced:
-
-- Use migrations.
-- Keep credentials and secrets in environment variables.
-- Commit `.env.example` only with placeholders.
-- Use database transactions for operations that must be atomic.
-- Add authorization checks for every account-owned resource.
-- Test concurrent or duplicate requests for inventory and economy operations.
-- Plan for backups before real players' data matters.
-
-## 7. Cross-platform principles
-
-- Share the core client code and server protocol.
-- Platform-specific Steam integrations belong behind a narrow adapter/module.
-- Steam account linking should connect to the canonical Serfdom account, not create an independent character system by default.
-- Ensure browser and desktop builds remain protocol-compatible.
-- Test mixed-platform play against the same backend before release.
-
-## 8. Avoid premature complexity
-
-Do not begin with microservices, Kubernetes, elaborate matchmaking, a large content pipeline, or production-scale infrastructure. Build the smallest architecture that proves the next game loop and can evolve safely.
-
-## 9. Approved browser layout and camera constraints
-
-- Initial desktop game container is 960×640 CSS pixels: 240×640 fixed HUD on the left and 720×640 gameplay viewport on the right.
-- Keep HUD layout outside the Phaser world-camera coordinate space. The camera centers the player within the gameplay viewport.
-- Camera must show at least 300 world pixels from the player center in each cardinal direction during normal play.
-- At 1 CSS pixel per world pixel, 720×640 viewport yields 360 horizontal and 320 vertical world pixels from center.
-- Source sprite size is 16×16 pixels for players and player-sized ordinary enemies. Larger enemies/bosses may vary.
-- Explicitly distinguish world coordinates, render resolution, CSS layout, device pixel ratio, and Phaser zoom/scale; disable texture smoothing.
-- Prefer a simple DOM layout (HUD sibling of the game canvas) or an equivalent clear separation. Verify actual canvas bounds before choosing implementation details.
-- Minimum window size, camera edge clamping, and multiplayer visibility fairness remain unresolved. Do not finalize these silently.
