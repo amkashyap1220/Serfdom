@@ -180,6 +180,6 @@ When a design decision changes, update the relevant docs and decision log in the
 
 - 960×640 CSS-pixel game container.
 - Fixed 240×640 HUD on the left, 720×640 gameplay viewport on the right.
-- 16×16 source-pixel player and player-sized ordinary enemy sprites.
+- 32×32 source-pixel player and player-sized ordinary enemy sprites (D-127; was 16×16).
 - Player-centered camera showing at least 300 world pixels in each cardinal direction in normal play.
 - Crisp pixel-art rendering without smoothing.
