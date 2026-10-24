@@ -373,6 +373,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - **Frost Hollow** (endgame 1, D-136, PROVISIONAL numbers): ice caves. Ice imps, ice wraiths that leave slowing frost behind them, yetis, frost archers; icicles that fall and leave frost. The Frost Wyrm breathes cones of frost, sweeps its tail round itself, and calls ice wraiths. Loot T6–T8.
 - **The Clockwork Vault** (endgame 2, D-137, PROVISIONAL numbers): the first fixed map, the same every run so it can be learned. Shielded clockwork sentries, cog drones, floor turrets, and steel blade arms that sweep rooms while they fight. The Automaton's plating shrugs off most damage except while it overheats; it fires rifle bursts and turns a laser arm round itself. Loot T6–T8.
 - **The Abyssal Gauntlet** (endgame 3, D-138, PROVISIONAL numbers): no rooms to cross: one arena and eight waves drawn from every earlier dungeon, each coming when you beat the last or after 45 s. Its braziers, runes, and slag switch on as the waves go. The last wave is the Warden of the Abyss, who spirals like the Lich, charges like the Warchief, and slams shockwaves like the Forgemaster. Loot T7–T9.
+- **Stormspire** (endgame 4, D-139, PROVISIONAL numbers): a tower climbed floor by floor. Storm hawks dive at you, storm adepts throw fast bolts, gargoyles hit hard; lightning comes down where you stand; gusts of wind push you towards the walls. The Storm Caller calls lightning on everyone, then raises pylons that shield it and arc lightning between them; break them to stun it. Loot T7–T9.
 
 ### Toward 40 dungeons
 

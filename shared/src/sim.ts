@@ -4,8 +4,10 @@ import {
   FORGEMASTER,
   SHAMAN,
   SKELETON,
+  STORMCALLER,
 } from "./enemy-config.ts";
 import { burningStrips, waveHits } from "./forge-boss.ts";
+import { LIGHTNING, windDrift, type Wind } from "./storm.ts";
 import {
   FROST,
   ICICLES,
@@ -218,6 +220,8 @@ export interface SimState {
   roomBlades?: readonly BladeSpot[];
   /** Every blade arm turning this tick, for drawing (D-137). */
   blades?: readonly LiveBlade[];
+  /** Wind channels (D-139): gusts on the run clock push players. */
+  winds?: readonly Wind[];
 }
 
 /** A blade arm as it is now (D-137): from `pivot` at `angle` (radians), turning `speed` rad/s. */
@@ -296,6 +300,10 @@ export interface Beam {
   remaining: number;
   /** Players it has already burned. */
   hit: readonly number[];
+  /** Seconds of warning before it burns (a Storm Caller's arc, D-139). */
+  startsIn?: number;
+  /** The enemy whose beam it is (its hits are that enemy's); absent: a room's fire jet. */
+  ownerId?: number;
 }
 
 /** A warning circle that damages living players inside it when it lands. */
@@ -896,13 +904,19 @@ export function applyPlayerInput(
     player.combat.moveSpeed * slow,
   );
   // Water drags them on top (D-135): an eel-priest's pull, whirlpools.
-  const drift = waterDrift(
-    walked,
-    clock,
-    player.pull,
-    state.whirlpools ?? [],
-    dtSeconds,
-  );
+  const drift = {
+    ...waterDrift(
+      walked,
+      clock,
+      player.pull,
+      state.whirlpools ?? [],
+      dtSeconds,
+    ),
+  };
+  // Gusts push too (D-139).
+  const gust = windDrift(walked, clock, state.winds ?? []);
+  drift.x += gust.x;
+  drift.y += gust.y;
   const driftSpeed = Math.hypot(drift.x, drift.y);
   const position =
     driftSpeed > 1e-9
@@ -1101,6 +1115,8 @@ export function stepWorld(
   const clock = state.clock ?? 0;
   const newWhirlpools: Whirlpool[] = [];
   const newSurges: Surge[] = [];
+  /** The Storm Caller's arcs this tick (D-139). */
+  const newArcs: Beam[] = [];
   /** Blade arms carried by enemies this tick (D-137). */
   const carried: LiveBlade[] = [];
   /** Frost and breath cones made this tick (D-136). */
@@ -1175,6 +1191,18 @@ export function stepWorld(
           left: EELPRIEST.pull.seconds,
           by: enemy.id,
         },
+      });
+    }
+    if (action.arc) {
+      newArcs.push({
+        from: { ...action.arc.from },
+        to: { ...action.arc.to },
+        width: STORMCALLER.arcs.width,
+        damage: STORMCALLER.arcs.damage,
+        remaining: STORMCALLER.arcs.seconds,
+        hit: [],
+        startsIn: STORMCALLER.arcs.warnSeconds,
+        ownerId: enemy.id,
       });
     }
     for (const b of action.blades ?? []) {
@@ -1396,7 +1424,14 @@ export function stepWorld(
 
   // 2a. Fire jets' beams burn every player they touch, each once (D-133).
   const beams: Beam[] = [];
-  for (const beam of state.beams ?? []) {
+  for (const beam of [...(state.beams ?? []), ...newArcs]) {
+    if ((beam.startsIn ?? 0) > 1e-9) {
+      beams.push({
+        ...beam,
+        startsIn: Math.max(0, beam.startsIn! - dtSeconds),
+      });
+      continue;
+    }
     const strip = beamBox(beam);
     const hit = [...beam.hit];
     players = players.map((pl) => {
@@ -1408,7 +1443,9 @@ export function stepWorld(
         return pl;
       }
       hit.push(pl.id);
-      return hazardDamage(pl, "jets", beam.damage, events);
+      return beam.ownerId !== undefined
+        ? damagePlayer(pl, beam.ownerId, beam.damage, pl.position, events)
+        : hazardDamage(pl, "jets", beam.damage, events);
     });
     const remaining = beam.remaining - dtSeconds;
     if (remaining > 1e-9) beams.push({ ...beam, remaining, hit });
@@ -1603,8 +1640,8 @@ export function stepWorld(
       }
       return hit;
     });
-    // A rune's burst flashes for everyone (D-123).
-    if (h.hazard === "runes") {
+    // A rune's burst flashes for everyone (D-123), and so does lightning (D-139).
+    if (h.hazard === "runes" || h.hazard === "lightning") {
       events.push({
         type: "blast",
         kind: "rune",
@@ -1894,6 +1931,7 @@ export const HAZARD_KINDS = [
   "slag",
   "icicles",
   "blades",
+  "lightning",
 ] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
@@ -1979,6 +2017,7 @@ export function dropBoulders(
     damage: number;
     slag?: boolean;
     icicle?: boolean;
+    lightning?: boolean;
   }[],
 ): SimState {
   if (drops.length === 0) return state;
@@ -1986,25 +2025,39 @@ export function dropBoulders(
     ...state,
     hazards: [
       ...state.hazards,
-      ...drops.map((d) => ({
-        position: { ...d.at },
-        radius: ROCKFALL.radius,
-        damage: d.damage,
-        landsIn: ROCKFALL.warnSeconds,
-        ownerId: -1,
-        // A slag spill leaves burning floor where it lands (D-133).
-        ...(d.slag
-          ? { hazard: "slag" as const, fire: { ...SLAG.fire } }
-          : d.icicle
-            ? {
-                hazard: "icicles" as const,
-                frost: {
-                  radius: ICICLES.frostRadius,
-                  seconds: ICICLES.frostSeconds,
-                },
-              }
-            : { hazard: "rockfall" as const }),
-      })),
+      ...drops.map((d): Hazard =>
+        d.lightning
+          ? {
+              position: { ...d.at },
+              radius: LIGHTNING.radius,
+              damage: d.damage,
+              landsIn: LIGHTNING.warnSeconds,
+              ownerId: -1,
+              hazard: "lightning",
+              // Drawn as a strike filling in, like the Lich's runes (D-139).
+              rune: true,
+            }
+          : {
+              position: { ...d.at },
+              radius: ROCKFALL.radius,
+              damage: d.damage,
+              landsIn: ROCKFALL.warnSeconds,
+              ownerId: -1,
+              // A slag spill leaves burning floor where it lands (D-133);
+              // an icicle leaves frost (D-136).
+              ...(d.slag
+                ? { hazard: "slag" as const, fire: { ...SLAG.fire } }
+                : d.icicle
+                  ? {
+                      hazard: "icicles" as const,
+                      frost: {
+                        radius: ICICLES.frostRadius,
+                        seconds: ICICLES.frostSeconds,
+                      },
+                    }
+                  : { hazard: "rockfall" as const }),
+            },
+      ),
     ],
   };
 }

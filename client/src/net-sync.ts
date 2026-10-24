@@ -3,6 +3,8 @@ import {
   layoutFor,
   sludgePools,
   tidePools,
+  windChannels,
+  gustAt,
   tideAt,
   surgeBand,
   SURGE,
@@ -379,7 +381,10 @@ export class NetSync {
   private waterViews(
     snapshot: Extract<ServerMessage, { type: "snapshot" }>,
     age: number,
-  ): Pick<CombatViewModel, "tides" | "whirlpools" | "surges" | "tethers"> {
+  ): Pick<
+    CombatViewModel,
+    "tides" | "whirlpools" | "surges" | "tethers" | "winds"
+  > {
     const clock = snapshot.clock + age;
     const state = tideAt(clock);
     const tides = (this.layout ? tidePools(this.layout) : []).map((r) => ({
@@ -425,7 +430,15 @@ export class NetSync {
           pulling: clock >= p.pull!.from,
         };
       });
-    return { tides, whirlpools, surges, tethers };
+    const gust = gustAt(clock);
+    const winds = (this.layout ? windChannels(this.layout) : []).map((w) => ({
+      ...w.rect,
+      dx: w.dir.x,
+      dy: w.dir.y,
+      gust,
+      phase: clock,
+    }));
+    return { tides, whirlpools, surges, tethers, winds };
   }
 
   /** Blasts still showing, with how far each has faded. */
@@ -490,6 +503,7 @@ export class NetSync {
             combatFor(this.myStats, weaponDamage(this.myWeaponTier)),
             this.currentLayout ? sludgePools(this.currentLayout) : [],
             this.currentLayout ? tidePools(this.currentLayout) : [],
+            this.currentLayout ? windChannels(this.currentLayout) : [],
           );
           this.predictorId = p.id;
           this.synced = false;

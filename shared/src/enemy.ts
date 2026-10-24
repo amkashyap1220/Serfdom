@@ -63,13 +63,26 @@ export type EnemyAi =
   | { kind: "none" }
   | {
       /** A brute, or a fishfolk spearman: the same charge with its own numbers (D-135). */
-      kind: "brute" | "spearman";
+      kind: "brute" | "spearman" | "hawk";
       /** "dazed": after charging into a wall (D-112), before recovering. */
       mode: "walk" | "windup" | "charge" | "dazed" | "recover";
       timer: number;
       direction: Vec2;
       /** Players already hit by the current charge. */
       hit: readonly number[];
+    }
+  | {
+      kind: "stormcaller";
+      /** Open to hits; warded while its pylons stand; stunned once they all break (D-139). */
+      mode: "open" | "warded" | "stunned";
+      timer: number;
+      /** Ward lines crossed so far. */
+      wards: number;
+      strike: number;
+      bolts: number;
+      arc: number;
+      /** Arcs so far: they go round the pylons in turn. */
+      arcs: number;
     }
   | {
       kind: "warden";
@@ -257,6 +270,7 @@ function initialAi(kind: EnemyKind): EnemyAi {
       return { kind, faded: false, timer: GHOST.visibleSeconds };
     case "elemental":
       return { kind, fuse: null };
+    case "hawk":
     case "spearman":
       return {
         kind,
@@ -267,6 +281,17 @@ function initialAi(kind: EnemyKind): EnemyAi {
       };
     case "wraith":
       return { kind, trail: WRAITH.trail.everySeconds / 2 };
+    case "stormcaller":
+      return {
+        kind,
+        mode: "open",
+        timer: 0,
+        wards: 0,
+        strike: FIRST_ATTACK_DELAY.stormcaller,
+        bolts: FIRST_ATTACK_DELAY.stormcaller,
+        arc: 0,
+        arcs: 0,
+      };
     case "warden":
       return {
         kind,
@@ -431,7 +456,8 @@ export function isAlive(enemy: EnemyState): boolean {
 export function isFaded(enemy: EnemyState): boolean {
   return (
     (enemy.ai.kind === "ghost" && enemy.ai.faded) ||
-    (enemy.ai.kind === "lich" && enemy.ai.mode === "warded")
+    (enemy.ai.kind === "lich" && enemy.ai.mode === "warded") ||
+    (enemy.ai.kind === "stormcaller" && enemy.ai.mode === "warded")
   );
 }
 

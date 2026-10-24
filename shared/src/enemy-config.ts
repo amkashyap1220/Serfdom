@@ -43,6 +43,11 @@ export const ENEMY_KINDS = [
   "turret",
   "automaton",
   "warden",
+  "hawk",
+  "adept",
+  "gargoyle",
+  "stormcaller",
+  "pylon",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -426,7 +431,74 @@ export const BOSS_KINDS: readonly EnemyKind[] = [
   "wyrm",
   "automaton",
   "warden",
+  "stormcaller",
 ];
+
+/** Storm hawk (D-139): the brute's charge as a quick dive. */
+export const HAWK = {
+  maxHp: 340,
+  size: 32,
+  speed: 80,
+  chargeTriggerRange: 260,
+  windupSeconds: 0.5,
+  chargeSpeed: 380,
+  chargeSeconds: 0.5,
+  recoverSeconds: 1.2,
+  chargeDamage: 15,
+  dazeSeconds: 1,
+} as const;
+
+/** Storm adept (D-139): the slinger's band, fast lightning bolts. */
+export const ADEPT = {
+  maxHp: 300,
+  size: 32,
+  speed: 55,
+  minRange: 180,
+  maxRange: 300,
+  throwRange: 420,
+  throwIntervalSeconds: 2,
+  rock: { damage: 13, speed: 300, size: 6, range: 460 },
+} as const;
+
+/** Gargoyle (D-139): a heavy stone walker. */
+export const GARGOYLE = {
+  maxHp: 900,
+  size: 40,
+  speed: 50,
+  contactDamage: 16,
+  contactCooldownSeconds: 1.4,
+} as const;
+
+/** A lightning pylon (D-139): stands still; while any stands, the Storm Caller is warded. */
+export const PYLON = { maxHp: 700, size: 40 } as const;
+
+/**
+ * The Storm Caller (D-139), Stormspire's boss: lightning strikes where each
+ * player stands and fans of bolts; below each `wardBelow` line it raises
+ * pylons, warded while they stand, arcs of lightning running between them;
+ * breaking them stuns it.
+ */
+export const STORMCALLER = {
+  maxHp: 18000,
+  size: 48,
+  wardBelow: [0.6, 0.3],
+  pylons: { count: 3, distance: 220 },
+  stunSeconds: 4,
+  strike: { intervalSeconds: 1.5, warnSeconds: 1, radius: 36, damage: 14 },
+  bolts: {
+    intervalSeconds: 2.5,
+    count: 5,
+    angleStepDegrees: 14,
+    bullet: { damage: 12, speed: 200, size: 8, range: 540 },
+  },
+  arcs: {
+    intervalSeconds: 2,
+    warnSeconds: 1,
+    seconds: 0.4,
+    width: 20,
+    damage: 14,
+  },
+} as const;
 
 /**
  * The Warden of the Abyss (D-138), the Abyssal Gauntlet's last wave: the
@@ -846,6 +918,11 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   turret: TURRET,
   automaton: AUTOMATON,
   warden: WARDEN,
+  hawk: HAWK,
+  adept: ADEPT,
+  gargoyle: GARGOYLE,
+  stormcaller: STORMCALLER,
+  pylon: PYLON,
 };
 
 /**
@@ -895,6 +972,11 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   turret: TURRET.throwIntervalSeconds / 2,
   automaton: 1.5,
   warden: 1,
+  hawk: 0,
+  adept: ADEPT.throwIntervalSeconds / 2,
+  gargoyle: GARGOYLE.contactCooldownSeconds / 2,
+  stormcaller: 1,
+  pylon: 0,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

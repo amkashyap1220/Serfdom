@@ -75,6 +75,11 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   turret: 0x6a6f78,
   automaton: 0x8a6a3a,
   warden: 0x3a1a4a,
+  hawk: 0x7f8fa6,
+  adept: 0x9fa8ff,
+  gargoyle: 0x6f6a66,
+  stormcaller: 0x4a5fc8,
+  pylon: 0xc8d8ff,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -143,6 +148,8 @@ const COLORS = {
   icicleEdge: 0x7fb0d0,
   blade: 0xd0d6dc,
   laser: 0xff3b3b,
+  wind: 0xdfe8f0,
+  arc: 0xf0f4ff,
   beamCore: 0xfff0a0,
   boulderEdge: 0x4a4238,
 } as const;
@@ -353,6 +360,21 @@ export class CombatView {
     // Fire jets' beams (D-133): a strip of fire with a bright core,
     // fading as it goes out.
     for (const b of view.beams) {
+      // A Storm Caller's arc warns as a thin crackle first (D-139).
+      if (b.startsIn > 0) {
+        h.lineStyle(
+          px(2),
+          COLORS.arc,
+          0.4 + 0.4 * Math.abs(Math.sin(nowMs / 50)),
+        );
+        h.lineBetween(b.x1, b.y1, b.x2, b.y2);
+        continue;
+      }
+      if (b.arc) {
+        h.lineStyle(b.width, COLORS.arc, 0.9);
+        h.lineBetween(b.x1, b.y1, b.x2, b.y2);
+        continue;
+      }
       const strip = beamBox({
         from: { x: b.x1, y: b.y1 },
         to: { x: b.x2, y: b.y2 },
@@ -425,6 +447,29 @@ export class CombatView {
           else h.fillRect(at, b.y, end - at, b.height);
         }
         at = Math.max(at, g.to);
+      }
+    }
+    // Wind channels (D-139): faint streaks drifting along the wind,
+    // thickening as a gust rises and racing while it blows.
+    for (const w of view.winds) {
+      const strength =
+        w.gust === "gust" ? 0.55 : w.gust === "rising" ? 0.3 : 0.08;
+      h.lineStyle(px(2), COLORS.wind, strength);
+      const along = Math.abs(w.dx) > Math.abs(w.dy);
+      const span = along ? w.width : w.height;
+      const across = along ? w.height : w.width;
+      const speed = w.gust === "gust" ? 240 : 60;
+      for (let k = 0; k < 6; k++) {
+        const off = (((w.phase * speed + k * 97) % span) + span) % span;
+        const side = ((k + 0.5) / 6) * across;
+        const len = 24;
+        if (along) {
+          const x = w.dx > 0 ? w.x + off : w.x + w.width - off;
+          h.lineBetween(x, w.y + side, x - w.dx * len, w.y + side);
+        } else {
+          const y = w.dy > 0 ? w.y + off : w.y + w.height - off;
+          h.lineBetween(w.x + side, y, w.x + side, y - w.dy * len);
+        }
       }
     }
     // Blade arms (D-137): steel bars turning on their pivots; the

@@ -52,6 +52,11 @@ describe("32×32 serfs and enemies (D-127)", () => {
       turret: 32,
       automaton: 72,
       warden: 64,
+      hawk: 32,
+      adept: 32,
+      gargoyle: 40,
+      stormcaller: 48,
+      pylon: 40,
       forgemaster: 88,
       lich: 32,
     });

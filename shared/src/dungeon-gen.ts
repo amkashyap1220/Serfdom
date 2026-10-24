@@ -11,6 +11,7 @@ import {
 import { overlaps } from "./enemy-ai.ts";
 import { ENEMY_STATS } from "./enemy-config.ts";
 import type { Rect, Vec2 } from "./geometry.ts";
+import type { Wind } from "./storm.ts";
 import { randomInt } from "./seeded-random.ts";
 
 /*
@@ -40,9 +41,10 @@ export interface RoomPiece {
   waves: readonly (readonly EnemySpawnDef[])[];
   /**
    * Boulders fall while it fights (D-110); "slag": slag spills instead
-   * (D-133); "icicle": icicles that leave frost (D-136).
+   * (D-133); "icicle": icicles that leave frost (D-136); "lightning":
+   * strikes where a player stands (D-139).
    */
-  rockfall?: boolean | "slag" | "icicle";
+  rockfall?: boolean | "slag" | "icicle" | "lightning";
   /** Its doors shut behind you until it is cleared (D-114). */
   gated?: boolean;
   /** Solid obstacles on its floor, relative like the spawns (D-112). */
@@ -55,6 +57,8 @@ export interface RoomPiece {
   tides?: readonly Rect[];
   /** Rotating blade arms, their pivots relative like the spawns (D-137). */
   blades?: readonly BladeSpot[];
+  /** Wind channels, relative like the spawns (D-139). */
+  winds?: readonly Wind[];
   /** Traps that wait for a wave, and timed waves (D-138), as on the room. */
   trapsFromWave?: { arrows?: number; rockfall?: number; runes?: number };
   waveSeconds?: number;
@@ -109,6 +113,7 @@ function orient(
   lava: Rect[];
   tides: Rect[];
   blades: BladeSpot[];
+  winds: Wind[];
   arrows: {
     slits: Vec2[];
     direction: Vec2;
@@ -140,6 +145,12 @@ function orient(
       ...b,
       pivot: map[entry](b.pivot),
     })),
+    // A wind's direction turns like the difference of two turned points.
+    winds: (piece.winds ?? []).map((w) => {
+      const o = map[entry]({ x: 0, y: 0 });
+      const d = map[entry](w.dir);
+      return { rect: turnRect(w.rect), dir: { x: d.x - o.x, y: d.y - o.y } };
+    }),
     arrows: piece.arrows
       ? {
           slits: piece.arrows.slits.map((p) => map[entry](p)),
@@ -182,7 +193,7 @@ interface Placed {
  * set per dungeon once the map is built, D-110).
  */
 function traps(
-  rockfall: false | { slag?: boolean; icicle?: boolean },
+  rockfall: false | { slag?: boolean; icicle?: boolean; lightning?: boolean },
   holes: Vec2[],
   holeWave: number | undefined,
   damage = 0,
@@ -194,6 +205,7 @@ function traps(
             damage,
             ...(rockfall.slag ? { slag: true } : {}),
             ...(rockfall.icicle ? { icicle: true } : {}),
+            ...(rockfall.lightning ? { lightning: true } : {}),
           },
         }
       : {}),
@@ -334,6 +346,7 @@ export class RoomAssembly {
               ? {
                   slag: piece.rockfall === "slag",
                   icicle: piece.rockfall === "icicle",
+                  lightning: piece.rockfall === "lightning",
                 }
               : false,
             o.holes.map(shift),
@@ -360,6 +373,14 @@ export class RoomAssembly {
             : {}),
           ...(o.blades.length > 0
             ? { blades: o.blades.map((b) => ({ ...b, pivot: shift(b.pivot) })) }
+            : {}),
+          ...(o.winds.length > 0
+            ? {
+                winds: o.winds.map((w) => ({
+                  dir: w.dir,
+                  rect: { ...w.rect, ...shift(w.rect) },
+                })),
+              }
             : {}),
           ...(o.arrows
             ? {
@@ -428,6 +449,14 @@ export class RoomAssembly {
       ...(room.tides ? { tides: room.tides.map(moveRect) } : {}),
       ...(room.blades
         ? { blades: room.blades.map((b) => ({ ...b, pivot: move(b.pivot) })) }
+        : {}),
+      ...(room.winds
+        ? {
+            winds: room.winds.map((w) => ({
+              dir: w.dir,
+              rect: moveRect(w.rect),
+            })),
+          }
         : {}),
       ...(room.arrows
         ? { arrows: { ...room.arrows, slits: room.arrows.slits.map(move) } }

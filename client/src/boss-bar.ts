@@ -6,6 +6,7 @@ import {
   WYRM,
   AUTOMATON,
   WARDEN,
+  STORMCALLER,
   WARLORD,
   type EnemyKind,
 } from "@serfdom/shared";
@@ -63,6 +64,20 @@ export function bossBar(
         : state.dazed
           ? "  — STUNNED"
           : fraction < LICH.wardBelow[1]!
+            ? "  — ENRAGED"
+            : "",
+    };
+  }
+  if (kind === "stormcaller") {
+    return {
+      name: "The Storm Caller",
+      notches: STORMCALLER.wardBelow,
+      angry: fraction < STORMCALLER.wardBelow[0]!,
+      suffix: state.faded
+        ? "  — WARDED"
+        : state.dazed
+          ? "  — STUNNED"
+          : fraction < STORMCALLER.wardBelow[1]!
             ? "  — ENRAGED"
             : "",
     };

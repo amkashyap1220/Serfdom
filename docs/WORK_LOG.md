@@ -694,3 +694,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found by a test: my daze test never put a wall in the charge's way; the rule was right.
 - `npm run check`: 549 shared, 199 server, 67 client, build.
 - Live (harness, **test** DB, headless): all eight waves came in order; braziers, runes, and slag were all running by the Warden, who spiralled, then (enraged) sent shockwave rings clipped to the arena.
+
+### Phase 13i — Stormspire, a climb — 2026-10-24
+
+- The fourth endgame dungeon (D-139, PROVISIONAL): a tower whose path climbs north; storm hawks, adepts, gargoyles; lightning where you stand; gusting wind; the Storm Caller (lightning on everyone, pylons that ward it and arc between them, a stun when they break).
+- Wind pushes players, so it keys to the clock and the map; a client test confirms a zero correction through a gust (my first version of that test skipped the first-contact reset a real run does, and reported a 43 px correction that a run would never see).
+- Found by tests: two of my own setups were wrong (a pylon test that left no pylons alive; a wind push I over-estimated); the rules were right.
+- `npm run check`: 561 shared, 199 server, 68 client, build.
+- Live (harness, **test** DB, headless): lightning under the player; the Storm Caller warded with its pylons, arcs warning and burning between them every 2 s, stunned once they broke. Not seen live: a gust moving a player (the harness put the player beside the channel, not in it; the movement is unit-tested and prediction-tested).

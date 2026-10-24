@@ -9,6 +9,7 @@ import {
   RUNES,
   type RuneWarning,
   type TideState,
+  type GustState,
 } from "@serfdom/shared";
 
 /**
@@ -143,6 +144,18 @@ export interface SurgeView {
   gaps: { from: number; to: number }[];
 }
 
+/** A wind channel (D-139): its gust state now, and the clock for its streaks. */
+export interface WindView {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  dx: number;
+  dy: number;
+  gust: GustState;
+  phase: number;
+}
+
 /** A blade arm (D-137) as it is now. */
 export interface BladeView {
   x: number;
@@ -187,6 +200,9 @@ export interface BeamView {
   y2: number;
   width: number;
   remaining: number;
+  /** Still warning (a Storm Caller's arc, D-139). */
+  startsIn: number;
+  arc: boolean;
 }
 
 /** One cursed rune (D-123): faint, or glowing (0 → 1) before it bursts. */
@@ -248,6 +264,7 @@ export interface CombatViewModel {
   frost: FrostView[];
   cones: ConeView[];
   blades: BladeView[];
+  winds: WindView[];
   portalOpen: boolean;
 }
 
@@ -272,6 +289,7 @@ export const EMPTY_VIEW: CombatViewModel = {
   frost: [],
   cones: [],
   blades: [],
+  winds: [],
   portalOpen: false,
 };
 

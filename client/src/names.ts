@@ -39,6 +39,11 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   turret: "a Floor Turret",
   automaton: "the Automaton",
   warden: "the Warden of the Abyss",
+  hawk: "a Storm Hawk",
+  adept: "a Storm Adept",
+  gargoyle: "a Gargoyle",
+  stormcaller: "the Storm Caller",
+  pylon: "a lightning pylon",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
   braziers: "a spirit brazier",
@@ -48,4 +53,5 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   slag: "a slag spill",
   icicles: "a falling icicle",
   blades: "a blade arm",
+  lightning: "a lightning strike",
 };

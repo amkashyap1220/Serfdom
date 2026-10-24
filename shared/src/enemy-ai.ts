@@ -35,6 +35,10 @@ import {
   TURRET,
   AUTOMATON,
   WARDEN,
+  HAWK,
+  ADEPT,
+  GARGOYLE,
+  STORMCALLER,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -132,6 +136,8 @@ export interface EnemyAction {
   pull?: { playerId: number; to: Vec2; startsIn: number };
   /** The Tide Priest's whirlpools (D-135), starting after their warning. */
   whirlpools?: Vec2[];
+  /** An arc of lightning between two pylons (D-139): it warns, then burns. */
+  arc?: { from: Vec2; to: Vec2 };
   /** Rotating arms this enemy carries this tick (the Automaton's laser, D-137), pivoting on it. */
   blades?: {
     length: number;
@@ -306,6 +312,41 @@ export function enemyAct(
         context,
         TURRET,
       );
+    case "hawk":
+      return bruteAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        HAWK,
+      );
+    case "adept":
+      return slingerAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        ADEPT,
+      );
+    case "gargoyle":
+      return gruntAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        GARGOYLE,
+      );
+    case "pylon":
+      return result(enemy);
+    case "stormcaller":
+      return stormcallerAct(enemy, targets, target, dtSeconds, result, context);
     case "warden":
       return wardenAct(
         enemy,
@@ -900,6 +941,111 @@ function elementalAct(
     dt,
   );
   return result({ ...enemy, position });
+}
+
+/** Where the Storm Caller's pylons rise (D-139): evenly round it. */
+export function pylonSpots(at: Vec2): Vec2[] {
+  const { count, distance } = STORMCALLER.pylons;
+  return Array.from({ length: count }, (_, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / count;
+    return {
+      x: at.x + Math.cos(a) * distance,
+      y: at.y + Math.sin(a) * distance,
+    };
+  });
+}
+
+/**
+ * The Storm Caller (D-139): stands at the centre of its arena. Open, it
+ * calls lightning down where every player stands and fires fans of
+ * bolts. Below each ward line it raises pylons and is warded until they all
+ * break, arcs of lightning running between them in turn; then it is
+ * stunned for a few seconds.
+ */
+function stormcallerAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "stormcaller") return result(enemy);
+  const S = STORMCALLER;
+  const tick = (t: number) => Math.max(0, t - dt);
+  let next = {
+    ...ai,
+    strike: tick(ai.strike),
+    bolts: tick(ai.bolts),
+    arc: tick(ai.arc),
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  const share = enemy.hp / enemy.maxHp;
+  const due = S.wardBelow[next.wards];
+  if (next.mode === "open" && due !== undefined && share < due) {
+    for (const at of pylonSpots(enemy.position))
+      action.summons.push({ kind: "pylon", at });
+    next = {
+      ...next,
+      mode: "warded",
+      wards: next.wards + 1,
+      arc: S.arcs.intervalSeconds / 2,
+    };
+    return result({ ...enemy, ai: next }, action);
+  }
+  if (next.mode === "warded") {
+    const pylons = (context.allies?.() ?? []).filter(
+      (e) => e.kind === "pylon" && e.summonerId === enemy.id && isAlive(e),
+    );
+    if (context.aliveSummons(enemy.id) === 0) {
+      next = { ...next, mode: "stunned", timer: S.stunSeconds };
+    } else if (next.arc <= 1e-9 && pylons.length >= 2) {
+      next.arc = S.arcs.intervalSeconds;
+      const a = pylons[next.arcs % pylons.length]!;
+      const b = pylons[(next.arcs + 1) % pylons.length]!;
+      action.arc = { from: { ...a.position }, to: { ...b.position } };
+      next.arcs += 1;
+    }
+    return result({ ...enemy, ai: next }, action);
+  }
+  if (next.mode === "stunned") {
+    const timer = next.timer - dt;
+    next =
+      timer > 1e-9 ? { ...next, timer } : { ...next, mode: "open", timer: 0 };
+    return result({ ...enemy, ai: next }, action);
+  }
+  if (!target) return result({ ...enemy, ai: next }, action);
+  if (next.strike <= 1e-9) {
+    next.strike = S.strike.intervalSeconds;
+    for (const t of targets) {
+      action.hazards.push({
+        at: { ...t.position },
+        radius: S.strike.radius,
+        damage: S.strike.damage,
+        delaySeconds: S.strike.warnSeconds,
+        rune: true,
+      });
+    }
+  }
+  if (next.bolts <= 1e-9) {
+    next.bolts = S.bolts.intervalSeconds;
+    const aim = toward(enemy.position, target.target.position);
+    const step = (S.bolts.angleStepDegrees * Math.PI) / 180;
+    const half = (S.bolts.count - 1) / 2;
+    for (let i = 0; i < S.bolts.count; i++) {
+      action.bullets.push({
+        direction: rotateVec(aim, (i - half) * step),
+        spec: S.bolts.bullet,
+      });
+    }
+  }
+  return result({ ...enemy, ai: next }, action);
 }
 
 /** One volley of a spiral (the Lich's, D-125; the Warden's, D-138): a bullet per arm, evenly round from `spin`. */
@@ -1685,7 +1831,8 @@ function bruteAct(
   BRUTE: ChargerSpec = BRUTE_CONFIG,
 ): EnemyAction {
   const ai = enemy.ai;
-  if (ai.kind !== "brute" && ai.kind !== "spearman") return result(enemy);
+  if (ai.kind !== "brute" && ai.kind !== "spearman" && ai.kind !== "hawk")
+    return result(enemy);
   const cooldown = Math.max(0, enemy.attackCooldown - dt);
 
   switch (ai.mode) {
@@ -2263,6 +2410,7 @@ export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
 }
 
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "hawk") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "warden") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "wyrm") return enemy.ai.mode !== "walk";
   if (enemy.ai.kind === "forgemaster") return enemy.ai.mode === "windup";
@@ -2280,6 +2428,8 @@ export function isTelegraphing(enemy: EnemyState): boolean {
 
 /** A brute that charged into a wall, standing dazed (D-112). */
 export function isDazed(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "stormcaller") return enemy.ai.mode === "stunned";
+  if (enemy.ai.kind === "hawk") return enemy.ai.mode === "dazed";
   if (enemy.ai.kind === "warden") return enemy.ai.mode === "dazed";
   if (enemy.ai.kind === "lich") return enemy.ai.mode === "stunned";
   return (

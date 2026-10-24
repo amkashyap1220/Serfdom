@@ -260,6 +260,15 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
+  // D-139: like the Gauntlet, T7 30%, T8 45%, T9 25%.
+  stormspire: {
+    tiers: [
+      [7, 30],
+      [8, 45],
+      [9, 25],
+    ],
+    slots: SLOT_WEIGHTS,
+  },
   training: {
     tiers: [
       [0, 50],

@@ -14,6 +14,7 @@ import {
   sludgePools,
   lavaPools,
   tidePools,
+  windChannels,
   trapWarnings,
   isDazed,
   rockfallDrops,
@@ -155,6 +156,7 @@ export class DungeonInstance {
       sludge: sludgePools(this.layout),
       lava: lavaPools(this.layout),
       tides: tidePools(this.layout),
+      winds: windChannels(this.layout),
       clock: 0,
     };
     this.rooms = newRunProgress(this.layout);
@@ -522,6 +524,8 @@ export class DungeonInstance {
         y2: roundCoord(b.to.y),
         width: b.width,
         remaining: roundCoord(b.remaining),
+        startsIn: roundCoord(b.startsIn ?? 0),
+        arc: b.ownerId !== undefined,
       })),
       waves: (this.sim.waves ?? []).map((w) => ({
         x: roundCoord(w.at.x),

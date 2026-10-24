@@ -2,6 +2,7 @@ import { boxAround } from "./collision.ts";
 import { overlaps } from "./enemy-ai.ts";
 import { ENEMY_STATS, type EnemyKind } from "./enemy-config.ts";
 import type { Rect, Vec2 } from "./geometry.ts";
+import type { Wind } from "./storm.ts";
 import { PLAYER_BODY } from "./movement-config.ts";
 
 /** Wall thickness used when walls are generated around rooms. */
@@ -92,6 +93,11 @@ export const BLADES = {
   hitCooldownSeconds: 1,
 } as const;
 
+/** Every wind channel in the dungeon (D-139). */
+export function windChannels(layout: DungeonLayout): Wind[] {
+  return layout.rooms.flatMap((r) => [...(r.winds ?? [])]);
+}
+
 /** Every tide pool in the dungeon (D-135). */
 export function tidePools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.tides ?? [])]);
@@ -160,7 +166,13 @@ export interface RoomDef {
    * A rockfall room and the damage of one boulder (D-110); `slag`: slag
    * spills instead, slower and leaving fire (D-133).
    */
-  rockfall?: { damage: number; slag?: boolean; icicle?: boolean };
+  rockfall?: {
+    damage: number;
+    slag?: boolean;
+    icicle?: boolean;
+    /** Lightning (D-139): each strike where a player stands. */
+    lightning?: boolean;
+  };
   /**
    * Obstacles on its floor (D-112): solid like walls (they are also in the
    * layout's walls), blocking movement and every shot.
@@ -181,6 +193,8 @@ export interface RoomDef {
   trapsFromWave?: { arrows?: number; rockfall?: number; runes?: number };
   /** The next wave comes after this many seconds even if the last is not cleared (D-138). */
   waveSeconds?: number;
+  /** Wind channels (D-139): gusts push players along them. */
+  winds?: readonly Wind[];
   /**
    * An arrow trap (D-113): slits just inside one wall, all firing across the
    * room in `direction` but for a gap, every ARROWS.everySeconds while it
@@ -389,6 +403,10 @@ export function validateLayout(layout: DungeonLayout): string[] {
       r.y >= b.y &&
       r.x + r.width <= b.x + b.width &&
       r.y + r.height <= b.y + b.height;
+    for (const w of room.winds ?? []) {
+      if (!within(w.rect))
+        problems.push(`${room.id}: a wind channel outside the room`);
+    }
     for (const blade of room.blades ?? []) {
       const p = blade.pivot;
       if (

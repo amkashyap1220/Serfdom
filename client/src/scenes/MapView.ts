@@ -46,6 +46,17 @@ const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
     obstacleEdge: 0x7d7472,
     hole: 0x0a0605,
   },
+  // D-139: slate and storm-blue.
+  stormspire: {
+    floor: 0x161a24,
+    gridMinor: 0x222838,
+    gridMajor: 0x343d55,
+    wall: 0x5a6680,
+    wallEdge: 0x9aa8c8,
+    obstacle: 0x4a5266,
+    obstacleEdge: 0x7f8aa6,
+    hole: 0x05060a,
+  },
   // D-138: black stone over the abyss, violet edges.
   "abyssal-gauntlet": {
     floor: 0x120f18,

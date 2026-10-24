@@ -4,6 +4,7 @@ import { buildTemple } from "./sunken-temple.ts";
 import { buildHollow } from "./frost-hollow.ts";
 import { VAULT_LAYOUT } from "./clockwork-vault.ts";
 import { buildGauntlet } from "./abyssal-gauntlet.ts";
+import { buildSpire } from "./stormspire.ts";
 import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
@@ -132,6 +133,16 @@ export const DUNGEONS = [
     listed: true,
     layout: buildGauntlet(0),
     generate: buildGauntlet,
+    minLevel: 20,
+  },
+  {
+    // D-139: an endgame dungeon climbed floor by floor.
+    id: "stormspire",
+    name: "Stormspire",
+    blurb: "Level 20 · 8 min · endgame · a climb",
+    listed: true,
+    layout: buildSpire(0),
+    generate: buildSpire,
     minLevel: 20,
   },
   {

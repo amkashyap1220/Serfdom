@@ -616,7 +616,18 @@ describe("snapshot messages", () => {
         { x: 3720, y: 960, radius: 28, landsIn: 0.9, kind: "slag" },
       ],
       fires: [],
-      beams: [{ x1: 400, y1: 10, x2: 400, y2: 300, width: 32, remaining: 0.3 }],
+      beams: [
+        {
+          x1: 400,
+          y1: 10,
+          x2: 400,
+          y2: 300,
+          width: 32,
+          remaining: 0.3,
+          startsIn: 0,
+          arc: false,
+        },
+      ],
       waves: [{ x: 500, y: 500, radius: 120, gap: 1.2, startsIn: 0 }],
       plates: [
         {

@@ -74,6 +74,11 @@ export {
   TURRET,
   AUTOMATON,
   WARDEN,
+  HAWK,
+  ADEPT,
+  GARGOYLE,
+  STORMCALLER,
+  PYLON,
   CASTER,
   GHOST,
   NECROMANCER,
@@ -142,6 +147,7 @@ export {
   sludgePools,
   lavaPools,
   tidePools,
+  windChannels,
   BLADES,
   type BladeSpot,
   LAVA,
@@ -522,3 +528,17 @@ export {
   GAUNTLET_WAVES,
   buildGauntlet,
 } from "./abyssal-gauntlet.ts";
+export {
+  SPIRE_PIECES,
+  SPIRE_RECIPE,
+  SPIRE_TOP,
+  buildSpire,
+} from "./stormspire.ts";
+export {
+  LIGHTNING,
+  WIND,
+  gustAt,
+  windDrift,
+  type GustState,
+  type Wind,
+} from "./storm.ts";

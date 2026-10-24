@@ -14,6 +14,7 @@ import {
 } from "./dungeon-layout.ts";
 import { isAlive } from "./enemy.ts";
 import { ICICLES } from "./frost.ts";
+import { LIGHTNING } from "./storm.ts";
 import { sweepIndex, type Rect, type Vec2 } from "./geometry.ts";
 import { PLAYER_BODY, TICK_SECONDS } from "./movement-config.ts";
 import {
@@ -205,6 +206,8 @@ export interface BoulderDrop {
   slag?: boolean;
   /** An icicle (D-136): it leaves frost. */
   icicle?: boolean;
+  /** A lightning strike (D-139). */
+  lightning?: boolean;
 }
 
 /**
@@ -228,7 +231,9 @@ export function rockfallDrops(
       ? SLAG.everySeconds
       : room.rockfall.icicle
         ? ICICLES.everySeconds
-        : ROCKFALL.everySeconds;
+        : room.rockfall.lightning
+          ? LIGHTNING.everySeconds
+          : ROCKFALL.everySeconds;
     const due = Math.floor(p.clock / every + 1e-9) + 1;
     // Waiting for its wave (D-138): keep its count at "now", so it starts
     // fresh rather than with a backlog.
@@ -246,7 +251,16 @@ export function rockfallDrops(
     );
     for (let n = p.dropped; n < due; n++) {
       let at: Vec2;
-      if (inRoom.length > 0 && random() < ROCKFALL.nearShare) {
+      if (room.rockfall.lightning && inRoom.length > 0) {
+        // Lightning comes down where a player stands (D-139).
+        const target = inRoom[Math.floor(random() * inRoom.length)]!;
+        const angle = random() * 2 * Math.PI;
+        const r = random() * LIGHTNING.spread;
+        at = clamp({
+          x: target.position.x + Math.cos(angle) * r,
+          y: target.position.y + Math.sin(angle) * r,
+        });
+      } else if (inRoom.length > 0 && random() < ROCKFALL.nearShare) {
         const target = inRoom[Math.floor(random() * inRoom.length)]!;
         const angle = random() * 2 * Math.PI;
         const r = random() * ROCKFALL.nearRadius;
@@ -265,6 +279,7 @@ export function rockfallDrops(
         damage: room.rockfall.damage,
         ...(room.rockfall.slag ? { slag: true } : {}),
         ...(room.rockfall.icicle ? { icicle: true } : {}),
+        ...(room.rockfall.lightning ? { lightning: true } : {}),
       });
     }
     return { ...p, dropped: due };

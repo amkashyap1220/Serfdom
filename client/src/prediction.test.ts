@@ -235,3 +235,78 @@ describe("prediction follows Frost Hollow's frost (D-136)", () => {
     expect(server.players[0]!.position.x).toBeLessThan(100 + 150 - 1);
   });
 });
+
+describe("prediction follows Stormspire's wind (D-139)", () => {
+  it("a gust replays exactly: no correction", () => {
+    const winds = [
+      {
+        rect: { x: 0, y: -300, width: 3000, height: 600 },
+        dir: { x: 0, y: 1 },
+      },
+    ];
+    const predictor = new PlayerPredictor(
+      1,
+      { x: 100, y: 0 },
+      [],
+      combatFor(SERF_BASE),
+      [],
+      [],
+      winds,
+    );
+    let server: SimState = {
+      players: [newPlayer(1, { x: 100, y: 0 }, SERF_BASE)],
+      enemies: [],
+      projectiles: [],
+      nextProjectileId: 1,
+      nextEnemyId: 1,
+      hazards: [],
+      blasts: [],
+      zones: [],
+      sludge: [],
+      fires: [],
+      winds,
+      clock: 2.5,
+    };
+    // First contact, as in a run: the predictor adopts the server's clock.
+    predictor.setWater(2.5, []);
+    predictor.reset({
+      id: 1,
+      x: 100,
+      y: 0,
+      ack: -1,
+      hp: server.players[0]!.hp,
+      maxHp: server.players[0]!.maxHp,
+      mp: server.players[0]!.mp,
+      maxMp: server.players[0]!.combat.maxMp,
+      buffs: [],
+      cooldown: 0,
+      pull: null,
+    });
+    const states: SimState[] = [];
+    for (let i = 0; i < 60; i++) {
+      predictor.predict(RIGHT);
+      server = applyPlayerInput(server, 1, RIGHT, [], TICK_SECONDS).state;
+      server = { ...server, clock: server.clock! + TICK_SECONDS };
+      states.push(server);
+    }
+    const at = states[24]!;
+    const me = at.players[0]!;
+    predictor.setWater(at.clock!, []);
+    predictor.reconcile({
+      id: 1,
+      x: me.position.x,
+      y: me.position.y,
+      ack: 24,
+      hp: me.hp,
+      maxHp: me.maxHp,
+      mp: me.mp,
+      maxMp: me.combat.maxMp,
+      buffs: [],
+      cooldown: me.fireCooldown,
+      pull: null,
+    });
+    expect(predictor.lastCorrection).toBeCloseTo(0, 9);
+    // The gust (from 3 s, half a second of it here) really pushed it south: about 45 px.
+    expect(server.players[0]!.position.y).toBeGreaterThan(30);
+  });
+});

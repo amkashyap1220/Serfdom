@@ -68,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v41 (13i): Stormspire (D-139): its kinds; a beam may warn before it
+ *          burns (`startsIn`) and be a Storm Caller's `arc`; killedBy may be
+ *          "lightning".
  * v40 (13h): the Abyssal Gauntlet (D-138): the Warden of the Abyss
  *          (a new enemy kind).
  * v39 (13g): the Clockwork Vault (D-137): snapshots list turning
@@ -143,7 +146,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 40;
+export const PROTOCOL_VERSION = 41;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -373,6 +376,10 @@ export interface SnapshotBeam {
   y2: number;
   width: number;
   remaining: number;
+  /** Seconds of warning before it burns (0 once burning, D-139). */
+  startsIn: number;
+  /** A Storm Caller's arc between pylons, not a fire jet (D-139). */
+  arc: boolean;
 }
 
 /** The Forgemaster's shockwave (D-134): a ring of `radius` round (x, y), its gap centred on `gap` (radians). */
@@ -1908,7 +1915,16 @@ function parseSnapshotPlates(v: unknown): SnapshotPlates | null {
 function parseSnapshotBeam(v: unknown): SnapshotBeam | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["x1", "y1", "x2", "y2", "width", "remaining"])
+    !hasExactKeys(v, [
+      "x1",
+      "y1",
+      "x2",
+      "y2",
+      "width",
+      "remaining",
+      "startsIn",
+      "arc",
+    ])
   ) {
     return null;
   }
@@ -1920,8 +1936,17 @@ function parseSnapshotBeam(v: unknown): SnapshotBeam | null {
   ) {
     return null;
   }
-  if (!isNonNegative(v.width) || !isNonNegative(v.remaining)) return null;
+  if (
+    !isNonNegative(v.width) ||
+    !isNonNegative(v.remaining) ||
+    !isNonNegative(v.startsIn) ||
+    typeof v.arc !== "boolean"
+  ) {
+    return null;
+  }
   return {
+    startsIn: v.startsIn,
+    arc: v.arc,
     x1: v.x1,
     y1: v.y1,
     x2: v.x2,

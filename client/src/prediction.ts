@@ -13,6 +13,7 @@ import {
   type Vec2,
   type WhirlpoolShape,
   type FrostPatch,
+  type Wind,
 } from "@serfdom/shared";
 
 export interface PendingInput {
@@ -84,6 +85,8 @@ export class PlayerPredictor {
     private readonly sludge: readonly Rect[] = [],
     /** Tide pools (D-135): deep on the run's tide cycle. */
     private readonly tides: readonly Rect[] = [],
+    /** Wind channels (D-139): gusts on the run's clock. */
+    private readonly winds: readonly Wind[] = [],
   ) {
     this.combat = combat;
     this.me = {
@@ -172,6 +175,7 @@ export class PlayerPredictor {
       clock,
       tides: this.tides,
       frost: this.frost,
+      winds: this.winds,
       whirlpools: this.whirlpools.map((w) => ({
         ...w,
         nextTick: w.from,
