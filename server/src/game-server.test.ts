@@ -1,4 +1,5 @@
 import {
+  clearExp,
   combatFor,
   encodeMessage,
   MAX_MESSAGE_BYTES,
@@ -1168,6 +1169,77 @@ describe("dungeon entry (D-107, D-108)", () => {
     client.send(encodeMessage({ type: "queue", dungeon: "goblin-stronghold" }));
     await until(() => server.isQueued(1));
   });
+
+  it("the Forgotten Crypt follows the same rule (D-107, D-120)", async () => {
+    const { client } = await joined();
+    client.send(encodeMessage({ type: "queue", dungeon: "forgotten-crypt" }));
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "Complete the Goblin Warrens first.",
+    );
+    expect(server.isQueued(1)).toBe(false);
+    await clearOnce(client, 1, 0);
+    client.send(encodeMessage({ type: "queue", dungeon: "forgotten-crypt" }));
+    await until(() => server.isQueued(1));
+  });
+});
+
+describe("a party clears the new dungeons (Phase 12 acceptance, D-126)", () => {
+  for (const [dungeon, tiers] of [
+    ["goblin-stronghold", [2, 3, 4]],
+    ["forgotten-crypt", [3, 4, 5]],
+  ] as const) {
+    it(`two players clear the ${dungeon} together, each with their own EXP and chest`, async () => {
+      const a = (await joined()).client;
+      const b = (await joined()).client;
+      // Each serf has completed something, so the dungeon is open (D-107).
+      await clearOnce(a, 1, 0);
+      await clearOnce(b, 2, 0);
+      const go = encodeMessage({ type: "queue", dungeon });
+      a.send(go);
+      b.send(go);
+      await until(() => server.isQueued(1) && server.isQueued(2));
+      server.tick();
+      await nextOfType(a, "runStarted");
+      await nextOfType(b, "runStarted");
+      const run = server.instanceOf(1)!;
+      expect(server.instanceOf(2)).toBe(run);
+      const portal = run.layout.exitPortal!;
+      // Into the boss room together: it wakes and its boss appears.
+      for (const id of [1, 2]) {
+        placePlayer(
+          id,
+          { x: portal.x - 120, y: portal.y + (id === 1 ? -40 : 40) },
+          1e6,
+        );
+      }
+      for (let t = 0; t < 3; t++) server.tick();
+      const boss = run.state.enemies.find((e) => e.roomId === "throne");
+      expect(boss?.kind).toBe(
+        dungeon === "goblin-stronghold" ? "warchief" : "lich",
+      );
+      // Its health scales for two (D-045).
+      expect(boss!.maxHp).toBeGreaterThan(boss!.baseMaxHp);
+      run.setStateForTest({ ...run.state, enemies: [] });
+      for (let t = 0; t < 3; t++) server.tick();
+      for (const id of [1, 2]) placePlayer(id, portal);
+      server.tick();
+      const ends = [
+        await nextOfType(a, "runEnded"),
+        await nextOfType(b, "runEnded"),
+      ];
+      for (const end of ends) {
+        expect(end.result).toBe("completed");
+        expect(end.dungeon).toBe(dungeon);
+        // Each serf earns its own EXP by its own level (D-071).
+        expect(end.expGained).toBe(clearExp(dungeon, 2));
+        // One chest each (Luck 1), from the dungeon's own tiers.
+        expect(end.loot).toHaveLength(1);
+        expect(tiers as readonly number[]).toContain(end.loot[0]!.item.tier);
+        // At most one potion each (one roll per Luck point).
+        expect(end.potions.length).toBeLessThanOrEqual(1);
+      }
+    });
+  }
 });
 
 describe("EXP and the leaderboard (8a)", () => {

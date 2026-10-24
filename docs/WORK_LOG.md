@@ -572,3 +572,13 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 
 - Reviewed PR #1's 27-phase roadmap against the code. User's answers (D-126): potion wording corrected to the serf's max (D-119); Phase 12 acceptance includes a two-player clear; Phase 14 builds minimal party screens, polished in Phase 15; the first 5 dungeons cover levels 1–20 and every later one is for level 20 and up (answers open question 24); Phase 13 builds reusable building blocks for Phase 22's dungeons.
 - Next step: the Phase 12 acceptance review, with a two-player clear of the Stronghold and the Crypt.
+
+### Phase 12 acceptance review — 2026-10-24
+
+- **Completed solo and by a party, loot and EXP as approved:** pass (automated). New server tests run two real clients through the Stronghold and the Crypt together: same run, the boss scaled for two, both complete through the portal, each gets the dungeon's EXP for their own level (`clearExp`), one chest each from the dungeon's own tiers (T2–T4, T3–T5), and at most one potion each. Solo clears: the user's 12a–12l checklists. Loot and EXP tables: unit tests per dungeon.
+- **Entry refused without a Warrens completion, tampered queue included:** pass. The Stronghold test is joined by the same test for the Crypt (a hand-made queue message is refused; one completion opens it).
+- **Potions granted once per roll, never above the serf's max, survive death:** pass (storage contract on memory and PostgreSQL, service, and network tests: rolls, caps, single drink, the rack outliving a dead serf).
+- **The server decides every potion, drop, and EXP award:** pass by construction: clients have no message that can name a reward; rewards come only from `SerfService.recordRun` on the server, and every drink is re-checked in the account-locked write.
+- `npm run check`: 448 shared, 196 server, 58 client, build.
+- Not done by hand: a two-person clear in two browser windows (the automated test uses two real clients against the real server).
+- Next step: the user decides whether to close Phase 12 (optionally after a two-window clear), then Phase 13 (tier 4: draft for approval).
