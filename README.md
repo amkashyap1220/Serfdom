@@ -25,7 +25,7 @@ What exists today:
 - **Abilities (Phase 10):** MP and one ability per class on Space, four fire modes on T.
 - **Dungeon variety (Phase 11):** a new procedural Goblin Warrens every run from a seed shown in the HUD; finishing the Warrens opens every other dungeon.
 - **Phase 12 (12a–12l):** the Goblin Stronghold (levels 9–12) with room mechanics (falling boulders, ambush holes, cover, arrow traps, sludge), new goblin kinds, and its boss the Goblin Warchief; rooms can be rushed; stat potions and the potion rack; the Forgotten Crypt (levels 12–15) with skeletons, archers, ghosts, necromancers, grave knights, cursed runes, and spirit braziers, and its boss the Lich. Phase 12 is complete.
-- **Phase 13 so far (13a–13c):** the Ember Forge (levels 15–18) with forge imps, ember casters, lava channels, fire elementals that explode, magma golems that are only weak while they vent, bellows-keepers that heal, fire jets, and slag spills. Next: 13d, the Forgemaster.
+- **Phase 13 (built, awaiting the user's test):** ten dungeons. The ladder from level 1 to 20 ends with the Ember Forge (the Forgemaster) and the Sunken Temple (tides, eel-priests, the Tide Priest); five endgame dungeons for level-20 serfs follow: Frost Hollow, the Clockwork Vault (a fixed map), the Abyssal Gauntlet (eight waves in one arena), Stormspire (a climb), and Dragon's Roost (the Elder Dragon, the only T10 loot).
 
 ## Development setup
 

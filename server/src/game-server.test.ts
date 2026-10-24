@@ -17,6 +17,9 @@ import {
   RACK_SIZE,
   SERF_MAX,
   type ServerMessage,
+  LOOT_POOLS,
+  layoutFor,
+  type DungeonId,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
@@ -1674,4 +1677,145 @@ describe("Arcane Blast over the network (10a, D-092–D-096)", () => {
       radius: 40,
     });
   });
+});
+
+describe("Phase 13 acceptance: entry, and a party clear of every new dungeon (D-130 to D-140)", () => {
+  /** A server whose serf store the test can reach, to give serfs EXP. */
+  async function withRepo(): Promise<MemorySerfRepo> {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      allowTestDungeons: true,
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      dungeonSeed: () => 0,
+      log: silentLogger,
+    });
+    return repo;
+  }
+
+  /** Makes this player's serf (serf id = player id) level 20 with a class, and plays it. */
+  async function toLevel20(repo: MemorySerfRepo, c: TestClient, id: number) {
+    await repo.recordRun(
+      id,
+      id,
+      "completed",
+      { ...newRunStats(), seconds: 1 },
+      null,
+      totalExpForLevel(20),
+    );
+    c.send(encodeMessage({ type: "selectSerf", serfId: id }));
+    let picked = await nextOfType(c, "serfList");
+    while (picked.serfs.find((x) => x.id === id)?.level !== 20)
+      picked = await nextOfType(c, "serfList");
+    c.send(
+      encodeMessage({ type: "chooseClass", serfId: id, classId: "fighter" }),
+    );
+    let list = await nextOfType(c, "serfList");
+    while (list.serfs.find((x) => x.id === id)?.classId !== "fighter")
+      list = await nextOfType(c, "serfList");
+  }
+
+  const ENDGAME: DungeonId[] = [
+    "frost-hollow",
+    "clockwork-vault",
+    "abyssal-gauntlet",
+    "stormspire",
+    "dragons-roost",
+  ];
+
+  it("every endgame dungeon refuses a serf below level 20, even by a hand-made queue message", async () => {
+    const repo = await withRepo();
+    // A fresh player for each: five refusals on one connection would close
+    // it (the server drops clients that send too many invalid messages).
+    for (const [i, dungeon] of ENDGAME.entries()) {
+      const id = i + 1;
+      const { client } = await joined();
+      // One completion: the ladder is open, the endgame is not.
+      await repo.recordRun(
+        id,
+        id,
+        "completed",
+        { ...newRunStats(), seconds: 1 },
+        null,
+        100,
+      );
+      client.send(encodeMessage({ type: "selectSerf", serfId: id }));
+      let list = await nextOfType(client, "serfList");
+      while (list.serfs.find((x) => x.id === id)?.level !== 2) {
+        list = await nextOfType(client, "serfList");
+      }
+      client.send(encodeMessage({ type: "queue", dungeon }));
+      expect((await nextOfType(client, "error")).reason).toBe(
+        "Reach level 20 first.",
+      );
+      expect(server.isQueued(id)).toBe(false);
+      // The last dungeon of the ladder is open to it, at any level.
+      client.send(encodeMessage({ type: "queue", dungeon: "sunken-temple" }));
+      await until(() => server.isQueued(id));
+    }
+  });
+
+  for (const dungeon of [
+    "ember-forge",
+    "sunken-temple",
+    ...ENDGAME,
+  ] as DungeonId[]) {
+    it(`two level-20 players clear the ${dungeon} together, each with their own EXP and a chest of its tiers`, async () => {
+      const repo = await withRepo();
+      const a = (await joined()).client;
+      const b = (await joined()).client;
+      await toLevel20(repo, a, 1);
+      await toLevel20(repo, b, 2);
+      const go = encodeMessage({ type: "queue", dungeon });
+      a.send(go);
+      b.send(go);
+      await until(() => server.isQueued(1) && server.isQueued(2));
+      server.tick();
+      await nextOfType(a, "runStarted");
+      await nextOfType(b, "runStarted");
+      const run = server.instanceOf(1)!;
+      expect(server.instanceOf(2)).toBe(run);
+      const portal = run.layout.exitPortal!;
+      for (const id of [1, 2]) {
+        placePlayer(
+          id,
+          { x: portal.x - 120, y: portal.y + (id === 1 ? -40 : 40) },
+          1e6,
+        );
+      }
+      for (let t = 0; t < 3; t++) server.tick();
+      // The boss room wakes with its first wave (the boss, or the Gauntlet's first wave).
+      const throne = layoutFor(dungeon, 0).rooms.find(
+        (r) => r.id === "throne",
+      )!;
+      const first = run.state.enemies.find((e) => e.roomId === "throne");
+      expect(first?.kind).toBe(throne.waves[0]![0]!.kind);
+      // Its health scales for two (D-045).
+      expect(first!.maxHp).toBeGreaterThan(first!.baseMaxHp);
+      // Beat every wave (the Gauntlet has eight).
+      for (let w = 0; w < 10 && !run.portalOpen; w++) {
+        run.setStateForTest({ ...run.state, enemies: [] });
+        for (let t = 0; t < 3; t++) server.tick();
+      }
+      expect(run.portalOpen).toBe(true);
+      for (const id of [1, 2]) placePlayer(id, portal);
+      server.tick();
+      const ends = [
+        await nextOfType(a, "runEnded"),
+        await nextOfType(b, "runEnded"),
+      ];
+      const tiers = LOOT_POOLS[dungeon].tiers.map(([tier]) => tier);
+      for (const end of ends) {
+        expect(end.result).toBe("completed");
+        expect(end.dungeon).toBe(dungeon);
+        expect(end.expGained).toBe(clearExp(dungeon, 20));
+        expect(end.loot).toHaveLength(1);
+        expect(tiers).toContain(end.loot[0]!.item.tier);
+      }
+    });
+  }
 });

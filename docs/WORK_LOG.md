@@ -4,7 +4,7 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-**Next step:** build the rest of Phase 13 (13e–13k) for one combined user test, committing locally on `phase-13-rest`.
+**Next step:** the user runs the Phase 13 combined checklist (TESTING_AND_FEEDBACK.md); then push `phase-13-rest` and start Phase 14 (partying up).
 
 Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
@@ -710,3 +710,10 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found by the tests: two old protocol tests used "dragon" as an example of an invalid name (now "kraken"); my push-distance guess forgot the gust ends at its edge.
 - `npm run check`: 569 shared, 199 server, 69 client, build.
 - Live (harness, **test** DB, headless): breath cones left fire; the gust blew the player back; at 45% it flew, faded, while meteors fell; it landed and breathed again.
+
+### Phase 13k — Acceptance checks — 2026-10-24
+
+- Server tests: every endgame dungeon refuses a serf below level 20, even by a hand-made queue message (a fresh player per dungeon: five refusals on one connection close it, by design); two level-20 players clear each of the seven new dungeons together, each with their own EXP and a chest from that dungeon's tiers.
+- EXP pace, simulated from the real formulas: level 1 to 20 in 29 clears (Warrens 13, Stronghold 4, Crypt 5, Forge 4, Temple 3). Worth the user's eye: the Warrens take 13 of the 29, from its own approved numbers.
+- `npm run check`: 571 shared, 207 server, 69 client, build.
+- Phase 13 is built and committed locally on `phase-13-rest` (13d–13k), awaiting the user's combined test; nothing pushed.

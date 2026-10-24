@@ -252,6 +252,20 @@ Restart `npm run dev` (protocol v35) and reload. Enter the Ember Forge with any 
 
 Report: pass/fail per step; whether the jets' glow gives you time to step out; whether the slag fires make any room feel unfair; your clear time and level. If something fails, copy the browser console (F12 → Console) and the server terminal's last lines.
 
+#### Phase 13 combined checklist (13d–13j)
+
+Restart `npm run dev` (protocol v42) and reload. The ladder dungeons open once a serf has completed the Warrens; the five endgame dungeons need a **level-20** serf (ask me to give one of your serfs level 20 and a kit, as with the level-12 Fighter). For each dungeon, note pass/fail per step, your clear time and level, and anything that felt unfair or unreadable. If something fails, copy the browser console (F12 → Console) and the server terminal's last lines.
+
+1. **The menu** lists ten dungeons; an endgame card says "Locked: Reach level 20 first." for a serf below 20.
+2. **Ember Forge, the Forgemaster** (Forge heart): it walks after you; when it raises its hammer (yellow blink, red circle) a shockwave ring follows, with a gap marked by two yellow lines; stand in the gap or the ring hits (12). Spreads of 5 molten bullets. Below 60% two magma golems come out of the forge doors; below 30% the floor glows red except a dark lane, then bursts (14); the lane moves a plate each time.
+3. **Sunken Temple** (levels 18–20): tide pools brighten, then go dark and deep and slow you to half speed (they cycle every 9 s); eel-priests draw a line to you, then pull you towards them (kill one while the line shows to break it); spearmen charge. Your movement must not jump or rubber-band in deep water or while pulled. **The Tide Priest**: walls of water sweep the arena with gaps (marked yellow on the starting edge); below half, whirlpools drag you towards a red core.
+4. **Frost Hollow**: ice wraiths leave pale frost that slows you; icicles fall and frost the floor. **The Frost Wyrm** breathes a blue cone (it fills in for 1 s, then hits and frosts the floor), sweeps its tail when you are close, and calls wraiths below half.
+5. **Clockwork Vault**: the same map every run; steel arms turn in some rooms (14 a touch, at most once a second); sentries block shots with their shields from the front; turrets never move. **The Automaton** shrugs off most damage until it glows orange (overheated, the bar says OVERHEATED): then it stops and takes double. Its red laser arm turns round it.
+6. **Abyssal Gauntlet**: one arena; eight waves, each when you beat the last or after 45 s; braziers from wave 2, runes from wave 4, slag from wave 6. **The Warden** (wave 8) spirals, then charges (a wall dazes it), then slams shockwave rings.
+7. **Stormspire**: the path climbs north; lightning circles fill in under you, then strike; wind channels gust (streaks speed up) and push you; hawks dive. **The Storm Caller** calls lightning on everyone; at 60% and 30% it raises 3 pylons (WARDED: shots pass through it) with lightning arcs between them (a crackle, then a burn); break the pylons and it is STUNNED.
+8. **Dragon's Roost**: lava, slag, jets, wind, and lightning together; fire drakes lob burning bombs. **The Elder Dragon** breathes fire cones that leave the floor burning, sweeps its tail, and beats its wings (a ring, then you are blown back); at half it flies (AIRBORNE, untouchable) while meteors fall, then lands. Its chests can hold T10.
+9. **Two players** (two browser windows), any one dungeon: both see the same waves, traps, and boss; both get a chest at the end.
+
 #### Known issue: snapshot size in crowded rooms (found in 13e)
 
 A full heavy Sunken Temple room (30 enemies, the callers' paired bolts) sent about 9.6 KB per snapshot, about 640 KB/s, roughly twice the forge's busiest rooms. Fine on localhost; on real connections that much data is a lag risk. To address before production hosting (Phase 19): send only what changed between snapshots.

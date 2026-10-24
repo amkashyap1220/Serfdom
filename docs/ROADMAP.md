@@ -4,38 +4,38 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 
 ## Where things stand
 
-**Current phase: 13, in progress: 13a (the Ember Forge, D-130) done; 13b (fire elementals, magma golems, bellows-keepers, D-132) done; 13c (fire jets, slag spills, D-133) done; 13d (the Forgemaster, D-134) 13e (the Sunken Temple, D-135), 13f (Frost Hollow, D-136), 13g (the Clockwork Vault, D-137), 13h (the Abyssal Gauntlet, D-138), 13i (Stormspire, D-139), and 13j (Dragon's Roost, D-140) built; the rest of Phase 13 (dungeons 5–10, the EXP-pace and entry checks) is being built for one combined user test (the user's choice, 2026-10-24).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
+**Current phase: 13, built, awaiting the user's combined test: all ten dungeons exist (13a–13c done and tested; 13d the Forgemaster, 13e the Sunken Temple, 13f–13j the endgame dungeons, and 13k the acceptance checks built and committed locally on `phase-13-rest`).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
 
-| Phase | Name                                               | Status                                                       |
-| ----- | -------------------------------------------------- | ------------------------------------------------------------ |
-| 0     | Repository orientation and development environment | Complete                                                     |
-| 1     | Playable local client skeleton                     | Complete                                                     |
-| 2     | Movement, collision, and camera following          | Complete                                                     |
-| 3     | Combat prototype                                   | Complete                                                     |
-| 4     | Authoritative multiplayer foundation               | Complete                                                     |
-| 5     | Shared combat and enemies                          | Complete                                                     |
-| 6     | Dungeon vertical slice                             | Complete                                                     |
-| 7     | Account and persistent data                        | Complete                                                     |
-| 8     | Progression and permadeath                         | Complete                                                     |
-| 9     | Equipment and rewards                              | Complete                                                     |
-| 10    | Classes and class abilities                        | Complete                                                     |
-| 11    | Dungeon variety and procedural assembly            | Complete                                                     |
-| 12    | Dungeon tiers and the endgame loop                 | Complete                                                     |
-| 13    | Ten dungeons: tiers 4 and 5 and more               | **In progress:** 13a–13c done; 13d onward built for one test |
-| 14    | Partying up                                        | Not started                                                  |
-| 15    | Home screen, HUD, minimap, and leaderboards        | Not started                                                  |
-| 16    | Rare loot                                          | Not started                                                  |
-| 17    | Economy and account systems                        | Not started                                                  |
-| 18    | Onboarding and settings                            | Not started                                                  |
-| 19    | Production hosting                                 | Not started                                                  |
-| 20    | Accounts, sessions, and player safety              | Not started                                                  |
-| 21    | **Website alpha**                                  | Not started                                                  |
-| 22    | Alpha content: toward 40 dungeons                  | Not started                                                  |
-| 23    | Presentation: art and sound                        | Not started                                                  |
-| 24    | Beta polish                                        | Not started                                                  |
-| 25    | Desktop wrapper and cross-play proof               | Not started                                                  |
-| 26    | Steam integration                                  | Not started                                                  |
-| 27    | Steam launch                                       | Not started                                                  |
+| Phase | Name                                               | Status                                                    |
+| ----- | -------------------------------------------------- | --------------------------------------------------------- |
+| 0     | Repository orientation and development environment | Complete                                                  |
+| 1     | Playable local client skeleton                     | Complete                                                  |
+| 2     | Movement, collision, and camera following          | Complete                                                  |
+| 3     | Combat prototype                                   | Complete                                                  |
+| 4     | Authoritative multiplayer foundation               | Complete                                                  |
+| 5     | Shared combat and enemies                          | Complete                                                  |
+| 6     | Dungeon vertical slice                             | Complete                                                  |
+| 7     | Account and persistent data                        | Complete                                                  |
+| 8     | Progression and permadeath                         | Complete                                                  |
+| 9     | Equipment and rewards                              | Complete                                                  |
+| 10    | Classes and class abilities                        | Complete                                                  |
+| 11    | Dungeon variety and procedural assembly            | Complete                                                  |
+| 12    | Dungeon tiers and the endgame loop                 | Complete                                                  |
+| 13    | Ten dungeons: tiers 4 and 5 and more               | **Built:** 13a–13c done; 13d–13k awaiting the user's test |
+| 14    | Partying up                                        | Not started                                               |
+| 15    | Home screen, HUD, minimap, and leaderboards        | Not started                                               |
+| 16    | Rare loot                                          | Not started                                               |
+| 17    | Economy and account systems                        | Not started                                               |
+| 18    | Onboarding and settings                            | Not started                                               |
+| 19    | Production hosting                                 | Not started                                               |
+| 20    | Accounts, sessions, and player safety              | Not started                                               |
+| 21    | **Website alpha**                                  | Not started                                               |
+| 22    | Alpha content: toward 40 dungeons                  | Not started                                               |
+| 23    | Presentation: art and sound                        | Not started                                               |
+| 24    | Beta polish                                        | Not started                                               |
+| 25    | Desktop wrapper and cross-play proof               | Not started                                               |
+| 26    | Steam integration                                  | Not started                                               |
+| 27    | Steam launch                                       | Not started                                               |
 
 When a slice or phase finishes, update this table, the phase's Status line, `docs/WORK_LOG.md`, and the README status in the same commit.
 
@@ -362,7 +362,7 @@ Acceptance:
 
 ## Phase 13 — Ten dungeons: tiers 4 and 5 and more
 
-Status: in progress. 13a (the Ember Forge, dungeon 4: levels 15–18, forge imps, ember casters, lava channels, D-130) done; 13b (fire elementals, magma golems, bellows-keepers, D-132) done; 13c (fire jets and slag spills, D-133) done; 13d (the Forgemaster, D-134) built. The user chose (2026-10-24) to have the rest of Phase 13 built and tested together: 13e the Sunken Temple (dungeon 5), 13f–13j the endgame dungeons 6–10, 13k the EXP-pace and entry checks; each committed locally, pushed after the user's test.
+Status: built, awaiting the user's combined test. 13a (the Ember Forge, D-130), 13b (D-132), and 13c (D-133) done; the user chose (2026-10-24) to have the rest built and tested together: 13d the Forgemaster (D-134), 13e the Sunken Temple (dungeon 5, D-135), 13f Frost Hollow (D-136), 13g the Clockwork Vault (D-137), 13h the Abyssal Gauntlet (D-138), 13i Stormspire (D-139), 13j Dragon's Roost (D-140), and 13k the acceptance checks, each committed locally on `phase-13-rest`, to push after the user's test. Acceptance as measured: 10 dungeons listed; a party clears each new dungeon in the server tests, with each player's own EXP and a chest from that dungeon's tiers; the server refuses an endgame dungeon to a serf below level 20, even by a hand-made queue message; the EXP climb from level 1 to 20 takes 29 clears by the real formulas (Warrens 13, Stronghold 4, Crypt 5, Forge 4, Temple 3); loot reaches T10 (Dragon's Roost only). Not yet: the user's playtest of 13d–13j; the endgame numbers are PROVISIONAL until then; entry rules beyond D-107 and the level-20 rule were not otherwise changed.
 
 **Goal:** At least **10 dungeons** before the alpha (the user, D-124): tiers 4 and 5 for levels 15–20, which finish the first five dungeons' ladder from level 1 to 20, then **five endgame dungeons for level 20 and up** (D-126). Three exist (the Warrens, the Stronghold, the Crypt).
 
