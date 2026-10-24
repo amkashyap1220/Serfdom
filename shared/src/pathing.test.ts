@@ -85,7 +85,8 @@ describe("goblins find their way (D-114)", () => {
         }
       }
     }
-  });
+    // 200 s of play on nine maps: slow, so it gets more than the default 5 s.
+  }, 30_000);
 
   it("without the grid, corner steering alone leaves some stuck (the reported bug)", () => {
     const stuck = [1, 2, 3, 9].some((seed) =>

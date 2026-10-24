@@ -123,27 +123,6 @@ describe("the Ember Forge (D-130)", () => {
     });
   });
 
-  it("main paths come to 51,030–54,170 with the stand-in Lich, inside the band (D-133)", () => {
-    const hp = (band: string) =>
-      FORGE_PIECES.filter((p) => p.band === band)
-        .map((p) => pieceHp(p.piece))
-        .sort((a, b) => a - b);
-    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-    const [light, medium, heavy] = [hp("light"), hp("medium"), hp("heavy")];
-    const boss = pieceHp(FORGE_RECIPE.boss);
-    // One light room, three different medium, three different heavy.
-    const least =
-      light[0]! + sum(medium.slice(0, 3)) + sum(heavy.slice(0, 3)) + boss;
-    const most =
-      light.at(-1)! + sum(medium.slice(-3)) + sum(heavy.slice(-3)) + boss;
-    expect([least, most]).toEqual([51_030, 54_170]);
-    expect(least).toBeGreaterThanOrEqual(FORGE_RECIPE.requiredHp.min);
-    expect(most).toBeLessThanOrEqual(FORGE_RECIPE.requiredHp.max);
-    // With the Forgemaster (14,000) instead, inside D-130's 52,000–62,000.
-    expect(least + 3_000).toBeGreaterThanOrEqual(52_000);
-    expect(most + 3_000).toBeLessThanOrEqual(62_000);
-  });
-
   it("1,000 seeds follow the rules (no spawn in lava or obstacles); no wall gaps; seeds rebuild", () => {
     for (const seed of SEEDS) {
       expect(

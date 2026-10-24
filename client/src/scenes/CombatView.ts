@@ -9,6 +9,9 @@ import {
   LICH,
   JETS,
   beamBox,
+  FORGEMASTER,
+  burningStrips,
+  plateColumns,
 } from "@serfdom/shared";
 import type { CombatViewModel, EnemyView } from "../combat-view-model";
 import { lichPose } from "../lich-pose";
@@ -54,6 +57,7 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   elemental: 0xe8281e,
   golem: 0x5a3a2e,
   bellows: 0xa0522d,
+  forgemaster: 0x3a2a26,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -107,6 +111,9 @@ const COLORS = {
   slagEdge: 0xa83a0a,
   nozzle: 0x2c2a2e,
   beam: 0xff7a1a,
+  wave: 0xffb347,
+  plateGlow: 0xff4d2d,
+  plateLine: 0x5a2a1a,
   beamCore: 0xfff0a0,
   boulderEdge: 0x4a4238,
 } as const;
@@ -324,6 +331,66 @@ export class CombatView {
       });
       h.fillStyle(COLORS.beamCore, 0.5 + 0.4 * life);
       h.fillRect(core.x, core.y, core.width, core.height);
+    }
+
+    // The Forgemaster's floor plates (D-134): everything but the safe
+    // lane glows red, filling in, then flashes with fire as it bursts.
+    for (const p of view.plates) {
+      const area = { x: p.x, y: p.y, width: p.width, height: p.height };
+      for (const s of burningStrips(area, p.lane)) {
+        h.fillStyle(
+          p.burning ? COLORS.fire : COLORS.plateGlow,
+          p.burning ? 0.7 : 0.1 + 0.35 * p.warn,
+        );
+        h.fillRect(s.x, s.y, s.width, s.height);
+      }
+      const plate = p.width / plateColumns(area);
+      h.lineStyle(px(1), COLORS.plateLine, 0.8);
+      for (let x = p.x + plate; x < p.x + p.width - 1; x += plate) {
+        h.lineBetween(x, p.y, x, p.y + p.height);
+      }
+      for (let y = p.y + plate; y < p.y + p.height - 1; y += plate) {
+        h.lineBetween(p.x, y, p.x + p.width, y);
+      }
+    }
+    // Its shockwaves (D-134): while the hammer is up, two marks show the
+    // gap; then the ring grows, the gap left open.
+    for (const w of view.waves) {
+      const half = (FORGEMASTER.wave.gapDegrees / 2) * (Math.PI / 180);
+      if (w.startsIn > 0) {
+        h.lineStyle(px(3), COLORS.alert, 0.9);
+        for (const side of [-1, 1]) {
+          const a = w.gap + side * half;
+          h.lineBetween(
+            w.x + Math.cos(a) * 30,
+            w.y + Math.sin(a) * 30,
+            w.x + Math.cos(a) * 110,
+            w.y + Math.sin(a) * 110,
+          );
+        }
+        continue;
+      }
+      // In short pieces, leaving out any beyond its arena floor.
+      h.lineStyle(FORGEMASTER.wave.thickness, COLORS.wave, 0.85);
+      const from = w.gap + half;
+      const to = w.gap - half + 2 * Math.PI;
+      const pieces = Math.ceil((to - from) / (Math.PI / 60));
+      const each = (to - from) / pieces;
+      for (let k = 0; k < pieces; k++) {
+        const a = from + (k + 0.5) * each;
+        const mx = w.x + Math.cos(a) * w.radius;
+        const my = w.y + Math.sin(a) * w.radius;
+        const c = w.clip;
+        if (
+          c &&
+          (mx < c.x || mx > c.x + c.width || my < c.y || my > c.y + c.height)
+        ) {
+          continue;
+        }
+        h.beginPath();
+        h.arc(w.x, w.y, w.radius, from + k * each, from + (k + 1) * each);
+        h.strokePath();
+      }
     }
 
     const bl = this.blasts.clear();

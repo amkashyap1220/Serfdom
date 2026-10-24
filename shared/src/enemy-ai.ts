@@ -19,6 +19,7 @@ import {
   ELEMENTAL,
   GOLEM,
   BELLOWS,
+  FORGEMASTER,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -29,6 +30,7 @@ import { isAlive, ringDirections, type EnemyState, isPile } from "./enemy.ts";
 import { rotateVec, type Rect, type Vec2 } from "./geometry.ts";
 import { stepMovement } from "./movement.ts";
 import { stepFireCooldown } from "./weapon.ts";
+import { laneAt, slamGap } from "./forge-boss.ts";
 
 /** What the AI needs to know about a living player. */
 export interface AiTarget {
@@ -102,6 +104,14 @@ export interface EnemyAction {
   stoke?: { at: Vec2; radius: number; share: number };
   /** A fire elemental exploding (D-132), for drawing. */
   explosion?: { at: Vec2; radius: number };
+  /**
+   * The Forgemaster's shockwave (D-134): a ring growing from `at` once
+   * `startsIn` runs out, with a gap centred on `gap` (radians); it only
+   * hits players inside `area` (its arena), if given.
+   */
+  wave?: { at: Vec2; gap: number; startsIn: number; area?: Rect };
+  /** The Forgemaster's floor plates (D-134): all of `area` but the safe lane glows, then bursts. */
+  plates?: { area: Rect; lane: number };
 }
 
 /** What the AI knows about the world beyond the targets. */
@@ -117,6 +127,8 @@ export interface AiContext {
   allies?: () => readonly EnemyState[];
   /** The holes of a room (the Warchief's war cry calls goblins out of them, D-117). */
   holesOf?: (roomId: string) => readonly Vec2[];
+  /** A room's floor (the Forgemaster's plates and shockwaves keep to its arena, D-134). */
+  boundsOf?: (roomId: string) => Rect | undefined;
 }
 
 const NO_MOVE = { x: 0, y: 0 };
@@ -225,6 +237,16 @@ export function enemyAct(
       );
     case "golem":
       return golemAct(enemy, target, walls, dtSeconds, result, context);
+    case "forgemaster":
+      return forgemasterAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+      );
     case "bellows":
       return shamanAct(
         enemy,
@@ -728,6 +750,149 @@ function elementalAct(
     dt,
   );
   return result({ ...enemy, position });
+}
+
+/** Where the Forgemaster's hammer lands, facing `direction` (D-134). */
+export function hammerSpot(position: Vec2, direction: Vec2): Vec2 {
+  return {
+    x: position.x + direction.x * FORGEMASTER.slam.reach,
+    y: position.y + direction.y * FORGEMASTER.slam.reach,
+  };
+}
+
+/**
+ * The Forgemaster (D-134): walks after the nearest player; slams (a
+ * windup, the hit, and a shockwave whose gap shows from the windup on);
+ * aimed molten spreads; golems below 60%; plates and faster slams below 30%.
+ */
+function forgemasterAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "forgemaster") return result(enemy);
+  const F = FORGEMASTER;
+  const fraction = enemy.hp / enemy.maxHp;
+  const golemPhase = fraction < F.golemsBelow;
+  const enraged = fraction < F.enragedBelow;
+  const tick = (t: number) => Math.max(0, t - dt);
+  let next = {
+    ...ai,
+    slam: tick(ai.slam),
+    spread: tick(ai.spread),
+    golems: golemPhase ? tick(ai.golems) : ai.golems,
+    plates: enraged ? tick(ai.plates) : ai.plates,
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  const area = enemy.roomId ? context.boundsOf?.(enemy.roomId) : undefined;
+  let position = enemy.position;
+
+  if (target) {
+    if (next.spread <= 1e-9) {
+      next.spread = F.spread.intervalSeconds;
+      const aim = toward(enemy.position, target.target.position);
+      const step = (F.spread.angleStepDegrees * Math.PI) / 180;
+      const half = (F.spread.count - 1) / 2;
+      for (let i = 0; i < F.spread.count; i++) {
+        action.bullets.push({
+          direction: rotateVec(aim, (i - half) * step),
+          spec: F.spread.bullet,
+        });
+      }
+    }
+    if (golemPhase && next.golems <= 1e-9) {
+      next.golems = F.golems.intervalSeconds;
+      const room = F.golems.maxAlive - context.aliveSummons(enemy.id);
+      const n = Math.min(F.golems.count, Math.max(0, room));
+      const doors = enemy.roomId ? (context.holesOf?.(enemy.roomId) ?? []) : [];
+      for (let i = 0; i < n; i++) {
+        const door = doors[(next.called + i) % Math.max(1, doors.length)];
+        action.summons.push({
+          kind: F.golems.kind,
+          at: door
+            ? { ...door }
+            : { x: enemy.position.x + (i % 2 ? 90 : -90), y: enemy.position.y },
+        });
+      }
+      next.called += n;
+    }
+    if (enraged && next.plates <= 1e-9 && area) {
+      next.plates = F.plates.intervalSeconds;
+      action.plates = { area, lane: laneAt(area, next.plateSteps) };
+      next.plateSteps += 1;
+    }
+  }
+
+  if (next.mode === "walk") {
+    if (target && next.slam <= 1e-9) {
+      // The hammer goes up: where it will land, and the gap its
+      // shockwave will have, show from now on.
+      const direction = toward(enemy.position, target.target.position);
+      const at = hammerSpot(enemy.position, direction);
+      // Slams are every 5 s (3.5 s enraged) from hammer-up to hammer-up.
+      next = {
+        ...next,
+        mode: "windup",
+        timer: F.slam.windupSeconds,
+        direction,
+        slam: enraged ? F.slam.enragedIntervalSeconds : F.slam.intervalSeconds,
+      };
+      action.slam = { at, radius: F.slam.radius, warning: true };
+      action.wave = {
+        at,
+        gap: slamGap(enemy.id, next.slams),
+        startsIn: F.slam.windupSeconds,
+        ...(area ? { area } : {}),
+      };
+    } else if (target) {
+      position = move(
+        enemy,
+        toward(
+          enemy.position,
+          route(
+            enemy.position,
+            target.target.position,
+            enemy.size / 2,
+            walls,
+            context,
+          ),
+        ),
+        F.speed,
+        walls,
+        dt,
+      );
+    }
+  } else {
+    const timer = next.timer - dt;
+    if (timer > 1e-9) {
+      next = { ...next, timer };
+    } else {
+      const at = hammerSpot(enemy.position, next.direction);
+      for (const t of targets) {
+        if (circleHitsPlayer(at, F.slam.radius, t.position)) {
+          action.contacts.push({ playerId: t.id, damage: F.slam.damage });
+        }
+      }
+      action.slam = { at, radius: F.slam.radius, warning: false };
+      next = {
+        ...next,
+        mode: "walk",
+        timer: 0,
+        slams: next.slams + 1,
+      };
+    }
+  }
+  return result({ ...enemy, position, ai: next }, action);
 }
 
 /** Magma golem (D-132): a slow walker that vents on a cycle. */
@@ -1341,6 +1506,7 @@ export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
 }
 
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "forgemaster") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "elemental") return enemy.ai.fuse !== null;
   if (enemy.ai.kind === "knight") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "warchief") {

@@ -6,6 +6,7 @@ import {
   dropBoulders,
   fireArrows,
   fireJets,
+  FORGEMASTER,
   burstRunes,
   runeBursts,
   runeWarnings,
@@ -297,6 +298,7 @@ export class DungeonInstance {
       TICK_SECONDS,
       this.navigatorFor(walls),
       this.holesOf,
+      this.boundsOf,
     );
     this.sim = world.state;
     this.collectEffects(world.events);
@@ -384,6 +386,10 @@ export class DungeonInstance {
   /** A room's holes (the Warchief's war cry, D-117). */
   private readonly holesOf = (roomId: string): readonly Vec2[] =>
     this.layout.rooms.find((r) => r.id === roomId)?.holes ?? [];
+
+  /** A room's floor (the Forgemaster's arena, D-134). */
+  private readonly boundsOf = (roomId: string): Rect | undefined =>
+    this.layout.rooms.find((r) => r.id === roomId)?.bounds;
 
   private navigatorFor(walls: readonly Rect[]): SizedNavigator {
     const key = this.closedDoors.join(",");
@@ -495,6 +501,24 @@ export class DungeonInstance {
         y2: roundCoord(b.to.y),
         width: b.width,
         remaining: roundCoord(b.remaining),
+      })),
+      waves: (this.sim.waves ?? []).map((w) => ({
+        x: roundCoord(w.at.x),
+        y: roundCoord(w.at.y),
+        radius: roundCoord(w.radius),
+        gap: Math.round(w.gap * 1000) / 1000,
+        startsIn: roundCoord(w.startsIn),
+      })),
+      plates: (this.sim.plates ?? []).map((p) => ({
+        x: p.area.x,
+        y: p.area.y,
+        width: p.area.width,
+        height: p.area.height,
+        lane: p.lane,
+        warn: roundCoord(
+          Math.min(1, 1 - p.burstsIn / FORGEMASTER.plates.warnSeconds),
+        ),
+        burning: p.burstsIn <= 1e-9,
       })),
       traps: trapWarnings(this.rooms, this.layout),
       runes: runeWarnings(this.rooms, this.layout),

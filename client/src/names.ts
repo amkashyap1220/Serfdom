@@ -23,6 +23,7 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   elemental: "a Fire Elemental",
   golem: "a Magma Golem",
   bellows: "a Bellows-keeper",
+  forgemaster: "the Forgemaster",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
   braziers: "a spirit brazier",

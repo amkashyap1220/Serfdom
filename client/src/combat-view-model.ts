@@ -92,6 +92,28 @@ export interface SlitView {
   jet?: boolean;
 }
 
+/** The Forgemaster's shockwave (D-134). */
+export interface WaveView {
+  x: number;
+  y: number;
+  radius: number;
+  gap: number;
+  startsIn: number;
+  /** Its arena: the ring is only drawn over this floor. */
+  clip?: { x: number; y: number; width: number; height: number };
+}
+
+/** The Forgemaster's floor plates (D-134). */
+export interface PlatesView {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  lane: number;
+  warn: number;
+  burning: boolean;
+}
+
 /** A fire jet's beam (D-133): from (x1, y1) to (x2, y2), `width` wide. */
 export interface BeamView {
   x1: number;
@@ -152,6 +174,8 @@ export interface CombatViewModel {
   runes: RuneView[];
   fires: FireView[];
   beams: BeamView[];
+  waves: WaveView[];
+  plates: PlatesView[];
   portalOpen: boolean;
 }
 
@@ -167,6 +191,8 @@ export const EMPTY_VIEW: CombatViewModel = {
   runes: [],
   fires: [],
   beams: [],
+  waves: [],
+  plates: [],
   portalOpen: false,
 };
 

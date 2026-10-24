@@ -58,6 +58,7 @@ export {
   GOLEM,
   BELLOWS,
   BOSS_KINDS,
+  FORGEMASTER,
   CASTER,
   GHOST,
   NECROMANCER,
@@ -210,6 +211,8 @@ export {
   fireJets,
   beamBox,
   type Beam,
+  type Wave,
+  type PlateBurst,
   burstRunes,
   TRAP_OWNER_ID,
   GOBLIN_BLAST_BY,
@@ -441,3 +444,12 @@ export {
   FORGE_PIECES,
   FORGE_RECIPE,
 } from "./ember-forge.ts";
+export {
+  burningStrips,
+  inGap,
+  laneAt,
+  plateColumns,
+  safeLane,
+  slamGap,
+  waveHits,
+} from "./forge-boss.ts";

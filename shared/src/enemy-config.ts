@@ -27,6 +27,7 @@ export const ENEMY_KINDS = [
   "elemental",
   "golem",
   "bellows",
+  "forgemaster",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -401,7 +402,61 @@ export const BELLOWS = {
 } as const;
 
 /** Bosses: never healed by a bellows-keeper (D-132), so a fight cannot stall. */
-export const BOSS_KINDS: readonly EnemyKind[] = ["warlord", "warchief", "lich"];
+export const BOSS_KINDS: readonly EnemyKind[] = [
+  "warlord",
+  "warchief",
+  "lich",
+  "forgemaster",
+];
+
+/**
+ * The Forgemaster (D-134), the Ember Forge's boss. Walks after the nearest
+ * player. Phase 1: a hammer slam (a 0.8 s windup, then `slam.damage` in a
+ * circle in front of it) that sends out a shockwave ring with a gap, and
+ * aimed spreads of molten bullets. Below `golemsBelow`: magma golems out
+ * of the forge doors. Below `enragedBelow`: floor plates burn round a
+ * moving safe lane, and slams come faster.
+ */
+export const FORGEMASTER = {
+  maxHp: 14000,
+  size: 88,
+  speed: 30,
+  golemsBelow: 0.6,
+  enragedBelow: 0.3,
+  slam: {
+    intervalSeconds: 5,
+    enragedIntervalSeconds: 3.5,
+    windupSeconds: 0.8,
+    /** The hammer lands this far in front of its centre. */
+    reach: 60,
+    radius: 70,
+    damage: 14,
+  },
+  wave: {
+    speed: 180,
+    maxRadius: 420,
+    thickness: 16,
+    gapDegrees: 60,
+    damage: 12,
+  },
+  spread: {
+    intervalSeconds: 2.5,
+    count: 5,
+    angleStepDegrees: 15,
+    bullet: { damage: 9, speed: 170, size: 10, range: 520 },
+  },
+  golems: { intervalSeconds: 10, count: 2, maxAlive: 2, kind: "golem" },
+  plates: {
+    intervalSeconds: 2.5,
+    warnSeconds: 1.5,
+    /** How long a burst stays drawn. */
+    burnSeconds: 0.25,
+    size: 80,
+    /** The safe lane is this many plates wide. */
+    laneWidth: 2,
+    damage: 14,
+  },
+} as const;
 
 /** Never attacks; strengthens goblins near it (D-108, D-115). */
 export const SHAMAN = {
@@ -496,6 +551,7 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   elemental: ELEMENTAL,
   golem: GOLEM,
   bellows: BELLOWS,
+  forgemaster: FORGEMASTER,
 };
 
 /**
@@ -529,6 +585,7 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   elemental: 0,
   golem: GOLEM.contactCooldownSeconds / 2,
   bellows: BELLOWS.pulseSeconds,
+  forgemaster: 1.5,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

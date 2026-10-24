@@ -9,6 +9,7 @@ import {
   NECROMANCER,
   LICH,
   GOLEM,
+  FORGEMASTER,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -86,6 +87,24 @@ export type EnemyAi =
       /** Final phase: seconds to the next runes, and how far they have turned. */
       runes: number;
       runeTurn: number;
+    }
+  | {
+      kind: "forgemaster";
+      /** Walking, or raising the hammer (the slam's windup, D-134). */
+      mode: "walk" | "windup";
+      timer: number;
+      /** Where the hammer is coming down, locked when it goes up. */
+      direction: Vec2;
+      /** Seconds until each attack is ready. */
+      slam: number;
+      spread: number;
+      golems: number;
+      plates: number;
+      /** Slams so far (each gap is new) and plate bursts so far (the lane sweeps). */
+      slams: number;
+      plateSteps: number;
+      /** Golems called so far, so the forge doors take turns. */
+      called: number;
     }
   | {
       kind: "elemental";
@@ -174,6 +193,21 @@ function initialAi(kind: EnemyKind): EnemyAi {
       return { kind, faded: false, timer: GHOST.visibleSeconds };
     case "elemental":
       return { kind, fuse: null };
+    case "forgemaster":
+      return {
+        kind,
+        mode: "walk",
+        timer: 0,
+        direction: { x: 0, y: 0 },
+        slam: FORGEMASTER.slam.intervalSeconds / 2,
+        spread: FIRST_ATTACK_DELAY.forgemaster,
+        // The golems come, and the plates start, as soon as their phase does.
+        golems: 0,
+        plates: 0,
+        slams: 0,
+        plateSteps: 0,
+        called: 0,
+      };
     case "golem":
       return { kind, vent: GOLEM.ventEverySeconds, venting: 0 };
     case "lich":

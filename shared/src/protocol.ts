@@ -68,6 +68,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v36 (13d): the Forgemaster (D-134): snapshots list its shockwaves
+ *          (`waves`) and floor plates (`plates`).
  * v35 (13c): fire jets and slag spills (D-133): snapshots list fire
  *          jets' `beams`; hazards may be a slag spill; killedBy may be
  *          "jets" or "slag".
@@ -129,7 +131,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 35;
+export const PROTOCOL_VERSION = 36;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -300,6 +302,28 @@ export interface SnapshotBeam {
   y2: number;
   width: number;
   remaining: number;
+}
+
+/** The Forgemaster's shockwave (D-134): a ring of `radius` round (x, y), its gap centred on `gap` (radians). */
+export interface SnapshotWave {
+  x: number;
+  y: number;
+  radius: number;
+  gap: number;
+  /** Seconds until it starts to grow (the hammer is still up). */
+  startsIn: number;
+}
+
+/** The Forgemaster's floor plates (D-134): its arena, the safe lane, and how near the burst is. */
+export interface SnapshotPlates {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  lane: number;
+  /** 0 → 1 while it glows; 1 once it bursts. */
+  warn: number;
+  burning: boolean;
 }
 
 /** Burning floor left by a bomb (D-115). */
@@ -499,6 +523,9 @@ export type ServerMessage =
       fires: SnapshotFire[];
       /** Fire jets' beams burning now (D-133). */
       beams: SnapshotBeam[];
+      /** The Forgemaster's shockwaves and floor plates (D-134). */
+      waves: SnapshotWave[];
+      plates: SnapshotPlates[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
       /** Rune columns glowing before they burst (D-123). */
@@ -997,6 +1024,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "hazards",
           "fires",
           "beams",
+          "waves",
+          "plates",
           "traps",
           "runes",
           "portalOpen",
@@ -1035,6 +1064,10 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!fires) return fail("snapshot: bad fire entry");
       const beams = parseList(obj.beams, parseSnapshotBeam);
       if (!beams) return fail("snapshot: bad beam entry");
+      const waves = parseList(obj.waves, parseSnapshotWave);
+      if (!waves) return fail("snapshot: bad wave entry");
+      const plates = parseList(obj.plates, parseSnapshotPlates);
+      if (!plates) return fail("snapshot: bad plates entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -1054,6 +1087,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           hazards,
           fires,
           beams,
+          waves,
+          plates,
           traps,
           runes,
           portalOpen: obj.portalOpen,
@@ -1562,6 +1597,55 @@ function parseSnapshotHazard(v: unknown): SnapshotHazard | null {
   )
     return null;
   return { x: v.x, y: v.y, radius: v.radius, landsIn: v.landsIn, kind: v.kind };
+}
+
+function parseSnapshotWave(v: unknown): SnapshotWave | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "radius", "gap", "startsIn"])
+  ) {
+    return null;
+  }
+  if (
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isFiniteNumber(v.gap) ||
+    !isNonNegative(v.radius) ||
+    !isNonNegative(v.startsIn)
+  ) {
+    return null;
+  }
+  return { x: v.x, y: v.y, radius: v.radius, gap: v.gap, startsIn: v.startsIn };
+}
+
+function parseSnapshotPlates(v: unknown): SnapshotPlates | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "width", "height", "lane", "warn", "burning"])
+  ) {
+    return null;
+  }
+  if (
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isNonNegative(v.width) ||
+    !isNonNegative(v.height) ||
+    !isNonNegativeInt(v.lane) ||
+    !isNonNegative(v.warn) ||
+    v.warn > 1 ||
+    typeof v.burning !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    x: v.x,
+    y: v.y,
+    width: v.width,
+    height: v.height,
+    lane: v.lane,
+    warn: v.warn,
+    burning: v.burning,
+  };
 }
 
 function parseSnapshotBeam(v: unknown): SnapshotBeam | null {

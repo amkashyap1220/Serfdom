@@ -4,7 +4,7 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-**Next step:** draft 13d (the Forgemaster) for approval.
+**Next step:** build the rest of Phase 13 (13e–13k) for one combined user test, committing locally on `phase-13-rest`.
 
 Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
@@ -650,3 +650,12 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Live (harness, **test** DB, seed 2, 1280×920 Chrome): the Chain gallery's beams crossed the whole room while the pillar-aligned nozzles were blocked; the Great furnace (turned) fired west and its beam stopped at the furnace block; the Ore store's molten boulders fell and left slag fires (the probe showed `slag` hazards and fires). Not checked live: a death by either, two players.
 - User ran the 13c checklist: pass (2026-10-24).
 - Next step: draft 13d (the Forgemaster).
+
+### Phase 13d — The Forgemaster — 2026-10-24
+
+- Drafted from D-130; the user approved it, then asked for the rest of Phase 13 to be built and tested at once. Approved themes for dungeons 5–10 (Sunken Temple, Frost Hollow, Clockwork Vault, Abyssal Gauntlet, Stormspire, Dragon's Roost); level-20 entry for the endgame ones. Work is committed locally on `phase-13-rest`, pushed after the user's test.
+- The user asked (mid-milestone) that test browsers no longer pop up: drivers now run headless.
+- Found by the tests: slams were 5.8 s apart (the timer restarted when the hammer came down); now hammer-up to hammer-up. A slow pathing test (200 s of play on nine maps) brushed the 5 s default timeout under load; it has an explicit 30 s now.
+- Found live: the shockwave was drawn past the arena's walls; it is now drawn in short arcs, only over the arena floor.
+- `npm run check`: 500 shared, 199 server, 65 client, build.
+- Live (harness, **test** DB, seed 2, headless): the boss walked and slammed, the ring grew with its gap, golems came out below 60%, the plates glowed round the dark lane below 30%, the boss bar said ENRAGED.

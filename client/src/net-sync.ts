@@ -1,4 +1,5 @@
 import {
+  FORGEMASTER,
   layoutFor,
   sludgePools,
   type DungeonLayout,
@@ -284,6 +285,26 @@ export class NetSync {
         ...b,
         remaining: Math.max(0, b.remaining - age),
       })),
+      // Grown on to "now", like projectiles are moved on.
+      waves: latest.snapshot.waves.map((w) => {
+        const late = Math.max(0, age - w.startsIn);
+        const clip = this.layout?.rooms.find((r) => {
+          const b = r.bounds;
+          return (
+            w.x >= b.x &&
+            w.x <= b.x + b.width &&
+            w.y >= b.y &&
+            w.y <= b.y + b.height
+          );
+        })?.bounds;
+        return {
+          ...w,
+          startsIn: Math.max(0, w.startsIn - age),
+          radius: w.radius + FORGEMASTER.wave.speed * late,
+          ...(clip ? { clip } : {}),
+        };
+      }),
+      plates: latest.snapshot.plates.map((p) => ({ ...p })),
     };
   }
 

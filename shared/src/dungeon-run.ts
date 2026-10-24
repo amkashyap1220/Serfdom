@@ -12,7 +12,7 @@ import {
   type RuneSpot,
 } from "./dungeon-layout.ts";
 import { isAlive } from "./enemy.ts";
-import type { Rect, Vec2 } from "./geometry.ts";
+import { sweepIndex, type Rect, type Vec2 } from "./geometry.ts";
 import { PLAYER_BODY, TICK_SECONDS } from "./movement-config.ts";
 import {
   isPlayerAlive,
@@ -366,10 +366,7 @@ export interface RuneBurst {
 
 /** The column of sweep step `k` among `columns`: west to east and back. */
 export function runeColumn(k: number, columns: number): number {
-  if (columns <= 1) return 0;
-  const period = 2 * columns - 2;
-  const i = k % period;
-  return i < columns ? i : period - i;
+  return sweepIndex(k, columns);
 }
 
 const columnsOf = (runes: readonly RuneSpot[]) =>

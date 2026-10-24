@@ -1,4 +1,10 @@
-import { LICH, WARCHIEF, WARLORD, type EnemyKind } from "@serfdom/shared";
+import {
+  FORGEMASTER,
+  LICH,
+  WARCHIEF,
+  WARLORD,
+  type EnemyKind,
+} from "@serfdom/shared";
 
 /** What the boss bar shows for one boss (D-102, D-117, D-125). */
 export interface BossBar {
@@ -55,6 +61,14 @@ export function bossBar(
           : fraction < LICH.wardBelow[1]!
             ? "  — ENRAGED"
             : "",
+    };
+  }
+  if (kind === "forgemaster") {
+    return {
+      name: "The Forgemaster",
+      notches: [FORGEMASTER.golemsBelow, FORGEMASTER.enragedBelow],
+      angry: fraction < FORGEMASTER.golemsBelow,
+      suffix: fraction < FORGEMASTER.enragedBelow ? "  — ENRAGED" : "",
     };
   }
   return undefined;

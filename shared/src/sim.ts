@@ -1,4 +1,5 @@
-import { BOSS_KINDS, SHAMAN, SKELETON } from "./enemy-config.ts";
+import { BOSS_KINDS, FORGEMASTER, SHAMAN, SKELETON } from "./enemy-config.ts";
+import { burningStrips, waveHits } from "./forge-boss.ts";
 import type { Waypoints } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
 import {
@@ -163,6 +164,34 @@ export interface SimState {
   lavaIn?: number;
   /** Fire jets' beams burning now (D-133). */
   beams?: readonly Beam[];
+  /** The Forgemaster's shockwaves (D-134). */
+  waves?: readonly Wave[];
+  /** The Forgemaster's floor plates, glowing or bursting (D-134). */
+  plates?: readonly PlateBurst[];
+}
+
+/** A shockwave ring (D-134): grows once `startsIn` runs out; hits each player once. */
+export interface Wave {
+  at: Vec2;
+  radius: number;
+  gap: number;
+  startsIn: number;
+  /** Its arena: players outside are not hit. */
+  area?: Rect;
+  damage: number;
+  ownerId: number;
+  hit: readonly number[];
+}
+
+/** Floor plates (D-134): all of `area` but the safe lane bursts when `burstsIn` runs out. */
+export interface PlateBurst {
+  area: Rect;
+  lane: number;
+  burstsIn: number;
+  /** After the burst: how much longer it is drawn burning. */
+  burnLeft: number;
+  damage: number;
+  ownerId: number;
 }
 
 /**
@@ -891,6 +920,8 @@ export function stepWorld(
   navigator?: Waypoints,
   /** A room's holes, where the Warchief's war cry calls goblins from (D-117). */
   holesOf?: (roomId: string) => readonly Vec2[],
+  /** A room's floor: the Forgemaster's arena (D-134). */
+  boundsOf?: (roomId: string) => Rect | undefined,
 ): { state: SimState; events: SimEvent[] } {
   const events: SimEvent[] = [];
   let players = state.players.map((p) => regenerate(p, dtSeconds));
@@ -928,6 +959,9 @@ export function stepWorld(
   const raises: number[] = [];
   /** Bellows-keepers' heal pulses this tick (D-132). */
   const stokes: { at: Vec2; radius: number; share: number }[] = [];
+  /** The Forgemaster's new shockwaves and plates this tick (D-134). */
+  const newWaves: Wave[] = [];
+  const newPlates: PlateBurst[] = [];
   const context = {
     allies: () => allies,
     aliveSummons: (id: number) =>
@@ -939,6 +973,7 @@ export function stepWorld(
         }
       : {}),
     ...(holesOf ? { holesOf } : {}),
+    ...(boundsOf ? { boundsOf } : {}),
   };
   enemies = enemies.map((enemy) => {
     // A vanished player is out of sight: not aimed at, chased, or touched.
@@ -973,6 +1008,28 @@ export function stepWorld(
     }
     if (action.raise !== undefined) raises.push(action.raise);
     if (action.stoke) stokes.push(action.stoke);
+    if (action.wave) {
+      newWaves.push({
+        at: { ...action.wave.at },
+        radius: 0,
+        gap: action.wave.gap,
+        startsIn: action.wave.startsIn,
+        ...(action.wave.area ? { area: action.wave.area } : {}),
+        damage: FORGEMASTER.wave.damage,
+        ownerId: enemy.id,
+        hit: [],
+      });
+    }
+    if (action.plates) {
+      newPlates.push({
+        area: action.plates.area,
+        lane: action.plates.lane,
+        burstsIn: FORGEMASTER.plates.warnSeconds,
+        burnLeft: FORGEMASTER.plates.burnSeconds,
+        damage: FORGEMASTER.plates.damage,
+        ownerId: enemy.id,
+      });
+    }
     if (action.explosion) {
       events.push({
         type: "blast",
@@ -1137,6 +1194,55 @@ export function stepWorld(
     });
     const remaining = beam.remaining - dtSeconds;
     if (remaining > 1e-9) beams.push({ ...beam, remaining, hit });
+  }
+
+  // 2a. The Forgemaster's shockwaves grow from the hammer once the windup
+  // ends, hitting each player in their band (outside the gap) once (D-134).
+  const waves: Wave[] = [];
+  for (const w of [...(state.waves ?? []), ...newWaves]) {
+    const waiting = w.startsIn > 1e-9;
+    const startsIn = waiting ? Math.max(0, w.startsIn - dtSeconds) : 0;
+    const radius = waiting
+      ? w.radius
+      : w.radius + FORGEMASTER.wave.speed * dtSeconds;
+    const hit = [...w.hit];
+    if (!waiting) {
+      players = players.map((pl) => {
+        if (
+          !isPlayerAlive(pl) ||
+          hit.includes(pl.id) ||
+          (w.area && !inside(w.area, pl.position)) ||
+          !waveHits({ at: w.at, radius, gap: w.gap }, pl.position)
+        ) {
+          return pl;
+        }
+        hit.push(pl.id);
+        return damagePlayer(pl, w.ownerId, w.damage, pl.position, events);
+      });
+    }
+    if (radius <= FORGEMASTER.wave.maxRadius) {
+      waves.push({ ...w, radius, startsIn, hit });
+    }
+  }
+  // Floor plates glow, then burst on every player touching the burning floor.
+  const plates: PlateBurst[] = [];
+  for (const p of [...(state.plates ?? []), ...newPlates]) {
+    if (p.burstsIn > 1e-9) {
+      const burstsIn = p.burstsIn - dtSeconds;
+      if (burstsIn <= 1e-9) {
+        const strips = burningStrips(p.area, p.lane);
+        players = players.map((pl) => {
+          const box = boxAround(pl.position, PLAYER_HEALTH.hurtboxSize);
+          return isPlayerAlive(pl) && strips.some((s) => overlapsBox(s, box))
+            ? damagePlayer(pl, p.ownerId, p.damage, pl.position, events)
+            : pl;
+        });
+      }
+      plates.push({ ...p, burstsIn: Math.max(0, burstsIn) });
+      continue;
+    }
+    const burnLeft = p.burnLeft - dtSeconds;
+    if (burnLeft > 1e-9) plates.push({ ...p, burnLeft });
   }
 
   // 2b. Hazards: existing ones count down and land; new ones wait a full delay.
@@ -1379,6 +1485,8 @@ export function stepWorld(
       nextEnemyId,
       lavaIn,
       beams,
+      waves,
+      plates,
       hazards,
       fires: burning,
       blasts: [],
@@ -1725,6 +1833,13 @@ function insideRect(r: Rect, p: Vec2): boolean {
 }
 
 /** Whether two rectangles overlap (edges touching do not count). */
+/** Is `p` inside `r` (edges included)? */
+function inside(r: Rect, p: Vec2): boolean {
+  return (
+    p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height
+  );
+}
+
 function overlapsBox(a: Rect, b: Rect): boolean {
   return (
     a.x < b.x + b.width &&

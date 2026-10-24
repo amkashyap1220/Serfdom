@@ -8,7 +8,6 @@ import {
   type RoomBand,
 } from "./dungeon-recipe.ts";
 import { ENEMY_STATS } from "./enemy-config.ts";
-import { CRYPT_SANCTUM } from "./forgotten-crypt.ts";
 import type { Rect } from "./geometry.ts";
 import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
 
@@ -18,7 +17,7 @@ import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
  * flanking) and ember casters (the bomber's lob) among lava channels that
  * burn players and that enemies walk round; fire elementals, magma golems,
  * and bellows-keepers (13b, D-132); fire jets and slag spills (13c, D-133).
- * 13d adds the Forgemaster; until then the Lich stands in as the boss.
+ * The Forgemaster (13d, D-134) waits in the Forge heart.
  */
 
 /** Spawn boxes keep this far clear of obstacles and lava. */
@@ -396,11 +395,21 @@ export const FORGE_PIECES: readonly RecipePiece[] = ROOMS.map((entry) =>
     : entry,
 );
 
-/** The forge's boss room. Until the Forgemaster (13d) the Lich stands in. */
+/**
+ * The Forge heart (D-134): the Forgemaster in the middle (the portal opens
+ * where it dies), a forge door in the north and south walls for its golems,
+ * and no pillars, so its floor plates and safe lane stay easy to read.
+ */
 export const FORGE_HEART: RoomPiece = {
-  ...CRYPT_SANCTUM,
   key: "forgeheart",
   name: "Forge heart",
+  width: 720,
+  height: 640,
+  waves: [[{ kind: "forgemaster", at: { x: 360, y: 320 } }]],
+  holes: [
+    { x: 360, y: 20 },
+    { x: 360, y: 620 },
+  ],
 };
 
 export const FORGE_RECIPE: DungeonRecipe = {
@@ -409,10 +418,9 @@ export const FORGE_RECIPE: DungeonRecipe = {
   boss: FORGE_HEART,
   pieces: FORGE_PIECES,
   mainPath: ["light", "medium", "medium", "medium", "heavy", "heavy", "heavy"],
-  // D-130: 52,000–62,000 with the Forgemaster (14,000); 3,000 less while
-  // the Lich (11,000) stands in. About 7.5 minutes for a level-15 serf.
-  // Main paths: 51,030–54,170 with the Lich (D-133).
-  requiredHp: { min: 49_000, max: 59_000 },
+  // D-130: 52,000–62,000 with the Forgemaster (14,000), about 7.5
+  // minutes for a level-15 serf. Main paths: 54,030–57,170 (D-133, D-134).
+  requiredHp: { min: 52_000, max: 62_000 },
   sideRooms: WARRENS_RULES.sideRooms,
   sideBands: WARRENS_RULES.sideBands,
   turnWeights: WARRENS_RULES.turnWeights,
