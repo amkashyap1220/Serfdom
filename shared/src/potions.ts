@@ -22,6 +22,8 @@ export const RACK_SIZE = 20;
 /** Chance per Luck point of a potion on completing this dungeon (D-118); 0 if absent. */
 export const POTION_CHANCE: Partial<Record<DungeonId, number>> = {
   "goblin-stronghold": 0.2,
+  // D-120: the harder dungeon pays faster.
+  "forgotten-crypt": 0.3,
 };
 
 /** A stat potion on the account: in the rack, or waiting for room. */

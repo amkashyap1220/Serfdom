@@ -4,6 +4,7 @@ import {
   WARLORD,
   type EnemyKind,
   WARCHIEF,
+  SKELETON,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -61,6 +62,13 @@ export type EnemyAi =
       hit: readonly number[];
     }
   | {
+      kind: "skeleton";
+      /** Seconds until a bone pile stands up again, or null while standing (D-120). */
+      pile: number | null;
+      /** Already stood up once: the next death is final. */
+      revived: boolean;
+    }
+  | {
       kind: "warchief";
       mode:
         | "walk"
@@ -102,6 +110,8 @@ function initialAi(kind: EnemyKind): EnemyAi {
         direction: { x: 0, y: 0 },
         hit: [],
       };
+    case "skeleton":
+      return { kind, pile: null, revived: false };
     case "warchief":
       return {
         kind,
@@ -166,6 +176,11 @@ export function isAlive(enemy: EnemyState): boolean {
   return enemy.hp > 0;
 }
 
+/** A skeleton lying as a bone pile (D-120): alive, but it neither moves nor attacks. */
+export function isPile(enemy: EnemyState): boolean {
+  return enemy.ai.kind === "skeleton" && enemy.ai.pile !== null;
+}
+
 /**
  * Applies damage. Returns the new state and whether this hit defeated it.
  * Hits on a defeated enemy do nothing (it is not targetable anyway).
@@ -181,6 +196,20 @@ export function damageEnemy(
   // A cursed enemy takes more from every source (D-098).
   const taken = damage * (1 + (enemy.curse?.bonus ?? 0));
   const { hp, died } = applyDamage(enemy.hp, taken);
+  // A skeleton's first death leaves a bone pile instead (D-120); a hit on
+  // the pile is the real death.
+  const ai = enemy.ai;
+  if (died && ai.kind === "skeleton" && ai.pile === null && !ai.revived) {
+    return {
+      enemy: {
+        ...enemy,
+        hp: SKELETON.pileHp,
+        ai: { ...ai, pile: SKELETON.reviveSeconds },
+      },
+      defeated: false,
+      damage: taken,
+    };
+  }
   return {
     enemy: { ...enemy, hp, respawnIn: died ? (enemy.respawnSeconds ?? 0) : 0 },
     defeated: died,

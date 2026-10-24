@@ -373,7 +373,7 @@ export class WorldScene extends Phaser.Scene {
       );
     this.cameras.main.centerOn(x, y).setRotation(this.viewRotation);
 
-    this.map.show(this.currentLayout());
+    this.map.show(this.currentLayout(), this.net.dungeon);
     this.map.syncDoors(this.net.closedDoors);
     this.lastView = this.net.viewModel(performance.now());
     this.map.syncPortal(this.lastView.portalOpen, nowMs);

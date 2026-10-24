@@ -31,6 +31,8 @@ export interface EnemyView {
   dazed: boolean;
   /** Strengthened by a shaman's chant (D-115): a red glow. */
   chanted: boolean;
+  /** A skeleton's bone pile (D-120): drawn small and flat, labelled "bones". */
+  pile: boolean;
 }
 
 /** Burning floor (D-115). */

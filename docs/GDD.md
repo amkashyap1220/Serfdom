@@ -350,6 +350,14 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Ordinary goblins in greater numbers; no general buff. Shamans (12e) strengthen goblins near them. Its boss is the Goblin Warchief in the War hall (12g, D-117).
 - Loot T2–T4 (the first T4 drops, so the first extra rolls and Luck items); EXP base 160 up to level 12.
 
+### Forgotten Crypt
+
+- Third tier (D-120): an undead crypt for levels 12–15, open once a serf has completed the Warrens (D-107). Crypt gate, 7 combat rooms (light, three medium, three heavy), then the boss room; 0–2 side rooms. About 7 minutes solo for a level-12 serf.
+- Loot T3–T5; EXP base 200 up to level 15; stat potions at 30% per Luck point.
+- Undead hit harder than goblins (D-121): a skeleton's touch does 8, an archer's arrow 7.
+- Built (12i): **skeletons** fall into a **bone pile** the first time they die and stand up again at half HP after 4 s unless you shoot the pile; **skeleton archers** loose two arrows at where you are heading; **sarcophagi** along the walls of the Ossuary and the Burial vault open for a second wave. The Goblin Warchief stands in as the boss until the Lich.
+- Next: ghosts that pass through walls, necromancers that raise bone piles, shielded grave knights (12j); cursed runes and spirit braziers (12k); the Lich with its soul crystals (12l).
+
 ### Room mechanics (D-109)
 
 Pace (D-111): in the intro dungeons enemies attack 1.5× less often and move 20% slower than first tuned, and each hit does 1.5× the damage, so the screen stays readable.

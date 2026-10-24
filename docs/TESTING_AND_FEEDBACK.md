@@ -78,6 +78,21 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Forgotten Crypt checklist (Phase 12i, D-120)
+
+Restart `npm run dev` (protocol v28) and reload. Any serf that has completed the Warrens can enter (it is aimed at levels 12–15).
+
+1. The Dungeons tab lists **Forgotten Crypt**, "Levels 12–15 · 6–8 min · opens after the Warrens". A serf that has not completed the Warrens sees it locked.
+2. The crypt looks different: cold grey-blue floor, bone-white walls, darker stone slabs and pillars. The first room is the Crypt gate; the HUD shows the seed.
+3. **Skeletons** (pale bone) walk at you and hit for 8 before Defense (D-121). Kill one: it drops into a small dim square labelled "bones". Leave it, and after 4 s it stands up with half its HP. Shoot the pile instead and it is gone for good. A room is not cleared while a pile lies there.
+4. **Skeleton archers** (tan) keep their distance and fire 2 arrows at a time (7 each before Defense), aimed where you are running.
+5. **Defense (D-121)**: with a high-Defense serf (e.g. a Fighter in plate), hits should now clearly hurt; two or three skeletons on you should out-damage your regeneration. A fresh Serf in the Warrens should feel unchanged.
+6. **Sarcophagi**: in the Ossuary (its doors shut until cleared) and the Burial vault, once the first wave is dead, skeletons climb out of dark gaps in the walls, 2 at a time.
+7. The last room is the Sanctum, with the Goblin Warchief standing in as the boss; its death opens the portal. Rewards: T3–T5 items, and sometimes a stat potion.
+8. Time a full clear and tell me your level: the target is about 7 minutes at level 12 (it is a little easier until the Lich replaces the Warchief).
+
+Report: pass/fail per step, clear time and level, and whether the bone piles feel fair and readable.
+
 ### Stat potions checklist (Phase 12h, D-118)
 
 Restart `npm run dev` (protocol v27, migration 010 runs on start) and reload. You need a serf that has completed the Warrens (a class is not needed, D-119).

@@ -1,4 +1,5 @@
 import type { DungeonLayout } from "./dungeon-layout.ts";
+import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
 import {
@@ -69,6 +70,15 @@ export const DUNGEONS = [
     listed: true,
     layout: buildStronghold(0),
     generate: buildStronghold,
+  },
+  {
+    // D-120: the third dungeon; opens on the same rule (D-107).
+    id: "forgotten-crypt",
+    name: "Forgotten Crypt",
+    blurb: "Levels 12–15 · 6–8 min · opens after the Warrens",
+    listed: true,
+    layout: buildCrypt(0),
+    generate: buildCrypt,
   },
   {
     id: "training",

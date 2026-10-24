@@ -68,6 +68,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v28 (12i): the Forgotten Crypt (D-120): skeletons and skeleton archers;
+ *          snapshot enemies say whether a skeleton lies as a bone pile.
  * v27 (12h): stat potions (D-118): runEnded carries potions, stash carries
  *          the potion rack and potions waiting for room; client
  *          drinkPotion {potionId, serfId} and pourPotion {potionId}.
@@ -107,7 +109,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 27;
+export const PROTOCOL_VERSION = 28;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -254,6 +256,8 @@ export interface SnapshotEnemy {
   dazed: boolean;
   /** Strengthened by a shaman's chant (D-115): drawn with a red glow. */
   chanted: boolean;
+  /** A skeleton lying as a bone pile (D-120): one hit shatters it. */
+  pile: boolean;
 }
 
 /** Burning floor left by a bomb (D-115). */
@@ -1399,6 +1403,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "leads",
       "dazed",
       "chanted",
+      "pile",
     ])
   ) {
     return null;
@@ -1408,7 +1413,8 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     typeof v.cursed !== "boolean" ||
     typeof v.leads !== "boolean" ||
     typeof v.dazed !== "boolean" ||
-    typeof v.chanted !== "boolean"
+    typeof v.chanted !== "boolean" ||
+    typeof v.pile !== "boolean"
   ) {
     return null;
   }
@@ -1437,6 +1443,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     leads: v.leads,
     dazed: v.dazed,
     chanted: v.chanted,
+    pile: v.pile,
   };
 }
 

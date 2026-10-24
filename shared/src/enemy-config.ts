@@ -15,6 +15,8 @@ export const ENEMY_KINDS = [
   "bomber",
   "shaman",
   "warchief",
+  "skeleton",
+  "archer",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -46,6 +48,25 @@ export const GRUNT = {
   contactCooldownSeconds: 1.2,
 } as const;
 
+/**
+ * Undead melee (D-120, the crypt): walks at you and hits like a grunt.
+ * Killed the first time, it falls into a bone pile that stands up again
+ * at half HP after `reviveSeconds`, unless a hit shatters the pile first.
+ */
+export const SKELETON = {
+  maxHp: 260,
+  size: 14,
+  speed: 70,
+  /** D-121: the crypt's undead hit harder than goblins (was 4). */
+  contactDamage: 8,
+  contactCooldownSeconds: 1.2,
+  reviveSeconds: 4,
+  /** A bone pile's HP: any hit shatters it. */
+  pileHp: 1,
+  /** It stands up with this share of its max HP. */
+  reviveShare: 0.5,
+} as const;
+
 /** Ranged: keeps its distance and throws aimed rocks. */
 export const SLINGER = {
   maxHp: 125,
@@ -61,6 +82,27 @@ export const SLINGER = {
   /** D-111: was 1.6 s and 2 damage; the rock flies as fast as before. */
   throwIntervalSeconds: 2.4,
   rock: { damage: 3, speed: 200, size: 6, range: 400 },
+} as const satisfies { rock: EnemyBulletSpec } & Record<string, unknown>;
+
+/**
+ * Skeleton archer (D-120): a slinger's habits with a bow: stays 200–320 px
+ * away and every 2.6 s looses 2 arrows at where you are heading.
+ */
+export const ARCHER = {
+  maxHp: 200,
+  size: 14,
+  speed: 50,
+  minRange: 200,
+  maxRange: 320,
+  throwRange: 400,
+  throwIntervalSeconds: 2.6,
+  /** Arrows per volley, this many degrees apart. */
+  volley: 2,
+  spreadDegrees: 8,
+  /** Always aims where you are heading (slingers only sometimes, D-109). */
+  alwaysLeads: true,
+  /** D-121: was 4 per arrow. */
+  rock: { damage: 7, speed: 230, size: 6, range: 450 },
 } as const satisfies { rock: EnemyBulletSpec } & Record<string, unknown>;
 
 /** Tough charger (6c): walks up, telegraphs, then charges in a straight line. Only the charge hurts. */
@@ -240,6 +282,8 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   bomber: BOMBER,
   shaman: SHAMAN,
   warchief: WARCHIEF,
+  skeleton: SKELETON,
+  archer: ARCHER,
 };
 
 /**
@@ -259,6 +303,8 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   shaman: SHAMAN.chantIntervalSeconds / 2,
   /** Before its first throw. */
   warchief: 1.5,
+  skeleton: SKELETON.contactCooldownSeconds / 2,
+  archer: ARCHER.throwIntervalSeconds / 2,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

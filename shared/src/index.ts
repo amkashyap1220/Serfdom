@@ -52,6 +52,8 @@ export {
   isEnemyKind,
   SLINGER,
   WARLORD,
+  SKELETON,
+  ARCHER,
   WARCHIEF,
   type EnemyKind,
 } from "./enemy-config.ts";
@@ -72,6 +74,7 @@ export {
 export {
   damageEnemy,
   isAlive,
+  isPile,
   newEnemy,
   ringDirections,
   scaleEnemyForParty,
@@ -382,3 +385,10 @@ export {
   rollPotions,
   type Potion,
 } from "./potions.ts";
+export {
+  buildCrypt,
+  CRYPT_PIECES,
+  CRYPT_RECIPE,
+  CRYPT_SANCTUM,
+} from "./forgotten-crypt.ts";
+export { DEFENSE_SCALE } from "./stats.ts";

@@ -29,6 +29,10 @@ import {
 } from "./sim.ts";
 import { seededRandom } from "./seeded-random.ts";
 import { SERF_BASE } from "./stats.ts";
+import { DEFENSE_SCALE } from "./stats.ts";
+
+/** The share of a hit taken at `defense` (D-121). */
+const takenAt = (defense: number) => DEFENSE_SCALE / (DEFENSE_SCALE + defense);
 
 const room = (extra: Partial<RoomDef>): RoomDef => ({
   id: "r",
@@ -149,7 +153,7 @@ describe("rockfall rooms (D-110)", () => {
     expect(plain.events.some((e) => e.type === "playerHit")).toBe(false);
     expect(
       findPlayer(land({ ...SERF_BASE, defense: 10 }).sim, 1)?.hp,
-    ).toBeCloseTo(18, 0);
+    ).toBeCloseTo(20 - 4 * takenAt(10), 0);
     expect(land(SERF_BASE, 1).events.map((e) => e.type)).toContain(
       "playerDied",
     );

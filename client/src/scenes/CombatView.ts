@@ -35,7 +35,13 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   bomber: 0x8a4b2a,
   shaman: 0xe6cf7a,
   warchief: 0x6e0f1a,
+  skeleton: 0xe8e2cf,
+  archer: 0xb3a98a,
 };
+
+/** A skeleton's bone pile (D-120): a small dim square where it fell. */
+const PILE_TEXTURE = "enemy-skeleton-pile";
+const PILE_SIZE = 8;
 
 const COLORS = {
   enemyMark: 0x1a1a1a,
@@ -56,6 +62,7 @@ const COLORS = {
   zone: 0x6fcf4f,
   leadingSlinger: 0xd7b8ec,
   dazed: 0x9fc6e8,
+  bonePile: 0x8f897a,
   slit: 0x1a1410,
   slitGlow: 0xff9f1c,
   trapArrow: 0xd9c9a3,
@@ -130,6 +137,13 @@ export class CombatView {
     }
     makeSquareTexture(
       scene,
+      PILE_TEXTURE,
+      PILE_SIZE,
+      COLORS.bonePile,
+      COLORS.enemyMark,
+    );
+    makeSquareTexture(
+      scene,
       LEADING_TEXTURE,
       ENEMY_STATS.slinger.size,
       COLORS.leadingSlinger,
@@ -172,15 +186,17 @@ export class CombatView {
         .setPosition(x, y)
         .setRotation(-viewRotation)
         .setTexture(
-          nowMs < sprite.flashUntil
-            ? flashTexture(enemy.kind)
-            : enemy.alert && Math.floor(nowMs / ALERT_BLINK_MS) % 2 === 0
-              ? alertTexture(enemy.kind)
-              : enemy.dazed && Math.floor(nowMs / DAZED_BLINK_MS) % 2 === 0
-                ? dazedTexture(enemy.kind)
-                : enemy.leads
-                  ? LEADING_TEXTURE
-                  : texture(enemy.kind),
+          enemy.pile
+            ? PILE_TEXTURE
+            : nowMs < sprite.flashUntil
+              ? flashTexture(enemy.kind)
+              : enemy.alert && Math.floor(nowMs / ALERT_BLINK_MS) % 2 === 0
+                ? alertTexture(enemy.kind)
+                : enemy.dazed && Math.floor(nowMs / DAZED_BLINK_MS) % 2 === 0
+                  ? dazedTexture(enemy.kind)
+                  : enemy.leads
+                    ? LEADING_TEXTURE
+                    : texture(enemy.kind),
         );
 
       const above = rotateVec(
@@ -191,9 +207,11 @@ export class CombatView {
         .setPosition(Math.round(x + above.x), Math.round(y + above.y))
         .setRotation(-viewRotation)
         .setText(
-          alive
-            ? `${Math.ceil(enemy.hp)}`
-            : `respawn ${enemy.respawnIn.toFixed(1)}s`,
+          enemy.pile
+            ? "bones"
+            : alive
+              ? `${Math.ceil(enemy.hp)}`
+              : `respawn ${enemy.respawnIn.toFixed(1)}s`,
         );
     }
 

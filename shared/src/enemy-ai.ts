@@ -8,6 +8,8 @@ import {
   SHAMAN,
   SKULKER,
   WARCHIEF,
+  SKELETON,
+  ARCHER,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -144,6 +146,18 @@ export function enemyAct(
       return gruntAct(enemy, target, walls, dtSeconds, result, context);
     case "slinger":
       return slingerAct(enemy, target, walls, dtSeconds, result, context);
+    case "skeleton":
+      return skeletonAct(enemy, target, walls, dtSeconds, result, context);
+    case "archer":
+      return slingerAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        ARCHER,
+      );
     case "brute":
       return bruteAct(
         enemy,
@@ -205,6 +219,41 @@ function dummyAct(
   );
 }
 
+/** A melee walker's numbers: grunts, and skeletons (D-120). */
+interface MeleeSpec {
+  speed: number;
+  contactDamage: number;
+  contactCooldownSeconds: number;
+}
+
+/**
+ * Skeleton (D-120): a grunt while standing. As a bone pile it lies still
+ * until its timer runs out, then stands up at half HP, once.
+ */
+function skeletonAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "skeleton") return result(enemy);
+  if (ai.pile !== null) {
+    const pile = ai.pile - dt;
+    if (pile > 1e-9) return result({ ...enemy, ai: { ...ai, pile } });
+    return result({
+      ...enemy,
+      hp: Math.round(enemy.maxHp * SKELETON.reviveShare),
+      // A moment to stand before it can hit.
+      attackCooldown: SKELETON.contactCooldownSeconds / 2,
+      ai: { kind: "skeleton", pile: null, revived: true },
+    });
+  }
+  return gruntAct(enemy, target, walls, dt, result, context, SKELETON);
+}
+
 function gruntAct(
   enemy: EnemyState,
   target: Nearest,
@@ -212,6 +261,7 @@ function gruntAct(
   dt: number,
   result: Result,
   context: AiContext = NO_CONTEXT,
+  spec: MeleeSpec = GRUNT,
 ): EnemyAction {
   const cooldown = Math.max(0, enemy.attackCooldown - dt);
   if (!target) return result({ ...enemy, attackCooldown: cooldown });
@@ -227,7 +277,7 @@ function gruntAct(
         context,
       ),
     ),
-    GRUNT.speed,
+    spec.speed,
     walls,
     dt,
   );
@@ -237,14 +287,29 @@ function gruntAct(
     {
       ...enemy,
       position,
-      attackCooldown: hits ? GRUNT.contactCooldownSeconds : cooldown,
+      attackCooldown: hits ? spec.contactCooldownSeconds : cooldown,
     },
     {
       contacts: hits
-        ? [{ playerId: target.target.id, damage: GRUNT.contactDamage }]
+        ? [{ playerId: target.target.id, damage: spec.contactDamage }]
         : [],
     },
   );
+}
+
+/** A thrower's numbers: slingers, and skeleton archers (D-120). */
+interface ThrowerSpec {
+  speed: number;
+  minRange: number;
+  maxRange: number;
+  throwRange: number;
+  throwIntervalSeconds: number;
+  rock: EnemyBulletSpec;
+  /** Shots per throw, `spreadDegrees` apart (1 if absent). */
+  volley?: number;
+  spreadDegrees?: number;
+  /** Leads every shot, whatever the dungeon's lead share. */
+  alwaysLeads?: boolean;
 }
 
 function slingerAct(
@@ -254,7 +319,9 @@ function slingerAct(
   dt: number,
   result: Result,
   context: AiContext = NO_CONTEXT,
+  spec: ThrowerSpec = SLINGER,
 ): EnemyAction {
+  const leads = enemy.leads || spec.alwaysLeads === true;
   if (!target) {
     return result({
       ...enemy,
@@ -265,14 +332,14 @@ function slingerAct(
   const throwAt = throwPoint(
     enemy.position,
     target.target,
-    SLINGER.rock.speed,
-    enemy.leads,
+    spec.rock.speed,
+    leads,
   );
   // No throwing into cover (D-112): step sideways until the line is clear.
   const blocked = lineBlocked(
     enemy.position,
     throwAt,
-    SLINGER.rock.size / 2,
+    spec.rock.size / 2,
     walls,
   );
   let direction = NO_MOVE;
@@ -280,31 +347,36 @@ function slingerAct(
     const ahead = toward(enemy.position, at);
     const side = enemy.id % 2 === 0 ? 1 : -1;
     direction = { x: -ahead.y * side, y: ahead.x * side };
-  } else if (target.distance < SLINGER.minRange)
+  } else if (target.distance < spec.minRange)
     direction = toward(at, enemy.position);
-  else if (target.distance > SLINGER.maxRange)
+  else if (target.distance > spec.maxRange)
     direction = toward(
       enemy.position,
       route(enemy.position, at, enemy.size / 2, walls, context),
     );
-  const position = move(enemy, direction, SLINGER.speed, walls, dt);
+  const position = move(enemy, direction, spec.speed, walls, dt);
 
   const attack = stepFireCooldown(
     enemy.attackCooldown,
     dt,
-    !blocked && target.distance <= SLINGER.throwRange,
-    1 / SLINGER.throwIntervalSeconds,
+    !blocked && target.distance <= spec.throwRange,
+    1 / spec.throwIntervalSeconds,
   );
   const aim = toward(
     position,
-    throwPoint(position, target.target, SLINGER.rock.speed, enemy.leads),
+    throwPoint(position, target.target, spec.rock.speed, leads),
   );
+  const volley = spec.volley ?? 1;
+  const step = ((spec.spreadDegrees ?? 0) * Math.PI) / 180;
   return result(
     { ...enemy, position, attackCooldown: attack.remaining },
     {
       bullets:
         attack.fired && (aim.x !== 0 || aim.y !== 0)
-          ? [{ direction: aim, spec: SLINGER.rock }]
+          ? Array.from({ length: volley }, (_, i) => ({
+              direction: rotateVec(aim, (i - (volley - 1) / 2) * step),
+              spec: spec.rock,
+            }))
           : [],
     },
   );

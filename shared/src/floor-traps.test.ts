@@ -24,6 +24,10 @@ import {
   type SimState,
 } from "./sim.ts";
 import { SERF_BASE } from "./stats.ts";
+import { DEFENSE_SCALE } from "./stats.ts";
+
+/** The share of a hit taken at `defense` (D-121). */
+const takenAt = (defense: number) => DEFENSE_SCALE / (DEFENSE_SCALE + defense);
 
 const east = { move: { x: 1, y: 0 }, fire: { trigger: false, aim: null } };
 const SEEDS = Array.from({ length: 200 }, (_, i) => i + 1);
@@ -174,7 +178,7 @@ describe("arrow traps (D-113)", () => {
     expect(open.events.filter((e) => e.type === "hazardHit")).toEqual([
       expect.objectContaining({ hazard: "arrows", damage: 6 }),
     ]);
-    expect(shoot([], 10).hp).toBeCloseTo(20 - 3, 0);
+    expect(shoot([], 10).hp).toBeCloseTo(20 - 6 * takenAt(10), 0);
     const covered = shoot([{ x: 80, y: 100, width: 40, height: 20 }]);
     expect(covered.events.some((e) => e.type === "hazardHit")).toBe(false);
     expect(covered.hp).toBe(20);

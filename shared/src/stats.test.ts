@@ -155,7 +155,8 @@ describe("combat from stats (D-077, D-078)", () => {
     expect(c.shotDamage).toBe(50);
     expect(c.shotsPerSecond).toBe(6);
     expect(c.moveSpeed).toBe(225);
-    expect(c.damageTakenFactor).toBe(0.25);
+    // D-121: 40 / (40 + 30).
+    expect(c.damageTakenFactor).toBeCloseTo(40 / 70);
     expect(c.regenPerSecond).toBe(1.5);
     // Speed 60 is out of reach (the highest Speed max is 45 → 281.25 px/s).
     const top = combatFor({

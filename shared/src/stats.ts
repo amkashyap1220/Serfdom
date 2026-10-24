@@ -246,11 +246,18 @@ export interface PlayerCombat {
 /**
  * D-078: damage 25 × (0.5 + ATK/20); shots/s 4 × (0.75 + DEX/40); speed
  * 150 × (0.75 + SPD/40) (the bases are PLAYER_WEAPON and PLAYER_SPEED; an
- * equipped weapon replaces the 25, D-083); taken hit × 10/(10 + DEF); regen VIT/20 HP/s.
+ * equipped weapon replaces the 25, D-083); taken hit × DEFENSE_SCALE/(DEFENSE_SCALE
+ * + DEF) (D-121: was 10/(10 + DEF)); regen VIT/20 HP/s.
  * At a fresh Serf's stats (10s, DEF 0) every factor is exactly 1, so a
  * level-1 Serf plays as before (D-054–D-056). MP is the ability pool and
  * WIS regenerates it, WIS / 10 MP/s (D-093, D-096).
  */
+/**
+ * Defense's curve (D-121): DEF 15 takes 73% of a hit, DEF 45 takes 47%.
+ * Was 10, which let plate gear block over 80%.
+ */
+export const DEFENSE_SCALE = 40;
+
 export function combatFor(
   stats: Stats,
   weaponDamage: number = PLAYER_WEAPON.damage,
@@ -262,7 +269,7 @@ export function combatFor(
       PLAYER_WEAPON.shotsPerSecond * (0.75 + stats.dexterity / 40),
     shotDamage: weaponDamage * (0.5 + stats.attack / 20),
     attackFactor: 0.5 + stats.attack / 20,
-    damageTakenFactor: 10 / (10 + stats.defense),
+    damageTakenFactor: DEFENSE_SCALE / (DEFENSE_SCALE + stats.defense),
     regenPerSecond: stats.vitality / 20,
     maxMp: stats.mp,
     mpRegenPerSecond: stats.wisdom / 10,

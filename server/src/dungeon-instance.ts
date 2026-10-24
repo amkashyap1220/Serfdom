@@ -20,6 +20,7 @@ import {
   findPlayer,
   isPlayerAlive,
   isTelegraphing,
+  isPile,
   MAX_PARTY_SIZE,
   PORTAL_RADIUS,
   requiredRoomsCleared,
@@ -416,6 +417,7 @@ export class DungeonInstance {
         leads: e.leads,
         dazed: isDazed(e),
         chanted: (e.chant ?? 0) > 0,
+        pile: isPile(e),
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,

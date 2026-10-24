@@ -14,6 +14,10 @@ import {
 } from "./sim.ts";
 import { SERF_BASE, type Stats } from "./stats.ts";
 import { guardReduction, vanishSeconds } from "./abilities.ts";
+import { DEFENSE_SCALE } from "./stats.ts";
+
+/** The share of a hit taken at `defense` (D-121). */
+const takenAt = (defense: number) => DEFENSE_SCALE / (DEFENSE_SCALE + defense);
 
 const RIGHT: PlayerInput = {
   move: { x: 1, y: 0 },
@@ -85,13 +89,15 @@ describe("stats change combat (8c-2, D-077, D-078)", () => {
     expect(shot(30)).toBe(50);
   });
 
-  it("Defense 30 takes a quarter of each hit, and the event says so", () => {
+  it("Defense 30 takes 40/70 of each hit (D-121), and the event says so", () => {
     const hitOf = (defense: number) => {
       const { events } = world(playerWith({ defense }, [{ x: 100, y: 0 }]), 60);
       return events.find((e) => e.type === "playerHit");
     };
     expect(hitOf(0)).toMatchObject({ damage: ENEMY_RING_ATTACK.damage });
-    expect(hitOf(30)).toMatchObject({ damage: ENEMY_RING_ATTACK.damage / 4 });
+    expect(hitOf(30)?.type === "playerHit" && hitOf(30)?.damage).toBeCloseTo(
+      ENEMY_RING_ATTACK.damage * takenAt(30),
+    );
   });
 
   it("Vitality 30 regenerates 1.5 HP/s", () => {
@@ -563,7 +569,7 @@ describe("10d: Guard, Vanish, Healing (D-100)", () => {
   it("Guard: (50 + 3 × tier)% less damage for 2.5 s, at most 80%, on top of Defense", () => {
     expect(guardReduction(0)).toBe(0.5);
     expect(guardReduction(10)).toBe(0.8);
-    // DEF 10 alone takes half; with a T0 Guard, a quarter (D-100's example).
+    // A T0 Guard halves what DEF 10 already lets through (D-100, D-121).
     let s = withAbility("guard", 0, [{ x: 100, y: 0 }], { defense: 10 });
     s = applyPlayerInput(s, 1, SPACE, [], TICK_SECONDS).state;
     expect(findPlayer(s, 1)!.buffs.guard).toEqual({
@@ -571,7 +577,9 @@ describe("10d: Guard, Vanish, Healing (D-100)", () => {
       bonus: 0.5,
     });
     const hit = world(s, 60).events.find((e) => e.type === "playerHit");
-    expect(hit).toMatchObject({ damage: ENEMY_RING_ATTACK.damage * 0.25 });
+    expect(hit?.type === "playerHit" && hit.damage).toBeCloseTo(
+      ENEMY_RING_ATTACK.damage * takenAt(10) * 0.5,
+    );
     expect(findPlayer(world(s, 60 * 3).state, 1)!.buffs.guard).toBeUndefined();
   });
 

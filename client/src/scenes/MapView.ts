@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import {
   PORTAL_RADIUS,
   WALL_THICKNESS,
+  type DungeonId,
   type DungeonLayout,
   type Rect,
 } from "@serfdom/shared";
@@ -26,7 +27,23 @@ const COLORS = {
   sludgeEdge: 0x7a9a45,
   obstacleEdge: 0xb8b0a2,
   label: "#8a94a6",
-} as const;
+};
+
+type Palette = typeof COLORS;
+
+/** A dungeon's own look over the default (D-120). Placeholder colors only. */
+const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
+  "forgotten-crypt": {
+    floor: 0x1a1f2a,
+    gridMinor: 0x262d3b,
+    gridMajor: 0x3a4456,
+    wall: 0xb9b2a0,
+    wallEdge: 0xe6e0cf,
+    obstacle: 0x565c6a,
+    obstacleEdge: 0x8a90a0,
+    hole: 0x05070a,
+  },
+};
 
 /**
  * Draws a dungeon layout (Phase 6b): each room's floor with the debug grid
@@ -66,6 +83,7 @@ export class MapView {
   private readonly portal: Phaser.GameObjects.Graphics;
   private layout: DungeonLayout | null = null;
   private doorKey = "";
+  private colors: Palette = COLORS;
 
   constructor(scene: Phaser.Scene, layer: Phaser.GameObjects.Layer) {
     this.scene = scene;
@@ -74,9 +92,11 @@ export class MapView {
     this.portal = scene.add.graphics();
   }
 
-  show(layout: DungeonLayout): void {
+  /** Draws `layout` in `dungeon`'s colors (the default outside a run). */
+  show(layout: DungeonLayout, dungeon: DungeonId | null = null): void {
     if (layout === this.layout) return;
     this.layout = layout;
+    this.colors = { ...COLORS, ...(dungeon ? PALETTES[dungeon] : {}) };
     for (const o of this.objects) o.destroy();
     this.objects = [];
     this.doorKey = "";
@@ -88,9 +108,9 @@ export class MapView {
     // Sludge pools (D-113): murky green on the floor.
     for (const room of layout.rooms) {
       for (const pool of room.sludge ?? []) {
-        g.fillStyle(COLORS.sludge, 0.55);
+        g.fillStyle(this.colors.sludge, 0.55);
         g.fillRect(pool.x, pool.y, pool.width, pool.height);
-        g.lineStyle(1, COLORS.sludgeEdge, 0.9);
+        g.lineStyle(1, this.colors.sludgeEdge, 0.9);
         g.strokeRect(
           pool.x + 0.5,
           pool.y + 0.5,
@@ -100,31 +120,31 @@ export class MapView {
       }
     }
     // Door gaps are floor once open (closed doors are drawn over them).
-    g.fillStyle(COLORS.floor);
+    g.fillStyle(this.colors.floor);
     for (const door of layout.doors) {
       g.fillRect(door.rect.x, door.rect.y, door.rect.width, door.rect.height);
     }
-    g.fillStyle(COLORS.wall);
+    g.fillStyle(this.colors.wall);
     for (const wall of layout.walls) {
       g.fillRect(wall.x, wall.y, wall.width, wall.height);
     }
     // Only the outline of all walls together: pieces overlap at corners
     // and shared walls, and outlining each one drew seams through them.
-    g.lineStyle(1, COLORS.wallEdge);
+    g.lineStyle(1, this.colors.wallEdge);
     for (const s of wallOutline(layout.walls)) {
       g.lineBetween(s.x1, s.y1, s.x2, s.y2);
     }
     // Obstacles (D-112): solid like walls, drawn as lighter stone.
     for (const room of layout.rooms) {
       for (const o of room.obstacles ?? []) {
-        g.fillStyle(COLORS.obstacle);
+        g.fillStyle(this.colors.obstacle);
         g.fillRect(o.x, o.y, o.width, o.height);
-        g.lineStyle(1, COLORS.obstacleEdge);
+        g.lineStyle(1, this.colors.obstacleEdge);
         g.strokeRect(o.x + 0.5, o.y + 0.5, o.width - 1, o.height - 1);
       }
     }
     // Ambush holes (D-109): dark gaps in the wall nearest each hole.
-    g.fillStyle(COLORS.hole);
+    g.fillStyle(this.colors.hole);
     for (const room of layout.rooms) {
       for (const hole of room.holes ?? []) {
         const r = holeRect(room.bounds, hole);
@@ -147,11 +167,11 @@ export class MapView {
     const at = this.layout?.exitPortal;
     if (!open || !at) return;
     const pulse = 0.5 + 0.5 * Math.sin(nowMs / 180);
-    g.fillStyle(COLORS.portal, 0.35 + 0.25 * pulse);
+    g.fillStyle(this.colors.portal, 0.35 + 0.25 * pulse);
     g.fillCircle(at.x, at.y, PORTAL_RADIUS + 6 * pulse);
-    g.lineStyle(2, COLORS.portalCore, 0.9);
+    g.lineStyle(2, this.colors.portalCore, 0.9);
     g.strokeCircle(at.x, at.y, PORTAL_RADIUS);
-    g.fillStyle(COLORS.portalCore, 0.8);
+    g.fillStyle(this.colors.portalCore, 0.8);
     g.fillCircle(at.x, at.y, 6 + 3 * pulse);
   }
 
@@ -164,9 +184,9 @@ export class MapView {
     for (const door of this.layout.doors) {
       if (!closed.includes(door.id)) continue;
       const r = door.rect;
-      g.fillStyle(COLORS.door);
+      g.fillStyle(this.colors.door);
       g.fillRect(r.x, r.y, r.width, r.height);
-      g.lineStyle(1, COLORS.doorEdge);
+      g.lineStyle(1, this.colors.doorEdge);
       g.strokeRect(r.x + 0.5, r.y + 0.5, r.width - 1, r.height - 1);
     }
   }
@@ -176,7 +196,7 @@ export class MapView {
     b: Rect,
     name: string,
   ): void {
-    g.fillStyle(COLORS.floor);
+    g.fillStyle(this.colors.floor);
     g.fillRect(b.x, b.y, b.width, b.height);
     // Grid lines on absolute world coordinates, so positions in the HUD can
     // be matched to the map.
@@ -184,7 +204,7 @@ export class MapView {
     for (let x = firstX; x <= b.x + b.width; x += GRID.minor) {
       g.lineStyle(
         1,
-        x % GRID.major === 0 ? COLORS.gridMajor : COLORS.gridMinor,
+        x % GRID.major === 0 ? this.colors.gridMajor : this.colors.gridMinor,
       );
       g.lineBetween(x, b.y, x, b.y + b.height);
     }
@@ -192,7 +212,7 @@ export class MapView {
     for (let y = firstY; y <= b.y + b.height; y += GRID.minor) {
       g.lineStyle(
         1,
-        y % GRID.major === 0 ? COLORS.gridMajor : COLORS.gridMinor,
+        y % GRID.major === 0 ? this.colors.gridMajor : this.colors.gridMinor,
       );
       g.lineBetween(b.x, y, b.x + b.width, y);
     }
@@ -200,7 +220,7 @@ export class MapView {
       b.x + 4,
       b.y + 4,
       `${name}  (${b.x},${b.y})`,
-      { fontFamily: "monospace", fontSize: "10px", color: COLORS.label },
+      { fontFamily: "monospace", fontSize: "10px", color: this.colors.label },
     );
     this.objects.push(label);
     this.layer.add(label);

@@ -1,6 +1,8 @@
 import {
+  buildCrypt,
   buildStronghold,
   buildWarrens,
+  damageEnemy,
   GOBLIN_WARRENS,
   SERF_BASE,
   GRUNT,
@@ -210,6 +212,46 @@ describe("the Goblin Warchief in a run (D-117)", () => {
       expect(near).toBe(true);
       expect(k.roomId).toBe("throne");
     }
+  });
+});
+
+describe("the Forgotten Crypt in a run (D-120)", () => {
+  it("a killed skeleton is sent as a bone pile, and the snapshot parses", () => {
+    const seed = 3;
+    const first = buildCrypt(seed).rooms.find(
+      (r) => r.required && r.id !== "entrance",
+    )!;
+    const r = new DungeonInstance(1, "forgotten-crypt", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed,
+    });
+    r.setStateForTest({
+      ...r.state,
+      players: r.state.players.map((p) => ({
+        ...p,
+        hp: 5000,
+        maxHp: 5000,
+        position: { x: first.bounds.x + 40, y: first.bounds.y + 40 },
+      })),
+    });
+    r.tick();
+    const skeleton = r.state.enemies.find((e) => e.kind === "skeleton")!;
+    r.setStateForTest({
+      ...r.state,
+      enemies: r.state.enemies.map((e) =>
+        e.id === skeleton.id ? damageEnemy(e, 9999).enemy : e,
+      ),
+    });
+    r.tick();
+    const parsed = parseServerMessage(encodeMessage(r.snapshot(1)));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.message.type !== "snapshot") return;
+    const sent = parsed.message.enemies.find((e) => e.id === skeleton.id);
+    expect(sent).toMatchObject({ kind: "skeleton", pile: true, hp: 1 });
+    expect(
+      parsed.message.enemies.filter((e) => e.id !== skeleton.id && e.pile),
+    ).toEqual([]);
   });
 });
 

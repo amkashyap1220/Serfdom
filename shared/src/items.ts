@@ -206,6 +206,15 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
+  // D-120: T3 30%, T4 45%, T5 25%.
+  "forgotten-crypt": {
+    tiers: [
+      [3, 30],
+      [4, 45],
+      [5, 25],
+    ],
+    slots: SLOT_WEIGHTS,
+  },
   training: {
     tiers: [
       [0, 50],
