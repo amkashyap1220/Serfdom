@@ -283,11 +283,13 @@ function freeSpot(
         y + half <= o.y ||
         y - half >= o.y + o.height,
     ) &&
+    // Start boxes do not overlap (D-127, PROVISIONAL: was 1.5× apart, which
+    // 32 px goblins no longer fit in the densest rooms).
     placed.every((p) => {
-      const gap = (ENEMY_STATS[p.kind].size / 2 + half) * 1.5;
+      const gap = ENEMY_STATS[p.kind].size / 2 + half;
       return Math.abs(p.at.x - x) >= gap || Math.abs(p.at.y - y) >= gap;
     });
-  for (let r = 0; r <= 120; r += 12) {
+  for (let r = 0; r <= 240; r += 12) {
     for (const [dx, dy] of [
       [0, 0],
       [0, r],

@@ -1,7 +1,7 @@
 import {
   type Rect,
   type Vec2,
-  Navigator,
+  SizedNavigator,
   arrowVolleys,
   dropBoulders,
   fireArrows,
@@ -118,7 +118,7 @@ export class DungeonInstance {
   private age = 0;
   /** Where this run's boulders fall (D-110). */
   private readonly rockRandom: () => number;
-  private navigator: Navigator | null = null;
+  private navigator: SizedNavigator | null = null;
   private navigatorKey = "";
 
   constructor(
@@ -371,10 +371,10 @@ export class DungeonInstance {
   private readonly holesOf = (roomId: string): readonly Vec2[] =>
     this.layout.rooms.find((r) => r.id === roomId)?.holes ?? [];
 
-  private navigatorFor(walls: readonly Rect[]): Navigator {
+  private navigatorFor(walls: readonly Rect[]): SizedNavigator {
     const key = this.closedDoors.join(",");
     if (!this.navigator || this.navigatorKey !== key) {
-      this.navigator = new Navigator(walls);
+      this.navigator = new SizedNavigator(walls);
       this.navigatorKey = key;
     }
     return this.navigator;

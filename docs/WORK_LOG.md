@@ -582,3 +582,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - `npm run check`: 448 shared, 196 server, 58 client, build.
 - Not done by hand: a two-person clear in two browser windows (the automated test uses two real clients against the real server).
 - Next step: the user decides whether to close Phase 12 (optionally after a two-window clear), then Phase 13 (tier 4: draft for approval).
+
+### 32×32 serfs and enemies, zoomed-out view — 2026-10-24
+
+- The user moved the player to 32×32 (PR #3, merged as `5fb2f98`: sprite, body, 31×31 hurtbox, debug-world gaps, a 76-map reachability test). Asked what else follows (D-127): ordinary enemies 32, bigger ones doubled; camera zoom 0.5; floor hazards hit on hurtbox overlap.
+- Found and fixed along the way: every dungeon failed to build (the Stronghold's doubled rooms had no free spot for 32 px spawns at 1.5× spacing: now non-overlapping, searched to 240 px); the Barracks dropped out of Stronghold maps (two slingers inside the bunks: moved to the aisles); 32 px goblins stuck on walls following an 8 px-clearance path grid (16 px now), and brutes and knights stuck between rooms (a second 22 px grid, `SizedNavigator`); buff rings hidden under the 32 px sprite; the debug visibility box drawn as if at zoom 1; a Volley test whose dummy grew; a server test with the dummy's old size typed in.
+- Tests: sizes per kind; `circleHitsPlayer` at the box edge and corner; a boulder hitting through the hurtbox edge; 44 px knights reach the boss room in all three dungeons; the zoomed view's extent (720 × 640, past 300) and `px`. `npm run check`: 457 shared, 196 server, 59 client, build.
+- Live (harness, **test** DB): the fixed Warrens' Tunnel with 32 px grunts, the Catacomb, and the Sanctum's 88 px Lich at the new zoom, labels readable, the corrected 300 px debug box. No console errors. Not play-tested: how fights feel with bigger hitboxes, and readability of the now half-size bullets.
+- User ran the D-127 checklist: pass (2026-10-24). Next: close Phase 12 (the user's call), then Phase 13 (tier 4: draft for approval).

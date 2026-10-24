@@ -6,7 +6,7 @@ import {
   type DungeonLayout,
   type Rect,
 } from "@serfdom/shared";
-import { GRID } from "../render-config";
+import { CAMERA_ZOOM, GRID, px } from "../render-config";
 import { wallOutline } from "../wall-outline";
 
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
@@ -110,7 +110,7 @@ export class MapView {
       for (const pool of room.sludge ?? []) {
         g.fillStyle(this.colors.sludge, 0.55);
         g.fillRect(pool.x, pool.y, pool.width, pool.height);
-        g.lineStyle(1, this.colors.sludgeEdge, 0.9);
+        g.lineStyle(px(1), this.colors.sludgeEdge, 0.9);
         g.strokeRect(
           pool.x + 0.5,
           pool.y + 0.5,
@@ -130,7 +130,7 @@ export class MapView {
     }
     // Only the outline of all walls together: pieces overlap at corners
     // and shared walls, and outlining each one drew seams through them.
-    g.lineStyle(1, this.colors.wallEdge);
+    g.lineStyle(px(1), this.colors.wallEdge);
     for (const s of wallOutline(layout.walls)) {
       g.lineBetween(s.x1, s.y1, s.x2, s.y2);
     }
@@ -139,7 +139,7 @@ export class MapView {
       for (const o of room.obstacles ?? []) {
         g.fillStyle(this.colors.obstacle);
         g.fillRect(o.x, o.y, o.width, o.height);
-        g.lineStyle(1, this.colors.obstacleEdge);
+        g.lineStyle(px(1), this.colors.obstacleEdge);
         g.strokeRect(o.x + 0.5, o.y + 0.5, o.width - 1, o.height - 1);
       }
     }
@@ -169,7 +169,7 @@ export class MapView {
     const pulse = 0.5 + 0.5 * Math.sin(nowMs / 180);
     g.fillStyle(this.colors.portal, 0.35 + 0.25 * pulse);
     g.fillCircle(at.x, at.y, PORTAL_RADIUS + 6 * pulse);
-    g.lineStyle(2, this.colors.portalCore, 0.9);
+    g.lineStyle(px(2), this.colors.portalCore, 0.9);
     g.strokeCircle(at.x, at.y, PORTAL_RADIUS);
     g.fillStyle(this.colors.portalCore, 0.8);
     g.fillCircle(at.x, at.y, 6 + 3 * pulse);
@@ -186,7 +186,7 @@ export class MapView {
       const r = door.rect;
       g.fillStyle(this.colors.door);
       g.fillRect(r.x, r.y, r.width, r.height);
-      g.lineStyle(1, this.colors.doorEdge);
+      g.lineStyle(px(1), this.colors.doorEdge);
       g.strokeRect(r.x + 0.5, r.y + 0.5, r.width - 1, r.height - 1);
     }
   }
@@ -203,7 +203,7 @@ export class MapView {
     const firstX = Math.ceil(b.x / GRID.minor) * GRID.minor;
     for (let x = firstX; x <= b.x + b.width; x += GRID.minor) {
       g.lineStyle(
-        1,
+        px(1),
         x % GRID.major === 0 ? this.colors.gridMajor : this.colors.gridMinor,
       );
       g.lineBetween(x, b.y, x, b.y + b.height);
@@ -211,7 +211,7 @@ export class MapView {
     const firstY = Math.ceil(b.y / GRID.minor) * GRID.minor;
     for (let y = firstY; y <= b.y + b.height; y += GRID.minor) {
       g.lineStyle(
-        1,
+        px(1),
         y % GRID.major === 0 ? this.colors.gridMajor : this.colors.gridMinor,
       );
       g.lineBetween(b.x, y, b.x + b.width, y);
@@ -222,6 +222,8 @@ export class MapView {
       `${name}  (${b.x},${b.y})`,
       { fontFamily: "monospace", fontSize: "10px", color: this.colors.label },
     );
+    // Reads at 10 CSS px whatever the camera zoom (D-127).
+    label.setScale(1 / CAMERA_ZOOM);
     this.objects.push(label);
     this.layer.add(label);
   }

@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { CAMERA_ZOOM, PLAYER_SPRITE_SIZE, px } from "../render-config";
 import {
   ENEMY_KINDS,
   ENEMY_STATS,
@@ -241,7 +242,7 @@ export class CombatView {
       // The Lich's runes (D-125): a red circle filling in as it comes.
       if (hz.kind === "rune") {
         const fill = 1 - Math.min(1, hz.landsIn / LICH.runes.warnSeconds);
-        h.lineStyle(2, COLORS.rune, 0.6 + 0.4 * fill);
+        h.lineStyle(px(2), COLORS.rune, 0.6 + 0.4 * fill);
         h.strokeCircle(hz.x, hz.y, hz.radius);
         h.fillStyle(COLORS.hazard, 0.15 + 0.35 * fill);
         h.fillCircle(hz.x, hz.y, hz.radius * fill);
@@ -255,7 +256,7 @@ export class CombatView {
         2 * hz.radius * (0.3 + 0.7 * fall),
         1.4 * hz.radius * (0.3 + 0.7 * fall),
       );
-      h.lineStyle(2, COLORS.hazard, 0.5 + 0.4 * fall);
+      h.lineStyle(px(2), COLORS.hazard, 0.5 + 0.4 * fall);
       h.strokeCircle(hz.x, hz.y, hz.radius);
       const lift = (1 - fall) * BOULDER_DROP_PX;
       if (hz.kind === "bomb") {
@@ -269,7 +270,7 @@ export class CombatView {
       const size = hz.radius * 0.6;
       rocks.fillStyle(COLORS.boulder, 1);
       rocks.fillCircle(hz.x, hz.y - lift, size);
-      rocks.lineStyle(2, COLORS.boulderEdge, 1);
+      rocks.lineStyle(px(2), COLORS.boulderEdge, 1);
       rocks.strokeCircle(hz.x, hz.y - lift, size);
     }
     // Burning floor (D-115): flickering, fading as it goes out.
@@ -288,12 +289,12 @@ export class CombatView {
       const life = Math.min(1, z.remaining / 3);
       bl.fillStyle(COLORS.zone, 0.12 + 0.18 * life);
       bl.fillCircle(z.x, z.y, z.radius);
-      bl.lineStyle(2, COLORS.zone, 0.4 + 0.5 * life);
+      bl.lineStyle(px(2), COLORS.zone, 0.4 + 0.5 * life);
       bl.strokeCircle(z.x, z.y, z.radius);
     }
     // Chain Lightning (D-097): a jagged line through every enemy hit.
     for (const c of view.chains) {
-      bl.lineStyle(2, COLORS.lightning, 1 - c.fade);
+      bl.lineStyle(px(2), COLORS.lightning, 1 - c.fade);
       for (let i = 1; i < c.points.length; i++) {
         const a = c.points[i - 1]!;
         const b = c.points[i]!;
@@ -312,7 +313,7 @@ export class CombatView {
       if (b.kind === "sweepWarning") {
         bl.fillStyle(COLORS.hazard, 0.15 + 0.25 * b.fade);
         bl.fillCircle(b.x, b.y, b.radius * b.fade);
-        bl.lineStyle(2, COLORS.hazard, 0.9);
+        bl.lineStyle(px(2), COLORS.hazard, 0.9);
         bl.strokeCircle(b.x, b.y, b.radius);
         continue;
       }
@@ -325,7 +326,7 @@ export class CombatView {
       if (b.kind === "slamWarning") {
         bl.fillStyle(COLORS.hazard, 0.15 + 0.25 * b.fade);
         bl.fillCircle(b.x, b.y, b.radius * b.fade);
-        bl.lineStyle(2, COLORS.hazard, 0.9);
+        bl.lineStyle(px(2), COLORS.hazard, 0.9);
         bl.strokeCircle(b.x, b.y, b.radius);
         continue;
       }
@@ -363,7 +364,7 @@ export class CombatView {
         bl.fillStyle(color, 0.5 * (1 - b.fade));
         bl.fillCircle(b.x, b.y, b.radius);
       }
-      bl.lineStyle(2, color, 1 - b.fade);
+      bl.lineStyle(px(2), color, 1 - b.fade);
       bl.strokeCircle(
         b.x,
         b.y,
@@ -382,14 +383,15 @@ export class CombatView {
               : buff === "guard"
                 ? COLORS.guard
                 : COLORS.inspire;
-          bl.lineStyle(buff === "guard" ? 3 : 2, color, 0.9);
-          bl.strokeCircle(a.x, a.y, 12 + 4 * i);
+          bl.lineStyle(px(buff === "guard" ? 3 : 2), color, 0.9);
+          // Just outside the player's sprite (D-127: 32 px), one ring per buff.
+          bl.strokeCircle(a.x, a.y, PLAYER_SPRITE_SIZE / 2 + 4 + 6 * i);
         });
     }
     // The Lich warded (D-125): a violet line to each of its soul crystals.
     const lich = view.enemies.find((e) => e.kind === "lich" && e.hp > 0);
     if (lich?.faded) {
-      bl.lineStyle(2, COLORS.raise, 0.5 + 0.3 * Math.sin(nowMs / 150));
+      bl.lineStyle(px(2), COLORS.raise, 0.5 + 0.3 * Math.sin(nowMs / 150));
       for (const c of view.enemies) {
         if (c.kind === "crystal" && c.hp > 0)
           bl.lineBetween(lich.x, lich.y, c.x, c.y);
@@ -399,7 +401,7 @@ export class CombatView {
     for (const e of view.enemies) {
       if (e.facing === null || e.hp <= 0) continue;
       const half = ((KNIGHT.shieldArcDegrees / 2) * Math.PI) / 180;
-      bl.lineStyle(3, COLORS.shield, 1);
+      bl.lineStyle(px(3), COLORS.shield, 1);
       bl.beginPath();
       bl.arc(e.x, e.y, e.size * 0.75, e.facing - half, e.facing + half);
       bl.strokePath();
@@ -407,13 +409,13 @@ export class CombatView {
     // Chanted goblins (D-115): a red glow.
     for (const e of view.enemies) {
       if (!e.chanted || e.hp <= 0) continue;
-      bl.lineStyle(2, COLORS.chanted, 0.6 + 0.4 * Math.sin(nowMs / 120));
+      bl.lineStyle(px(2), COLORS.chanted, 0.6 + 0.4 * Math.sin(nowMs / 120));
       bl.strokeCircle(e.x, e.y, e.size * 0.9);
     }
     // Cursed enemies: a violet outline.
     for (const e of view.enemies) {
       if (!e.cursed || e.hp <= 0) continue;
-      bl.lineStyle(2, COLORS.curse, 1);
+      bl.lineStyle(px(2), COLORS.curse, 1);
       bl.strokeRect(
         e.x - e.size / 2 - 2,
         e.y - e.size / 2 - 2,
@@ -426,7 +428,7 @@ export class CombatView {
     // Cursed runes (D-123): faint circles on the floor; the column about
     // to burst fills in red.
     for (const r of view.runes) {
-      g.lineStyle(1, COLORS.rune, 0.35 + 0.65 * r.glow);
+      g.lineStyle(px(1), COLORS.rune, 0.35 + 0.65 * r.glow);
       g.strokeCircle(r.x, r.y, r.radius);
       if (r.glow > 0) {
         g.fillStyle(COLORS.hazard, 0.15 + 0.35 * r.glow);
@@ -467,7 +469,7 @@ export class CombatView {
       }
       if (p.trap) {
         // A trap arrow: a shaft along its flight, its point leading.
-        g.lineStyle(2, COLORS.trapArrow, 1);
+        g.lineStyle(px(2), COLORS.trapArrow, 1);
         g.lineBetween(p.x - p.trap.dx * 12, p.y - p.trap.dy * 12, p.x, p.y);
         g.fillStyle(COLORS.trapArrowTip);
         g.fillRect(Math.round(p.x - 2), Math.round(p.y - 2), 4, 4);
@@ -499,7 +501,9 @@ export class CombatView {
           fontSize: "10px",
           color: "#ffffff",
         })
-        .setOrigin(0.5, 1);
+        .setOrigin(0.5, 1)
+        // Reads at 10 CSS px whatever the camera zoom (D-127).
+        .setScale(1 / CAMERA_ZOOM);
       this.layer.add([image, label]);
       sprite = { image, label, flashUntil: 0, lastHp: hp };
       this.enemies.set(id, sprite);

@@ -1,5 +1,6 @@
 import {
   clearExp,
+  DUMMY_ENEMY,
   combatFor,
   encodeMessage,
   MAX_MESSAGE_BYTES,
@@ -817,7 +818,7 @@ describe("shared combat on the server (5b)", () => {
       id: 1,
       x: 1300,
       y: 1100,
-      size: 16,
+      size: DUMMY_ENEMY.size,
     });
     expect(
       snap.projectiles.some((p) => p.owner === "player" && p.by === 1),

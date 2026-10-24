@@ -44,7 +44,7 @@ export const DUMMY = {
 /** Melee: runs at the nearest player and hurts on contact. */
 export const GRUNT = {
   maxHp: 170,
-  size: 14,
+  size: 32,
   /** Slower than the player (150), so it can be kited (D-111: was 95). */
   speed: 76,
   /** 7 contact hits kill a fresh 20 HP Serf (D-055; D-111: was 2). */
@@ -60,7 +60,7 @@ export const GRUNT = {
  */
 export const SKELETON = {
   maxHp: 260,
-  size: 14,
+  size: 32,
   speed: 70,
   /** D-121: the crypt's undead hit harder than goblins (was 4). */
   contactDamage: 8,
@@ -75,7 +75,7 @@ export const SKELETON = {
 /** Ranged: keeps its distance and throws aimed rocks. */
 export const SLINGER = {
   maxHp: 125,
-  size: 14,
+  size: 32,
   /** D-111: was 70. */
   speed: 56,
   /** Backs away when the nearest player is closer than this… */
@@ -95,7 +95,7 @@ export const SLINGER = {
  */
 export const ARCHER = {
   maxHp: 200,
-  size: 14,
+  size: 32,
   speed: 50,
   minRange: 200,
   maxRange: 320,
@@ -117,7 +117,7 @@ export const ARCHER = {
  */
 export const GHOST = {
   maxHp: 300,
-  size: 14,
+  size: 32,
   speed: 55,
   contactDamage: 10,
   contactCooldownSeconds: 1.2,
@@ -132,7 +132,7 @@ export const GHOST = {
  */
 export const NECROMANCER = {
   maxHp: 400,
-  size: 14,
+  size: 32,
   speed: 50,
   minRange: 200,
   maxRange: 260,
@@ -153,7 +153,7 @@ export const NECROMANCER = {
  */
 export const KNIGHT = {
   maxHp: 1200,
-  size: 22,
+  size: 44,
   speed: 40,
   turnDegreesPerSecond: 120,
   shieldArcDegrees: 120,
@@ -177,7 +177,7 @@ export const KNIGHT = {
  */
 export const LICH = {
   maxHp: 11000,
-  size: 44,
+  size: 88,
   wardBelow: [0.6, 0.3],
   spiral: {
     arms: 2,
@@ -209,13 +209,13 @@ export const LICH = {
 /** A soul crystal (D-125): stands still; while any stands, the Lich is warded. */
 export const CRYSTAL = {
   maxHp: 600,
-  size: 20,
+  size: 40,
 } as const;
 
 /** Tough charger (6c): walks up, telegraphs, then charges in a straight line. Only the charge hurts. */
 export const BRUTE = {
   maxHp: 450,
-  size: 20,
+  size: 40,
   /** D-111: was 60. */
   speed: 48,
   /** Starts a charge when the nearest player is this close and it is ready. */
@@ -239,7 +239,7 @@ export const BRUTE = {
  */
 export const WARLORD = {
   maxHp: 5000,
-  size: 28,
+  size: 56,
   /** Attacks while any player is this close. */
   aggroRange: 600,
   /** Phase 2 below this fraction of max HP. */
@@ -279,7 +279,7 @@ export const WARLORD = {
 /** Flanker (D-115): runs to where you are heading, then lunges. */
 export const SKULKER = {
   maxHp: 150,
-  size: 14,
+  size: 32,
   /** Faster than a grunt (76), slower than the player (150). */
   speed: 95,
   /** Aims this far ahead of a moving player. */
@@ -293,7 +293,7 @@ export const SKULKER = {
 /** Lobs bombs that leave burning floor (D-115). */
 export const BOMBER = {
   maxHp: 140,
-  size: 16,
+  size: 32,
   speed: 50,
   minRange: 180,
   maxRange: 300,
@@ -311,7 +311,7 @@ export const BOMBER = {
 /** Never attacks; strengthens goblins near it (D-108, D-115). */
 export const SHAMAN = {
   maxHp: 200,
-  size: 16,
+  size: 32,
   speed: 60,
   /** Looks for goblins to strengthen this far away… */
   seekRange: 300,
@@ -332,7 +332,7 @@ export const SHAMAN = {
  */
 export const WARCHIEF = {
   maxHp: 8000,
-  size: 40,
+  size: 80,
   speed: 40,
   phaseTwoBelow: 0.66,
   phaseThreeBelow: 0.33,

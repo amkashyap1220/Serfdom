@@ -251,18 +251,18 @@ describe("Ranger Volley (D-097)", () => {
 
   it("each arrow does (30 + 8 × tier) × attack and stops at the first enemy", () => {
     const s = applyPlayerInput(
-      ranger([{ x: 60, y: 0 }], { attack: 30 }, 2),
+      ranger([{ x: 120, y: 0 }], { attack: 30 }, 2),
       1,
-      CAST(60, 0),
+      CAST(120, 0),
       [],
       TICK_SECONDS,
     ).state;
     expect(s.projectiles.every((p) => p.damage === (30 + 16) * 2)).toBe(true);
     const before = s.enemies[0]!.hp;
     const { state } = world(s, 30);
-    // At 60 px the middle three arrows (±7.5° is ~8 px off the line) hit the
-    // 16 px dummy; the outer two (±15°, ~16 px off) miss: close range is
-    // where a Volley hits hardest.
+    // At 120 px the middle three arrows (±7.5° is ~16 px off the line) hit
+    // the 32 px dummy (D-127); the outer two (±15°, ~32 px off) miss: close
+    // range is where a Volley hits hardest.
     expect(before - state.enemies[0]!.hp).toBe(3 * 92);
   });
 

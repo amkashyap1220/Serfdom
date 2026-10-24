@@ -127,9 +127,10 @@ const BASE_PIECES: readonly RecipePiece[] = [
           [480, 200],
           [480, 360],
         ]),
+        // In the aisles between the bunks (D-127: 32 px slingers).
         ...s([
-          [640, 160],
-          [640, 400],
+          [680, 208],
+          [680, 352],
         ]),
       ],
       [

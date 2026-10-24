@@ -121,7 +121,7 @@ Be clear, direct, and practical. Explain important decisions without overwhelmin
 ## Art direction and AI-generated assets
 
 - The confirmed art direction is chunky, crisp retro pixel art based on the user's supplied sprite-sheet reference.
-- Player characters and player-sized ordinary enemies use 16×16 source-pixel sprites; larger enemies and bosses may use larger canvases.
+- Player characters and player-sized ordinary enemies use 32×32 source-pixel sprites (D-127; was 16×16); larger enemies and bosses may use larger canvases (bigger enemies are about twice their old sizes).
 - The requested palette reference is Pokémon Emerald. Use it as a palette reference only; create original Serfdom sprites and never copy Pokémon characters, sprites, tiles, logos, or other game assets.
 - Generate art only when a current milestone needs it. Use placeholder shapes until then.
 - Use an actual available image-generation capability if the environment provides one. If not, say so honestly and ask how the user wants to proceed or provide a ready-to-use prompt; never claim a prompt is a generated asset.
@@ -137,7 +137,7 @@ The following are CONFIRMED design constraints for the initial desktop-browser l
 - Gameplay viewport, to the right of HUD: **720×640 CSS pixels**.
 - HUD is outside the gameplay viewport; it must not obscure gameplay.
 - Camera follows the player and normally centers the player **within the gameplay viewport**, not the entire game container.
-- The target is at least **300 world pixels of visibility in each cardinal direction** from the player's center during normal play. A 720×640 world-pixel view at one CSS pixel per world pixel provides 360 horizontally and 320 vertically.
+- The target is at least **300 world pixels of visibility in each cardinal direction** from the player's center during normal play. Since D-127 the world camera zooms **0.5**: the 720×640 viewport shows 1440×1280 world pixels (720 horizontally and 640 vertically from the player), and a 32×32 sprite draws at 16 CSS pixels. World-space line widths and text are counter-scaled so they read at their CSS size.
 - Distinguish source sprite pixels, world pixels, CSS pixels, and device pixels. Configure Phaser camera zoom/display scaling deliberately.
 - Keep pixel art crisp; disable texture smoothing. Prefer integer scaling where practical without violating visibility.
 - Camera clamping at world boundaries and smaller-window responsive behavior require deliberate decisions and testing.

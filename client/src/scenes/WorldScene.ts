@@ -29,7 +29,7 @@ import {
   type PointerInput,
 } from "../input";
 import { NetSync } from "../net-sync";
-import { PLAYER_SPRITE_SIZE } from "../render-config";
+import { CAMERA_ZOOM, PLAYER_SPRITE_SIZE } from "../render-config";
 import { CombatView, makeSquareTexture } from "./CombatView";
 import { MapView } from "./MapView";
 import { RemotePlayersView, VANISHED_ALPHA } from "./RemotePlayersView";
@@ -189,7 +189,7 @@ export class WorldScene extends Phaser.Scene {
     // D-033: no camera bounds; the camera always centers the player and
     // shows void past the map edge.
     this.cameras.main
-      .setZoom(1)
+      .setZoom(CAMERA_ZOOM)
       .ignore([overlay, this.bossBar, this.bossLabel]);
     this.cameras
       .add(0, 0, this.scale.width, this.scale.height, false, "overlay")
@@ -429,8 +429,9 @@ export class WorldScene extends Phaser.Scene {
 
   /**
    * Debug overlay fixed to the screen (drawn by the non-rotating overlay camera):
-   * the 600×600 visibility target (D-029; at zoom 1, screen pixels = world
-   * pixels) and four ticks around the viewport center. If the camera keeps
+   * the visibility target, 300 world px each way (D-029), drawn at the
+   * camera's zoom (D-127: 0.5, so 300 CSS px across), and four ticks
+   * around the viewport center. If the camera keeps
    * the player centered, the player stays between the ticks and inside the box.
    */
   private drawScreenOverlay(): Phaser.GameObjects.Graphics {
@@ -438,13 +439,10 @@ export class WorldScene extends Phaser.Scene {
     const cy = this.scale.height / 2;
     const g = this.add.graphics().setScrollFactor(0);
 
+    // This camera does not zoom: screen pixels here.
+    const target = MIN_VISIBLE_WORLD_PX * CAMERA_ZOOM;
     g.lineStyle(2, COLORS.visibilityTarget);
-    g.strokeRect(
-      cx - MIN_VISIBLE_WORLD_PX,
-      cy - MIN_VISIBLE_WORLD_PX,
-      MIN_VISIBLE_WORLD_PX * 2,
-      MIN_VISIBLE_WORLD_PX * 2,
-    );
+    g.strokeRect(cx - target, cy - target, target * 2, target * 2);
 
     const gap = 14;
     const len = 8;

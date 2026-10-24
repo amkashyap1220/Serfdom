@@ -8,8 +8,8 @@ Add inventory entries only when assets are actually needed and generated/integra
 
 - Chunky, readable, crisp retro pixel art with original Serfdom designs.
 - Pokémon Emerald is a palette _reference_, not permission to copy sprites, characters, tiles, or logos. Exact RGB entries must be verified before being described as exact.
-- Player character: **16×16 source pixels**.
-- Player-sized ordinary enemies: **16×16 source pixels**.
+- Player character: **32×32 source pixels** (D-127; was 16×16).
+- Player-sized ordinary enemies: **32×32 source pixels** (D-127).
 - Larger enemies and bosses may use larger sprite canvases.
 - Disable smoothing; keep pixel edges sharp.
 - Generate original AI-assisted assets only as the current milestone needs them.
@@ -18,7 +18,7 @@ Add inventory entries only when assets are actually needed and generated/integra
 
 | Asset path                                                                | Purpose                    | Canvas/frame size | Frames | Palette                                                                               | Source/prompt notes                              | Verified in game?                                                  |
 | ------------------------------------------------------------------------- | -------------------------- | ----------------- | ------ | ------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
-| `player-placeholder` (runtime texture, `client/src/scenes/WorldScene.ts`) | Phase 1 player placeholder | 16×16             | 1      | Placeholder colors only (yellow fill, 2×2 dark center mark); not the verified palette | Generated in code; no image file. Not final art. | Rendered in headless Chrome screenshot; awaiting user visual check |
+| `player-placeholder` (runtime texture, `client/src/scenes/WorldScene.ts`) | Phase 1 player placeholder | 32×32 (D-127)     | 1      | Placeholder colors only (yellow fill, 2×2 dark center mark); not the verified palette | Generated in code; no image file. Not final art. | Rendered in headless Chrome screenshot; awaiting user visual check |
 
 Record the size of individual frames, not just the overall spritesheet.
 
@@ -26,8 +26,8 @@ Record the size of individual frames, not just the overall spritesheet.
 
 | Category                          | Source dimensions    | Status    |
 | --------------------------------- | -------------------- | --------- |
-| Player character                  | 16×16 pixels         | CONFIRMED |
-| Player-sized ordinary enemy       | 16×16 pixels         | CONFIRMED |
+| Player character                  | 32×32 pixels         | CONFIRMED |
+| Player-sized ordinary enemy       | 32×32 pixels         | CONFIRMED |
 | Larger enemy / boss               | By design            | OPEN      |
 | Projectiles / effects             | By readability needs | OPEN      |
 | Environment tiles                 | To be determined     | OPEN      |
@@ -41,7 +41,7 @@ Source sprite pixels, world pixels, CSS pixels, and device pixels are distinct. 
 - Fixed left HUD: **240×640 CSS pixels**.
 - Gameplay viewport: **720×640 CSS pixels**.
 - Camera target: at least **300 world pixels visible from player center in each cardinal direction** during normal gameplay.
-- At initial 1:1 CSS/world scale, the gameplay viewport shows 360 world pixels horizontally and 320 vertically from center.
+- At the 0.5 camera zoom (D-127), the gameplay viewport shows 720 world pixels horizontally and 640 vertically from center (360 and 320 at the old 1:1 scale), and a 32×32 sprite draws at 16 CSS pixels.
 - Evaluate sprites and projectiles at actual in-game display size, not only zoomed-in previews.
 - Keep projectiles and enemy silhouettes distinguishable in dense combat.
 - Preserve sharp pixels while the camera scrolls.
@@ -60,7 +60,7 @@ Source sprite pixels, world pixels, CSS pixels, and device pixels are distinct. 
 
 - [ ] Original Serfdom design, not copied from another game.
 - [ ] Source frame dimensions match the approved category.
-- [ ] Player and ordinary player-sized enemy frames are 16×16.
+- [ ] Player and ordinary player-sized enemy frames are 32×32 (D-127).
 - [ ] Transparent background where appropriate.
 - [ ] Crisp pixel edges without unintended smoothing.
 - [ ] Colors consistent with the chosen/verified palette reference.

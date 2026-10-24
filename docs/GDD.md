@@ -48,7 +48,7 @@ Design pillars:
 
 ### Rendering and UI
 
-- Player and player-sized ordinary enemy source sprites are 16×16 pixels; larger enemies/bosses may use larger canvases.
+- Player and player-sized ordinary enemy source sprites are 32×32 pixels (D-127; was 16×16); larger enemies/bosses use larger canvases.
 - Keep source pixels, world pixels, CSS pixels, and device pixels distinct.
 - Configure Phaser zoom/scale to preserve approved world-space visibility.
 - Disable pixel-art smoothing; prefer integer scaling where practical.
@@ -60,7 +60,7 @@ Design pillars:
 
 - Game container measures 960×640 CSS pixels at target desktop size.
 - HUD measures 240×640; gameplay viewport measures 720×640, with no overlap.
-- A 16×16 player placeholder renders crisply.
+- A 32×32 player placeholder renders crisply (D-127).
 - Camera centers the player within gameplay, not the whole container.
 - Debug world bounds confirm at least 300 world pixels visible in every cardinal direction.
 - Browser resizing and map boundaries have documented, tested behavior.
@@ -70,8 +70,9 @@ Design pillars:
 ### Confirmed art direction
 
 - **Style reference:** chunky, readable retro pixel art resembling the user's supplied sprite-sheet reference: strong silhouettes, compact shapes, limited clusters of color, and crisp pixel edges.
-- **Player-sized ordinary enemies:** baseline sprite canvas of **16×16 source pixels**.
-- **Player characters:** baseline sprite canvas of **16×16 source pixels**.
+- **Player-sized ordinary enemies:** baseline sprite canvas of **32×32 source pixels** (D-127).
+- **Player characters:** baseline sprite canvas of **32×32 source pixels** (D-127).
+- **Camera (D-127):** zoomed out to 0.5, so the gameplay viewport shows 1440×1280 world pixels and sprites draw at half their source size.
 - **Palette reference:** use the **Pokémon Emerald palette as the requested color reference** for the game's palette direction. Do not copy Pokémon characters, sprites, tiles, logos, or other game assets. Create original Serfdom designs and original sprite assets using the chosen palette reference.
 - The same visual language should apply to enemies, players, items, projectiles, UI icons, and environments, while keeping combat elements easy to distinguish.
 - Larger bosses may use larger canvases when needed, but their pixel density and palette should remain consistent with the ordinary sprites.
@@ -434,7 +435,7 @@ The user wants a **more expansive leaderboard** before the alpha (Phase 15, D-12
 
 The first vertical slice is complete (Phases 1–11): every step below is built except the desktop client (Phase 25). Current work and its order live in `docs/ROADMAP.md`.
 
-1. The browser client shows the approved 960×640 layout, fixed 240-pixel HUD, 720×640 gameplay viewport, 16×16 player, and player-centered camera with at least 300 world pixels of cardinal visibility.
+1. The browser client shows the approved 960×640 layout, fixed 240-pixel HUD, 720×640 gameplay viewport, 32×32 player (D-127), and player-centered camera with at least 300 world pixels of cardinal visibility.
 2. A browser game loads.
 3. Player can move and interact with the world.
 4. One enemy demonstrates the chosen combat model.

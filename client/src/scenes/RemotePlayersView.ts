@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { CAMERA_ZOOM } from "../render-config";
 import { rotateVec, type Vec2 } from "@serfdom/shared";
 import { makeSquareTexture } from "./CombatView";
 
@@ -71,7 +72,9 @@ export class RemotePlayersView {
         fontSize: "10px",
         color: "#a9c4ff",
       })
-      .setOrigin(0.5, 1);
+      .setOrigin(0.5, 1)
+      // Reads at 10 CSS px whatever the camera zoom (D-127).
+      .setScale(1 / CAMERA_ZOOM);
     this.layer.add([image, label]);
     const sprite = { image, label };
     this.sprites.set(id, sprite);

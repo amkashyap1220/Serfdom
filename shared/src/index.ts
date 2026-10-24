@@ -69,6 +69,7 @@ export {
   slamCentre,
   crystalSpots,
   shieldBlocks,
+  circleHitsPlayer,
   warchiefPhase,
   overlaps,
   isDazed,
@@ -394,7 +395,14 @@ export {
   MAX_LEVEL,
   totalExpForLevel,
 } from "./progression.ts";
-export { NAV_CELL, NAV_CLEARANCE, Navigator } from "./pathing.ts";
+export {
+  NAV_CELL,
+  NAV_CLEARANCE,
+  Navigator,
+  SizedNavigator,
+  NAV_CLEARANCE_LARGE,
+  type Waypoints,
+} from "./pathing.ts";
 export {
   drinkPotion,
   POTION_CHANCE,

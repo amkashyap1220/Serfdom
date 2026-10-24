@@ -147,7 +147,8 @@ Do not begin with microservices, Kubernetes, elaborate matchmaking, a large cont
 - Keep HUD layout outside the Phaser world-camera coordinate space. The camera centers the player within the gameplay viewport.
 - Camera must show at least 300 world pixels from the player center in each cardinal direction during normal play.
 - At 1 CSS pixel per world pixel, 720×640 viewport yields 360 horizontal and 320 vertical world pixels from center.
-- Source sprite size is 16×16 pixels for players and player-sized ordinary enemies. Larger enemies/bosses may vary.
+- Source sprite size is 32×32 pixels for players and player-sized ordinary enemies (D-127). Larger enemies/bosses may vary.
+- The world camera zooms 0.5 (`CAMERA_ZOOM`, client/src/render-config.ts): the viewport shows 1440×1280 world px. `px()` converts a CSS size to world pixels for line widths, and world text is scaled by 1 / zoom; the overlay camera (boss bar, debug box) does not zoom.
 - Explicitly distinguish world coordinates, render resolution, CSS layout, device pixel ratio, and Phaser zoom/scale; disable texture smoothing.
 - Prefer a simple DOM layout (HUD sibling of the game canvas) or an equivalent clear separation. Verify actual canvas bounds before choosing implementation details.
 - Camera edges are decided: no clamping, space beyond the map is empty void (D-033). Minimum window size and multiplayer visibility fairness remain unresolved (open questions 11–13, 15). Do not finalize these silently.
@@ -218,7 +219,7 @@ Kept as the record of how and why each part was built. The current shape of the 
 
 - `client/index.html`: `#game-container` (960×640) is a flex row of `#hud` (240×640, plain DOM) and `#gameplay` (720×640, holds the Phaser canvas). Both use `flex: 0 0 <width>` so neither can grow or shrink into the other.
 - The HUD is DOM, outside Phaser entirely, so it is outside the world camera's coordinate space by construction (PROVISIONAL, T-011).
-- Phaser canvas = 720×640 with `Scale.NONE` and camera zoom 1: one world pixel is one CSS pixel. At `devicePixelRatio` 1 that is also one device pixel. Higher DPR or browser zoom makes the browser upscale the canvas; CSS `image-rendering: pixelated` keeps that blocky, but non-integer ratios (e.g. 1.25, 1.5) can make pixel widths uneven. Not yet addressed.
+- Phaser canvas = 720×640 with `Scale.NONE` and camera zoom 1 (D-127: now 0.5): one world pixel was one CSS pixel. At `devicePixelRatio` 1 that is also one device pixel. Higher DPR or browser zoom makes the browser upscale the canvas; CSS `image-rendering: pixelated` keeps that blocky, but non-integer ratios (e.g. 1.25, 1.5) can make pixel widths uneven. Not yet addressed.
 - `pixelArt: true` disables texture smoothing/antialiasing and rounds texture positions to whole pixels.
 - Pure rules live in Phaser-free modules with Vitest unit tests: client `layout.ts`, `camera-math.ts`; shared `movement.ts`, `fixed-step.ts`, `movement-config.ts`. `WorldScene.ts` wires input → simulation → rendering and holds no rules of its own.
 - Simulation loop (Phase 2): each rendered frame, `consumeFixedSteps` converts elapsed time into whole 1/60 s ticks (remainder carried, stalls capped at 0.25 s). Input is sampled once per frame; each tick calls `stepMovement`. The sprite and camera then use the same rounded position, so the player is always exactly centered (D-028, D-033) and texture-aligned.

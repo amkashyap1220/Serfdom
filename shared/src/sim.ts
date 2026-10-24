@@ -1,10 +1,10 @@
 import { SHAMAN, SKELETON } from "./enemy-config.ts";
-import type { Navigator } from "./pathing.ts";
+import type { Waypoints } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
 import { ARROWS, BRAZIERS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
-import { enemyAct, shieldBlocks } from "./enemy-ai.ts";
+import { circleHitsPlayer, enemyAct, shieldBlocks } from "./enemy-ai.ts";
 import type { EnemyKind } from "./enemy-config.ts";
 import {
   damageEnemy,
@@ -858,7 +858,7 @@ export function stepWorld(
   walls: readonly Rect[],
   dtSeconds: number,
   /** The server's grid for `walls` (D-114); without it, enemies only corner-steer. */
-  navigator?: Navigator,
+  navigator?: Waypoints,
   /** A room's holes, where the Warchief's war cry calls goblins from (D-117). */
   holesOf?: (roomId: string) => readonly Vec2[],
 ): { state: SimState; events: SimEvent[] } {
@@ -1047,8 +1047,8 @@ export function stepWorld(
     players = players.map((pl) => {
       if (
         !isPlayerAlive(pl) ||
-        Math.hypot(pl.position.x - h.position.x, pl.position.y - h.position.y) >
-          h.radius
+        // Any overlap with the hurtbox counts (D-127).
+        !circleHitsPlayer(h.position, h.radius, pl.position)
       ) {
         return pl;
       }
@@ -1099,11 +1099,7 @@ export function stepWorld(
     if (nextTick <= 1e-9) {
       nextTick += f.tickSeconds;
       players = players.map((pl) =>
-        isPlayerAlive(pl) &&
-        Math.hypot(
-          pl.position.x - f.position.x,
-          pl.position.y - f.position.y,
-        ) <= f.radius
+        isPlayerAlive(pl) && circleHitsPlayer(f.position, f.radius, pl.position)
           ? damagePlayer(pl, f.ownerId, f.damage, pl.position, events)
           : pl,
       );

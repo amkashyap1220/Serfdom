@@ -17,7 +17,7 @@ export const PLAYER_WEAPON = {
 
 export const DUMMY_ENEMY = {
   /** Square hit box, world pixels. */
-  size: 16,
+  size: 32,
   maxHp: 500,
   /** Seconds after defeat before it reappears at full HP. */
   respawnSeconds: 3,

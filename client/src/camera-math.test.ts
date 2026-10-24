@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CAMERA_ZOOM, px } from "./render-config";
 import {
   MIN_VISIBLE_WORLD_PX,
   meetsVisibilityTarget,
@@ -144,5 +145,16 @@ describe("screenToWorld", () => {
   it("undoes zoom", () => {
     const p = screenToWorld({ x: 460, y: 320 }, view, center, 0, 2);
     expect(p.x).toBeCloseTo(1050, 9);
+  });
+});
+
+describe("the zoomed-out view (D-127)", () => {
+  it("0.5 zoom shows 720 world px left and right, 640 up and down, past D-029's 300", () => {
+    const extent = visibleExtentFromCenter(720, 640, CAMERA_ZOOM);
+    expect(extent).toEqual({ horizontal: 720, vertical: 640 });
+    expect(meetsVisibilityTarget(extent)).toBe(true);
+    // A 32 px sprite draws at 16 CSS px; px() keeps lines and text at their CSS size.
+    expect(32 * CAMERA_ZOOM).toBe(16);
+    expect(px(1) * CAMERA_ZOOM).toBe(1);
   });
 });

@@ -154,7 +154,7 @@ For Phase 1 and Phase 2, Claude must give executable manual instructions and exp
 - Inspecting the game container: 960×640 CSS pixels at target desktop size.
 - Inspecting fixed HUD: 240×640 CSS pixels, on the left, with no gameplay overlap.
 - Inspecting gameplay viewport: 720×640 CSS pixels, to the right.
-- Confirming the player uses a 16×16 source-pixel sprite and stays crisp.
+- Confirming the player uses a 32×32 source-pixel sprite (D-127) and stays crisp.
 - Checking camera centering relative to gameplay viewport, not total window.
 - Using a world-coordinate grid/debug overlay to verify at least 300 world pixels visible in each cardinal direction during normal play.
 - Moving the player to verify camera following and fixed HUD.
@@ -213,6 +213,19 @@ Network delay (Phase 4c, D-042 target < 100 ms excluding network travel): Claude
 Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a centered message reads "You died / Main menu (placeholder) / Press Enter to play again"; there is no automatic respawn. Enter returns with 200/200 HP (offline: at the start; online in 5a: where the server has you). The dummy is not reset. Party HP scaling (D-045) is covered by shared tests; it only becomes visible once combat is on the server (5b).
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
+
+#### 32×32 and the zoomed-out view checklist (D-127)
+
+Restart `npm run dev` (no protocol change) and reload.
+
+1. **View:** the camera shows about twice as much world as before; whole rooms fit on screen. The player stays centred. The debug box (green) is 300 CSS px across and the player sits in its middle.
+2. **Sizes:** the player and ordinary enemies (grunts, slingers, skeletons, archers, ghosts, …) are the same size; brutes and knights are a bit bigger; the Warchief and the Lich are large.
+3. **Readability:** HP numbers over enemies, room names, and other players' #ids read as before (not tiny); wall outlines and rings are as thick as before. Buff rings (Battle Cry, Guard, Inspiration) show just outside your square.
+4. **Walls and doors:** you and every enemy fit through every doorway; brutes and knights follow you between rooms when you rush.
+5. **Hazards:** a boulder, bomb, rune, sweep, or slam hits you if its circle touches any part of your square.
+6. **Aiming:** manual aim with the mouse still fires exactly where you click.
+
+Report: pass/fail per step, and whether anything now looks too small (bullets are drawn at half their old screen size).
 
 #### The Lich checklist (Phase 12l, D-125)
 

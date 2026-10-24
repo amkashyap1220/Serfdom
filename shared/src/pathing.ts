@@ -11,8 +11,13 @@ import type { Rect, Vec2 } from "./geometry.ts";
 
 /** Grid cell size, world px. */
 export const NAV_CELL = 16;
-/** Cells this close to a wall count as blocked, so bodies fit (about a brute's half). */
-export const NAV_CLEARANCE = 8;
+/**
+ * Cells this close to a wall count as blocked, so bodies fit: half an
+ * ordinary 32 px enemy (D-127; was 8 for 14 px goblins).
+ */
+export const NAV_CLEARANCE = 16;
+/** The wider grid's clearance: half a grave knight (D-127). */
+export const NAV_CLEARANCE_LARGE = 22;
 /** How many downhill steps ahead an enemy may aim. */
 const LOOKAHEAD = 6;
 /** Distance fields kept at once (one per target cell); old ones are dropped. */
@@ -37,10 +42,15 @@ export class Navigator {
   private readonly rows: number;
   private readonly blocked: Uint8Array;
   private readonly fields = new Map<number, Int32Array>();
+  private readonly clearance: number;
 
-  /** `walls`: everything that blocks movement now (closed doors included). */
-  constructor(walls: readonly Rect[]) {
+  /**
+   * `walls`: everything that blocks movement now (closed doors included);
+   * `clearance`: how far paths keep from them, about the walker's half size.
+   */
+  constructor(walls: readonly Rect[], clearance: number = NAV_CLEARANCE) {
     this.walls = walls;
+    this.clearance = clearance;
     const xs = walls.flatMap((w) => [w.x, w.x + w.width]);
     const ys = walls.flatMap((w) => [w.y, w.y + w.height]);
     this.x0 =
@@ -54,13 +64,13 @@ export class Navigator {
     this.blocked = new Uint8Array(this.cols * this.rows);
     // A cell is blocked when its centre is inside a wall grown by the clearance.
     for (const w of walls) {
-      const c0 = Math.ceil((w.x - NAV_CLEARANCE - this.x0) / NAV_CELL - 0.5);
+      const c0 = Math.ceil((w.x - this.clearance - this.x0) / NAV_CELL - 0.5);
       const c1 = Math.floor(
-        (w.x + w.width + NAV_CLEARANCE - this.x0) / NAV_CELL - 0.5,
+        (w.x + w.width + this.clearance - this.x0) / NAV_CELL - 0.5,
       );
-      const r0 = Math.ceil((w.y - NAV_CLEARANCE - this.y0) / NAV_CELL - 0.5);
+      const r0 = Math.ceil((w.y - this.clearance - this.y0) / NAV_CELL - 0.5);
       const r1 = Math.floor(
-        (w.y + w.height + NAV_CLEARANCE - this.y0) / NAV_CELL - 0.5,
+        (w.y + w.height + this.clearance - this.y0) / NAV_CELL - 0.5,
       );
       for (let r = Math.max(0, r0); r <= Math.min(this.rows - 1, r1); r++) {
         for (let c = Math.max(0, c0); c <= Math.min(this.cols - 1, c1); c++) {
@@ -167,5 +177,33 @@ export class Navigator {
       x: this.x0 + (c + 0.5) * NAV_CELL,
       y: this.y0 + (r + 0.5) * NAV_CELL,
     };
+  }
+}
+
+/** Something that can give an enemy its next waypoint (one grid, or a set). */
+export interface Waypoints {
+  next(from: Vec2, to: Vec2, half: number): Vec2 | null;
+}
+
+/**
+ * Two grids for one set of walls (D-127): ordinary 32 px enemies use the
+ * narrower one, bigger walkers (brutes, grave knights) the wider one, so
+ * each keeps clear of walls by about its own half size.
+ */
+export class SizedNavigator implements Waypoints {
+  private readonly small: Navigator;
+  private readonly large: Navigator;
+
+  constructor(walls: readonly Rect[]) {
+    this.small = new Navigator(walls, NAV_CLEARANCE);
+    this.large = new Navigator(walls, NAV_CLEARANCE_LARGE);
+  }
+
+  next(from: Vec2, to: Vec2, half: number): Vec2 | null {
+    return (half > NAV_CLEARANCE ? this.large : this.small).next(
+      from,
+      to,
+      half,
+    );
   }
 }

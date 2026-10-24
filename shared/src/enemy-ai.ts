@@ -1061,11 +1061,7 @@ function knightAct(
     }
     const at = slamCentre(enemy.position, ai.facing);
     const contacts = targets
-      .filter(
-        (t) =>
-          Math.hypot(t.position.x - at.x, t.position.y - at.y) <=
-          KNIGHT.slam.radius,
-      )
+      .filter((t) => circleHitsPlayer(at, KNIGHT.slam.radius, t.position))
       .map((t) => ({ playerId: t.id, damage: KNIGHT.slam.damage }));
     return result(
       {
@@ -1305,10 +1301,7 @@ function warchiefAct(
       }
       const at = sweepCentre(enemy.position, next.direction);
       for (const t of targets) {
-        if (
-          Math.hypot(t.position.x - at.x, t.position.y - at.y) <=
-          WARCHIEF.sweep.radius
-        ) {
+        if (circleHitsPlayer(at, WARCHIEF.sweep.radius, t.position)) {
           action.contacts.push({
             playerId: t.id,
             damage: WARCHIEF.sweep.damage,
@@ -1463,6 +1456,22 @@ export function steerToward(
 
 /** How far past an obstacle's corner an enemy aims, beyond its own size. */
 const STEER_CLEARANCE = 6;
+
+/**
+ * Whether a circle reaches a player's hurtbox (D-127): any overlap of the
+ * circle with the 31×31 box counts, as bullets and touches already do.
+ * Used by every floor hazard, sweep, and slam.
+ */
+export function circleHitsPlayer(
+  centre: Vec2,
+  radius: number,
+  player: Vec2,
+): boolean {
+  const half = PLAYER_HEALTH.hurtboxSize / 2;
+  const dx = Math.max(Math.abs(centre.x - player.x) - half, 0);
+  const dy = Math.max(Math.abs(centre.y - player.y) - half, 0);
+  return dx * dx + dy * dy <= radius * radius;
+}
 
 function touching(position: Vec2, size: number, player: Vec2): boolean {
   return overlaps(

@@ -4,7 +4,8 @@ import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens } from "./goblin-warrens.ts";
 import { mainPath } from "./layout-test-helpers.ts";
 import { TICK_SECONDS } from "./movement-config.ts";
-import { Navigator } from "./pathing.ts";
+import { Navigator, SizedNavigator } from "./pathing.ts";
+import { buildCrypt } from "./forgotten-crypt.ts";
 import {
   addPlayer,
   createSimState,
@@ -18,7 +19,12 @@ import {
  * the boss room with every door open (a rushed run, D-114). Each must make
  * its way there: the bug was goblins pressing into room corners forever.
  */
-function chase(layout: DungeonLayout, useGrid: boolean, seconds: number) {
+function chase(
+  layout: DungeonLayout,
+  useGrid: boolean,
+  seconds: number,
+  kind: "grunt" | "knight" = "grunt",
+) {
   const path = mainPath(layout);
   const boss = path.at(-1)!.bounds;
   const goal = { x: boss.x + boss.width / 2, y: boss.y + boss.height / 2 };
@@ -35,15 +41,22 @@ function chase(layout: DungeonLayout, useGrid: boolean, seconds: number) {
   }));
   sim = spawnEnemies(
     sim,
-    starts.map((at) => ({ kind: "grunt" as const, at, roomId: null })),
+    starts.map((at) => ({ kind, at, roomId: null })),
   );
   // They must not hurt the player for this test: no regen race.
   sim = {
     ...sim,
     players: sim.players.map((p) => ({ ...p, hp: 1e9, maxHp: 1e9 })),
   };
-  const nav = useGrid ? new Navigator(layout.walls) : undefined;
+  const nav = useGrid ? new SizedNavigator(layout.walls) : undefined;
   for (let t = 0; t < seconds / TICK_SECONDS; t++) {
+    // Knights keep walking for this test: no slam to stop them.
+    sim = {
+      ...sim,
+      enemies: sim.enemies.map((e) =>
+        e.ai.kind === "knight" ? { ...e, ai: { ...e.ai, slam: 99 } } : e,
+      ),
+    };
     sim = stepWorld(sim, layout.walls, TICK_SECONDS, nav).state;
   }
   return sim.enemies.map((e) =>
@@ -60,6 +73,16 @@ describe("goblins find their way (D-114)", () => {
       for (const seed of seeds) {
         const distances = chase(build(seed), true, 70);
         for (const d of distances) expect(d, `seed ${seed}`).toBeLessThan(40);
+      }
+    }
+  });
+
+  it("44 px grave knights find their way too, on the wider grid (D-127)", () => {
+    for (const build of [buildWarrens, buildStronghold, buildCrypt]) {
+      for (const seed of [1, 2, 3]) {
+        for (const d of chase(build(seed), true, 200, "knight")) {
+          expect(d, `seed ${seed}`).toBeLessThan(40);
+        }
       }
     }
   });
