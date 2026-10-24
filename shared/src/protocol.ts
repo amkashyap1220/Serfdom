@@ -67,6 +67,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v26 (12g): the Goblin Warchief; blasts may be its axe sweep's warning
+ *          or hit (D-117).
  * v19 (10c): snapshot players list their buffs, enemies say whether
  *          they are cursed, blasts say which ability made them.
  * v18 (10b): runStarted carries your ability (kind and tier), so the
@@ -101,7 +103,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 25;
+export const PROTOCOL_VERSION = 26;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -246,7 +248,7 @@ export interface SnapshotFire {
 export interface SnapshotBlast {
   /** Which ability: Arcane Blast, the Bard's ring, the Warlock's curse. */
   kind: BlastKind;
-  /** The caster. */
+  /** The caster, or 0 for a goblin's (a chant, the Warchief's sweep). */
   by: number;
   x: number;
   y: number;
@@ -261,6 +263,9 @@ export const BLAST_KINDS = [
   "healed",
   /** A goblin shaman's chant (D-115). */
   "chant",
+  /** The Warchief's axe sweep: where it will hit, then the hit (D-117). */
+  "sweepWarning",
+  "sweep",
 ] as const;
 export type BlastKind = (typeof BLAST_KINDS)[number];
 
@@ -1221,13 +1226,15 @@ function parseSnapshotBlast(v: unknown): SnapshotBlast | null {
   ) {
     return null;
   }
-  if (!isPlayerId(v.by) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
+  // 0: a goblin's (D-115, D-117), not a player's.
+  const by = v.by === 0 || isPlayerId(v.by);
+  if (!by || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
     return null;
   }
   if (!isNonNegative(v.radius)) return null;
   return {
     kind: v.kind as BlastKind,
-    by: v.by,
+    by: v.by as number,
     x: v.x,
     y: v.y,
     radius: v.radius,

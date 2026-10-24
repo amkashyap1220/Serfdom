@@ -347,7 +347,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 
 - Second tier of about five (D-108): the goblins' fortified home past the Warrens, aimed at levels 9–12, open once a serf has completed the Warrens (D-107).
 - Procedural like the Warrens: the Stronghold gate, then 6 combat rooms (light, three medium, two heavy), then the War hall; 0–2 optional side rooms. About 6 minutes solo for a level-9 serf.
-- Ordinary goblins in greater numbers; no general buff. Shamans (Phase 12b) strengthen goblins near them. Its own boss, the Goblin Warchief, arrives in 12c; the Warlord stands in until then.
+- Ordinary goblins in greater numbers; no general buff. Shamans (12e) strengthen goblins near them. Its boss is the Goblin Warchief in the War hall (12g, D-117).
 - Loot T2–T4 (the first T4 drops, so the first extra rolls and Luck items); EXP base 160 up to level 12.
 
 ### Room mechanics (D-109)
@@ -361,6 +361,7 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 - Built (12d, D-113): **arrow traps** in the Stronghold's Gatehouse (slits glow, then a volley crosses the room with a gap of 3 slits to stand in, every 3.5 s; 6 damage; barricades shelter you) and **sludge** in the Fungus grotto (60% speed for players; goblins wade through).
 - Built (12e, D-115): **Goblin skulkers** cut you off by running to where you are heading; **Goblin bombers** lob bombs that leave burning floor; **Goblin shamans** never attack but chant, making goblins near them hit 50% harder for 5 s (kill them first). Stronghold only.
 - Built (12f, D-116): **fewer goblins** where rooms have a mechanic (Warrens 25%, Stronghold 30%, and 20% in the Stronghold's other rooms), so difficulty comes from the room, not the crowd.
+- Built (12g, D-117): the **Goblin Warchief**, the Stronghold's boss, in a War hall with 4 pillars and 4 holes. Phase 1: an axe sweep in front of it (a red circle shows exactly where, 0.8 s ahead) and fans of 3 throwing axes. Below 66%: a charge (1 s warning) that dazes it for 2.5 s if it slams into a pillar or wall, and a war cry that calls skulkers out of the holes (at most 4). Below 33%: everything 25% more often, plus a ground slam ring of 20 slow shockwaves. Lure its charge into a pillar to get free hits.
 
 ## 11. Multiplayer and reward rules
 

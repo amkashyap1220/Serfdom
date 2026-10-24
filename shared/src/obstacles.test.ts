@@ -12,7 +12,7 @@ const SEEDS = Array.from({ length: 200 }, (_, i) => i + 1);
 const target = (x: number, y: number) => ({ id: 1, position: { x, y } });
 
 describe("obstacles in the rooms (D-112)", () => {
-  it("rubble in the Collapsed passage and pillars in the Guard room; the Stronghold adds barricades and bunks", () => {
+  it("rubble in the Collapsed passage and pillars in the Guard room; the Stronghold adds barricades, bunks, and the War hall's pillars", () => {
     const seen = (build: (s: number) => ReturnType<typeof buildWarrens>) => {
       const keys = new Set<string>();
       for (const seed of SEEDS) {
@@ -28,6 +28,7 @@ describe("obstacles in the rooms (D-112)", () => {
       "gatehouse",
       "guard",
       "passage",
+      "throne",
     ]);
   });
 

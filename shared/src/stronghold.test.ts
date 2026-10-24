@@ -7,12 +7,12 @@ import {
   STRONGHOLD_FULL_PIECES,
   STRONGHOLD_PIECES,
   STRONGHOLD_RECIPE,
+  WAR_HALL,
 } from "./goblin-stronghold.ts";
 import {
   MECHANIC_ROOMS,
   WARRENS_BASE_PIECES,
   WARRENS_PIECES,
-  WARRENS_THRONE,
 } from "./goblin-warrens.ts";
 import { LOOT_POOLS } from "./items.ts";
 import { findLeak, mainPath, recipeProblems } from "./layout-test-helpers.ts";
@@ -128,7 +128,7 @@ describe("Goblin Stronghold (D-108)", () => {
     }
   });
 
-  it("every possible main path lands inside the 25,000–31,000 solo HP band (D-116)", () => {
+  it("every possible main path lands inside the 28,000–34,000 solo HP band (D-116, D-117)", () => {
     const band = (b: string) =>
       STRONGHOLD_PIECES.filter((p) => p.band === b).map((p) =>
         pieceHp(p.piece),
@@ -139,7 +139,7 @@ describe("Goblin Stronghold (D-108)", () => {
         : xs.flatMap((x, i) =>
             pairs(xs.slice(i + 1), k - 1).map((rest) => [x, ...rest]),
           );
-    const boss = pieceHp(WARRENS_THRONE);
+    const boss = pieceHp(WAR_HALL);
     let paths = 0;
     for (const light of band("light"))
       for (const mediums of pairs(band("medium"), 3))
@@ -156,6 +156,30 @@ describe("Goblin Stronghold (D-108)", () => {
           paths++;
         }
     expect(paths).toBe(5 * 20 * 3);
+  });
+
+  it("the War hall holds the Warchief alone, with 4 pillars and 4 holes, the portal clear of them (D-117)", () => {
+    expect(WAR_HALL.waves).toEqual([
+      [{ kind: "warchief", at: { x: 320, y: 300 } }],
+    ]);
+    for (const seed of SEEDS.slice(0, 200)) {
+      const layout = buildStronghold(seed);
+      const hall = layout.rooms.find((r) => r.id === "throne")!;
+      expect(hall.name).toBe("War hall");
+      expect(hall.waves.flat().map((e) => e.kind)).toEqual(["warchief"]);
+      expect(hall.obstacles).toHaveLength(4);
+      expect(hall.holes).toHaveLength(4);
+      // The portal opens where the Warchief stood, never inside a pillar.
+      const p = layout.exitPortal!;
+      for (const o of hall.obstacles!) {
+        const inside =
+          p.x >= o.x &&
+          p.x <= o.x + o.width &&
+          p.y >= o.y &&
+          p.y <= o.y + o.height;
+        expect(inside, `seed ${seed}`).toBe(false);
+      }
+    }
   });
 
   it("1,000 seeds follow the rules: gate, light, 3 medium, 2 heavy, war hall", () => {

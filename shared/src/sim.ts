@@ -1,5 +1,6 @@
 import { SHAMAN } from "./enemy-config.ts";
 import type { Navigator } from "./pathing.ts";
+import type { BlastKind } from "./protocol.ts";
 import { ARROWS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
@@ -567,8 +568,8 @@ export type SimEvent =
   /** An ability landed (drawn by every client). */
   | {
       type: "blast";
-      kind:
-        "arcaneBlast" | "inspiration" | "curse" | "heal" | "healed" | "chant";
+      kind: BlastKind;
+      /** The caster, or GOBLIN_BLAST_BY for a goblin's (chant, sweep). */
       playerId: number;
       at: Vec2;
       radius: number;
@@ -854,6 +855,8 @@ export function stepWorld(
   dtSeconds: number,
   /** The server's grid for `walls` (D-114); without it, enemies only corner-steer. */
   navigator?: Navigator,
+  /** A room's holes, where the Warchief's war cry calls goblins from (D-117). */
+  holesOf?: (roomId: string) => readonly Vec2[],
 ): { state: SimState; events: SimEvent[] } {
   const events: SimEvent[] = [];
   let players = state.players.map((p) => regenerate(p, dtSeconds));
@@ -894,6 +897,7 @@ export function stepWorld(
             navigator.next(from, to, half),
         }
       : {}),
+    ...(holesOf ? { holesOf } : {}),
   };
   enemies = enemies.map((enemy) => {
     // A vanished player is out of sight: not aimed at, chased, or touched.
@@ -908,6 +912,15 @@ export function stepWorld(
       summons.push({ ...s, roomId: enemy.roomId, summonerId: enemy.id });
     }
     if (action.chant) chants.push(action.chant);
+    if (action.sweep) {
+      events.push({
+        type: "blast",
+        kind: action.sweep.warning ? "sweepWarning" : "sweep",
+        playerId: GOBLIN_BLAST_BY,
+        at: { ...action.sweep.at },
+        radius: action.sweep.radius,
+      });
+    }
     // A shaman's chant (D-115): everything this goblin deals is stronger.
     const boost = (enemy.chant ?? 0) > 0 ? 1 + SHAMAN.damageBonus : 1;
     for (const h of action.hazards) {
@@ -970,7 +983,7 @@ export function stepWorld(
     events.push({
       type: "blast",
       kind: "chant",
-      playerId: -1,
+      playerId: GOBLIN_BLAST_BY,
       at: { ...c.at },
       radius: c.radius,
     });
@@ -1258,6 +1271,9 @@ export type HazardKind = (typeof HAZARD_KINDS)[number];
 
 /** Arrow traps' projectiles have this owner: no enemy has id 0 (D-113). */
 export const TRAP_OWNER_ID = 0;
+
+/** The `playerId` of a blast a goblin made (a chant, a sweep): no player is 0. */
+export const GOBLIN_BLAST_BY = 0;
 
 /**
  * An arrow trap fires (D-113): each arrow flies across the room like an

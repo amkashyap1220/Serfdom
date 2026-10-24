@@ -7,6 +7,7 @@ import {
   GRUNT,
   SHAMAN,
   SKULKER,
+  WARCHIEF,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -75,6 +76,11 @@ export interface EnemyAction {
   hazards: HazardSpec[];
   /** A shaman's chant (D-115): goblins inside the circle are strengthened. */
   chant?: { at: Vec2; radius: number };
+  /**
+   * The Warchief's axe sweep (D-117), for drawing: the circle it will hit
+   * (`warning`, when the axe goes up) and then the hit itself.
+   */
+  sweep?: { at: Vec2; radius: number; warning: boolean };
 }
 
 /** What the AI knows about the world beyond the targets. */
@@ -88,6 +94,8 @@ export interface AiContext {
   waypoint?: (from: Vec2, to: Vec2, half: number) => Vec2 | null;
   /** Living enemies at the start of the tick (shamans look for them, D-115). */
   allies?: () => readonly EnemyState[];
+  /** The holes of a room (the Warchief's war cry calls goblins out of them, D-117). */
+  holesOf?: (roomId: string) => readonly Vec2[];
 }
 
 const NO_MOVE = { x: 0, y: 0 };
@@ -154,6 +162,16 @@ export function enemyAct(
       return bomberAct(enemy, target, walls, dtSeconds, result, context);
     case "shaman":
       return shamanAct(enemy, target, walls, dtSeconds, result, context);
+    case "warchief":
+      return warchiefAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+      );
   }
 }
 
@@ -654,12 +672,255 @@ function warlordAct(
 
 /** True while a brute is telegraphing its charge (drawn as a warning). */
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "warchief") {
+    return enemy.ai.mode === "sweepWindup" || enemy.ai.mode === "chargeWindup";
+  }
   return enemy.ai.kind === "brute" && enemy.ai.mode === "windup";
 }
 
 /** A brute that charged into a wall, standing dazed (D-112). */
 export function isDazed(enemy: EnemyState): boolean {
-  return enemy.ai.kind === "brute" && enemy.ai.mode === "dazed";
+  return (
+    (enemy.ai.kind === "brute" || enemy.ai.kind === "warchief") &&
+    enemy.ai.mode === "dazed"
+  );
+}
+
+/** The Warchief's phase (D-117): 1, 2 below 66% HP, 3 below 33%. */
+export function warchiefPhase(enemy: EnemyState): 1 | 2 | 3 {
+  const f = enemy.hp / enemy.maxHp;
+  if (f < WARCHIEF.phaseThreeBelow) return 3;
+  return f < WARCHIEF.phaseTwoBelow ? 2 : 1;
+}
+
+/** The middle of the circle the Warchief's sweep hits (D-117). */
+export function sweepCentre(position: Vec2, facing: Vec2): Vec2 {
+  return {
+    x: position.x + facing.x * WARCHIEF.sweep.reach,
+    y: position.y + facing.y * WARCHIEF.sweep.reach,
+  };
+}
+
+function warchiefAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "warchief") return result(enemy);
+  const phase = warchiefPhase(enemy);
+  // Enraged in phase 3: every attack comes back sooner.
+  const rate = phase === 3 ? WARCHIEF.enragedRate : 1;
+  const tick = (t: number) => Math.max(0, t - dt);
+  let next = {
+    ...ai,
+    sweep: tick(ai.sweep),
+    axes: tick(ai.axes),
+    charge: phase >= 2 ? tick(ai.charge) : ai.charge,
+    warCry: phase >= 2 ? tick(ai.warCry) : ai.warCry,
+    slam: phase === 3 ? tick(ai.slam) : ai.slam,
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  let position = enemy.position;
+  const fan = (aim: Vec2) => {
+    const step = (WARCHIEF.axes.angleStepDegrees * Math.PI) / 180;
+    const half = (WARCHIEF.axes.count - 1) / 2;
+    for (let i = 0; i < WARCHIEF.axes.count; i++) {
+      action.bullets.push({
+        direction: rotateVec(aim, (i - half) * step),
+        spec: WARCHIEF.axes.bullet,
+      });
+    }
+  };
+
+  // Ranged attacks run whatever it is doing (but not while dazed).
+  if (target && next.mode !== "dazed") {
+    if (next.axes <= 1e-9) {
+      next.axes = WARCHIEF.axes.intervalSeconds * rate;
+      fan(toward(enemy.position, target.target.position));
+    }
+    if (phase === 3 && next.slam <= 1e-9) {
+      next.slam = WARCHIEF.slam.intervalSeconds * rate;
+      for (const d of ringDirections(WARCHIEF.slam.count)) {
+        action.bullets.push({ direction: d, spec: WARCHIEF.slam.bullet });
+      }
+    }
+    if (phase >= 2 && next.warCry <= 1e-9) {
+      next.warCry = WARCHIEF.warCry.intervalSeconds * rate;
+      const room = WARCHIEF.warCry.maxAlive - context.aliveSummons(enemy.id);
+      const n = Math.min(WARCHIEF.warCry.count, Math.max(0, room));
+      const holes = enemy.roomId ? (context.holesOf?.(enemy.roomId) ?? []) : [];
+      for (let i = 0; i < n; i++) {
+        const hole = holes[(next.cries + i) % Math.max(1, holes.length)];
+        action.summons.push({
+          kind: WARCHIEF.warCry.kind,
+          at: hole
+            ? { ...hole }
+            : { x: enemy.position.x + (i % 2 ? 60 : -60), y: enemy.position.y },
+        });
+      }
+      next.cries += n;
+    }
+  }
+
+  switch (next.mode) {
+    case "walk": {
+      if (!target) break;
+      if (
+        next.sweep <= 1e-9 &&
+        target.distance <= WARCHIEF.sweep.triggerRange
+      ) {
+        // It picks where to swing as the axe goes up: the warning shows
+        // exactly where it will hit, so stepping out of it is the dodge.
+        const direction = toward(enemy.position, target.target.position);
+        next = {
+          ...next,
+          mode: "sweepWindup",
+          timer: WARCHIEF.sweep.windupSeconds,
+          direction,
+        };
+        action.sweep = {
+          at: sweepCentre(enemy.position, direction),
+          radius: WARCHIEF.sweep.radius,
+          warning: true,
+        };
+        break;
+      }
+      if (
+        phase >= 2 &&
+        next.charge <= 1e-9 &&
+        target.distance <= WARCHIEF.charge.triggerRange
+      ) {
+        next = {
+          ...next,
+          mode: "chargeWindup",
+          timer: WARCHIEF.charge.windupSeconds,
+        };
+        break;
+      }
+      position = move(
+        enemy,
+        toward(
+          enemy.position,
+          route(
+            enemy.position,
+            target.target.position,
+            enemy.size / 2,
+            walls,
+            context,
+          ),
+        ),
+        WARCHIEF.speed,
+        walls,
+        dt,
+      );
+      break;
+    }
+    case "sweepWindup": {
+      const timer = next.timer - dt;
+      if (timer > 1e-9) {
+        next = { ...next, timer };
+        break;
+      }
+      const at = sweepCentre(enemy.position, next.direction);
+      for (const t of targets) {
+        if (
+          Math.hypot(t.position.x - at.x, t.position.y - at.y) <=
+          WARCHIEF.sweep.radius
+        ) {
+          action.contacts.push({
+            playerId: t.id,
+            damage: WARCHIEF.sweep.damage,
+          });
+        }
+      }
+      action.sweep = { at, radius: WARCHIEF.sweep.radius, warning: false };
+      next = {
+        ...next,
+        mode: "recover",
+        timer: WARCHIEF.sweep.recoverSeconds,
+        sweep: WARCHIEF.sweep.cooldownSeconds * rate,
+      };
+      break;
+    }
+    case "chargeWindup": {
+      const timer = next.timer - dt;
+      if (timer > 1e-9) {
+        next = { ...next, timer };
+        break;
+      }
+      // Direction locks at the end of the warning: dodge sideways.
+      const direction = target
+        ? toward(enemy.position, target.target.position)
+        : NO_MOVE;
+      next = {
+        ...next,
+        mode: "charge",
+        timer: WARCHIEF.charge.seconds,
+        direction,
+        hit: [],
+        charge: WARCHIEF.charge.intervalSeconds * rate,
+      };
+      break;
+    }
+    case "charge": {
+      position = move(enemy, next.direction, WARCHIEF.charge.speed, walls, dt);
+      for (const t of targets) {
+        if (
+          !next.hit.includes(t.id) &&
+          touching(position, enemy.size, t.position)
+        ) {
+          action.contacts.push({
+            playerId: t.id,
+            damage: WARCHIEF.charge.damage,
+          });
+          next = { ...next, hit: [...next.hit, t.id] };
+        }
+      }
+      const travelled = Math.hypot(
+        position.x - enemy.position.x,
+        position.y - enemy.position.y,
+      );
+      const blocked =
+        travelled < WARCHIEF.charge.speed * speedFactor(enemy) * dt * 0.5;
+      const timer = next.timer - dt;
+      if (blocked)
+        next = { ...next, mode: "dazed", timer: WARCHIEF.charge.dazeSeconds };
+      else if (timer <= 1e-9)
+        next = {
+          ...next,
+          mode: "recover",
+          timer: WARCHIEF.charge.recoverSeconds,
+        };
+      else next = { ...next, timer };
+      break;
+    }
+    case "dazed":
+    case "recover": {
+      const timer = next.timer - dt;
+      next =
+        timer > 1e-9
+          ? { ...next, timer }
+          : next.mode === "dazed"
+            ? {
+                ...next,
+                mode: "recover",
+                timer: WARCHIEF.charge.recoverSeconds,
+              }
+            : { ...next, mode: "walk", timer: 0 };
+      break;
+    }
+  }
+  return result({ ...enemy, position, ai: next }, action);
 }
 
 /**

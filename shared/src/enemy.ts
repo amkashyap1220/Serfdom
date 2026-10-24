@@ -3,6 +3,7 @@ import {
   FIRST_ATTACK_DELAY,
   WARLORD,
   type EnemyKind,
+  WARCHIEF,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -60,6 +61,29 @@ export type EnemyAi =
       hit: readonly number[];
     }
   | {
+      kind: "warchief";
+      mode:
+        | "walk"
+        | "sweepWindup"
+        | "chargeWindup"
+        | "charge"
+        | "dazed"
+        | "recover";
+      timer: number;
+      /** Locked at the end of a windup. */
+      direction: Vec2;
+      /** Players already hit by the current charge. */
+      hit: readonly number[];
+      /** Seconds until each attack is ready. */
+      sweep: number;
+      axes: number;
+      charge: number;
+      warCry: number;
+      slam: number;
+      /** Holes the war cry has used, so they take turns. */
+      cries: number;
+    }
+  | {
       kind: "warlord";
       spread: number;
       ring: number;
@@ -77,6 +101,20 @@ function initialAi(kind: EnemyKind): EnemyAi {
         timer: 0,
         direction: { x: 0, y: 0 },
         hit: [],
+      };
+    case "warchief":
+      return {
+        kind,
+        mode: "walk",
+        timer: 0,
+        direction: { x: 0, y: 0 },
+        hit: [],
+        sweep: 0,
+        axes: FIRST_ATTACK_DELAY.warchief,
+        charge: WARCHIEF.charge.intervalSeconds / 2,
+        warCry: WARCHIEF.warCry.intervalSeconds / 2,
+        slam: WARCHIEF.slam.intervalSeconds / 2,
+        cries: 0,
       };
     case "warlord": {
       const delay = FIRST_ATTACK_DELAY.warlord;

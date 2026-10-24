@@ -34,6 +34,7 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   skulker: 0x1f6f6a,
   bomber: 0x8a4b2a,
   shaman: 0xe6cf7a,
+  warchief: 0x6e0f1a,
 };
 
 const COLORS = {
@@ -263,6 +264,20 @@ export class CombatView {
     // violet, a healed player's green flash; the Bard's gold ring and the
     // Cleric's green ring widen out.
     for (const b of view.blasts) {
+      // The Warchief's sweep (D-117): a red circle filling in as the axe
+      // goes up, exactly where it will hit; then a white flash.
+      if (b.kind === "sweepWarning") {
+        bl.fillStyle(COLORS.hazard, 0.15 + 0.25 * b.fade);
+        bl.fillCircle(b.x, b.y, b.radius * b.fade);
+        bl.lineStyle(2, COLORS.hazard, 0.9);
+        bl.strokeCircle(b.x, b.y, b.radius);
+        continue;
+      }
+      if (b.kind === "sweep") {
+        bl.fillStyle(COLORS.flash, 0.6 * (1 - b.fade));
+        bl.fillCircle(b.x, b.y, b.radius);
+        continue;
+      }
       const color =
         b.kind === "chant"
           ? COLORS.chant

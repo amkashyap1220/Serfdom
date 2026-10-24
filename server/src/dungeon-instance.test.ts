@@ -6,6 +6,9 @@ import {
   GRUNT,
   WARLORD,
   PLAYER_HEALTH,
+  WARCHIEF,
+  encodeMessage,
+  parseServerMessage,
   type ServerMessage,
 } from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
@@ -134,6 +137,79 @@ describe("arrow traps in a run (D-113)", () => {
       ).length;
     }
     expect(arrows).toBe(gate.arrows!.slits.length - 3);
+  });
+});
+
+describe("the Goblin Warchief in a run (D-117)", () => {
+  const seed = 2;
+  const hall = buildStronghold(seed).rooms.find((r) => r.id === "throne")!;
+  const inHall = () => {
+    const r = new DungeonInstance(1, "goblin-stronghold", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed,
+    });
+    const centre = {
+      x: hall.bounds.x + hall.bounds.width / 2,
+      y: hall.bounds.y + hall.bounds.height / 2,
+    };
+    // Step into the hall so it wakes, then stand just east of the Warchief.
+    const place = (at: { x: number; y: number }) =>
+      r.setStateForTest({
+        ...r.state,
+        players: r.state.players.map((p) => ({
+          ...p,
+          hp: 5000,
+          maxHp: 5000,
+          position: at,
+        })),
+      });
+    place({ x: centre.x + 100, y: centre.y });
+    r.tick();
+    return { r, place, centre };
+  };
+
+  it("its sweep warning and hit reach the client: snapshots with goblin blasts still parse", () => {
+    const { r, place } = inHall();
+    const boss = r.state.enemies.find((e) => e.kind === "warchief")!;
+    place({ x: boss.position.x + 60, y: boss.position.y });
+    const kinds: string[] = [];
+    for (let t = 0; t < 60; t++) {
+      r.tick();
+      const parsed = parseServerMessage(encodeMessage(r.snapshot(t)));
+      expect(parsed.ok).toBe(true);
+      if (parsed.ok && parsed.message.type === "snapshot") {
+        kinds.push(...parsed.message.blasts.map((b) => b.kind));
+      }
+    }
+    expect(kinds).toEqual(["sweepWarning", "sweep"]);
+  });
+
+  it("its war cry calls skulkers out of the War hall's holes", () => {
+    const { r } = inHall();
+    r.setStateForTest({
+      ...r.state,
+      enemies: r.state.enemies.map((e) =>
+        e.ai.kind === "warchief"
+          ? {
+              ...e,
+              hp: WARCHIEF.maxHp / 2,
+              ai: { ...e.ai, warCry: 0, sweep: 99, axes: 99, charge: 99 },
+            }
+          : e,
+      ),
+    });
+    r.tick();
+    const skulkers = r.state.enemies.filter((e) => e.kind === "skulker");
+    expect(skulkers).toHaveLength(2);
+    for (const k of skulkers) {
+      // Out of a hole (they may already have taken one step).
+      const near = hall.holes!.some(
+        (h) => Math.hypot(h.x - k.position.x, h.y - k.position.y) < 4,
+      );
+      expect(near).toBe(true);
+      expect(k.roomId).toBe("throne");
+    }
   });
 });
 

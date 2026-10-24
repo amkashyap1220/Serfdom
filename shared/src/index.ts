@@ -52,11 +52,14 @@ export {
   isEnemyKind,
   SLINGER,
   WARLORD,
+  WARCHIEF,
   type EnemyKind,
 } from "./enemy-config.ts";
 export {
   enemyAct,
   isTelegraphing,
+  sweepCentre,
+  warchiefPhase,
   overlaps,
   isDazed,
   lineBlocked,
@@ -154,6 +157,7 @@ export {
   STRONGHOLD_FULL_PIECES,
   STRONGHOLD_PIECES,
   STRONGHOLD_RECIPE,
+  WAR_HALL,
 } from "./goblin-stronghold.ts";
 export {
   newRunStats,
@@ -170,6 +174,7 @@ export {
   dropBoulders,
   fireArrows,
   TRAP_OWNER_ID,
+  GOBLIN_BLAST_BY,
   type HazardKind,
   createSimState,
   findPlayer,

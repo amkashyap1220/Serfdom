@@ -78,6 +78,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Goblin Warchief checklist (Phase 12g, D-117)
+
+Restart `npm run dev` (protocol v26) and reload. Play the Goblin Stronghold to the War hall (the last room).
+
+1. **War hall:** 4 stone pillars, 4 dark holes in the top and bottom walls, a deep crimson boss in the middle. The bar at the top reads "Goblin Warchief" with two white notches (66% and 33%).
+2. **Axe sweep:** get close. It flashes yellow and a red circle fills in just in front of it; after 0.8 s comes a white flash and 8 damage if you were inside. Step out of the circle during the warning and it misses.
+3. **Throwing axes:** every 3 s, a fan of 3 bullets at you (6 each).
+4. **Below 66%** (the label adds "WAR CRY"): it flashes yellow for 1 s, then charges in a straight line (10 damage). Dodge sideways so it hits a pillar or wall: it stops and stays still for 2.5 s with no attacks. Every 10 s, 2 skulkers come out of the holes; never more than 4 at once.
+5. **Below 33%** (label "ENRAGED"): attacks come faster, and every few seconds a ring of 20 slow bullets spreads out from it (5 each).
+6. When it dies, the portal opens where it stood. Death names it ("Slain by the Goblin Warchief").
+7. A shaman's gold chant ring (12e) now shows too (it was silently dropped before).
+
+Report: pass/fail per step, your level and class, how long the fight took, and whether each attack was readable and dodgeable.
+
 ### Fewer goblins checklist (Phase 12f, D-116)
 
 Restart `npm run dev` and reload.

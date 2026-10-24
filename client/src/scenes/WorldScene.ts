@@ -10,7 +10,6 @@ import {
   abilityIntent,
   TICK_SECONDS,
   worldDirectionFromInput,
-  WARLORD,
   type AimTarget,
   type DungeonLayout,
   type FireMode,
@@ -21,6 +20,7 @@ import {
   screenToWorld,
   stepViewRotation,
 } from "../camera-math";
+import { bossBar } from "../boss-bar";
 import { EMPTY_VIEW, type CombatViewModel } from "../combat-view-model";
 import {
   createKeyReader,
@@ -391,35 +391,33 @@ export class WorldScene extends Phaser.Scene {
     return { x: Math.round(p.x), y: Math.round(p.y) };
   }
 
-  /** Shows the Warlord's health across the top of the screen while it lives. */
+  /** Shows a living boss's health across the top of the screen. */
   private syncBossBar(): void {
     const boss = this.lastView.enemies.find(
-      (e) => e.kind === "warlord" && e.hp > 0,
+      (e) => e.hp > 0 && bossBar(e.kind, e.hp, e.maxHp) !== undefined,
     );
     const g = this.bossBar.clear();
     this.bossLabel.setVisible(boss !== undefined);
     if (!boss) return;
+    const bar = bossBar(boss.kind, boss.hp, boss.maxHp)!;
     const x = (this.scale.width - BOSS_BAR.width) / 2;
     const fraction = boss.hp / boss.maxHp;
     g.fillStyle(0x000000, 0.7);
     g.fillRect(x - 2, BOSS_BAR.y - 2, BOSS_BAR.width + 4, BOSS_BAR.height + 4);
-    g.fillStyle(fraction < WARLORD.phaseTwoBelow ? 0xff3030 : 0xc0392b);
+    g.fillStyle(bar.angry ? 0xff3030 : 0xc0392b);
     g.fillRect(
       x,
       BOSS_BAR.y,
       Math.round(BOSS_BAR.width * fraction),
       BOSS_BAR.height,
     );
-    // Notch where phase 2 begins.
+    // A notch where each later phase begins.
     g.fillStyle(0xffffff, 0.8);
-    g.fillRect(
-      x + BOSS_BAR.width * WARLORD.phaseTwoBelow,
-      BOSS_BAR.y,
-      1,
-      BOSS_BAR.height,
-    );
+    for (const notch of bar.notches) {
+      g.fillRect(x + BOSS_BAR.width * notch, BOSS_BAR.y, 1, BOSS_BAR.height);
+    }
     this.bossLabel.setText(
-      `Goblin Warlord  ${Math.ceil(boss.hp)}/${boss.maxHp}${fraction < WARLORD.phaseTwoBelow ? "  — ENRAGED" : ""}`,
+      `${bar.name}  ${Math.ceil(boss.hp)}/${boss.maxHp}${bar.suffix}`,
     );
   }
 

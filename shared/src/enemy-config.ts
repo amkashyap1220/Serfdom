@@ -14,6 +14,7 @@ export const ENEMY_KINDS = [
   "skulker",
   "bomber",
   "shaman",
+  "warchief",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -174,6 +175,54 @@ export const SHAMAN = {
   damageBonus: 0.5,
 } as const;
 
+/**
+ * The Goblin Warchief (D-117), the Stronghold's boss: it walks after you.
+ * Phase 1 sweeps its axe and throws axes; phase 2 (below 66% HP) adds a
+ * charge and a war cry; phase 3 (below 33%) adds a ground slam, and every
+ * attack comes 25% more often.
+ */
+export const WARCHIEF = {
+  maxHp: 8000,
+  size: 40,
+  speed: 40,
+  phaseTwoBelow: 0.66,
+  phaseThreeBelow: 0.33,
+  /** Phase 3: every interval times this. */
+  enragedRate: 0.75,
+  sweep: {
+    triggerRange: 90,
+    windupSeconds: 0.8,
+    /** Hits a circle this far in front, this wide. */
+    reach: 50,
+    radius: 60,
+    damage: 8,
+    cooldownSeconds: 2.5,
+    recoverSeconds: 0.6,
+  },
+  axes: {
+    intervalSeconds: 3,
+    count: 3,
+    angleStepDegrees: 20,
+    bullet: { damage: 6, speed: 200, size: 10, range: 500 },
+  },
+  charge: {
+    intervalSeconds: 7,
+    triggerRange: 320,
+    windupSeconds: 1,
+    speed: 300,
+    seconds: 1,
+    damage: 10,
+    dazeSeconds: 2.5,
+    recoverSeconds: 1,
+  },
+  warCry: { intervalSeconds: 10, count: 2, maxAlive: 4, kind: "skulker" },
+  slam: {
+    intervalSeconds: 6,
+    count: 20,
+    bullet: { damage: 5, speed: 110, size: 10, range: 500 },
+  },
+} as const;
+
 export const RING_BULLET: EnemyBulletSpec = {
   damage: ENEMY_RING_ATTACK.damage,
   speed: ENEMY_RING_ATTACK.speed,
@@ -190,6 +239,7 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   skulker: SKULKER,
   bomber: BOMBER,
   shaman: SHAMAN,
+  warchief: WARCHIEF,
 };
 
 /**
@@ -207,6 +257,8 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   skulker: SKULKER.contactCooldownSeconds / 2,
   bomber: BOMBER.throwIntervalSeconds / 2,
   shaman: SHAMAN.chantIntervalSeconds / 2,
+  /** Before its first throw. */
+  warchief: 1.5,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

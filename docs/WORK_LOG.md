@@ -483,4 +483,14 @@ Keep this concise and update it after each meaningful milestone.
 - `thinPiece` and full-strength base pools, so the Stronghold (built on the Warrens' rooms) is not thinned twice. HP bands lowered.
 - Tests: Warrens mechanic rooms lose exactly 25% of grunts and slingers per wave and everything else stays; plain rooms unchanged; Stronghold 30% / 20% with brutes and new goblins kept; the 11b table and the Stronghold composition tests now check the full-strength pools; every Stronghold path combination inside 25,000–31,000; the 2,000-seed rule check holds the Warrens' generated maps to 11,500–14,500. `npm run check`: 391 shared, 177 server, 54 client, build.
 - Measured over 1,000 seeds: Warrens main paths 12,060–13,640 HP (was 12,590–14,180), about 42 enemies (was 45); Stronghold 25,855–28,930 (was 30,750–33,455), about 112 enemies (was 140). Not play-tested: real clear times.
-- User ran the 12f checklist: pass (2026-10-23). Committed and pushed 12f. Next: draft the Goblin Warchief.
+- User ran the 12f checklist: pass (2026-10-23). Committed and pushed 12f (`07a5e03`). Next: draft the Goblin Warchief.
+
+### Phase 12g — The Goblin Warchief — 2026-10-23
+
+- Draft approved (D-117). New kind, three-phase AI, War hall (pillars, holes), Stronghold band 28,000–34,000, protocol v26, boss bar for either boss.
+- Refinement: the sweep's direction is fixed when the axe goes up, so the warning circle is exactly where it lands (snapshots carry no facing).
+- **Bug found live and fixed:** goblin blasts (12e's chant, and the new sweep) were sent with `by: -1`, which the snapshot parser rejects, so the client threw away every snapshot carrying one (the chant ring never drew). Now `by: 0`, which the parser accepts; a server test parses real snapshots through a sweep.
+- Tests: phase thresholds; phase 1 walks and throws 3 fans in 10 s and never charges, cries, or slams; the sweep warns, then hits 8 in exactly the warned circle, and misses if you step out; phase 2 charges after 1 s at 300 px/s and hits for 10 once; a pillar dazes it, it throws nothing while dazed, then recovers; the war cry spawns at the holes and stops at 4; no war cry in phase 1; phase 3 slams 20 × 5 and resets intervals ×0.75; world-step blasts; the War hall in 200 generated Strongholds (Warchief alone, 4 pillars, 4 holes, portal clear); every Stronghold path inside the new band; boss bar labels. `npm run check`: 402 shared, 179 server, 57 client, build.
+- Live (harness, **test** DB, Stronghold seed 2 after a seed-0 Warrens clear): the sweep's red circle with the yellow flash; axe fans; the "WAR CRY" bar with two notches and skulkers from the holes; a charge that hit the player; "ENRAGED" with the slam ring spreading out. No console errors. Not play-tested: a real fight's length and difficulty.
+- Known limits: axes and shockwaves look like ordinary enemy bullets (placeholder art).
+- User ran the 12g checklist: pass (2026-10-23). Next: draft stat potions and the potion rack.

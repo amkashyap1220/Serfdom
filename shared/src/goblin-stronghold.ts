@@ -24,8 +24,8 @@ import {
  * (D-107). Ordinary goblins, no general buff: the strength is in numbers
  * (12b adds shamans that strengthen goblins near them). Every Warrens room
  * comes back with both of its setups at once, about twice the goblins;
- * three new fortified rooms join them. The Goblin Warlord stands in as the
- * boss until 12c's Warchief.
+ * three new fortified rooms join them. Its boss is the Goblin Warchief
+ * in the War hall (D-117).
  */
 
 const at = (kind: EnemyKind, points: [number, number][]): EnemySpawnDef[] =>
@@ -270,15 +270,39 @@ export const STRONGHOLD_PIECES: readonly RecipePiece[] =
     thinPiece(entry, MECHANIC_ROOMS.has(entry.piece.key) ? 0.3 : 0.2),
   );
 
+/**
+ * The War hall (D-117): the Warchief in the middle (where the portal
+ * opens), four pillars to break its charge on, and four holes its war cry
+ * calls skulkers out of.
+ */
+export const WAR_HALL: RoomPiece = {
+  ...WARRENS_THRONE,
+  key: "warhall",
+  name: "War hall",
+  waves: [at("warchief", [[320, 300]])],
+  obstacles: [
+    { x: 136, y: 126, width: 48, height: 48 },
+    { x: 456, y: 126, width: 48, height: 48 },
+    { x: 136, y: 426, width: 48, height: 48 },
+    { x: 456, y: 426, width: 48, height: 48 },
+  ],
+  holes: [
+    { x: 200, y: 20 },
+    { x: 440, y: 20 },
+    { x: 200, y: 580 },
+    { x: 440, y: 580 },
+  ],
+};
+
 export const STRONGHOLD_RECIPE: DungeonRecipe = {
   name: "Goblin Stronghold",
   entrance: { ...WARRENS_ENTRANCE, name: "Stronghold gate" },
-  boss: { ...WARRENS_THRONE, name: "War hall" },
+  boss: WAR_HALL,
   pieces: STRONGHOLD_PIECES,
   mainPath: ["light", "medium", "medium", "medium", "heavy", "heavy"],
   // About 6 minutes for a level-9 serf (D-108); D-116: was 30,000–36,000
-  // before rooms were thinned.
-  requiredHp: { min: 25_000, max: 31_000 },
+  // before rooms were thinned; D-117: +3,000 for the Warchief.
+  requiredHp: { min: 28_000, max: 34_000 },
   sideRooms: WARRENS_RULES.sideRooms,
   sideBands: WARRENS_RULES.sideBands,
   turnWeights: WARRENS_RULES.turnWeights,

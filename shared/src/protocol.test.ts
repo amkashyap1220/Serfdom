@@ -572,7 +572,13 @@ describe("snapshot messages", () => {
       fires: [],
       traps: [],
       portalOpen: false,
-      blasts: [{ kind: "arcaneBlast", by: 2, x: 1100.5, y: 990, radius: 40 }],
+      blasts: [
+        { kind: "arcaneBlast", by: 2, x: 1100.5, y: 990, radius: 40 },
+        // A goblin's blasts have no player (D-115, D-117).
+        { kind: "chant", by: 0, x: 900, y: 990, radius: 120 },
+        { kind: "sweepWarning", by: 0, x: 950, y: 990, radius: 60 },
+        { kind: "sweep", by: 0, x: 950, y: 990, radius: 60 },
+      ],
       chains: [
         {
           by: 2,

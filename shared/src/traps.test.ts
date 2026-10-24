@@ -311,9 +311,11 @@ describe("where the traps go (D-109)", () => {
       "guard",
       "tunnel",
     ]);
+    // "throne" is the War hall: the Warchief's war cry uses its holes (D-117).
     expect([...seen.get("stronghold holes")!].sort()).toEqual([
       "ambush",
       "barracks",
+      "throne",
     ]);
   });
 

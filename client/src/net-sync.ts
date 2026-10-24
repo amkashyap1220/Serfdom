@@ -10,6 +10,7 @@ import {
   SERF_BASE,
   TICK_SECONDS,
   type BlastKind,
+  WARCHIEF,
   type DungeonId,
   type PlayerInput,
   type Rect,
@@ -55,6 +56,13 @@ const MAX_EXTRAPOLATION_S = 0.1;
  */
 /** How long a landed blast stays drawn (presentation only). */
 const BLAST_SHOW_MS = 350;
+
+/** How long a blast stays on screen: the sweep's warning lasts its whole windup. */
+function blastShowMs(kind: BlastKind): number {
+  return kind === "sweepWarning"
+    ? WARCHIEF.sweep.windupSeconds * 1000
+    : BLAST_SHOW_MS;
+}
 
 export class NetSync {
   readonly connection: Connection;
@@ -301,15 +309,17 @@ export class NetSync {
     }));
   }
 
-  /** Blasts younger than BLAST_SHOW_MS, with how far each has faded. */
+  /** Blasts still showing, with how far each has faded. */
   private blastViews(nowMs: number): BlastView[] {
-    this.blasts = this.blasts.filter((b) => nowMs - b.atMs < BLAST_SHOW_MS);
+    this.blasts = this.blasts.filter(
+      (b) => nowMs - b.atMs < blastShowMs(b.kind),
+    );
     return this.blasts.map((b) => ({
       kind: b.kind,
       x: b.x,
       y: b.y,
       radius: b.radius,
-      fade: Math.max(0, (nowMs - b.atMs) / BLAST_SHOW_MS),
+      fade: Math.max(0, (nowMs - b.atMs) / blastShowMs(b.kind)),
     }));
   }
 

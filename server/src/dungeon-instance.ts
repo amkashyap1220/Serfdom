@@ -1,5 +1,6 @@
 import {
   type Rect,
+  type Vec2,
   Navigator,
   arrowVolleys,
   dropBoulders,
@@ -286,6 +287,7 @@ export class DungeonInstance {
       walls,
       TICK_SECONDS,
       this.navigatorFor(walls),
+      this.holesOf,
     );
     this.sim = world.state;
     this.collectEffects(world.events);
@@ -356,6 +358,10 @@ export class DungeonInstance {
    * The grid goblins find their way with (D-114), rebuilt only when doors
    * open or shut (the walls change).
    */
+  /** A room's holes (the Warchief's war cry, D-117). */
+  private readonly holesOf = (roomId: string): readonly Vec2[] =>
+    this.layout.rooms.find((r) => r.id === roomId)?.holes ?? [];
+
   private navigatorFor(walls: readonly Rect[]): Navigator {
     const key = this.closedDoors.join(",");
     if (!this.navigator || this.navigatorKey !== key) {
