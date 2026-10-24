@@ -28,4 +28,6 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   braziers: "a spirit brazier",
   runes: "a cursed rune",
   lava: "lava",
+  jets: "a fire jet",
+  slag: "a slag spill",
 };

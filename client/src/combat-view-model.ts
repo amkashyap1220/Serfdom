@@ -62,7 +62,7 @@ export interface HazardView {
   radius: number;
   /** Seconds until it lands (estimated for now). */
   landsIn: number;
-  kind: "boulder" | "bomb" | "rune";
+  kind: "boulder" | "bomb" | "rune" | "slag";
 }
 
 export interface ProjectileView {
@@ -88,6 +88,18 @@ export interface SlitView {
   glow: number;
   /** A spirit brazier (D-123), not an arrow slit. */
   fire?: boolean;
+  /** A fire jet's nozzle (D-133). */
+  jet?: boolean;
+}
+
+/** A fire jet's beam (D-133): from (x1, y1) to (x2, y2), `width` wide. */
+export interface BeamView {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  remaining: number;
 }
 
 /** One cursed rune (D-123): faint, or glowing (0 → 1) before it bursts. */
@@ -139,6 +151,7 @@ export interface CombatViewModel {
   slits: SlitView[];
   runes: RuneView[];
   fires: FireView[];
+  beams: BeamView[];
   portalOpen: boolean;
 }
 
@@ -153,6 +166,7 @@ export const EMPTY_VIEW: CombatViewModel = {
   slits: [],
   runes: [],
   fires: [],
+  beams: [],
   portalOpen: false,
 };
 
@@ -180,6 +194,7 @@ export function slitViews(
         dy: trap.direction.y,
         glow: w && fires ? 0.3 + 0.7 * w.warn : 0,
         ...(trap.fire ? { fire: true } : {}),
+        ...(trap.jet ? { jet: true } : {}),
       });
     });
   }

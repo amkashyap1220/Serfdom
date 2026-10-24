@@ -240,6 +240,18 @@ Restart `npm run dev` (protocol v34) and reload. Any serf that has completed the
 
 Report: pass/fail per step; whether the yellow blink gives you enough warning; whether the golem's vent glow is easy to see; your clear time and level. If something fails, copy the browser console (F12 → Console) and the server terminal's last lines.
 
+#### Fire jets and slag spills checklist (Phase 13c, D-133)
+
+Restart `npm run dev` (protocol v35) and reload. Enter the Ember Forge with any serf that has completed the Warrens. Rooms are turned to fit the map, so "north wall" means the wall the nozzles are on.
+
+1. **Fire jets** (Bellows room, Chain gallery, Great furnace): dark nozzles along one wall. Every 2 s alternate nozzles glow orange for under a second, then a bright orange beam with a pale core shoots across the room for half a second.
+2. Stand in a beam's path: you take one hit of 12 before Defense, not more, however long you stand there. Stand behind a block or pillar in its line: the beam stops at the block and misses you.
+3. **Slag spills** (Ore store, Anvil hall, Slag pit): orange molten boulders fall onto growing shadows, about one every 1.6 s; landing hurts (10) and leaves a patch of burning floor for 3 s (3 every 0.5 s).
+4. Die to a beam or a slag spill (or ask me for a weak serf): the death screen says "Slain by a fire jet" or "Slain by a slag spill".
+5. Those six rooms feel a little emptier than the others; clear the forge and note your time and level (expected about 7.5 min at level 15).
+
+Report: pass/fail per step; whether the jets' glow gives you time to step out; whether the slag fires make any room feel unfair; your clear time and level. If something fails, copy the browser console (F12 → Console) and the server terminal's last lines.
+
 #### Bigger window, closer camera checklist (D-131)
 
 Restart `npm run dev` (no protocol change) and reload. Make the browser window at least 1200×800 inside (a maximised window on a 1080p screen).

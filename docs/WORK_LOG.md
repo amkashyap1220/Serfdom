@@ -4,7 +4,7 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-**Next step:** draft 13c (fire jets, slag spills) for approval.
+**Next step:** draft 13d (the Forgemaster) for approval.
 
 Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
@@ -641,3 +641,12 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Live (harness, **test** DB, 1280×920 Chrome): an elemental rushed, blinked yellow, exploded (an orange disc; the player took 14) and was gone; a venting golem glowed orange; a bellows-keeper's orange ring healed a hurt grunt about 5 HP a second (3% of 170). Not checked live: walking through real forge rooms (the room contents are unit-tested over 1,000 seeds), two players.
 - User ran the 13b checklist: all pass (2026-10-24).
 - Next step: draft 13c (fire jets, slag spills).
+
+### Phase 13c — Fire jets and slag spills — 2026-10-24
+
+- Drafted the rooms, timings, beam width, and thinning from D-130's mechanics; the user approved it as D-133.
+- Built on the existing traps: fire jets are a third kind of arrow trap whose volley makes beams (a new `Beam` in the simulation, ray-cast to the first wall or obstacle), and slag spills are rockfall with burning floor attached. Room fires now remember they are the room's, and one helper, `hazardDamage`, turns any room hit into a hazard hit. Protocol v35.
+- `npm run check`: 489 shared, 199 server, 65 client, build.
+- Live (harness, **test** DB, seed 2, 1280×920 Chrome): the Chain gallery's beams crossed the whole room while the pillar-aligned nozzles were blocked; the Great furnace (turned) fired west and its beam stopped at the furnace block; the Ore store's molten boulders fell and left slag fires (the probe showed `slag` hazards and fires). Not checked live: a death by either, two players.
+- User ran the 13c checklist: pass (2026-10-24).
+- Next step: draft 13d (the Forgemaster).

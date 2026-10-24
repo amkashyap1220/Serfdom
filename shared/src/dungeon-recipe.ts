@@ -98,7 +98,9 @@ function arm(
             : s,
         ),
       ),
-      ...(room.rockfall ? { rockfall: { damage: recipe.rockfallDamage } } : {}),
+      ...(room.rockfall
+        ? { rockfall: { ...room.rockfall, damage: recipe.rockfallDamage } }
+        : {}),
       ...(room.arrows
         ? { arrows: { ...room.arrows, damage: recipe.arrowDamage } }
         : {}),

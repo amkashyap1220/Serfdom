@@ -68,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v35 (13c): fire jets and slag spills (D-133): snapshots list fire
+ *          jets' `beams`; hazards may be a slag spill; killedBy may be
+ *          "jets" or "slag".
  * v34 (13b): fire elementals, magma golems, bellows-keepers (D-132):
  *          snapshot enemies say whether a golem is `vented`; blasts may be
  *          an elemental's explosion or a bellows-keeper's heal (`stoke`).
@@ -126,7 +129,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 34;
+export const PROTOCOL_VERSION = 35;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -289,6 +292,16 @@ export interface SnapshotEnemy {
   vented: boolean;
 }
 
+/** A fire jet's beam (D-133): from (x1, y1) to (x2, y2), `width` wide. */
+export interface SnapshotBeam {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  width: number;
+  remaining: number;
+}
+
 /** Burning floor left by a bomb (D-115). */
 export interface SnapshotFire {
   x: number;
@@ -363,8 +376,8 @@ export interface SnapshotHazard {
   y: number;
   radius: number;
   landsIn: number;
-  /** A falling boulder, or a goblin's bomb (D-115). */
-  kind: "boulder" | "bomb" | "rune";
+  /** A falling boulder, a goblin's bomb (D-115), a rune, or a slag spill (D-133). */
+  kind: "boulder" | "bomb" | "rune" | "slag";
 }
 
 export interface SnapshotProjectile {
@@ -484,6 +497,8 @@ export type ServerMessage =
       hazards: SnapshotHazard[];
       /** Burning floor (D-115). */
       fires: SnapshotFire[];
+      /** Fire jets' beams burning now (D-133). */
+      beams: SnapshotBeam[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
       /** Rune columns glowing before they burst (D-123). */
@@ -981,6 +996,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "closedDoors",
           "hazards",
           "fires",
+          "beams",
           "traps",
           "runes",
           "portalOpen",
@@ -1017,6 +1033,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!runes) return fail("snapshot: bad rune entry");
       const fires = parseList(obj.fires, parseSnapshotFire);
       if (!fires) return fail("snapshot: bad fire entry");
+      const beams = parseList(obj.beams, parseSnapshotBeam);
+      if (!beams) return fail("snapshot: bad beam entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -1035,6 +1053,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           closedDoors: [...closedDoors],
           hazards,
           fires,
+          beams,
           traps,
           runes,
           portalOpen: obj.portalOpen,
@@ -1535,9 +1554,40 @@ function parseSnapshotHazard(v: unknown): SnapshotHazard | null {
   }
   if (!isFiniteNumber(v.x) || !isFiniteNumber(v.y)) return null;
   if (!isNonNegative(v.radius) || !isNonNegative(v.landsIn)) return null;
-  if (v.kind !== "boulder" && v.kind !== "bomb" && v.kind !== "rune")
+  if (
+    v.kind !== "boulder" &&
+    v.kind !== "bomb" &&
+    v.kind !== "rune" &&
+    v.kind !== "slag"
+  )
     return null;
   return { x: v.x, y: v.y, radius: v.radius, landsIn: v.landsIn, kind: v.kind };
+}
+
+function parseSnapshotBeam(v: unknown): SnapshotBeam | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x1", "y1", "x2", "y2", "width", "remaining"])
+  ) {
+    return null;
+  }
+  if (
+    !isFiniteNumber(v.x1) ||
+    !isFiniteNumber(v.y1) ||
+    !isFiniteNumber(v.x2) ||
+    !isFiniteNumber(v.y2)
+  ) {
+    return null;
+  }
+  if (!isNonNegative(v.width) || !isNonNegative(v.remaining)) return null;
+  return {
+    x1: v.x1,
+    y1: v.y1,
+    x2: v.x2,
+    y2: v.y2,
+    width: v.width,
+    remaining: v.remaining,
+  };
 }
 
 function parseSnapshotFire(v: unknown): SnapshotFire | null {

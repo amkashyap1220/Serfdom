@@ -1,7 +1,15 @@
 import { BOSS_KINDS, SHAMAN, SKELETON } from "./enemy-config.ts";
 import type { Waypoints } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
-import { ARROWS, BRAZIERS, LAVA, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
+import {
+  ARROWS,
+  BRAZIERS,
+  JETS,
+  LAVA,
+  ROCKFALL,
+  SLAG,
+  SLUDGE,
+} from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
 import { circleHitsPlayer, enemyAct, shieldBlocks } from "./enemy-ai.ts";
@@ -153,6 +161,22 @@ export interface SimState {
   lava?: readonly Rect[];
   /** Seconds until lava next burns (every LAVA.tickSeconds). */
   lavaIn?: number;
+  /** Fire jets' beams burning now (D-133). */
+  beams?: readonly Beam[];
+}
+
+/**
+ * A fire jet's beam (D-133): fire from `from` to `to`, `width` wide, for
+ * `remaining` seconds; it burns each player once.
+ */
+export interface Beam {
+  from: Vec2;
+  to: Vec2;
+  width: number;
+  damage: number;
+  remaining: number;
+  /** Players it has already burned. */
+  hit: readonly number[];
 }
 
 /** A warning circle that damages living players inside it when it lands. */
@@ -184,6 +208,8 @@ export interface Fire {
   damage: number;
   /** The bomber that made it (named on a death). */
   ownerId: number;
+  /** A room's fire (a slag spill's, D-133): its burns are the room's hits. */
+  hazard?: HazardKind;
 }
 
 /** An enemy to add to the simulation (dungeon room waves, boss summons). */
@@ -1088,21 +1114,29 @@ export function stepWorld(
         ) {
           return pl;
         }
-        const before = events.length;
-        const hit = damagePlayer(pl, -1, LAVA.damage, pl.position, events);
-        const reported = events[before];
-        if (reported?.type === "playerHit") {
-          events[before] = {
-            type: "hazardHit",
-            playerId: pl.id,
-            hazard: "lava",
-            damage: reported.damage,
-            position: reported.position,
-          };
-        }
-        return hit;
+        return hazardDamage(pl, "lava", LAVA.damage, events);
       });
     }
+  }
+
+  // 2a. Fire jets' beams burn every player they touch, each once (D-133).
+  const beams: Beam[] = [];
+  for (const beam of state.beams ?? []) {
+    const strip = beamBox(beam);
+    const hit = [...beam.hit];
+    players = players.map((pl) => {
+      if (
+        !isPlayerAlive(pl) ||
+        hit.includes(pl.id) ||
+        !overlapsBox(strip, boxAround(pl.position, PLAYER_HEALTH.hurtboxSize))
+      ) {
+        return pl;
+      }
+      hit.push(pl.id);
+      return hazardDamage(pl, "jets", beam.damage, events);
+    });
+    const remaining = beam.remaining - dtSeconds;
+    if (remaining > 1e-9) beams.push({ ...beam, remaining, hit });
   }
 
   // 2b. Hazards: existing ones count down and land; new ones wait a full delay.
@@ -1158,6 +1192,7 @@ export function stepWorld(
         tickSeconds: h.fire.tickSeconds,
         damage: h.fire.damage,
         ownerId: h.ownerId,
+        ...(h.hazard ? { hazard: h.hazard } : {}),
       });
     }
   }
@@ -1170,9 +1205,12 @@ export function stepWorld(
     if (nextTick <= 1e-9) {
       nextTick += f.tickSeconds;
       players = players.map((pl) =>
-        isPlayerAlive(pl) && circleHitsPlayer(f.position, f.radius, pl.position)
-          ? damagePlayer(pl, f.ownerId, f.damage, pl.position, events)
-          : pl,
+        !isPlayerAlive(pl) ||
+        !circleHitsPlayer(f.position, f.radius, pl.position)
+          ? pl
+          : f.hazard
+            ? hazardDamage(pl, f.hazard, f.damage, events)
+            : damagePlayer(pl, f.ownerId, f.damage, pl.position, events),
       );
     }
     if (remaining > 1e-9) burning.push({ ...f, remaining, nextTick });
@@ -1340,6 +1378,7 @@ export function stepWorld(
       nextProjectileId: nextId,
       nextEnemyId,
       lavaIn,
+      beams,
       hazards,
       fires: burning,
       blasts: [],
@@ -1400,6 +1439,8 @@ export const HAZARD_KINDS = [
   "braziers",
   "runes",
   "lava",
+  "jets",
+  "slag",
 ] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
@@ -1480,7 +1521,7 @@ export function burstRunes(
 
 export function dropBoulders(
   state: SimState,
-  drops: readonly { at: Vec2; damage: number }[],
+  drops: readonly { at: Vec2; damage: number; slag?: boolean }[],
 ): SimState {
   if (drops.length === 0) return state;
   return {
@@ -1493,10 +1534,123 @@ export function dropBoulders(
         damage: d.damage,
         landsIn: ROCKFALL.warnSeconds,
         ownerId: -1,
-        hazard: "rockfall" as const,
+        // A slag spill leaves burning floor where it lands (D-133).
+        ...(d.slag
+          ? { hazard: "slag" as const, fire: { ...SLAG.fire } }
+          : { hazard: "rockfall" as const }),
       })),
     ],
   };
+}
+
+/**
+ * Fire jets fire (D-133): each beam runs from its nozzle along its
+ * direction to the first wall or obstacle in `walls`, or the edge of its
+ * room, and burns for JETS.beamSeconds.
+ */
+export function fireJets(
+  state: SimState,
+  jets: readonly { at: Vec2; direction: Vec2; damage: number; room?: Rect }[],
+  walls: readonly Rect[],
+): SimState {
+  if (jets.length === 0) return state;
+  const fired = jets.map((j): Beam => ({
+    from: { ...j.at },
+    to: beamEnd(j.at, j.direction, walls, j.room),
+    width: JETS.width,
+    damage: j.damage,
+    remaining: JETS.beamSeconds,
+    hit: [],
+  }));
+  return { ...state, beams: [...(state.beams ?? []), ...fired] };
+}
+
+/** How far a beam runs before something stops it (a beam with no room: 2,000 px at most). */
+function beamEnd(
+  from: Vec2,
+  direction: Vec2,
+  walls: readonly Rect[],
+  room?: Rect,
+): Vec2 {
+  let reach = room ? (rayThrough(from, direction, room)?.exit ?? 0) : 2000;
+  for (const w of walls) {
+    const t = rayThrough(from, direction, w);
+    if (t && t.exit > 0) reach = Math.min(reach, Math.max(0, t.enter));
+  }
+  return { x: from.x + direction.x * reach, y: from.y + direction.y * reach };
+}
+
+/** Where a ray from `from` enters and leaves `r` (in distances along `d`), if it crosses it. */
+function rayThrough(
+  from: Vec2,
+  d: Vec2,
+  r: Rect,
+): { enter: number; exit: number } | null {
+  let enter = -Infinity;
+  let exit = Infinity;
+  const axes: [number, number, number, number][] = [
+    [from.x, d.x, r.x, r.x + r.width],
+    [from.y, d.y, r.y, r.y + r.height],
+  ];
+  for (const [o, dir, lo, hi] of axes) {
+    if (Math.abs(dir) < 1e-12) {
+      if (o < lo || o > hi) return null;
+      continue;
+    }
+    const a = (lo - o) / dir;
+    const b = (hi - o) / dir;
+    enter = Math.max(enter, Math.min(a, b));
+    exit = Math.min(exit, Math.max(a, b));
+  }
+  return enter <= exit ? { enter, exit } : null;
+}
+
+/**
+ * The strip a beam burns: its line, `width` across. Beams run along an
+ * axis (nozzles fire straight out of a wall, and rooms turn by quarters).
+ */
+export function beamBox(beam: Pick<Beam, "from" | "to" | "width">): Rect {
+  const { from, to, width } = beam;
+  const half = width / 2;
+  const across = Math.abs(to.x - from.x) < Math.abs(to.y - from.y);
+  return across
+    ? {
+        x: from.x - half,
+        y: Math.min(from.y, to.y),
+        width,
+        height: Math.abs(to.y - from.y),
+      }
+    : {
+        x: Math.min(from.x, to.x),
+        y: from.y - half,
+        width: Math.abs(to.x - from.x),
+        height: width,
+      };
+}
+
+/**
+ * A room hazard's hit (D-110): Defense counts as for any hit, and it is
+ * reported as the room's (a death names the hazard), not an enemy's.
+ */
+function hazardDamage(
+  player: PlayerState,
+  hazard: HazardKind,
+  damage: number,
+  events: SimEvent[],
+): PlayerState {
+  const before = events.length;
+  const hit = damagePlayer(player, -1, damage, player.position, events);
+  const reported = events[before];
+  if (reported?.type === "playerHit") {
+    events[before] = {
+      type: "hazardHit",
+      playerId: player.id,
+      hazard,
+      damage: reported.damage,
+      position: reported.position,
+    };
+  }
+  return hit;
 }
 
 function damagePlayer(

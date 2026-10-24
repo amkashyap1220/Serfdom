@@ -37,8 +37,8 @@ export interface RoomPiece {
   height: number;
   /** Spawn points relative to the floor's top-left corner. */
   waves: readonly (readonly EnemySpawnDef[])[];
-  /** Boulders fall while it fights (D-110). */
-  rockfall?: boolean;
+  /** Boulders fall while it fights (D-110); "slag": slag spills instead (D-133). */
+  rockfall?: boolean | "slag";
   /** Its doors shut behind you until it is cleared (D-114). */
   gated?: boolean;
   /** Solid obstacles on its floor, relative like the spawns (D-112). */
@@ -47,8 +47,16 @@ export interface RoomPiece {
   sludge?: readonly Rect[];
   /** Lava channels, relative like the spawns (D-130). */
   lava?: readonly Rect[];
-  /** An arrow trap's slits and firing direction, relative (D-113); `fire`: spirit braziers (D-123). */
-  arrows?: { slits: readonly Vec2[]; direction: Vec2; fire?: boolean };
+  /**
+   * An arrow trap's slits and firing direction, relative (D-113); `fire`:
+   * spirit braziers (D-123); `jet`: fire jets (D-133).
+   */
+  arrows?: {
+    slits: readonly Vec2[];
+    direction: Vec2;
+    fire?: boolean;
+    jet?: boolean;
+  };
   /** Cursed runes on the floor, relative, each in a column (D-123). */
   runes?: readonly RuneSpot[];
   /** Ambush holes and the wave that comes out of them (D-109). */
@@ -88,7 +96,12 @@ function orient(
   obstacles: Rect[];
   sludge: Rect[];
   lava: Rect[];
-  arrows: { slits: Vec2[]; direction: Vec2; fire?: boolean } | null;
+  arrows: {
+    slits: Vec2[];
+    direction: Vec2;
+    fire?: boolean;
+    jet?: boolean;
+  } | null;
   runes: RuneSpot[];
 } {
   const { width: w, height: h } = piece;
@@ -119,6 +132,7 @@ function orient(
             return { x: d.x - o.x, y: d.y - o.y };
           })(),
           ...(piece.arrows.fire ? { fire: true } : {}),
+          ...(piece.arrows.jet ? { jet: true } : {}),
         }
       : null,
     // A rune keeps its column, so the sweep runs the same way however
@@ -150,13 +164,15 @@ interface Placed {
  * set per dungeon once the map is built, D-110).
  */
 function traps(
-  rockfall: boolean,
+  rockfall: false | { slag?: boolean },
   holes: Vec2[],
   holeWave: number | undefined,
   damage = 0,
 ): Pick<RoomDef, "rockfall" | "holes" | "holeWave"> {
   return {
-    ...(rockfall ? { rockfall: { damage } } : {}),
+    ...(rockfall
+      ? { rockfall: { damage, ...(rockfall.slag ? { slag: true } : {}) } }
+      : {}),
     ...(holes.length > 0 ? { holes } : {}),
     ...(holeWave !== undefined ? { holeWave } : {}),
   };
@@ -289,7 +305,11 @@ export class RoomAssembly {
           bounds,
           waves,
           required,
-          ...traps(piece.rockfall === true, o.holes.map(shift), piece.holeWave),
+          ...traps(
+            piece.rockfall ? { slag: piece.rockfall === "slag" } : false,
+            o.holes.map(shift),
+            piece.holeWave,
+          ),
           ...(piece.gated ? { gated: true } : {}),
           ...(o.obstacles.length > 0
             ? { obstacles: o.obstacles.map((r) => ({ ...r, ...shift(r) })) }
@@ -307,6 +327,7 @@ export class RoomAssembly {
                   direction: o.arrows.direction,
                   damage: 0,
                   ...(o.arrows.fire ? { fire: true } : {}),
+                  ...(o.arrows.jet ? { jet: true } : {}),
                 },
               }
             : {}),
@@ -355,7 +376,7 @@ export class RoomAssembly {
         wave.map((s) => ({ ...s, at: move(s.at) })),
       ),
       ...traps(
-        room.rockfall !== undefined,
+        room.rockfall ?? false,
         (room.holes ?? []).map(move),
         room.holeWave,
         room.rockfall?.damage,

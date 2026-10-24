@@ -2,7 +2,9 @@ import { boxAround } from "./collision.ts";
 import {
   contains,
   ARROWS,
+  JETS,
   ROCKFALL,
+  SLAG,
   type DungeonLayout,
   type RoomDef,
   BRAZIERS,
@@ -191,6 +193,8 @@ export function holeSpot(room: RoomDef, burst: number, k: number): Vec2 {
 export interface BoulderDrop {
   at: Vec2;
   damage: number;
+  /** A slag spill (D-133): it leaves burning floor. */
+  slag?: boolean;
 }
 
 /**
@@ -210,7 +214,10 @@ export function rockfallDrops(
   const next = layout.rooms.map((room, i): RoomProgress => {
     const p = progress[i] ?? DORMANT;
     if (!room.rockfall || p.status !== "active") return p;
-    const due = Math.floor(p.clock / ROCKFALL.everySeconds + 1e-9) + 1;
+    const every = room.rockfall.slag
+      ? SLAG.everySeconds
+      : ROCKFALL.everySeconds;
+    const due = Math.floor(p.clock / every + 1e-9) + 1;
     if (p.dropped >= due) return p;
     const b = room.bounds;
     const m = ROCKFALL.radius;
@@ -237,7 +244,11 @@ export function rockfallDrops(
           y: b.y + random() * b.height,
         });
       }
-      drops.push({ at, damage: room.rockfall.damage });
+      drops.push({
+        at,
+        damage: room.rockfall.damage,
+        ...(room.rockfall.slag ? { slag: true } : {}),
+      });
     }
     return { ...p, dropped: due };
   });
@@ -251,10 +262,14 @@ export interface ArrowShot {
   damage: number;
   /** A spirit brazier's fireball (D-123). */
   fire?: boolean;
+  /** A fire jet's beam (D-133), which stops at the edge of `room`. */
+  jet?: boolean;
+  room?: Rect;
 }
 
-/** An arrow trap's or a brazier row's timing (D-113, D-123). */
-const timingOf = (trap: { fire?: boolean }) => (trap.fire ? BRAZIERS : ARROWS);
+/** An arrow trap's, a brazier row's, or fire jets' timing (D-113, D-123, D-133). */
+const timingOf = (trap: { fire?: boolean; jet?: boolean }) =>
+  trap.jet ? JETS : trap.fire ? BRAZIERS : ARROWS;
 
 /**
  * Arrow traps of fighting rooms (D-113): volley k fires at
@@ -274,10 +289,11 @@ export function arrowVolleys(
     const trap = room.arrows;
     if (!trap || p.status !== "active") return p;
     const t = timingOf(trap);
-    // Braziers (D-123) take turns: `gap` is which half fires (0 even, 1
-    // odd), switching every time. Arrow traps leave a random gap.
+    // Braziers (D-123) and fire jets (D-133) take turns: `gap` is which
+    // half fires (0 even, 1 odd), switching every time. Arrow traps leave
+    // a random gap.
     const pickGap = () =>
-      trap.fire
+      trap.fire || trap.jet
         ? p.gap < 0
           ? 0
           : 1 - p.gap
@@ -292,6 +308,7 @@ export function arrowVolleys(
         direction: trap.direction,
         damage: trap.damage,
         ...(trap.fire ? { fire: true } : {}),
+        ...(trap.jet ? { jet: true, room: room.bounds } : {}),
       });
     });
     return { ...p, volleys: p.volleys + 1, gap: pickGap() };
@@ -301,11 +318,13 @@ export function arrowVolleys(
 
 /** Whether slit `k` fires in a volley whose gap is `gap` (D-113, D-123). */
 export function firesThisVolley(
-  trap: { fire?: boolean },
+  trap: { fire?: boolean; jet?: boolean },
   gap: number,
   k: number,
 ): boolean {
-  return trap.fire ? k % 2 === gap : k < gap || k >= gap + ARROWS.gap;
+  return trap.fire || trap.jet
+    ? k % 2 === gap
+    : k < gap || k >= gap + ARROWS.gap;
 }
 
 /** A trap about to fire: its room, the gap's first slit, and 0 → 1 through the glow. */

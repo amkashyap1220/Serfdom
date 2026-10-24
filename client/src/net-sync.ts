@@ -280,6 +280,10 @@ export class NetSync {
         ...z,
         remaining: Math.max(0, z.remaining - age),
       })),
+      beams: latest.snapshot.beams.map((b) => ({
+        ...b,
+        remaining: Math.max(0, b.remaining - age),
+      })),
     };
   }
 

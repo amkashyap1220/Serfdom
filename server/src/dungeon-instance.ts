@@ -5,6 +5,7 @@ import {
   arrowVolleys,
   dropBoulders,
   fireArrows,
+  fireJets,
   burstRunes,
   runeBursts,
   runeWarnings,
@@ -343,7 +344,17 @@ export class DungeonInstance {
     // Arrow traps in fighting rooms (D-113); arrows fly the room across.
     const volley = arrowVolleys(this.rooms, this.layout, this.rockRandom);
     this.rooms = volley.progress;
-    this.sim = fireArrows(this.sim, volley.shots, ARROW_RANGE);
+    this.sim = fireArrows(
+      this.sim,
+      volley.shots.filter((s) => !s.jet),
+      ARROW_RANGE,
+    );
+    // Fire jets (D-133): beams across the room, stopped by walls and obstacles.
+    this.sim = fireJets(
+      this.sim,
+      volley.shots.filter((s) => s.jet),
+      walls,
+    );
     // Cursed runes burst column by column (D-123).
     const runes = runeBursts(this.rooms, this.layout);
     this.rooms = runes.progress;
@@ -465,15 +476,25 @@ export class DungeonInstance {
           landsIn: h.landsIn,
           kind: h.rune
             ? ("rune" as const)
-            : h.fire
-              ? ("bomb" as const)
-              : ("boulder" as const),
+            : h.hazard === "slag"
+              ? ("slag" as const)
+              : h.fire
+                ? ("bomb" as const)
+                : ("boulder" as const),
         })),
       fires: this.sim.fires.map((f) => ({
         x: roundCoord(f.position.x),
         y: roundCoord(f.position.y),
         radius: f.radius,
         remaining: roundCoord(f.remaining),
+      })),
+      beams: (this.sim.beams ?? []).map((b) => ({
+        x1: roundCoord(b.from.x),
+        y1: roundCoord(b.from.y),
+        x2: roundCoord(b.to.x),
+        y2: roundCoord(b.to.y),
+        width: b.width,
+        remaining: roundCoord(b.remaining),
       })),
       traps: trapWarnings(this.rooms, this.layout),
       runes: runeWarnings(this.rooms, this.layout),

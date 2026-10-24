@@ -2,6 +2,7 @@ import type { RoomPiece } from "./dungeon-gen.ts";
 import type { DungeonLayout, EnemySpawnDef } from "./dungeon-layout.ts";
 import {
   buildFromRecipe,
+  thinPiece,
   type DungeonRecipe,
   type RecipePiece,
   type RoomBand,
@@ -16,8 +17,8 @@ import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
  * opened by completing the Warrens (D-107). Forge imps (the skulker's
  * flanking) and ember casters (the bomber's lob) among lava channels that
  * burn players and that enemies walk round; fire elementals, magma golems,
- * and bellows-keepers (13b, D-132). 13c adds fire jets and slag spills; 13d
- * the Forgemaster. Until then the Lich stands in as the boss.
+ * and bellows-keepers (13b, D-132); fire jets and slag spills (13c, D-133).
+ * 13d adds the Forgemaster; until then the Lich stands in as the boss.
  */
 
 /** Spawn boxes keep this far clear of obstacles and lava. */
@@ -164,7 +165,7 @@ const room = (
   height: number,
   band: RoomBand,
   [imps, casters]: [number, number],
-  traps: Pick<RoomPiece, "obstacles" | "lava"> = {},
+  traps: Pick<RoomPiece, "obstacles" | "lava" | "arrows" | "rockfall"> = {},
   newcomers: Newcomers = {},
 ): RecipePiece => {
   const blocked = [...(traps.obstacles ?? []), ...(traps.lava ?? [])];
@@ -190,8 +191,34 @@ const MEDIUM: [number, number] = [12, 7];
 /** Heavy rooms: 17 imps and 9 casters (7,620 HP). */
 const HEAVY: [number, number] = [17, 9];
 
+/**
+ * Fire-jet nozzles (D-133): `count` along the north wall, 128 px apart from
+ * x = `first`, firing south across the room.
+ */
+const jets = (
+  first: number,
+  count: number,
+): NonNullable<RoomPiece["arrows"]> => ({
+  slits: Array.from({ length: count }, (_, i) => ({
+    x: first + 128 * i,
+    y: 10,
+  })),
+  direction: { x: 0, y: 1 },
+  jet: true,
+});
+
+/** Rooms with fire jets or slag spills: 20% fewer imps and casters, imps first (D-133). */
+export const FORGE_TRAP_ROOMS: ReadonlySet<string> = new Set([
+  "bellows",
+  "orestore",
+  "anvils",
+  "chains",
+  "slagpit",
+  "furnace",
+]);
+
 /** Forge rooms: entrance on the west, positions relative to the floor. HP is solo. */
-export const FORGE_PIECES: readonly RecipePiece[] = [
+const ROOMS: readonly RecipePiece[] = [
   room(
     "ashroom",
     "Ash antechamber",
@@ -216,6 +243,8 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
         { x: 280, y: 96, width: 64, height: 48 },
         { x: 280, y: 336, width: 64, height: 48 },
       ],
+      // The second jet's beam stops at the first bellows block.
+      arrows: jets(184, 4),
     },
     { bellows: 1 },
   ),
@@ -225,6 +254,7 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
       { x: 240, y: 392, width: 48, height: 48 },
       { x: 384, y: 256, width: 48, height: 48 },
     ],
+    rockfall: "slag",
   }),
   // A lava channel across the middle, open at both ends.
   room(
@@ -253,6 +283,7 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
         { x: 240, y: 380, width: 64, height: 40 },
         { x: 440, y: 380, width: 64, height: 40 },
       ],
+      rockfall: "slag",
     },
     { golem: 1 },
   ),
@@ -284,6 +315,8 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
         { x, y: 128, width: 32, height: 32 },
         { x, y: 320, width: 32, height: 32 },
       ]),
+      // The second and fifth jets line up with pillars, which stop them.
+      arrows: jets(144, 5),
     },
     { elemental: 3 },
   ),
@@ -300,6 +333,7 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
         { x: 160, y: 328, width: 400, height: 64 },
         { x: 328, y: 160, width: 64, height: 400 },
       ],
+      rockfall: "slag",
     },
     { golem: 1 },
   ),
@@ -330,6 +364,8 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
     HEAVY,
     {
       obstacles: [{ x: 400, y: 240, width: 160, height: 160 }],
+      // The furnace itself stops the third and fourth jets.
+      arrows: jets(160, 5),
     },
     { golem: 2, bellows: 1 },
   ),
@@ -354,6 +390,12 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
   ),
 ];
 
+export const FORGE_PIECES: readonly RecipePiece[] = ROOMS.map((entry) =>
+  FORGE_TRAP_ROOMS.has(entry.piece.key)
+    ? thinPiece(entry, 0.2, ["imp", "caster"])
+    : entry,
+);
+
 /** The forge's boss room. Until the Forgemaster (13d) the Lich stands in. */
 export const FORGE_HEART: RoomPiece = {
   ...CRYPT_SANCTUM,
@@ -369,6 +411,7 @@ export const FORGE_RECIPE: DungeonRecipe = {
   mainPath: ["light", "medium", "medium", "medium", "heavy", "heavy", "heavy"],
   // D-130: 52,000–62,000 with the Forgemaster (14,000); 3,000 less while
   // the Lich (11,000) stands in. About 7.5 minutes for a level-15 serf.
+  // Main paths: 51,030–54,170 with the Lich (D-133).
   requiredHp: { min: 49_000, max: 59_000 },
   sideRooms: WARRENS_RULES.sideRooms,
   sideBands: WARRENS_RULES.sideBands,

@@ -59,7 +59,7 @@ describe("the Ember Forge (D-130)", () => {
     expect(POTION_CHANCE["ember-forge"]).toBe(0.4);
   });
 
-  it("11 rooms, with 13b's newcomers swapped in as D-132 places them", () => {
+  it("11 rooms: 13b's newcomers (D-132), and 20% fewer imps and casters in 13c's trap rooms (D-133)", () => {
     const count = (key: string) => {
       const n: Record<string, number> = {};
       const piece = FORGE_PIECES.find((p) => p.piece.key === key)!.piece;
@@ -74,19 +74,19 @@ describe("the Ember Forge (D-130)", () => {
       caster: 4,
     });
     expect(count("bellows")).toEqual({
-      hp: 3690,
-      imp: 8,
+      hp: 3090,
+      imp: 6,
       bellows: 1,
       caster: 3,
     });
-    expect(count("orestore")).toEqual({ hp: 3520, imp: 8, caster: 4 });
+    expect(count("orestore")).toEqual({ hp: 2920, imp: 6, caster: 4 });
     expect(count("smelter")).toEqual({
       hp: 5360,
       elemental: 2,
       imp: 10,
       caster: 7,
     });
-    expect(count("anvils")).toEqual({ hp: 5960, golem: 1, imp: 8, caster: 7 });
+    expect(count("anvils")).toEqual({ hp: 5060, golem: 1, imp: 5, caster: 7 });
     expect(count("quench")).toEqual({
       hp: 5730,
       imp: 12,
@@ -94,17 +94,12 @@ describe("the Ember Forge (D-130)", () => {
       caster: 6,
     });
     expect(count("chains")).toEqual({
-      hp: 5260,
+      hp: 4360,
       elemental: 3,
-      imp: 9,
+      imp: 6,
       caster: 7,
     });
-    expect(count("slagpit")).toEqual({
-      hp: 8020,
-      golem: 1,
-      imp: 13,
-      caster: 9,
-    });
+    expect(count("slagpit")).toEqual({ hp: 6820, golem: 1, imp: 9, caster: 9 });
     expect(count("crucible")).toEqual({
       hp: 7820,
       golem: 1,
@@ -113,9 +108,9 @@ describe("the Ember Forge (D-130)", () => {
       caster: 9,
     });
     expect(count("furnace")).toEqual({
-      hp: 8590,
+      hp: 7690,
       golem: 2,
-      imp: 9,
+      imp: 6,
       bellows: 1,
       caster: 8,
     });
@@ -128,7 +123,7 @@ describe("the Ember Forge (D-130)", () => {
     });
   });
 
-  it("main paths come to 54,700–56,540 with the stand-in Lich, inside the band", () => {
+  it("main paths come to 51,030–54,170 with the stand-in Lich, inside the band (D-133)", () => {
     const hp = (band: string) =>
       FORGE_PIECES.filter((p) => p.band === band)
         .map((p) => pieceHp(p.piece))
@@ -141,7 +136,7 @@ describe("the Ember Forge (D-130)", () => {
       light[0]! + sum(medium.slice(0, 3)) + sum(heavy.slice(0, 3)) + boss;
     const most =
       light.at(-1)! + sum(medium.slice(-3)) + sum(heavy.slice(-3)) + boss;
-    expect([least, most]).toEqual([54_700, 56_540]);
+    expect([least, most]).toEqual([51_030, 54_170]);
     expect(least).toBeGreaterThanOrEqual(FORGE_RECIPE.requiredHp.min);
     expect(most).toBeLessThanOrEqual(FORGE_RECIPE.requiredHp.max);
     // With the Forgemaster (14,000) instead, inside D-130's 52,000–62,000.

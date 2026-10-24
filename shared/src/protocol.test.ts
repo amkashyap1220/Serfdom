@@ -525,6 +525,12 @@ describe("menu, queue, and run messages (v4)", () => {
     expect(
       server({ ...ended, result: "died", stats, killedBy: "quicksand" }).ok,
     ).toBe(false);
+    // v35: fire jets and slag spills (D-133).
+    for (const killedBy of ["jets", "slag"]) {
+      expect(server({ ...ended, result: "died", stats, killedBy }).ok).toBe(
+        true,
+      );
+    }
     // v21: the layout seed, an unsigned 32-bit whole number (D-104).
     expect(server({ ...started, seed: 4294967295 }).ok).toBe(true);
     for (const seed of [-1, 1.5, 4294967296, "7", null, undefined]) {
@@ -604,8 +610,12 @@ describe("snapshot messages", () => {
       enemies: [enemy],
       projectiles: [shot],
       closedDoors: ["tunnel-camp"],
-      hazards: [{ x: 3700, y: 980, radius: 32, landsIn: 0.4, kind: "boulder" }],
+      hazards: [
+        { x: 3700, y: 980, radius: 32, landsIn: 0.4, kind: "boulder" },
+        { x: 3720, y: 960, radius: 28, landsIn: 0.9, kind: "slag" },
+      ],
       fires: [],
+      beams: [{ x1: 400, y1: 10, x2: 400, y2: 300, width: 32, remaining: 0.3 }],
       traps: [],
       runes: [],
       portalOpen: false,
@@ -645,6 +655,7 @@ describe("snapshot messages", () => {
           closedDoors: [],
           hazards: [],
           fires: [],
+          beams: [],
           traps: [],
           runes: [],
           portalOpen: true,
@@ -679,6 +690,7 @@ describe("snapshot messages", () => {
       projectiles: [],
       hazards: [],
       fires: [],
+      beams: [],
       traps: [],
       runes: [],
       portalOpen: false,
@@ -706,6 +718,7 @@ describe("snapshot messages", () => {
       closedDoors: [],
       hazards: [],
       fires: [],
+      beams: [],
       traps: [],
       runes: [],
       portalOpen: false,
@@ -978,6 +991,7 @@ describe("ability drawing in snapshots (v18, D-097)", () => {
     closedDoors: [],
     hazards: [],
     fires: [],
+    beams: [],
     traps: [],
     runes: [],
     portalOpen: false,

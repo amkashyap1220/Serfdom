@@ -86,6 +86,29 @@ export function sludgePools(layout: DungeonLayout): Rect[] {
 /** Obstacles keep at least this far from a room's walls, so no doorway is blocked (D-112). */
 export const OBSTACLE_MARGIN = 64;
 
+/**
+ * Fire jets (D-133): nozzles along one wall take turns like spirit braziers
+ * (alternate nozzles, a new group every `everySeconds`). A group glows for
+ * `warnSeconds`, then each nozzle sends a `width`-wide beam of fire
+ * straight across its room for `beamSeconds`, stopped by the first wall or
+ * obstacle. A beam burns each player once.
+ */
+export const JETS = {
+  everySeconds: 2,
+  warnSeconds: 0.8,
+  beamSeconds: 0.5,
+  width: 32,
+} as const;
+
+/**
+ * Slag spills (D-133): a rockfall room's boulders, one every
+ * `everySeconds`, each leaving burning floor where it lands.
+ */
+export const SLAG = {
+  everySeconds: 1.6,
+  fire: { seconds: 3, tickSeconds: 0.5, damage: 3 },
+} as const;
+
 export const ROCKFALL = {
   /** D-111: was 0.7 s. */
   everySeconds: 1.05,
@@ -114,8 +137,11 @@ export interface RoomDef {
   required: boolean;
   /** Locks you in while it fights: all its doors shut until cleared (D-114). */
   gated?: boolean;
-  /** A rockfall room and the damage of one boulder (D-110). */
-  rockfall?: { damage: number };
+  /**
+   * A rockfall room and the damage of one boulder (D-110); `slag`: slag
+   * spills instead, slower and leaving fire (D-133).
+   */
+  rockfall?: { damage: number; slag?: boolean };
   /**
    * Obstacles on its floor (D-112): solid like walls (they are also in the
    * layout's walls), blocking movement and every shot.
@@ -136,6 +162,8 @@ export interface RoomDef {
     damage: number;
     /** Spirit braziers (D-123): slow fireballs, alternate braziers in turn. */
     fire?: boolean;
+    /** Fire jets (D-133): beams across the room, alternate nozzles in turn. */
+    jet?: boolean;
   };
   /** Cursed runes (D-123): columns glow and burst in a sweep while it fights. */
   runes?: readonly RuneSpot[];
@@ -353,7 +381,8 @@ export function validateLayout(layout: DungeonLayout): string[] {
       if (Math.abs(Math.hypot(direction.x, direction.y) - 1) > 1e-9) {
         problems.push(`${room.id}: arrow direction is not a unit vector`);
       }
-      if (room.arrows.fire ? slits.length < 2 : slits.length <= ARROWS.gap) {
+      const inTurns = room.arrows.fire || room.arrows.jet;
+      if (inTurns ? slits.length < 2 : slits.length <= ARROWS.gap) {
         problems.push(
           `${room.id}: an arrow trap needs more slits than its gap`,
         );

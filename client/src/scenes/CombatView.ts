@@ -7,6 +7,8 @@ import {
   type EnemyKind,
   KNIGHT,
   LICH,
+  JETS,
+  beamBox,
 } from "@serfdom/shared";
 import type { CombatViewModel, EnemyView } from "../combat-view-model";
 import { lichPose } from "../lich-pose";
@@ -101,6 +103,11 @@ const COLORS = {
   stoke: 0xff9a3c,
   chant: 0xe6cf7a,
   boulder: 0x8c7f6e,
+  slag: 0xff8a2a,
+  slagEdge: 0xa83a0a,
+  nozzle: 0x2c2a2e,
+  beam: 0xff7a1a,
+  beamCore: 0xfff0a0,
   boulderEdge: 0x4a4238,
 } as const;
 
@@ -281,10 +288,12 @@ export class CombatView {
         rocks.fillCircle(hz.x + 4, hz.y - lift * 0.6 - 7, 2);
         continue;
       }
+      // A slag spill (D-133) is a molten boulder.
+      const slag = hz.kind === "slag";
       const size = hz.radius * 0.6;
-      rocks.fillStyle(COLORS.boulder, 1);
+      rocks.fillStyle(slag ? COLORS.slag : COLORS.boulder, 1);
       rocks.fillCircle(hz.x, hz.y - lift, size);
-      rocks.lineStyle(px(2), COLORS.boulderEdge, 1);
+      rocks.lineStyle(px(2), slag ? COLORS.slagEdge : COLORS.boulderEdge, 1);
       rocks.strokeCircle(hz.x, hz.y - lift, size);
     }
     // Burning floor (D-115): flickering, fading as it goes out.
@@ -295,6 +304,26 @@ export class CombatView {
       h.fillCircle(f.x, f.y, f.radius);
       h.fillStyle(COLORS.fireCore, (0.2 + 0.3 * life) * flicker);
       h.fillCircle(f.x, f.y, f.radius * 0.5);
+    }
+
+    // Fire jets' beams (D-133): a strip of fire with a bright core,
+    // fading as it goes out.
+    for (const b of view.beams) {
+      const strip = beamBox({
+        from: { x: b.x1, y: b.y1 },
+        to: { x: b.x2, y: b.y2 },
+        width: b.width,
+      });
+      const life = Math.min(1, b.remaining / JETS.beamSeconds);
+      h.fillStyle(COLORS.beam, 0.45 + 0.4 * life);
+      h.fillRect(strip.x, strip.y, strip.width, strip.height);
+      const core = beamBox({
+        from: { x: b.x1, y: b.y1 },
+        to: { x: b.x2, y: b.y2 },
+        width: b.width / 3,
+      });
+      h.fillStyle(COLORS.beamCore, 0.5 + 0.4 * life);
+      h.fillRect(core.x, core.y, core.width, core.height);
     }
 
     const bl = this.blasts.clear();
@@ -465,6 +494,27 @@ export class CombatView {
     // Arrow slits (D-113): dark marks, glowing orange before a volley.
     // Spirit braziers (D-123): round, glowing blue-white before they fire.
     for (const s of view.slits) {
+      // Fire jets' nozzles (D-133): dark iron, glowing orange before they fire.
+      if (s.jet) {
+        const across = { x: -s.dy, y: s.dx };
+        g.fillStyle(COLORS.nozzle, 1);
+        g.fillRect(
+          Math.round(s.x - 10 * Math.abs(across.x) - 4 * Math.abs(s.dx)),
+          Math.round(s.y - 10 * Math.abs(across.y) - 4 * Math.abs(s.dy)),
+          Math.round(20 * Math.abs(across.x) + 8 * Math.abs(s.dx)),
+          Math.round(20 * Math.abs(across.y) + 8 * Math.abs(s.dy)),
+        );
+        if (s.glow > 0) {
+          g.fillStyle(COLORS.slitGlow, s.glow);
+          g.fillRect(
+            Math.round(s.x - 7 * Math.abs(across.x) - 3 * Math.abs(s.dx)),
+            Math.round(s.y - 7 * Math.abs(across.y) - 3 * Math.abs(s.dy)),
+            Math.round(14 * Math.abs(across.x) + 6 * Math.abs(s.dx)),
+            Math.round(14 * Math.abs(across.y) + 6 * Math.abs(s.dy)),
+          );
+        }
+        continue;
+      }
       if (s.fire) {
         g.fillStyle(
           s.glow > 0 ? COLORS.brazierGlow : COLORS.brazier,
