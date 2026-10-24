@@ -1,5 +1,25 @@
-import { BOSS_KINDS, FORGEMASTER, SHAMAN, SKELETON } from "./enemy-config.ts";
+import {
+  BOSS_KINDS,
+  EELPRIEST,
+  FORGEMASTER,
+  SHAMAN,
+  SKELETON,
+} from "./enemy-config.ts";
 import { burningStrips, waveHits } from "./forge-boss.ts";
+import {
+  SURGE,
+  TIDES,
+  WHIRLPOOL,
+  surgeDone,
+  surgeHits,
+  surgeStart,
+  tideAt,
+  waterDrift,
+  whirlpoolActive,
+  type Pull,
+  type SurgeShape,
+  type WhirlpoolShape,
+} from "./temple-water.ts";
 import type { Waypoints } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
 import {
@@ -101,6 +121,8 @@ export interface PlayerState {
   buffs: PlayerBuffs;
   /** World px per second over its last input; leading slingers aim with it (D-109). */
   velocity: Vec2;
+  /** An eel-priest's pull on them (D-135), and which eel-priest: its death before the pull breaks it. */
+  pull?: Pull & { by: number };
 }
 
 /** A timed bonus: `bonus` is a share (0.3 = +30%), `remaining` seconds. */
@@ -168,6 +190,30 @@ export interface SimState {
   waves?: readonly Wave[];
   /** The Forgemaster's floor plates, glowing or bursting (D-134). */
   plates?: readonly PlateBurst[];
+  /** Seconds since the run began: tides, pulls, and whirlpools keep to it (D-135). */
+  clock?: number;
+  /** Tide pools (D-135): deep on the tide cycle, slowing players. */
+  tides?: readonly Rect[];
+  /** The Tide Priest's whirlpools (D-135). */
+  whirlpools?: readonly Whirlpool[];
+  /** The Tide Priest's tidal surges (D-135). */
+  surges?: readonly Surge[];
+}
+
+/** A whirlpool (D-135): drags players in while active; its core hurts every tick. */
+export interface Whirlpool extends WhirlpoolShape {
+  /** Run clock of its core's next hurt. */
+  nextTick: number;
+  damage: number;
+  ownerId: number;
+}
+
+/** A tidal surge (D-135): waits out `startsIn`, then sweeps; hits each player once. */
+export interface Surge extends SurgeShape {
+  startsIn: number;
+  damage: number;
+  ownerId: number;
+  hit: readonly number[];
 }
 
 /** A shockwave ring (D-134): grows once `startsIn` runs out; hits each player once. */
@@ -778,18 +824,54 @@ export function applyPlayerInput(
   if (aim && !(Math.abs(Math.hypot(aim.x, aim.y) - 1) < 1e-6)) {
     throw new RangeError(`aim must be a unit vector, got (${aim.x}, ${aim.y})`);
   }
-  // Sludge slows the player wading in it (D-113); prediction runs this too.
+  // Sludge slows the player wading in it (D-113), and so does deep tide
+  // water (D-135); prediction runs this too.
+  const clock = state.clock ?? 0;
   const inSludge = (state.sludge ?? []).some((r) =>
     insideRect(r, player.position),
   );
-  const position = stepMovement(
+  const inDeep =
+    (state.tides ?? []).length > 0 &&
+    tideAt(clock) === "deep" &&
+    (state.tides ?? []).some((r) => insideRect(r, player.position));
+  const slow = Math.min(
+    inSludge ? SLUDGE.speedFactor : 1,
+    inDeep ? TIDES.speedFactor : 1,
+  );
+  const walked = stepMovement(
     player.position,
     input.move,
     PLAYER_BODY,
     walls,
     dtSeconds,
-    player.combat.moveSpeed * (inSludge ? SLUDGE.speedFactor : 1),
+    player.combat.moveSpeed * slow,
   );
+  // Water drags them on top (D-135): an eel-priest's pull, whirlpools.
+  const drift = waterDrift(
+    walked,
+    clock,
+    player.pull,
+    state.whirlpools ?? [],
+    dtSeconds,
+  );
+  const driftSpeed = Math.hypot(drift.x, drift.y);
+  const position =
+    driftSpeed > 1e-9
+      ? stepMovement(
+          walked,
+          { x: drift.x / driftSpeed, y: drift.y / driftSpeed },
+          PLAYER_BODY,
+          walls,
+          dtSeconds,
+          driftSpeed,
+        )
+      : walked;
+  const pulling = player.pull && clock >= player.pull.from - 1e-9;
+  const pullLeft = player.pull
+    ? pulling
+      ? player.pull.left - dtSeconds
+      : player.pull.left
+    : 0;
   // A vanished player's automatic shots hold fire, so Vanish lasts in the
   // auto modes; a click still shoots and ends it (D-101).
   const holdFire = isVanished(player) && input.fire.auto === true;
@@ -822,7 +904,7 @@ export function applyPlayerInput(
   }
 
   const updated: PlayerState = {
-    ...player,
+    ...withoutPull(player),
     position,
     velocity: {
       x: (position.x - player.position.x) / dtSeconds,
@@ -831,6 +913,10 @@ export function applyPlayerInput(
     fireCooldown: cooldown.remaining,
     mp,
     abilityCooldown,
+    // The pull counts down only while it pulls; spent, it is gone (D-135).
+    ...(player.pull && pullLeft > 1e-9
+      ? { pull: { ...player.pull, left: pullLeft } }
+      : {}),
   };
   // Shooting or casting anything (but Vanish itself) ends Vanish (D-100).
   if (
@@ -962,6 +1048,11 @@ export function stepWorld(
   /** The Forgemaster's new shockwaves and plates this tick (D-134). */
   const newWaves: Wave[] = [];
   const newPlates: PlateBurst[] = [];
+  /** The Tide Priest's new whirlpools and surges, and eel-priests' pulls, this tick (D-135). */
+  const clock = state.clock ?? 0;
+  const newWhirlpools: Whirlpool[] = [];
+  const newSurges: Surge[] = [];
+  const pulls: { playerId: number; pull: Pull & { by: number } }[] = [];
   const context = {
     allies: () => allies,
     aliveSummons: (id: number) =>
@@ -1016,6 +1107,44 @@ export function stepWorld(
         startsIn: action.wave.startsIn,
         ...(action.wave.area ? { area: action.wave.area } : {}),
         damage: FORGEMASTER.wave.damage,
+        ownerId: enemy.id,
+        hit: [],
+      });
+    }
+    if (action.pull) {
+      pulls.push({
+        playerId: action.pull.playerId,
+        pull: {
+          to: { ...action.pull.to },
+          from: clock + action.pull.startsIn,
+          speed: EELPRIEST.pull.speed,
+          left: EELPRIEST.pull.seconds,
+          by: enemy.id,
+        },
+      });
+    }
+    for (const at of action.whirlpools ?? []) {
+      const from = clock + WHIRLPOOL.warnSeconds;
+      newWhirlpools.push({
+        at: { ...at },
+        radius: WHIRLPOOL.radius,
+        from,
+        until: from + WHIRLPOOL.seconds,
+        nextTick: from,
+        damage: WHIRLPOOL.damage,
+        ownerId: enemy.id,
+      });
+    }
+    if (action.surge) {
+      const s = action.surge;
+      newSurges.push({
+        area: s.area,
+        axis: s.axis,
+        dir: s.dir,
+        pos: surgeStart(s.area, s.axis, s.dir),
+        gaps: s.gaps,
+        startsIn: SURGE.warnSeconds,
+        damage: SURGE.damage,
         ownerId: enemy.id,
         hit: [],
       });
@@ -1223,6 +1352,54 @@ export function stepWorld(
     if (radius <= FORGEMASTER.wave.maxRadius) {
       waves.push({ ...w, radius, startsIn, hit });
     }
+  }
+  // Eel-priests' tethers take hold (D-135); a pull whose eel-priest is
+  // dead before it starts is broken.
+  const living = new Set(enemies.filter(isAlive).map((e) => e.id));
+  players = players.map((pl) => {
+    const fresh = pulls.find((p) => p.playerId === pl.id)?.pull;
+    if (fresh && isPlayerAlive(pl)) return { ...pl, pull: fresh };
+    if (pl.pull && !living.has(pl.pull.by) && clock < pl.pull.from - 1e-9) {
+      return withoutPull(pl);
+    }
+    return pl;
+  });
+  // Whirlpools' cores hurt each tick while they turn (D-135).
+  const whirlpools: Whirlpool[] = [];
+  for (const w of [...(state.whirlpools ?? []), ...newWhirlpools]) {
+    let nextTick = w.nextTick;
+    if (whirlpoolActive(w, clock) && clock >= nextTick - 1e-9) {
+      nextTick += WHIRLPOOL.tickSeconds;
+      players = players.map((pl) =>
+        isPlayerAlive(pl) &&
+        circleHitsPlayer(w.at, WHIRLPOOL.coreRadius, pl.position)
+          ? damagePlayer(pl, w.ownerId, w.damage, pl.position, events)
+          : pl,
+      );
+    }
+    if (clock + dtSeconds < w.until - 1e-9) whirlpools.push({ ...w, nextTick });
+  }
+  // Tidal surges sweep their arena, hitting each player outside the gaps once.
+  const surges: Surge[] = [];
+  for (const s of [...(state.surges ?? []), ...newSurges]) {
+    if (s.startsIn > 1e-9) {
+      surges.push({ ...s, startsIn: Math.max(0, s.startsIn - dtSeconds) });
+      continue;
+    }
+    const moved = { ...s, pos: s.pos + s.dir * SURGE.speed * dtSeconds };
+    const hit = [...s.hit];
+    players = players.map((pl) => {
+      if (
+        !isPlayerAlive(pl) ||
+        hit.includes(pl.id) ||
+        !surgeHits(moved, pl.position)
+      ) {
+        return pl;
+      }
+      hit.push(pl.id);
+      return damagePlayer(pl, s.ownerId, s.damage, pl.position, events);
+    });
+    if (!surgeDone(moved)) surges.push({ ...moved, hit });
   }
   // Floor plates glow, then burst on every player touching the burning floor.
   const plates: PlateBurst[] = [];
@@ -1487,6 +1664,9 @@ export function stepWorld(
       beams,
       waves,
       plates,
+      clock: clock + dtSeconds,
+      whirlpools,
+      surges,
       hazards,
       fires: burning,
       blasts: [],
@@ -1833,6 +2013,13 @@ function insideRect(r: Rect, p: Vec2): boolean {
 }
 
 /** Whether two rectangles overlap (edges touching do not count). */
+/** The player with no pull on them (D-135). */
+function withoutPull(player: PlayerState): PlayerState {
+  const copy = { ...player };
+  delete copy.pull;
+  return copy;
+}
+
 /** Is `p` inside `r` (edges included)? */
 function inside(r: Rect, p: Vec2): boolean {
   return (

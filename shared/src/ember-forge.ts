@@ -8,6 +8,7 @@ import {
   type RoomBand,
 } from "./dungeon-recipe.ts";
 import { ENEMY_STATS } from "./enemy-config.ts";
+import { clearAt, fillRoom } from "./room-fill.ts";
 import type { Rect } from "./geometry.ts";
 import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
 
@@ -20,45 +21,10 @@ import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
  * The Forgemaster (13d, D-134) waits in the Forge heart.
  */
 
-/** Spawn boxes keep this far clear of obstacles and lava. */
-const CLEAR = 8;
-
-/** Is a spawn box of `size` at (x, y) clear of every blocked rect? */
-const clearAt = (
-  x: number,
-  y: number,
-  size: number,
-  blocked: readonly Rect[],
-) => {
-  const half = size / 2 + CLEAR;
-  return blocked.every(
-    (r) =>
-      !overlaps(r, {
-        x: x - half,
-        y: y - half,
-        width: 2 * half,
-        height: 2 * half,
-      }),
-  );
-};
-
-const overlaps = (a: Rect, b: Rect) =>
-  a.x < b.x + b.width &&
-  b.x < a.x + a.width &&
-  a.y < b.y + b.height &&
-  b.y < a.y + a.height;
-
-/** Every grid point of a range, a step apart. */
-const steps = (from: number, to: number, step: number) =>
-  Array.from(
-    { length: Math.floor((to - from) / step) + 1 },
-    (_, i) => from + i * step,
-  );
-
 /**
- * \`imps\` imps spread over the front and middle of the room and \`casters\`
+ * `imps` imps spread over the front and middle of the room and `casters`
  * ember casters along the back, every spawn clear of the room's obstacles
- * and lava. Deterministic; throws if the room has no room for them.
+ * and lava (the shared placement, `fillRoom`).
  */
 function fill(
   width: number,
@@ -67,35 +33,13 @@ function fill(
   casters: number,
   blocked: readonly Rect[],
 ): EnemySpawnDef[] {
-  const free = (x: number, y: number) =>
-    clearAt(x, y, ENEMY_STATS.imp.size, blocked);
-  const pick = (spots: [number, number][], n: number, what: string) => {
-    if (spots.length < n) {
-      throw new Error(`no room for ${n} ${what} in a ${width}×${height} room`);
-    }
-    // Evenly through the free spots, so they spread over the room.
-    return Array.from(
-      { length: n },
-      (_, k) => spots[Math.floor(((k + 0.5) * spots.length) / n)]!,
-    );
-  };
-  const ys = steps(72, height - 72, 56);
-  const front = steps(176, width - 200, 56).flatMap((x) =>
-    ys.filter((y) => free(x, y)).map((y): [number, number] => [x, y]),
+  return fillRoom(
+    width,
+    height,
+    [["imp", imps]],
+    [["caster", casters]],
+    blocked,
   );
-  const back = [width - 80, width - 140].flatMap((x) =>
-    ys.filter((y) => free(x, y)).map((y): [number, number] => [x, y]),
-  );
-  return [
-    ...pick(front, imps, "imps").map(([x, y]) => ({
-      kind: "imp" as const,
-      at: { x, y },
-    })),
-    ...pick(back, casters, "casters").map(([x, y]) => ({
-      kind: "caster" as const,
-      at: { x, y },
-    })),
-  ];
 }
 
 /** 13b's newcomers in a room (D-132). */

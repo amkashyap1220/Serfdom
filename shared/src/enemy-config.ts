@@ -28,6 +28,11 @@ export const ENEMY_KINDS = [
   "golem",
   "bellows",
   "forgemaster",
+  "acolyte",
+  "caller",
+  "spearman",
+  "eelpriest",
+  "tidepriest",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -407,7 +412,89 @@ export const BOSS_KINDS: readonly EnemyKind[] = [
   "warchief",
   "lich",
   "forgemaster",
+  "tidepriest",
 ];
+
+/** Drowned acolyte (D-135): walks at you and hits, like a grunt. */
+export const ACOLYTE = {
+  maxHp: 260,
+  size: 32,
+  speed: 80,
+  contactDamage: 12,
+  contactCooldownSeconds: 1.2,
+} as const;
+
+/** Tide caller (D-135): keeps its distance and throws pairs of water bolts, like a slinger. */
+export const CALLER = {
+  maxHp: 240,
+  size: 32,
+  speed: 55,
+  minRange: 150,
+  maxRange: 260,
+  throwRange: 380,
+  throwIntervalSeconds: 2.6,
+  rock: { damage: 11, speed: 220, size: 8, range: 420 },
+  volley: 2,
+  spreadDegrees: 12,
+} as const;
+
+/** Fishfolk spearman (D-135): a brute's charge, quicker and harder; tides do not slow it. */
+export const SPEARMAN = {
+  maxHp: 420,
+  size: 32,
+  speed: 60,
+  chargeTriggerRange: 230,
+  windupSeconds: 0.7,
+  chargeSpeed: 300,
+  chargeSeconds: 0.7,
+  recoverSeconds: 1.8,
+  chargeDamage: 14,
+  dazeSeconds: 1.2,
+} as const;
+
+/**
+ * Eel-priest (D-135): keeps its distance like a slinger (it throws
+ * nothing); every few seconds it tethers the nearest player in clear
+ * sight, and after the warning pulls them towards where it stood.
+ */
+export const EELPRIEST = {
+  maxHp: 400,
+  size: 32,
+  speed: 50,
+  minRange: 170,
+  maxRange: 280,
+  pull: {
+    intervalSeconds: 5,
+    range: 320,
+    warnSeconds: 0.8,
+    seconds: 0.45,
+    speed: 240,
+    damage: 8,
+  },
+} as const;
+
+/**
+ * The Tide Priest (D-135), the Sunken Temple's boss: tidal surges that
+ * sweep the arena with gaps, fans of water bolts; below `whirlBelow`
+ * whirlpools; below `enragedBelow` surges come faster and turn.
+ */
+export const TIDEPRIEST = {
+  maxHp: 16000,
+  size: 56,
+  speed: 25,
+  /** It stops walking this close to its target. */
+  keep: 160,
+  whirlBelow: 0.5,
+  enragedBelow: 0.25,
+  surge: { intervalSeconds: 6, enragedIntervalSeconds: 4 },
+  bolts: {
+    intervalSeconds: 2,
+    count: 3,
+    angleStepDegrees: 18,
+    bullet: { damage: 10, speed: 180, size: 10, range: 520 },
+  },
+  whirlpools: { intervalSeconds: 5, count: 2 },
+} as const;
 
 /**
  * The Forgemaster (D-134), the Ember Forge's boss. Walks after the nearest
@@ -552,6 +639,11 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   golem: GOLEM,
   bellows: BELLOWS,
   forgemaster: FORGEMASTER,
+  acolyte: ACOLYTE,
+  caller: CALLER,
+  spearman: SPEARMAN,
+  eelpriest: EELPRIEST,
+  tidepriest: TIDEPRIEST,
 };
 
 /**
@@ -586,6 +678,11 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   golem: GOLEM.contactCooldownSeconds / 2,
   bellows: BELLOWS.pulseSeconds,
   forgemaster: 1.5,
+  acolyte: ACOLYTE.contactCooldownSeconds / 2,
+  caller: CALLER.throwIntervalSeconds / 2,
+  spearman: 0,
+  eelpriest: EELPRIEST.pull.intervalSeconds / 2,
+  tidepriest: 1.5,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

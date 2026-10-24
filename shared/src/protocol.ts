@@ -68,6 +68,10 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v37 (13e): the Sunken Temple (D-135): snapshots carry the run's
+ *          `clock` (tides, pulls, and whirlpools keep to it, so prediction
+ *          matches), players their `pull`, and the Tide Priest's
+ *          `whirlpools` and `surges`.
  * v36 (13d): the Forgemaster (D-134): snapshots list its shockwaves
  *          (`waves`) and floor plates (`plates`).
  * v35 (13c): fire jets and slag spills (D-133): snapshots list fire
@@ -131,7 +135,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 36;
+export const PROTOCOL_VERSION = 37;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -257,6 +261,36 @@ export interface SnapshotPlayer {
   buffs: BuffKind[];
   /** Seconds until this player may fire again (needed to predict own shots exactly). */
   cooldown: number;
+  /** An eel-priest's pull (D-135): towards (x, y) from run clock `from`, `left` seconds of it to go; else null. */
+  pull: {
+    x: number;
+    y: number;
+    from: number;
+    speed: number;
+    left: number;
+  } | null;
+}
+
+/** A whirlpool (D-135): drags players within `radius` from `from` until `until` (run clock). */
+export interface SnapshotWhirlpool {
+  x: number;
+  y: number;
+  radius: number;
+  from: number;
+  until: number;
+}
+
+/** A tidal surge (D-135) across its arena. */
+export interface SnapshotSurge {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  axis: "x" | "y";
+  dir: 1 | -1;
+  pos: number;
+  gaps: { from: number; to: number }[];
+  startsIn: number;
 }
 
 export interface SnapshotEnemy {
@@ -526,6 +560,11 @@ export type ServerMessage =
       /** The Forgemaster's shockwaves and floor plates (D-134). */
       waves: SnapshotWave[];
       plates: SnapshotPlates[];
+      /** Seconds since the run began (D-135). */
+      clock: number;
+      /** The Tide Priest's whirlpools and surges (D-135). */
+      whirlpools: SnapshotWhirlpool[];
+      surges: SnapshotSurge[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
       /** Rune columns glowing before they burst (D-123). */
@@ -1026,6 +1065,9 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "beams",
           "waves",
           "plates",
+          "clock",
+          "whirlpools",
+          "surges",
           "traps",
           "runes",
           "portalOpen",
@@ -1068,6 +1110,11 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!waves) return fail("snapshot: bad wave entry");
       const plates = parseList(obj.plates, parseSnapshotPlates);
       if (!plates) return fail("snapshot: bad plates entry");
+      if (!isNonNegative(obj.clock)) return fail("snapshot: bad clock");
+      const whirlpools = parseList(obj.whirlpools, parseSnapshotWhirlpool);
+      if (!whirlpools) return fail("snapshot: bad whirlpool entry");
+      const surges = parseList(obj.surges, parseSnapshotSurge);
+      if (!surges) return fail("snapshot: bad surge entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -1089,6 +1136,9 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           beams,
           waves,
           plates,
+          clock: obj.clock,
+          whirlpools,
+          surges,
           traps,
           runes,
           portalOpen: obj.portalOpen,
@@ -1379,10 +1429,13 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
       "maxMp",
       "buffs",
       "cooldown",
+      "pull",
     ])
   ) {
     return null;
   }
+  const pull = v.pull === null ? null : parsePull(v.pull);
+  if (pull === undefined) return null;
   if (!isPlayerId(v.id) || !isFiniteNumber(v.x) || !isFiniteNumber(v.y)) {
     return null;
   }
@@ -1420,6 +1473,94 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
     maxMp: v.maxMp,
     buffs: v.buffs as BuffKind[],
     cooldown: v.cooldown,
+    pull,
+  };
+}
+
+/** A player's pull (D-135), or undefined if malformed. */
+function parsePull(v: unknown): SnapshotPlayer["pull"] | undefined {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "from", "speed", "left"]) ||
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isNonNegative(v.from) ||
+    !isNonNegative(v.speed) ||
+    !isNonNegative(v.left)
+  ) {
+    return undefined;
+  }
+  return { x: v.x, y: v.y, from: v.from, speed: v.speed, left: v.left };
+}
+
+function parseSnapshotWhirlpool(v: unknown): SnapshotWhirlpool | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "radius", "from", "until"]) ||
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isNonNegative(v.radius) ||
+    !isNonNegative(v.from) ||
+    !isNonNegative(v.until)
+  ) {
+    return null;
+  }
+  return { x: v.x, y: v.y, radius: v.radius, from: v.from, until: v.until };
+}
+
+function parseSnapshotSurge(v: unknown): SnapshotSurge | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, [
+      "x",
+      "y",
+      "width",
+      "height",
+      "axis",
+      "dir",
+      "pos",
+      "gaps",
+      "startsIn",
+    ])
+  ) {
+    return null;
+  }
+  if (
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isNonNegative(v.width) ||
+    !isNonNegative(v.height) ||
+    (v.axis !== "x" && v.axis !== "y") ||
+    (v.dir !== 1 && v.dir !== -1) ||
+    !isFiniteNumber(v.pos) ||
+    !isNonNegative(v.startsIn) ||
+    !Array.isArray(v.gaps) ||
+    v.gaps.length > 8
+  ) {
+    return null;
+  }
+  const gaps: { from: number; to: number }[] = [];
+  for (const g of v.gaps) {
+    if (
+      !isPlainObject(g) ||
+      !hasExactKeys(g, ["from", "to"]) ||
+      !isFiniteNumber(g.from) ||
+      !isFiniteNumber(g.to)
+    ) {
+      return null;
+    }
+    gaps.push({ from: g.from, to: g.to });
+  }
+  return {
+    x: v.x,
+    y: v.y,
+    width: v.width,
+    height: v.height,
+    axis: v.axis,
+    dir: v.dir,
+    pos: v.pos,
+    gaps,
+    startsIn: v.startsIn,
   };
 }
 

@@ -37,6 +37,11 @@ describe("32×32 serfs and enemies (D-127)", () => {
       crystal: 40,
       warlord: 56,
       warchief: 80,
+      acolyte: 32,
+      caller: 32,
+      spearman: 32,
+      eelpriest: 32,
+      tidepriest: 56,
       forgemaster: 88,
       lich: 32,
     });

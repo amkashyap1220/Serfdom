@@ -1,6 +1,7 @@
 import {
   FORGEMASTER,
   LICH,
+  TIDEPRIEST,
   WARCHIEF,
   WARLORD,
   type EnemyKind,
@@ -61,6 +62,14 @@ export function bossBar(
           : fraction < LICH.wardBelow[1]!
             ? "  — ENRAGED"
             : "",
+    };
+  }
+  if (kind === "tidepriest") {
+    return {
+      name: "The Tide Priest",
+      notches: [TIDEPRIEST.whirlBelow, TIDEPRIEST.enragedBelow],
+      angry: fraction < TIDEPRIEST.whirlBelow,
+      suffix: fraction < TIDEPRIEST.enragedBelow ? "  — ENRAGED" : "",
     };
   }
   if (kind === "forgemaster") {

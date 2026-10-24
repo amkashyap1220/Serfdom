@@ -224,6 +224,15 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
+  // D-135: T5 30%, T6 45%, T7 25% (the first T7).
+  "sunken-temple": {
+    tiers: [
+      [5, 30],
+      [6, 45],
+      [7, 25],
+    ],
+    slots: SLOT_WEIGHTS,
+  },
   training: {
     tiers: [
       [0, 50],

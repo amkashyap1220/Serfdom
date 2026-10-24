@@ -11,6 +11,7 @@ import {
   type SimState,
   type SnapshotPlayer,
   type Vec2,
+  type WhirlpoolShape,
 } from "@serfdom/shared";
 
 export interface PendingInput {
@@ -50,6 +51,20 @@ export class PlayerPredictor {
   private readonly combat: PlayerCombat;
   /** Distance the last reconciliation moved the player (0 = prediction was exact). */
   lastCorrection = 0;
+  /**
+   * The run clock the server will apply the next input at (D-135): the
+   * latest snapshot's clock plus a tick for each input still pending.
+   */
+  private clock = 0;
+  /** The Tide Priest's whirlpools, as the latest snapshot has them. */
+  private whirlpools: readonly WhirlpoolShape[] = [];
+
+  /** The latest snapshot's clock and whirlpools; call before `reconcile` or `reset`. */
+  setWater(clock: number, whirlpools: readonly WhirlpoolShape[]): void {
+    this.snapshotClock = clock;
+    this.whirlpools = whirlpools;
+  }
+  private snapshotClock = 0;
 
   constructor(
     id: number,
@@ -58,6 +73,8 @@ export class PlayerPredictor {
     combat: PlayerCombat = combatFor(SERF_BASE),
     /** Sludge pools (D-113): the same slowdown the server applies. */
     private readonly sludge: readonly Rect[] = [],
+    /** Tide pools (D-135): deep on the run's tide cycle. */
+    private readonly tides: readonly Rect[] = [],
   ) {
     this.combat = combat;
     this.me = {
@@ -92,7 +109,8 @@ export class PlayerPredictor {
   /** Applies one tick locally; returns the input to send and the shot it fired, if any. */
   predict(input: PlayerInput): { seq: number; shot: Projectile | null } {
     const seq = this.nextSeq++;
-    const { player, shot } = this.step(this.me, input);
+    const { player, shot } = this.step(this.me, input, this.clock);
+    this.clock += TICK_SECONDS;
     this.me = player;
     this.pending.push({ seq, input });
     if (this.pending.length > MAX_PENDING) this.pending.shift();
@@ -103,8 +121,14 @@ export class PlayerPredictor {
   reconcile(server: SnapshotPlayer): void {
     this.pending = this.pending.filter((p) => p.seq > server.ack);
     let replayed = fromSnapshot(server, this.combat);
-    for (const p of this.pending)
-      replayed = this.step(replayed, p.input).player;
+    // The input after #ack is applied at the snapshot's clock, the next a
+    // tick later, and so on.
+    let clock = this.snapshotClock;
+    for (const p of this.pending) {
+      replayed = this.step(replayed, p.input, clock).player;
+      clock += TICK_SECONDS;
+    }
+    this.clock = clock;
     this.lastCorrection = Math.hypot(
       replayed.position.x - this.me.position.x,
       replayed.position.y - this.me.position.y,
@@ -117,11 +141,13 @@ export class PlayerPredictor {
     this.me = fromSnapshot(server, this.combat);
     this.pending = [];
     this.lastCorrection = 0;
+    this.clock = this.snapshotClock;
   }
 
   private step(
     from: PlayerState,
     input: PlayerInput,
+    clock: number,
   ): { player: PlayerState; shot: Projectile | null } {
     const solo: SimState = {
       players: [from],
@@ -134,6 +160,14 @@ export class PlayerPredictor {
       zones: [],
       sludge: this.sludge,
       fires: [],
+      clock,
+      tides: this.tides,
+      whirlpools: this.whirlpools.map((w) => ({
+        ...w,
+        nextTick: w.from,
+        damage: 0,
+        ownerId: 0,
+      })),
     };
     const r = applyPlayerInput(solo, from.id, input, this.walls, TICK_SECONDS);
     return {
@@ -157,5 +191,17 @@ function fromSnapshot(p: SnapshotPlayer, combat: PlayerCombat): PlayerState {
     abilityCooldown: 0,
     buffs: {},
     velocity: { x: 0, y: 0 },
+    // The pull is the server's; prediction only follows it (D-135).
+    ...(p.pull
+      ? {
+          pull: {
+            to: { x: p.pull.x, y: p.pull.y },
+            from: p.pull.from,
+            speed: p.pull.speed,
+            left: p.pull.left,
+            by: 0,
+          },
+        }
+      : {}),
   };
 }

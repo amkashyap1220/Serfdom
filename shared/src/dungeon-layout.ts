@@ -78,6 +78,11 @@ export function lavaPools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.lava ?? [])]);
 }
 
+/** Every tide pool in the dungeon (D-135). */
+export function tidePools(layout: DungeonLayout): Rect[] {
+  return layout.rooms.flatMap((r) => [...(r.tides ?? [])]);
+}
+
 /** Every sludge pool in the dungeon (players' movement checks these). */
 export function sludgePools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.sludge ?? [])]);
@@ -151,6 +156,8 @@ export interface RoomDef {
   sludge?: readonly Rect[];
   /** Lava channels (D-130): burn players, block enemies. */
   lava?: readonly Rect[];
+  /** Tide pools (D-135): deep on the run's tide cycle, slowing players. */
+  tides?: readonly Rect[];
   /**
    * An arrow trap (D-113): slits just inside one wall, all firing across the
    * room in `direction` but for a gap, every ARROWS.everySeconds while it
@@ -359,6 +366,10 @@ export function validateLayout(layout: DungeonLayout): string[] {
       r.y >= b.y &&
       r.x + r.width <= b.x + b.width &&
       r.y + r.height <= b.y + b.height;
+    for (const pool of room.tides ?? []) {
+      if (!within(pool))
+        problems.push(`${room.id}: a tide pool outside the room`);
+    }
     for (const pool of room.sludge ?? []) {
       if (!within(pool)) problems.push(`${room.id}: sludge outside the room`);
     }

@@ -47,6 +47,8 @@ export interface RoomPiece {
   sludge?: readonly Rect[];
   /** Lava channels, relative like the spawns (D-130). */
   lava?: readonly Rect[];
+  /** Tide pools, relative like the spawns (D-135). */
+  tides?: readonly Rect[];
   /**
    * An arrow trap's slits and firing direction, relative (D-113); `fire`:
    * spirit braziers (D-123); `jet`: fire jets (D-133).
@@ -96,6 +98,7 @@ function orient(
   obstacles: Rect[];
   sludge: Rect[];
   lava: Rect[];
+  tides: Rect[];
   arrows: {
     slits: Vec2[];
     direction: Vec2;
@@ -122,6 +125,7 @@ function orient(
     obstacles: (piece.obstacles ?? []).map(turnRect),
     sludge: (piece.sludge ?? []).map(turnRect),
     lava: (piece.lava ?? []).map(turnRect),
+    tides: (piece.tides ?? []).map(turnRect),
     arrows: piece.arrows
       ? {
           slits: piece.arrows.slits.map((p) => map[entry](p)),
@@ -320,6 +324,9 @@ export class RoomAssembly {
           ...(o.lava.length > 0
             ? { lava: o.lava.map((r) => ({ ...r, ...shift(r) })) }
             : {}),
+          ...(o.tides.length > 0
+            ? { tides: o.tides.map((r) => ({ ...r, ...shift(r) })) }
+            : {}),
           ...(o.arrows
             ? {
                 arrows: {
@@ -384,6 +391,7 @@ export class RoomAssembly {
       ...(room.obstacles ? { obstacles: room.obstacles.map(moveRect) } : {}),
       ...(room.sludge ? { sludge: room.sludge.map(moveRect) } : {}),
       ...(room.lava ? { lava: room.lava.map(moveRect) } : {}),
+      ...(room.tides ? { tides: room.tides.map(moveRect) } : {}),
       ...(room.arrows
         ? { arrows: { ...room.arrows, slits: room.arrows.slits.map(move) } }
         : {}),

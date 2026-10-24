@@ -10,6 +10,7 @@ import {
   JETS,
   beamBox,
   FORGEMASTER,
+  WHIRLPOOL,
   burningStrips,
   plateColumns,
 } from "@serfdom/shared";
@@ -58,6 +59,11 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   golem: 0x5a3a2e,
   bellows: 0xa0522d,
   forgemaster: 0x3a2a26,
+  acolyte: 0x5f8f86,
+  caller: 0x7fc8d8,
+  spearman: 0x2f6f8f,
+  eelpriest: 0x6b4f9a,
+  tidepriest: 0x1f4e79,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -114,6 +120,12 @@ const COLORS = {
   wave: 0xffb347,
   plateGlow: 0xff4d2d,
   plateLine: 0x5a2a1a,
+  tide: 0x2b6f9e,
+  tideDeep: 0x123a66,
+  tideEdge: 0x7fc8f8,
+  whirl: 0x5fd0ff,
+  surge: 0x9fe0ff,
+  tether: 0x7fffd4,
   beamCore: 0xfff0a0,
   boulderEdge: 0x4a4238,
 } as const;
@@ -331,6 +343,69 @@ export class CombatView {
       });
       h.fillStyle(COLORS.beamCore, 0.5 + 0.4 * life);
       h.fillRect(core.x, core.y, core.width, core.height);
+    }
+
+    // The Sunken Temple's water (D-135): tide pools, faint when shallow,
+    // brightening as the tide rises, dark when deep (it slows you).
+    for (const t of view.tides) {
+      const deep = t.state === "deep";
+      h.fillStyle(
+        deep ? COLORS.tideDeep : COLORS.tide,
+        deep ? 0.6 : 0.15 + 0.3 * t.rise,
+      );
+      h.fillRect(t.x, t.y, t.width, t.height);
+      h.lineStyle(
+        px(deep ? 2 : 1),
+        COLORS.tideEdge,
+        deep ? 0.9 : 0.3 + 0.5 * t.rise,
+      );
+      h.strokeRect(t.x, t.y, t.width, t.height);
+    }
+    // Whirlpools: a ring closing in while they warn, then turning rings.
+    for (const w of view.whirlpools) {
+      if (!w.active) {
+        h.lineStyle(px(2), COLORS.whirl, 0.3 + 0.6 * w.warn);
+        h.strokeCircle(w.x, w.y, w.radius * (1.2 - 0.2 * w.warn));
+        continue;
+      }
+      for (let k = 0; k < 3; k++) {
+        const r = w.radius * (((nowMs / 900 + k / 3) % 1) * 0.9 + 0.1);
+        h.lineStyle(px(2), COLORS.whirl, 0.7);
+        h.strokeCircle(w.x, w.y, r);
+      }
+      h.fillStyle(COLORS.hazard, 0.45);
+      h.fillCircle(w.x, w.y, WHIRLPOOL.coreRadius);
+    }
+    // Tidal surges: the wall of water with its gaps; while it waits, the
+    // gaps are marked on the edge it will come from.
+    for (const s of view.surges) {
+      const cuts = [...s.gaps].sort((a, b) => a.from - b.from);
+      if (!s.band) {
+        h.lineStyle(px(4), COLORS.alert, 0.9);
+        for (const g of cuts) {
+          if (s.axis === "x") h.lineBetween(s.edge, g.from, s.edge, g.to);
+          else h.lineBetween(g.from, s.edge, g.to, s.edge);
+        }
+        continue;
+      }
+      const b = s.band;
+      const lo = s.axis === "x" ? b.y : b.x;
+      const hi = s.axis === "x" ? b.y + b.height : b.x + b.width;
+      let at = lo;
+      h.fillStyle(COLORS.surge, 0.8);
+      for (const g of [...cuts, { from: hi, to: hi }]) {
+        const end = Math.min(hi, Math.max(at, g.from));
+        if (end > at) {
+          if (s.axis === "x") h.fillRect(b.x, at, b.width, end - at);
+          else h.fillRect(at, b.y, end - at, b.height);
+        }
+        at = Math.max(at, g.to);
+      }
+    }
+    // Eel-priests' tethers: thin while they warn, thick once pulling.
+    for (const t of view.tethers) {
+      h.lineStyle(px(t.pulling ? 4 : 2), COLORS.tether, t.pulling ? 1 : 0.7);
+      h.lineBetween(t.x1, t.y1, t.x2, t.y2);
     }
 
     // The Forgemaster's floor plates (D-134): everything but the safe

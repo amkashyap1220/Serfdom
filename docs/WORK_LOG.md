@@ -659,3 +659,13 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found live: the shockwave was drawn past the arena's walls; it is now drawn in short arcs, only over the arena floor.
 - `npm run check`: 500 shared, 199 server, 65 client, build.
 - Live (harness, **test** DB, seed 2, headless): the boss walked and slammed, the ring grew with its gap, golems came out below 60%, the plates glowed round the dark lane below 30%, the boss bar said ENRAGED.
+
+### Phase 13e — The Sunken Temple — 2026-10-24
+
+- Dungeon 5 (levels 18–20), designed under the user's delegation (D-135, PROVISIONAL): acolytes, tide callers, spearmen, eel-priests; tide pools; the Tide Priest (surges with gaps, water bolts, whirlpools).
+- Pulls and whirlpools move players, so they are announced ahead and keyed to a run clock that snapshots carry; prediction steps each input at its clock. A client test confirms a zero correction through deep water and a pull.
+- The forge's spawn placement became the shared `fillRoom` (the forge's spawns are byte-identical).
+- Found while building: the eel-priest's movement and the spearman's charge now reuse the slinger and the brute through specs, rather than copies.
+- `npm run check`: 517 shared, 199 server, 66 client, build.
+- Live (harness, **test** DB, seed 2, headless): tide pools turned deep, eel-priests tethered and pulled, surges swept the sanctum both ways, two whirlpools below 50%.
+- Known issue: a full heavy room's snapshots are about 9.6 KB (640 KB/s); recorded for Phase 19.

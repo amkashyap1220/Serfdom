@@ -56,6 +56,7 @@ describe("prediction uses your stats (8c-2)", () => {
       maxMp: me.combat.maxMp,
       buffs: [],
       cooldown: me.fireCooldown,
+      pull: null,
     });
     expect(predictor.lastCorrection).toBe(0);
   });
@@ -99,7 +100,85 @@ describe("prediction wades through sludge like the server (D-113)", () => {
       maxMp: me.combat.maxMp,
       buffs: [],
       cooldown: me.fireCooldown,
+      pull: null,
     });
     expect(predictor.lastCorrection).toBe(0);
+  });
+});
+
+describe("prediction follows the Sunken Temple's water (D-135)", () => {
+  it("deep tides and an eel-priest's pull replay exactly: no correction", () => {
+    const pool = { x: 0, y: -200, width: 2000, height: 400 };
+    const pull = { to: { x: 600, y: 0 }, from: 4.7, speed: 240, left: 0.45 };
+    const predictor = new PlayerPredictor(
+      1,
+      { x: 100, y: 0 },
+      [],
+      combatFor(SERF_BASE),
+      [],
+      [pool],
+    );
+    // The tide rises at 4 s and is deep from 5 s; the pull starts at 4.7 s.
+    const start = 4.5;
+    let server: SimState = {
+      players: [
+        {
+          ...newPlayer(1, { x: 100, y: 0 }, SERF_BASE),
+          pull: { ...pull, by: 9 },
+        },
+      ],
+      enemies: [],
+      projectiles: [],
+      nextProjectileId: 1,
+      nextEnemyId: 1,
+      hazards: [],
+      blasts: [],
+      zones: [],
+      sludge: [],
+      fires: [],
+      tides: [pool],
+      clock: start,
+    };
+    const snap = (s: SimState, ack: number) => {
+      const me = s.players[0]!;
+      return {
+        id: 1,
+        x: me.position.x,
+        y: me.position.y,
+        ack,
+        hp: me.hp,
+        maxHp: me.maxHp,
+        mp: me.mp,
+        maxMp: me.combat.maxMp,
+        buffs: [],
+        cooldown: me.fireCooldown,
+        pull: me.pull
+          ? {
+              x: me.pull.to.x,
+              y: me.pull.to.y,
+              from: me.pull.from,
+              speed: me.pull.speed,
+              left: me.pull.left,
+            }
+          : null,
+      };
+    };
+    predictor.setWater(start, []);
+    predictor.reset(snap(server, -1));
+    // The server applies each input, then its world step moves the clock on.
+    const states: SimState[] = [];
+    for (let i = 0; i < 60; i++) {
+      predictor.predict(RIGHT);
+      server = applyPlayerInput(server, 1, RIGHT, [], TICK_SECONDS).state;
+      server = { ...server, clock: server.clock! + TICK_SECONDS };
+      states.push(server);
+    }
+    // The pull and the deep water both happened in those 60 ticks.
+    expect(server.players[0]!.pull).toBeUndefined();
+    const after30 = states[29]!;
+    predictor.setWater(after30.clock!, []);
+    predictor.reconcile(snap(after30, 29));
+    expect(predictor.lastCorrection).toBeCloseTo(0, 9);
+    expect(predictor.position.x).toBeCloseTo(server.players[0]!.position.x, 9);
   });
 });

@@ -252,6 +252,10 @@ Restart `npm run dev` (protocol v35) and reload. Enter the Ember Forge with any 
 
 Report: pass/fail per step; whether the jets' glow gives you time to step out; whether the slag fires make any room feel unfair; your clear time and level. If something fails, copy the browser console (F12 → Console) and the server terminal's last lines.
 
+#### Known issue: snapshot size in crowded rooms (found in 13e)
+
+A full heavy Sunken Temple room (30 enemies, the callers' paired bolts) sent about 9.6 KB per snapshot, about 640 KB/s, roughly twice the forge's busiest rooms. Fine on localhost; on real connections that much data is a lag risk. To address before production hosting (Phase 19): send only what changed between snapshots.
+
 #### Bigger window, closer camera checklist (D-131)
 
 Restart `npm run dev` (no protocol change) and reload. Make the browser window at least 1200×800 inside (a maximised window on a 1080p screen).

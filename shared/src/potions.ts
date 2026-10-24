@@ -26,6 +26,8 @@ export const POTION_CHANCE: Partial<Record<DungeonId, number>> = {
   "forgotten-crypt": 0.3,
   // D-130.
   "ember-forge": 0.4,
+  // D-135.
+  "sunken-temple": 0.5,
 };
 
 /** A stat potion on the account: in the rack, or waiting for room. */

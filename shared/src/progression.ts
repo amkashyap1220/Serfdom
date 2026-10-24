@@ -30,6 +30,8 @@ export const DUNGEON_EXP: Record<DungeonId, DungeonExp> = {
   "forgotten-crypt": { base: 200, topLevel: 15 },
   // D-130: aimed at levels 15–18; about 4 clears take a serf from 15 to 18.
   "ember-forge": { base: 240, topLevel: 18 },
+  // D-135: aimed at levels 18–20; about 3 clears take a serf from 18 to 20.
+  "sunken-temple": { base: 280, topLevel: 20 },
   training: { base: 100, topLevel: 9 },
 };
 

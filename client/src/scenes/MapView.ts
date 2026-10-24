@@ -46,6 +46,17 @@ const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
     obstacleEdge: 0x7d7472,
     hole: 0x0a0605,
   },
+  // D-135: wet green-grey stone, a teal floor.
+  "sunken-temple": {
+    floor: 0x132126,
+    gridMinor: 0x1d3036,
+    gridMajor: 0x2d474f,
+    wall: 0x4f6f66,
+    wallEdge: 0x86a89c,
+    obstacle: 0x3f5a5f,
+    obstacleEdge: 0x6f8f94,
+    hole: 0x050b0d,
+  },
   "forgotten-crypt": {
     floor: 0x1a1f2a,
     gridMinor: 0x262d3b,

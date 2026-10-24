@@ -3,7 +3,7 @@ import { NATURES_REACH } from "./abilities.ts";
 import { ENEMY_RING_ATTACK, PLAYER_HEALTH } from "./combat-config.ts";
 import {
   BOMBER,
-  BRUTE,
+  BRUTE as BRUTE_CONFIG,
   GRUNT,
   SHAMAN,
   SKULKER,
@@ -20,6 +20,11 @@ import {
   GOLEM,
   BELLOWS,
   FORGEMASTER,
+  ACOLYTE,
+  CALLER,
+  SPEARMAN,
+  EELPRIEST,
+  TIDEPRIEST,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -31,6 +36,7 @@ import { rotateVec, type Rect, type Vec2 } from "./geometry.ts";
 import { stepMovement } from "./movement.ts";
 import { stepFireCooldown } from "./weapon.ts";
 import { laneAt, slamGap } from "./forge-boss.ts";
+import { surgeGaps } from "./temple-water.ts";
 
 /** What the AI needs to know about a living player. */
 export interface AiTarget {
@@ -112,6 +118,17 @@ export interface EnemyAction {
   wave?: { at: Vec2; gap: number; startsIn: number; area?: Rect };
   /** The Forgemaster's floor plates (D-134): all of `area` but the safe lane glows, then bursts. */
   plates?: { area: Rect; lane: number };
+  /** An eel-priest's tether (D-135): pull this player towards `to` once `startsIn` runs out. */
+  pull?: { playerId: number; to: Vec2; startsIn: number };
+  /** The Tide Priest's whirlpools (D-135), starting after their warning. */
+  whirlpools?: Vec2[];
+  /** The Tide Priest's tidal surge (D-135) across `area`. */
+  surge?: {
+    area: Rect;
+    axis: "x" | "y";
+    dir: 1 | -1;
+    gaps: { from: number; to: number }[];
+  };
 }
 
 /** What the AI knows about the world beyond the targets. */
@@ -237,6 +254,49 @@ export function enemyAct(
       );
     case "golem":
       return golemAct(enemy, target, walls, dtSeconds, result, context);
+    case "acolyte":
+      return gruntAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        ACOLYTE,
+      );
+    case "caller":
+      return slingerAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        CALLER,
+      );
+    case "spearman":
+      return bruteAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        SPEARMAN,
+      );
+    case "eelpriest":
+      return eelpriestAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+      );
+    case "tidepriest":
+      return tidepriestAct(enemy, target, walls, dtSeconds, result, context);
     case "forgemaster":
       return forgemasterAct(
         enemy,
@@ -752,6 +812,186 @@ function elementalAct(
   return result({ ...enemy, position });
 }
 
+/** An eel-priest's movement: a slinger's that never throws (D-135). */
+const EEL_MOVES: ThrowerSpec = {
+  speed: EELPRIEST.speed,
+  minRange: EELPRIEST.minRange,
+  maxRange: EELPRIEST.maxRange,
+  throwRange: 0,
+  throwIntervalSeconds: 1,
+  rock: { damage: 0, speed: 1, size: 8, range: 0 },
+};
+
+/**
+ * Eel-priest (D-135): moves like a slinger; tethers the nearest player in
+ * clear sight within range, and when the warning ends hits them and the
+ * pull begins (the simulation moves them; killing it first breaks it).
+ */
+function eelpriestAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "eelpriest") return result(enemy);
+  const moved = slingerAct(
+    enemy,
+    target,
+    walls,
+    dt,
+    result,
+    context,
+    EEL_MOVES,
+  );
+  const P = EELPRIEST.pull;
+  let next = { ...ai, pull: Math.max(0, ai.pull - dt) };
+  const action: Partial<EnemyAction> = {};
+  if (next.tethered !== null) {
+    const strikeIn = next.strikeIn - dt;
+    if (strikeIn > 1e-9) {
+      next = { ...next, strikeIn };
+    } else {
+      const victim = targets.find((t) => t.id === next.tethered);
+      if (victim) action.contacts = [{ playerId: victim.id, damage: P.damage }];
+      next = { ...next, tethered: null, strikeIn: 0 };
+    }
+  } else if (
+    target &&
+    next.pull <= 1e-9 &&
+    target.distance <= P.range &&
+    !lineBlocked(enemy.position, target.target.position, 4, walls)
+  ) {
+    next = {
+      ...next,
+      pull: P.intervalSeconds,
+      tethered: target.target.id,
+      strikeIn: P.warnSeconds,
+    };
+    action.pull = {
+      playerId: target.target.id,
+      to: { ...moved.enemy.position },
+      startsIn: P.warnSeconds,
+    };
+  }
+  return {
+    ...moved,
+    ...action,
+    contacts: [...moved.contacts, ...(action.contacts ?? [])],
+    enemy: { ...moved.enemy, ai: next },
+  };
+}
+
+/**
+ * The Tide Priest (D-135): drifts towards the nearest player (stopping at
+ * a distance); fans of water bolts; tidal surges across its arena with
+ * moving gaps; below half HP whirlpools (one where its target stands);
+ * enraged, surges come faster and turn between the two axes.
+ */
+function tidepriestAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "tidepriest") return result(enemy);
+  const T = TIDEPRIEST;
+  const fraction = enemy.hp / enemy.maxHp;
+  const whirlPhase = fraction < T.whirlBelow;
+  const enraged = fraction < T.enragedBelow;
+  const tick = (t: number) => Math.max(0, t - dt);
+  const next = {
+    ...ai,
+    surge: tick(ai.surge),
+    bolts: tick(ai.bolts),
+    whirls: whirlPhase ? tick(ai.whirls) : ai.whirls,
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  const area = enemy.roomId ? context.boundsOf?.(enemy.roomId) : undefined;
+  let position = enemy.position;
+  if (target) {
+    if (next.bolts <= 1e-9) {
+      next.bolts = T.bolts.intervalSeconds;
+      const aim = toward(enemy.position, target.target.position);
+      const step = (T.bolts.angleStepDegrees * Math.PI) / 180;
+      const half = (T.bolts.count - 1) / 2;
+      for (let i = 0; i < T.bolts.count; i++) {
+        action.bullets.push({
+          direction: rotateVec(aim, (i - half) * step),
+          spec: T.bolts.bullet,
+        });
+      }
+    }
+    if (area && next.surge <= 1e-9) {
+      next.surge = enraged
+        ? T.surge.enragedIntervalSeconds
+        : T.surge.intervalSeconds;
+      // West to east, then back; enraged, it turns to sweep north–south too.
+      const axis: "x" | "y" = enraged && next.surges % 2 === 1 ? "y" : "x";
+      const dir: 1 | -1 =
+        Math.floor(next.surges / (enraged ? 2 : 1)) % 2 === 0 ? 1 : -1;
+      const lo = axis === "x" ? area.y : area.x;
+      const hi = axis === "x" ? area.y + area.height : area.x + area.width;
+      action.surge = { area, axis, dir, gaps: surgeGaps(lo, hi, next.surges) };
+      next.surges += 1;
+    }
+    if (whirlPhase && next.whirls <= 1e-9) {
+      next.whirls = T.whirlpools.intervalSeconds;
+      const at = target.target.position;
+      // The second on the far side of the priest from the first.
+      const other = {
+        x: enemy.position.x - (at.x - enemy.position.x) * 0.8,
+        y: enemy.position.y - (at.y - enemy.position.y) * 0.8,
+      };
+      const clamp = (p: Vec2): Vec2 =>
+        area
+          ? {
+              x: Math.min(area.x + area.width - 40, Math.max(area.x + 40, p.x)),
+              y: Math.min(
+                area.y + area.height - 40,
+                Math.max(area.y + 40, p.y),
+              ),
+            }
+          : p;
+      action.whirlpools = [clamp({ ...at }), clamp(other)].slice(
+        0,
+        T.whirlpools.count,
+      );
+      next.rounds += 1;
+    }
+    if (target.distance > T.keep) {
+      position = move(
+        enemy,
+        toward(
+          enemy.position,
+          route(
+            enemy.position,
+            target.target.position,
+            enemy.size / 2,
+            walls,
+            context,
+          ),
+        ),
+        T.speed,
+        walls,
+        dt,
+      );
+    }
+  }
+  return result({ ...enemy, position, ai: next }, action);
+}
+
 /** Where the Forgemaster's hammer lands, facing `direction` (D-134). */
 export function hammerSpot(position: Vec2, direction: Vec2): Vec2 {
   return {
@@ -920,6 +1160,18 @@ function golemAct(
   };
 }
 
+/** A charger's numbers: the brute's (6c, D-111, D-112), or the spearman's (D-135). */
+interface ChargerSpec {
+  speed: number;
+  chargeTriggerRange: number;
+  windupSeconds: number;
+  chargeSpeed: number;
+  chargeSeconds: number;
+  recoverSeconds: number;
+  chargeDamage: number;
+  dazeSeconds: number;
+}
+
 function bruteAct(
   enemy: EnemyState,
   targets: readonly AiTarget[],
@@ -928,9 +1180,10 @@ function bruteAct(
   dt: number,
   result: Result,
   context: AiContext = NO_CONTEXT,
+  BRUTE: ChargerSpec = BRUTE_CONFIG,
 ): EnemyAction {
   const ai = enemy.ai;
-  if (ai.kind !== "brute") return result(enemy);
+  if (ai.kind !== "brute" && ai.kind !== "spearman") return result(enemy);
   const cooldown = Math.max(0, enemy.attackCooldown - dt);
 
   switch (ai.mode) {
@@ -1512,14 +1765,19 @@ export function isTelegraphing(enemy: EnemyState): boolean {
   if (enemy.ai.kind === "warchief") {
     return enemy.ai.mode === "sweepWindup" || enemy.ai.mode === "chargeWindup";
   }
-  return enemy.ai.kind === "brute" && enemy.ai.mode === "windup";
+  return (
+    (enemy.ai.kind === "brute" || enemy.ai.kind === "spearman") &&
+    enemy.ai.mode === "windup"
+  );
 }
 
 /** A brute that charged into a wall, standing dazed (D-112). */
 export function isDazed(enemy: EnemyState): boolean {
   if (enemy.ai.kind === "lich") return enemy.ai.mode === "stunned";
   return (
-    (enemy.ai.kind === "brute" || enemy.ai.kind === "warchief") &&
+    (enemy.ai.kind === "brute" ||
+      enemy.ai.kind === "spearman" ||
+      enemy.ai.kind === "warchief") &&
     enemy.ai.mode === "dazed"
   );
 }

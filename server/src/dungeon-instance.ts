@@ -12,6 +12,7 @@ import {
   runeWarnings,
   sludgePools,
   lavaPools,
+  tidePools,
   trapWarnings,
   isDazed,
   rockfallDrops,
@@ -152,6 +153,8 @@ export class DungeonInstance {
       ...createSimState([], { respawnSeconds: null }),
       sludge: sludgePools(this.layout),
       lava: lavaPools(this.layout),
+      tides: tidePools(this.layout),
+      clock: 0,
     };
     this.rooms = newRunProgress(this.layout);
     for (const playerId of playerIds) {
@@ -422,6 +425,16 @@ export class DungeonInstance {
         maxMp: p.combat.maxMp,
         buffs: BUFF_KINDS.filter((b) => p.buffs[b] !== undefined),
         cooldown: p.fireCooldown,
+        // Exact, like the position: prediction must pull the same way.
+        pull: p.pull
+          ? {
+              x: p.pull.to.x,
+              y: p.pull.to.y,
+              from: p.pull.from,
+              speed: p.pull.speed,
+              left: p.pull.left,
+            }
+          : null,
       });
     }
     return out;
@@ -519,6 +532,29 @@ export class DungeonInstance {
           Math.min(1, 1 - p.burstsIn / FORGEMASTER.plates.warnSeconds),
         ),
         burning: p.burstsIn <= 1e-9,
+      })),
+      // Exact: the client keys its prediction of the water to it.
+      clock: this.sim.clock ?? 0,
+      whirlpools: (this.sim.whirlpools ?? []).map((w) => ({
+        x: roundCoord(w.at.x),
+        y: roundCoord(w.at.y),
+        radius: w.radius,
+        from: w.from,
+        until: w.until,
+      })),
+      surges: (this.sim.surges ?? []).map((s) => ({
+        x: s.area.x,
+        y: s.area.y,
+        width: s.area.width,
+        height: s.area.height,
+        axis: s.axis,
+        dir: s.dir,
+        pos: roundCoord(s.pos),
+        gaps: s.gaps.map((g) => ({
+          from: roundCoord(g.from),
+          to: roundCoord(g.to),
+        })),
+        startsIn: roundCoord(s.startsIn),
       })),
       traps: trapWarnings(this.rooms, this.layout),
       runes: runeWarnings(this.rooms, this.layout),

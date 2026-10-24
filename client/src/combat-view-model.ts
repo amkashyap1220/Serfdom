@@ -8,6 +8,7 @@ import {
   firesThisVolley,
   RUNES,
   type RuneWarning,
+  type TideState,
 } from "@serfdom/shared";
 
 /**
@@ -114,6 +115,44 @@ export interface PlatesView {
   burning: boolean;
 }
 
+/** A tide pool (D-135) and how far the tide is in (`rise` 0 → 1 while it rises). */
+export interface TideView {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  state: TideState;
+  rise: number;
+}
+
+/** A whirlpool (D-135): `warn` 0 → 1 before it turns; `active` while it drags. */
+export interface WhirlpoolView {
+  x: number;
+  y: number;
+  radius: number;
+  warn: number;
+  active: boolean;
+}
+
+/** A tidal surge (D-135): its band now (empty while it waits), and its gaps. */
+export interface SurgeView {
+  band: { x: number; y: number; width: number; height: number } | null;
+  axis: "x" | "y";
+  /** The edge it starts from, while it waits (to mark the gaps). */
+  edge: number;
+  gaps: { from: number; to: number }[];
+}
+
+/** An eel-priest's tether (D-135): from the player to where they are pulled. */
+export interface TetherView {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  /** The pull has started. */
+  pulling: boolean;
+}
+
 /** A fire jet's beam (D-133): from (x1, y1) to (x2, y2), `width` wide. */
 export interface BeamView {
   x1: number;
@@ -176,6 +215,10 @@ export interface CombatViewModel {
   beams: BeamView[];
   waves: WaveView[];
   plates: PlatesView[];
+  tides: TideView[];
+  whirlpools: WhirlpoolView[];
+  surges: SurgeView[];
+  tethers: TetherView[];
   portalOpen: boolean;
 }
 
@@ -193,6 +236,10 @@ export const EMPTY_VIEW: CombatViewModel = {
   beams: [],
   waves: [],
   plates: [],
+  tides: [],
+  whirlpools: [],
+  surges: [],
+  tethers: [],
   portalOpen: false,
 };
 

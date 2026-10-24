@@ -1,5 +1,6 @@
 import type { DungeonLayout } from "./dungeon-layout.ts";
 import { buildForge } from "./ember-forge.ts";
+import { buildTemple } from "./sunken-temple.ts";
 import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
@@ -89,6 +90,15 @@ export const DUNGEONS = [
     listed: true,
     layout: buildForge(0),
     generate: buildForge,
+  },
+  {
+    // D-135: the fifth dungeon, the last of the 1–20 ladder (D-126).
+    id: "sunken-temple",
+    name: "Sunken Temple",
+    blurb: "Levels 18–20 · 8 min · opens after the Warrens",
+    listed: true,
+    layout: buildTemple(0),
+    generate: buildTemple,
   },
   {
     id: "training",

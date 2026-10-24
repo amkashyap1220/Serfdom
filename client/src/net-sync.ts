@@ -2,7 +2,14 @@ import {
   FORGEMASTER,
   layoutFor,
   sludgePools,
+  tidePools,
+  tideAt,
+  surgeBand,
+  SURGE,
+  TIDES,
+  WHIRLPOOL,
   type DungeonLayout,
+  type ServerMessage,
   blockingWalls,
   boxAround,
   combatFor,
@@ -65,6 +72,13 @@ function blastShowMs(kind: BlastKind): number {
   if (kind === "sweepWarning") return WARCHIEF.sweep.windupSeconds * 1000;
   if (kind === "slamWarning") return KNIGHT.slam.windupSeconds * 1000;
   return BLAST_SHOW_MS;
+}
+
+/** How far into the tide cycle's rising stretch `clock` is (0 → 1), for the glow. */
+function riseAt(clock: number): number {
+  const t = clock % TIDES.periodSeconds;
+  const from = TIDES.periodSeconds - TIDES.deepSeconds - TIDES.warnSeconds;
+  return Math.min(1, Math.max(0, (t - from) / TIDES.warnSeconds));
 }
 
 export class NetSync {
@@ -305,6 +319,8 @@ export class NetSync {
         };
       }),
       plates: latest.snapshot.plates.map((p) => ({ ...p })),
+      // The water, at the clock of "now" (D-135).
+      ...this.waterViews(latest.snapshot, age),
     };
   }
 
@@ -336,6 +352,63 @@ export class NetSync {
       points: c.points,
       fade: Math.max(0, (nowMs - c.atMs) / BLAST_SHOW_MS),
     }));
+  }
+
+  /**
+   * The Sunken Temple's water at "now" (D-135): the snapshot's clock moved
+   * on by its age. Tide pools come from the map; whirlpools, surges, and
+   * tethers from the snapshot.
+   */
+  private waterViews(
+    snapshot: Extract<ServerMessage, { type: "snapshot" }>,
+    age: number,
+  ): Pick<CombatViewModel, "tides" | "whirlpools" | "surges" | "tethers"> {
+    const clock = snapshot.clock + age;
+    const state = tideAt(clock);
+    const tides = (this.layout ? tidePools(this.layout) : []).map((r) => ({
+      ...r,
+      state,
+      rise: state === "rising" ? riseAt(clock) : state === "deep" ? 1 : 0,
+    }));
+    const whirlpools = snapshot.whirlpools.map((w) => ({
+      x: w.x,
+      y: w.y,
+      radius: w.radius,
+      warn: Math.min(
+        1,
+        Math.max(0, 1 - (w.from - clock) / WHIRLPOOL.warnSeconds),
+      ),
+      active: clock >= w.from && clock < w.until,
+    }));
+    const surges = snapshot.surges.map((s) => {
+      const area = { x: s.x, y: s.y, width: s.width, height: s.height };
+      const waiting = s.startsIn - age > 0;
+      const pos = waiting
+        ? s.pos
+        : s.pos + s.dir * SURGE.speed * Math.max(0, age - s.startsIn);
+      return {
+        band: waiting
+          ? null
+          : surgeBand({ area, axis: s.axis, dir: s.dir, pos, gaps: s.gaps }),
+        axis: s.axis,
+        edge: s.pos,
+        gaps: s.gaps,
+      };
+    });
+    const me = this.predictor?.position;
+    const tethers = snapshot.players
+      .filter((p) => p.pull && p.hp > 0)
+      .map((p) => {
+        const self = this.self?.id === p.id && me;
+        return {
+          x1: self ? me.x : p.x,
+          y1: self ? me.y : p.y,
+          x2: p.pull!.x,
+          y2: p.pull!.y,
+          pulling: clock >= p.pull!.from,
+        };
+      });
+    return { tides, whirlpools, surges, tethers };
   }
 
   /** Blasts still showing, with how far each has faded. */
@@ -399,10 +472,20 @@ export class NetSync {
             this.walls,
             combatFor(this.myStats, weaponDamage(this.myWeaponTier)),
             this.currentLayout ? sludgePools(this.currentLayout) : [],
+            this.currentLayout ? tidePools(this.currentLayout) : [],
           );
           this.predictorId = p.id;
           this.synced = false;
         }
+        this.predictor.setWater(
+          snapshot.clock,
+          snapshot.whirlpools.map((w) => ({
+            at: { x: w.x, y: w.y },
+            radius: w.radius,
+            from: w.from,
+            until: w.until,
+          })),
+        );
         if (this.synced) {
           this.predictor.reconcile(p);
         } else {

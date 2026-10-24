@@ -10,6 +10,7 @@ import {
   LICH,
   GOLEM,
   FORGEMASTER,
+  TIDEPRIEST,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -58,13 +59,32 @@ export interface EnemyState {
 export type EnemyAi =
   | { kind: "none" }
   | {
-      kind: "brute";
+      /** A brute, or a fishfolk spearman: the same charge with its own numbers (D-135). */
+      kind: "brute" | "spearman";
       /** "dazed": after charging into a wall (D-112), before recovering. */
       mode: "walk" | "windup" | "charge" | "dazed" | "recover";
       timer: number;
       direction: Vec2;
       /** Players already hit by the current charge. */
       hit: readonly number[];
+    }
+  | {
+      kind: "eelpriest";
+      /** Seconds until it may tether again. */
+      pull: number;
+      /** The player it has tethered, and seconds until the pull (and its hit) starts. */
+      tethered: number | null;
+      strikeIn: number;
+    }
+  | {
+      kind: "tidepriest";
+      /** Seconds until each attack is ready. */
+      surge: number;
+      bolts: number;
+      whirls: number;
+      /** Surges and whirlpool rounds so far (each surge's gaps move). */
+      surges: number;
+      rounds: number;
     }
   | {
       kind: "lich";
@@ -193,6 +213,30 @@ function initialAi(kind: EnemyKind): EnemyAi {
       return { kind, faded: false, timer: GHOST.visibleSeconds };
     case "elemental":
       return { kind, fuse: null };
+    case "spearman":
+      return {
+        kind,
+        mode: "walk",
+        timer: 0,
+        direction: { x: 0, y: 0 },
+        hit: [],
+      };
+    case "eelpriest":
+      return {
+        kind,
+        pull: FIRST_ATTACK_DELAY.eelpriest,
+        tethered: null,
+        strikeIn: 0,
+      };
+    case "tidepriest":
+      return {
+        kind,
+        surge: TIDEPRIEST.surge.intervalSeconds / 2,
+        bolts: FIRST_ATTACK_DELAY.tidepriest,
+        whirls: 0,
+        surges: 0,
+        rounds: 0,
+      };
     case "forgemaster":
       return {
         kind,

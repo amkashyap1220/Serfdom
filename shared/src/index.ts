@@ -59,6 +59,11 @@ export {
   BELLOWS,
   BOSS_KINDS,
   FORGEMASTER,
+  ACOLYTE,
+  CALLER,
+  SPEARMAN,
+  EELPRIEST,
+  TIDEPRIEST,
   CASTER,
   GHOST,
   NECROMANCER,
@@ -126,6 +131,7 @@ export {
   SLUDGE,
   sludgePools,
   lavaPools,
+  tidePools,
   LAVA,
   ROCKFALL,
   JETS,
@@ -213,6 +219,8 @@ export {
   type Beam,
   type Wave,
   type PlateBurst,
+  type Whirlpool,
+  type Surge,
   burstRunes,
   TRAP_OWNER_ID,
   GOBLIN_BLAST_BY,
@@ -453,3 +461,21 @@ export {
   slamGap,
   waveHits,
 } from "./forge-boss.ts";
+export {
+  TEMPLE_PIECES,
+  TEMPLE_RECIPE,
+  TEMPLE_SANCTUM,
+  buildTemple,
+} from "./sunken-temple.ts";
+export {
+  SURGE,
+  TIDES,
+  WHIRLPOOL,
+  surgeBand,
+  tideAt,
+  type Pull,
+  type TideState,
+  type WhirlpoolShape,
+  type SurgeShape,
+} from "./temple-water.ts";
+export { fillRoom } from "./room-fill.ts";
