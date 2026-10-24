@@ -1,6 +1,6 @@
 # Serfdom — Technical Architecture
 
-**Status:** Proposed direction; verify against the actual repository before implementation.
+**Status:** Describes the code as built through Phase 12k (2026-10-24). Verify against the repository before relying on a detail.
 
 ## 1. Product architecture
 
@@ -11,13 +11,13 @@ Serfdom is one online game with two planned clients:
 
 Both clients connect to the same authoritative multiplayer service and persistent data store. Do not build a separate game backend or progression database for Steam.
 
-## 2. Proposed stack
+## 2. Stack
 
-- Client: Phaser + TypeScript.
-- Desktop wrapper: Electron, later.
-- Real-time transport: WebSockets.
-- Server: TypeScript/JavaScript runtime with a small authoritative game-server process.
-- Database: PostgreSQL, when persistent account/game data is introduced.
+- Client: Phaser 4 + TypeScript (T-001).
+- Desktop wrapper: Electron or similar, Phase 16 (T-002, still PROPOSED).
+- Real-time transport: WebSockets (`ws`, T-020).
+- Server: Node.js 24 running TypeScript directly, one small authoritative game-server process.
+- Database: PostgreSQL 17 (D-059), since Phase 7.
 - Build/dev server: Vite (Phase 1).
 - Testing: Vitest (Phase 1); document commands in the root README.
 - Formatting: Prettier, pinned exact version (Phase 0). Linting: ESLint (Phase 1). Type checks: `tsc` (Phase 1).
@@ -26,7 +26,7 @@ Both clients connect to the same authoritative multiplayer service and persisten
 
 - Runtime: Node.js 24 LTS (`.nvmrc`; `package.json` `engines`; `.npmrc` `engine-strict=true` makes npm refuse other versions).
 - Package manager: npm. `.npmrc` `save-exact=true` records exact versions; `package-lock.json` is committed.
-- Monorepo: npm workspaces. Current workspaces: `shared` (`@serfdom/shared`) and `client` (`@serfdom/client`). `server` is added in Phase 4.
+- Monorepo: npm workspaces. Workspaces: `shared` (`@serfdom/shared`), `client` (`@serfdom/client`), and `server` (`@serfdom/server`, since Phase 4).
 - `@serfdom/shared` is consumed as TypeScript source (its `exports` points at `src/index.ts`); Vite compiles it for the client. It has no DOM types (`lib: ["ES2022"]`), so browser-only code there is a type error. Internal imports use explicit `.ts` paths so Node can later run it directly; the client tsconfig sets `allowImportingTsExtensions` because it type-checks that source.
 - Line endings: LF everywhere (`.gitattributes` `eol=lf`, `.editorconfig`, Prettier `endOfLine`).
 - Pinned versions (Phase 1): Phaser 4.2.1, Vite 8.3.5, Vitest 5.0.5, TypeScript 6.0.3, ESLint 10.13.0 with typescript-eslint 8.72.0, Prettier 3.9.10.
@@ -160,7 +160,7 @@ PostgreSQL 17 (D-059), reached through `pg` with one connection pool per server 
 - `sessions`: SHA-256 `token_hash` (the token itself is never stored), account_id (cascade delete), expires_at.
 - `serfs`: id, account_id (cascade delete), name (unique among living, case-insensitive, partial index), level, died_at / death_dungeon / killed_by (set once), lifetime stat columns.
 
-Rules in code: every serf query is scoped by `account_id`; slot-limited creation locks the account row; a run is recorded with one `update … where died_at is null`; all SQL uses parameters (no string-built queries). Not yet done: backups and restore drills (before real players' data matters, Phase 14).
+Rules in code: every serf query is scoped by `account_id`; slot-limited creation locks the account row; a run is recorded with one `update … where died_at is null`; all SQL uses parameters (no string-built queries). Migrations since then (003–010) add EXP, classes, stats, items, the stash and gold, ability grants, accessory bases, and potions; see `server/migrations/`. Not yet done: backups and restore drills (before real players' data matters, Phase 18).
 
 When persistence is introduced:
 
@@ -193,4 +193,4 @@ Do not begin with microservices, Kubernetes, elaborate matchmaking, a large cont
 - Source sprite size is 16×16 pixels for players and player-sized ordinary enemies. Larger enemies/bosses may vary.
 - Explicitly distinguish world coordinates, render resolution, CSS layout, device pixel ratio, and Phaser zoom/scale; disable texture smoothing.
 - Prefer a simple DOM layout (HUD sibling of the game canvas) or an equivalent clear separation. Verify actual canvas bounds before choosing implementation details.
-- Minimum window size, camera edge clamping, and multiplayer visibility fairness remain unresolved. Do not finalize these silently.
+- Camera edges are decided: no clamping, space beyond the map is empty void (D-033). Minimum window size and multiplayer visibility fairness remain unresolved (open questions 11–13, 15). Do not finalize these silently.

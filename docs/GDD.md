@@ -1,7 +1,7 @@
 # Serfdom — Game Design Document
 
 **Document status:** Living design document  
-**Current design baseline:** Consolidated from available project decisions as of 2026-10-22  
+**Current design baseline:** Reconciled with the decision log (D-001–D-122) and the code as of 2026-10-24  
 **Important:** This document distinguishes confirmed direction from unresolved or provisional details. It intentionally does not invent missing class names or final balance numbers.
 
 ## 1. High concept
@@ -109,8 +109,8 @@ The exact hexadecimal RGB palette entries and permitted color variants should be
 
 ### Design details still to resolve
 
-- XP curve, exact per-level requirements, and whether any other sources of XP exist need explicit approval.
-- Exact class stat caps and level-up stat growth need explicit approval.
+- The EXP curve and the per-dungeon falloff are PROVISIONAL numbers (T-045); the direction (D-069–D-071) is confirmed. EXP comes only from completions (D-069).
+- Stat growth and class maxes are confirmed and tunable (D-074–D-078, D-119); see §6.
 
 ## 4. Classes and abilities
 
@@ -163,20 +163,24 @@ Confirmed high-level intent:
 - Bosses use multiple phases and mechanics, not just larger health pools.
 - Combat must remain responsive while server-authoritative.
 
-Still unresolved:
+Confirmed controls and rules (built):
 
-- Whether normal attacks auto-fire, require input, or vary by weapon/class.
-- Whether aiming is manual, automatic, or hybrid.
-- Exact controls for movement, aiming, rotation, and abilities.
-- Weapon attack identities and final weapon list.
-- Damage, defense, attack-speed, range, and regeneration formulas.
-- Ability MP costs, cooldowns, durations, ranges, and numerical effects.
+- **Movement:** WASD only, 8 directions, diagonals normalized, instant start and stop (D-031, D-032); W is always up the screen (D-040). Dodging is movement only, no dash (D-037).
+- **View:** Q/E rotate the camera, Z resets it (D-040; speed and keys PROVISIONAL, T-017).
+- **Attacks and aiming:** four fire modes cycled with T (D-099; names PROVISIONAL): Full auto, Auto aim + Space (default), Auto fire + Space, Manual (left click). Basic attacks are projectiles (D-041).
+- **Ability:** Space (D-035); costs and cooldowns per class in §4.
+- **Leave a run:** R, at no cost except that run's rewards (D-036, D-053).
+- **Formulas:** damage, fire rate, speed, Defense, and regen are D-078, with Defense changed by D-121 (§6). Hit authority is the server's (D-043, D-044).
 
-Never implement a final combat formula or input scheme based only on a prior proposal. Ask if the missing decision materially affects the milestone.
+Still open:
+
+- Weapon attack identities: every weapon type currently fires the same basic shot; each type's own style is planned for Phase 13.
+
+Never implement a new combat formula or input scheme based only on a prior proposal. Ask if the missing decision materially affects the milestone.
 
 ## 6. Stats
 
-Previously proposed stats:
+Confirmed stats (D-065, D-077, D-078), all live in combat:
 
 - HP
 - MP
@@ -188,7 +192,7 @@ Previously proposed stats:
 - Wisdom
 - Luck (confirmed, D-065)
 
-Prior meanings:
+Meanings:
 
 - HP: health.
 - MP: resource for class abilities.
@@ -200,11 +204,11 @@ Prior meanings:
 - Wisdom: mana regeneration.
 - Luck (confirmed, D-065–D-068): the number of reward chests a player rolls at the end of a completed dungeon, one chest per Luck point. A level-1 Serf starts with **1 Luck**. Luck never grows with level or class; it only comes from **equipped** items, each carrying **+1 Luck** at most and never negative Luck. Any item that can roll stats can roll Luck, Artifacts included. There is no Luck cap.
 
-These names and roles are prior design material; confirm any change against the latest decisions. Exact formulas, caps, class growth, and potion effects remain unresolved.
+Formulas, caps, and class growth are confirmed and tunable (D-078, D-121); potion effects are D-118 and D-119 (§10).
 
 Confirmed starting values: a level-1 Serf has **20 HP** (D-055) and regenerates **0.5 HP/s**, always on (D-056). Dungeon difficulty is balanced for a fresh level-1 Serf (D-054).
 
-Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a range, chosen by the server: the Serf's ranges for levels 2–5, then the class's ranges by its High/Mid/Low tier for each stat. Choosing a class gives a one-time bonus to its High stats. Leveling takes each stat partway; each class has a max per stat that only stat potions (from high-tier dungeons) reach. A level-1 Serf's stats (HP 20, DEF 0, the rest 10) reproduce the starting values above exactly. The tables and formulas are D-078. Since 8c-2 the combat stats are live: HP (max HP), Attack (shot damage), Dexterity (fire rate), Speed (movement), Defense (damage taken), Vitality (regen). MP and Wisdom wait for abilities (Phase 10).
+Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a range, chosen by the server: the Serf's ranges for levels 2–5, then the class's ranges by its High/Mid/Low tier for each stat. Choosing a class gives a one-time bonus to its High stats. Leveling takes each stat partway; each class has a max per stat that only stat potions (from high-tier dungeons) reach. A level-1 Serf's stats (HP 20, DEF 0, the rest 10) reproduce the starting values above exactly. The tables and formulas are D-078. Since 8c-2 the combat stats are live: HP (max HP), Attack (shot damage), Dexterity (fire rate), Speed (movement), Defense (damage taken: hit × 40/(40 + DEF), D-121), Vitality (regen). MP and Wisdom are live since Phase 10a (max MP, and MP regen = WIS/10 per second, D-096).
 
 ## 7. Death and account persistence
 
@@ -213,8 +217,7 @@ Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a r
 - Character permadeath is a core game pillar.
 - A character that dies before dungeon completion does not receive completion rewards.
 - A dead character's final lifetime EXP remains on the lifetime EXP leaderboard.
-- A Resurrection Necklace Artifact is part of the prior equipment concept and is intended to preserve a character once, subject to final rule confirmation.
-- Account-level resources and eligible shared storage were previously planned to persist through character death.
+- A Resurrection Necklace Artifact is intended to preserve a character once; the exact rule is still to be confirmed (Phase 13).
 
 ### Confirmed item and reward rules (Phase 9)
 
@@ -223,20 +226,17 @@ Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a r
 - **Gold** is account-wide and survives death; it comes from selling items (D-087).
 - Stat potions not drunk at once wait in the account's **potion rack** (D-089).
 
-### Prior persistence concepts requiring final reconciliation
+- An account has **2 serf slots**; a dead serf frees its slot (D-061). Buying more slots with gold is Phase 14.
+- Drunk potions die with the serf; undrunk potions in the rack survive (D-118).
 
-- Gold persists through character death (confirmed by D-087).
-- Shared stash is account-wide and can transfer eligible items between characters (confirmed by D-085, D-086).
-- Two free character slots; additional slots purchasable with gold.
-- Shared stash capacity and potion rack may be upgradeable.
-- Equipped items are lost on death under normal rules.
-- Handling of unequipped inventory, carried potions, and resurrection edge cases needs a definitive rule.
+### Still open
 
-Do not implement death handling until the exact inventory-loss and reward rules for the target milestone are recorded as confirmed.
+- Gold upgrades (more serf slots, a bigger stash and potion rack) and what happens to them on death: Phase 14 (open question 5).
+- The Resurrection Necklace's exact rule and its edge cases: Phase 13.
 
 ## 8. Equipment
 
-Prior draft equipment slots:
+Equipment slots (CONFIRMED, D-082):
 
 1. Weapon
 2. Class ability item
@@ -251,7 +251,7 @@ Prior draft equipment slots:
 
 Important correction: there is **one head armor slot**; do not add a separate cap/hat slot.
 
-Prior weapon types:
+Weapon types (CONFIRMED, D-083):
 
 - Sword
 - Dagger
@@ -261,19 +261,19 @@ Prior weapon types:
 - Wand
 - Mace
 
-Prior armor types:
+Armor types (CONFIRMED, D-083; piece names D-091):
 
 - Cloth
 - Leather
 - Plate
 
-Prior accessories:
+Accessories:
 
 - Rings, necklaces, capes.
 - Stat variants based on HP, MP, Attack, Dexterity, Speed, Defense, Vitality, and Wisdom.
 - CONFIRMED (D-106): each ring, necklace, and cape has one of those as its **base stat** ("T5 Ring of Defense"), worth tier + 1 (×3 for HP and MP); never Luck. Any class can wear any of them.
 
-Equipment restrictions and class proficiencies were previously drafted but are not final unless confirmed in the decision log.
+Class restrictions (CONFIRMED, D-081, D-083): each class can use certain weapon types and one armor type; a classless Serf can use T0 weapons and armor and every accessory. Weapon damage is 27 + 4 × tier. Ability items are wearable only by their class (D-096).
 
 ## 9. Tiers, modifiers, Artifacts, and Shiny items
 
@@ -377,15 +377,15 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 
 - Maximum party size: ten players (D-012; was four).
 - Players enter dungeons from a main menu (stash, serfs, leaderboard, dungeon select) and can quickly requeue for the same dungeon after a run (D-048).
-- Parties form through an open queue that fills a run with up to 4 queued players (D-051); a run accepts joiners for its first 15 seconds, then is locked (D-052).
+- Parties form through an open queue that fills a run with up to 10 queued players (D-051, D-012); a run accepts joiners for its first 15 seconds, then is locked (D-052). No party codes or friend invites yet.
 - Completion should feel rewarding: strong celebratory effects and a slot-machine-like reward chest (D-049). Death is abrupt and tragic: a stats screen about the serf's life, then return to choose a serf and dungeon (D-050).
 - Browser and Steam desktop clients share the same game servers and can play together.
 - Mixed-platform parties can enter the same dungeon instance and fight the same enemies/boss.
 - Every player who completes a dungeon receives their own randomized reward results; rewards are individual rather than a single shared loot roll. The number of item rolls each player gets equals their own Luck (D-065).
 - A player who dies before completion receives no completion rewards.
-- Enemy HP scales by party size; the exact formula remains unresolved.
+- Enemy HP scales by party size: × (1 + 0.5 × (players − 1)) (D-045, PROVISIONAL).
 - Solo play should remain viable.
-- Reconnect, disconnect, session ownership, and party-leader behavior require explicit rules.
+- Reconnect, disconnect, session ownership, and party-leader behavior require explicit rules (Phase 18). Today: one connection per account (T-042); a player who disconnects leaves the run and cannot rejoin it (D-052).
 
 ## 12. Economy and leaderboards
 
@@ -420,9 +420,9 @@ Other leaderboard ideas (survival time, dungeon clears, bosses, fastest clears, 
 - Browser and desktop clients must use compatible network protocols and gameplay rules.
 - Version compatibility, authentication, reconnects, and session conflicts must be considered before release.
 
-## 14. Current prototype goal
+## 14. First vertical slice (achieved)
 
-Build a small vertical slice before building the full game:
+The first vertical slice is complete (Phases 1–11): every step below is built except the desktop client (Phase 16). Current work and its order live in `docs/ROADMAP.md`.
 
 1. The browser client shows the approved 960×640 layout, fixed 240-pixel HUD, 720×640 gameplay viewport, 16×16 player, and player-centered camera with at least 300 world pixels of cardinal visibility.
 2. A browser game loads.

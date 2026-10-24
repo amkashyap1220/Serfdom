@@ -4,21 +4,27 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
+Phase numbering follows the 18-phase roadmap (D-103); `docs/ROADMAP.md` holds each phase's acceptance criteria.
+
 - [x] Phase 0 — Repository orientation and environment
 - [x] Phase 1 — Playable local client skeleton
 - [x] Phase 2 — Movement, collision, and camera following
 - [x] Phase 3 — Combat prototype
 - [x] Phase 4 — Authoritative multiplayer foundation
-- [ ] Phase 5 — Shared combat and enemies
-- [ ] Phase 6 — Dungeon vertical slice
-- [ ] Phase 7 — Account and persistent data
+- [x] Phase 5 — Shared combat and enemies
+- [x] Phase 6 — Dungeon vertical slice
+- [x] Phase 7 — Account and persistent data
 - [x] Phase 8 — Progression and permadeath
 - [x] Phase 9 — Equipment and rewards
-- [ ] Phase 10 — Classes and class abilities
-- [ ] Phase 11 — Dungeon variety and procedural assembly
-- [ ] Phase 12 — Economy and account systems
-- [ ] Phase 13 — Desktop wrapper and cross-play proof
-- [ ] Phase 14 — Release hardening
+- [x] Phase 10 — Classes and class abilities
+- [x] Phase 11 — Dungeon variety and procedural assembly
+- [ ] Phase 12 — Dungeon tiers and the endgame loop (in progress: 12a–12k built; next 12l, the Lich)
+- [ ] Phase 13 — Rare loot
+- [ ] Phase 14 — Economy and account systems
+- [ ] Phase 15 — Presentation: art, HUD, and sound
+- [ ] Phase 16 — Desktop wrapper and cross-play proof
+- [ ] Phase 17 — Steam integration
+- [ ] Phase 18 — Release hardening
 
 ## Session entries
 
