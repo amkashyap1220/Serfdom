@@ -38,13 +38,13 @@ export const TEST_WALLS: readonly Rect[] = [
   { x: 868, y: 1000, width: 32, height: 150 },
   { x: 700, y: 1150, width: 200, height: 32 },
 
-  // Gap 24 px wide (wider than the 16 px body): passable.
+  // Gap 48 px wide (wider than the 32 px body): passable.
   { x: 1000, y: 1250, width: 200, height: 32 },
-  { x: 1224, y: 1250, width: 200, height: 32 },
+  { x: 1248, y: 1250, width: 200, height: 32 },
 
-  // Gap 12 px wide (narrower than the body): must block.
+  // Gap 24 px wide (narrower than the body): must block.
   { x: 1000, y: 1400, width: 200, height: 32 },
-  { x: 1212, y: 1400, width: 200, height: 32 },
+  { x: 1224, y: 1400, width: 200, height: 32 },
 ];
 
 /**

@@ -8,6 +8,7 @@ import {
   SERF_BASE,
   GRUNT,
   WARLORD,
+  PLAYER_BODY,
   PLAYER_HEALTH,
   WARCHIEF,
   encodeMessage,
@@ -441,8 +442,11 @@ describe("DungeonInstance in the Goblin Warrens", () => {
         projectiles: [],
       });
     }
-    // Body (16 px) flush against the shut door at x = 2036 (the hall's west edge).
-    expect(r.state.players[0]?.position.x).toBeCloseTo(2036 + 8, 6);
+    // Body flush against the shut door at x = 2036 (the hall's west edge).
+    expect(r.state.players[0]?.position.x).toBeCloseTo(
+      2036 + PLAYER_BODY.width / 2,
+      6,
+    );
   });
 
   it("entering the tunnel spawns grunts, which come and hit the player", () => {

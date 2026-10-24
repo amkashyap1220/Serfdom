@@ -845,7 +845,7 @@ export function applyPlayerInput(
  *    hits, summons, or marks hazards. Summons join after every enemy acted.
  * 2b. Hazards count down; landing ones hit living players inside them.
  * 3. Projectiles move and resolve hits (player shots → enemies; enemy
- *    bullets → any living player's 15×15 hurtbox at their server position,
+ *    bullets → any living player's 31×31 hurtbox at their server position,
  *    D-044).
  * 4. Enemy respawn timers. Defeated enemies that never respawn (dungeons)
  *    are removed, so snapshots do not grow with the dead; summons die

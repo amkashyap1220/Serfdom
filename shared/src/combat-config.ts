@@ -30,8 +30,8 @@ export const DUMMY_ENEMY = {
  */
 export const PLAYER_HEALTH = {
   maxHp: 20,
-  /** Square box enemy projectiles can hit: 15×15, ½ px inset per side of the 16×16 sprite. */
-  hurtboxSize: 15,
+  /** Square box enemy projectiles can hit: 31×31, ½ px inset per side of the 32×32 sprite (D-127, PROVISIONAL). */
+  hurtboxSize: 31,
 } as const;
 
 /**
