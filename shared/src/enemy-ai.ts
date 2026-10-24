@@ -34,6 +34,7 @@ import {
   DRONE,
   TURRET,
   AUTOMATON,
+  WARDEN,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -304,6 +305,16 @@ export function enemyAct(
         result,
         context,
         TURRET,
+      );
+    case "warden":
+      return wardenAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
       );
     case "automaton":
       return automatonAct(enemy, target, walls, dtSeconds, result, context);
@@ -889,6 +900,158 @@ function elementalAct(
     dt,
   );
   return result({ ...enemy, position });
+}
+
+/** One volley of a spiral (the Lich's, D-125; the Warden's, D-138): a bullet per arm, evenly round from `spin`. */
+export function spiralVolley(
+  spin: number,
+  arms: number,
+  spec: EnemyBulletSpec,
+): { direction: Vec2; spec: EnemyBulletSpec }[] {
+  return Array.from({ length: arms }, (_, arm) => {
+    const a = spin + (arm * 2 * Math.PI) / arms;
+    return { direction: { x: Math.cos(a), y: Math.sin(a) }, spec };
+  });
+}
+
+/**
+ * The Warden of the Abyss (D-138): the Lich's spiral all fight long (not
+ * while dazed); below 66% it walks and charges like the Warchief (a wall
+ * dazes it); below 33% it also slams like the Forgemaster, sending a
+ * shockwave ring with a gap.
+ */
+function wardenAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "warden") return result(enemy);
+  const W = WARDEN;
+  const fraction = enemy.hp / enemy.maxHp;
+  const two = fraction < W.phaseTwoBelow;
+  const three = fraction < W.phaseThreeBelow;
+  const tick = (t: number) => Math.max(0, t - dt);
+  let next = {
+    ...ai,
+    shot: tick(ai.shot),
+    charge: two ? tick(ai.charge) : ai.charge,
+    slam: three ? tick(ai.slam) : ai.slam,
+    spin: ai.spin + ((W.spiral.degreesPerSecond * Math.PI) / 180) * dt,
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  const area = enemy.roomId ? context.boundsOf?.(enemy.roomId) : undefined;
+  let position = enemy.position;
+  if (!target) return result({ ...enemy, ai: next }, action);
+  if (next.mode !== "dazed" && next.shot <= 1e-9) {
+    next.shot = W.spiral.intervalSeconds;
+    action.bullets.push(
+      ...spiralVolley(next.spin, W.spiral.arms, W.spiral.bullet),
+    );
+  }
+  if (three && next.slam <= 1e-9 && next.mode !== "dazed") {
+    next.slam = W.slam.intervalSeconds;
+    action.wave = {
+      at: { ...enemy.position },
+      gap: slamGap(enemy.id, next.slams),
+      startsIn: FORGEMASTER.slam.windupSeconds,
+      ...(area ? { area } : {}),
+    };
+    action.slam = {
+      at: { ...enemy.position },
+      radius: FORGEMASTER.slam.radius,
+      warning: true,
+    };
+    next.slams += 1;
+  }
+  switch (next.mode) {
+    case "walk": {
+      if (!two) break;
+      if (next.charge <= 1e-9 && target.distance <= W.charge.triggerRange) {
+        next = { ...next, mode: "windup", timer: W.charge.windupSeconds };
+        break;
+      }
+      position = move(
+        enemy,
+        toward(
+          enemy.position,
+          route(
+            enemy.position,
+            target.target.position,
+            enemy.size / 2,
+            walls,
+            context,
+          ),
+        ),
+        W.speed,
+        walls,
+        dt,
+      );
+      break;
+    }
+    case "windup": {
+      const timer = next.timer - dt;
+      if (timer > 1e-9) {
+        next = { ...next, timer };
+        break;
+      }
+      next = {
+        ...next,
+        mode: "charge",
+        timer: W.charge.seconds,
+        direction: toward(enemy.position, target.target.position),
+        hit: [],
+        charge: W.charge.intervalSeconds,
+      };
+      break;
+    }
+    case "charge": {
+      position = move(enemy, next.direction, W.charge.speed, walls, dt);
+      for (const t of targets) {
+        if (
+          !next.hit.includes(t.id) &&
+          touching(position, enemy.size, t.position)
+        ) {
+          action.contacts.push({ playerId: t.id, damage: W.charge.damage });
+          next = { ...next, hit: [...next.hit, t.id] };
+        }
+      }
+      const travelled = Math.hypot(
+        position.x - enemy.position.x,
+        position.y - enemy.position.y,
+      );
+      const blocked =
+        travelled < W.charge.speed * speedFactor(enemy) * dt * 0.5;
+      const timer = next.timer - dt;
+      if (blocked)
+        next = { ...next, mode: "dazed", timer: W.charge.dazeSeconds };
+      else if (timer <= 1e-9)
+        next = { ...next, mode: "recover", timer: W.charge.recoverSeconds };
+      else next = { ...next, timer };
+      break;
+    }
+    case "dazed":
+    case "recover": {
+      const timer = next.timer - dt;
+      next =
+        timer > 1e-9
+          ? { ...next, timer }
+          : next.mode === "dazed"
+            ? { ...next, mode: "recover", timer: W.charge.recoverSeconds }
+            : { ...next, mode: "walk", timer: 0 };
+      break;
+    }
+  }
+  return result({ ...enemy, position, ai: next }, action);
 }
 
 /**
@@ -1823,13 +1986,9 @@ function lichAct(
   next.firing = ai.firing || next.shot <= 1e-9;
   if (next.shot <= 1e-9) {
     next.shot = spiral.intervalSeconds;
-    for (let arm = 0; arm < LICH.spiral.arms; arm++) {
-      const a = next.spin + (arm * 2 * Math.PI) / LICH.spiral.arms;
-      action.bullets.push({
-        direction: { x: Math.cos(a), y: Math.sin(a) },
-        spec: LICH.spiral.bullet,
-      });
-    }
+    action.bullets.push(
+      ...spiralVolley(next.spin, LICH.spiral.arms, LICH.spiral.bullet),
+    );
   }
   // Skeletons out of the sarcophagi, two at a time, at most four alive.
   next.rise = Math.max(0, next.rise - dt);
@@ -2104,6 +2263,7 @@ export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
 }
 
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "warden") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "wyrm") return enemy.ai.mode !== "walk";
   if (enemy.ai.kind === "forgemaster") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "elemental") return enemy.ai.fuse !== null;
@@ -2120,6 +2280,7 @@ export function isTelegraphing(enemy: EnemyState): boolean {
 
 /** A brute that charged into a wall, standing dazed (D-112). */
 export function isDazed(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "warden") return enemy.ai.mode === "dazed";
   if (enemy.ai.kind === "lich") return enemy.ai.mode === "stunned";
   return (
     (enemy.ai.kind === "brute" ||

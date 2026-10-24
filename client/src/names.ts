@@ -38,6 +38,7 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   drone: "a Cog Drone",
   turret: "a Floor Turret",
   automaton: "the Automaton",
+  warden: "the Warden of the Abyss",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
   braziers: "a spirit brazier",

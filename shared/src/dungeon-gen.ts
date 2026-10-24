@@ -55,6 +55,9 @@ export interface RoomPiece {
   tides?: readonly Rect[];
   /** Rotating blade arms, their pivots relative like the spawns (D-137). */
   blades?: readonly BladeSpot[];
+  /** Traps that wait for a wave, and timed waves (D-138), as on the room. */
+  trapsFromWave?: { arrows?: number; rockfall?: number; runes?: number };
+  waveSeconds?: number;
   /**
    * An arrow trap's slits and firing direction, relative (D-113); `fire`:
    * spirit braziers (D-123); `jet`: fire jets (D-133).
@@ -337,6 +340,12 @@ export class RoomAssembly {
             piece.holeWave,
           ),
           ...(piece.gated ? { gated: true } : {}),
+          ...(piece.trapsFromWave
+            ? { trapsFromWave: piece.trapsFromWave }
+            : {}),
+          ...(piece.waveSeconds !== undefined
+            ? { waveSeconds: piece.waveSeconds }
+            : {}),
           ...(o.obstacles.length > 0
             ? { obstacles: o.obstacles.map((r) => ({ ...r, ...shift(r) })) }
             : {}),

@@ -160,7 +160,13 @@ export function stepRooms(
       const waiting =
         ticked.wave === room.holeWave &&
         ticked.released < (room.waves[ticked.wave]?.length ?? 0);
-      if (alive || waiting) return ticked;
+      // A timed room's next wave comes when the last is cleared or its
+      // time is up, whichever is first (D-138).
+      const timeUp =
+        room.waveSeconds !== undefined &&
+        ticked.wave + 1 < room.waves.length &&
+        ticked.clock - ticked.waveStart >= room.waveSeconds - 1e-9;
+      if ((alive || waiting) && !timeUp) return ticked;
       if (ticked.wave + 1 < room.waves.length) {
         return startWave(ticked.wave + 1, ticked.clock);
       }
@@ -224,6 +230,10 @@ export function rockfallDrops(
         ? ICICLES.everySeconds
         : ROCKFALL.everySeconds;
     const due = Math.floor(p.clock / every + 1e-9) + 1;
+    // Waiting for its wave (D-138): keep its count at "now", so it starts
+    // fresh rather than with a backlog.
+    if (p.wave < (room.trapsFromWave?.rockfall ?? 0))
+      return { ...p, dropped: due };
     if (p.dropped >= due) return p;
     const b = room.bounds;
     const m = ROCKFALL.radius;
@@ -296,6 +306,15 @@ export function arrowVolleys(
     const trap = room.arrows;
     if (!trap || p.status !== "active") return p;
     const t = timingOf(trap);
+    if (p.wave < (room.trapsFromWave?.arrows ?? 0)) {
+      return {
+        ...p,
+        volleys: Math.max(
+          0,
+          Math.floor((p.clock - t.warnSeconds) / t.everySeconds) + 1,
+        ),
+      };
+    }
     // Braziers (D-123) and fire jets (D-133) take turns: `gap` is which
     // half fires (0 even, 1 odd), switching every time. Arrow traps leave
     // a random gap.
@@ -403,6 +422,9 @@ export function runeBursts(
     const p = progress[i] ?? DORMANT;
     const runes = room.runes;
     if (!runes || runes.length === 0 || p.status !== "active") return p;
+    if (p.wave < (room.trapsFromWave?.runes ?? 0)) {
+      return { ...p, runeSteps: Math.floor(p.clock / RUNES.everySeconds) + 1 };
+    }
     const due = RUNES.warnSeconds + p.runeSteps * RUNES.everySeconds;
     if (p.clock + 1e-9 < due) return p;
     const column = runeColumn(p.runeSteps, columnsOf(runes));

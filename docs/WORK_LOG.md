@@ -686,3 +686,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found by a test: my own expectation of a blade's reach forgot the hurtbox's width; the rule was right.
 - `npm run check`: 541 shared, 199 server, 67 client, build.
 - Live (harness, **test** DB, headless): two arms turning in the Escapement with sentries' shields drawn; the Automaton's laser and overheat cycle in the Core.
+
+### Phase 13h — The Abyssal Gauntlet, a wave arena — 2026-10-24
+
+- The third endgame dungeon (D-138, PROVISIONAL): one arena, eight timed waves from every earlier dungeon, traps that switch on at waves 2, 4, and 6, and the Warden (spiral, charge, shockwaves).
+- Found while building: a trap switched on late would have fired its whole backlog at once (its schedule runs on the room clock); waiting traps now keep their count at "now". And the waiting rockfall used the boulder's pace for slag rooms; fixed before testing.
+- Found by a test: my daze test never put a wall in the charge's way; the rule was right.
+- `npm run check`: 549 shared, 199 server, 67 client, build.
+- Live (harness, **test** DB, headless): all eight waves came in order; braziers, runes, and slag were all running by the Warden, who spiralled, then (enraged) sent shockwave rings clipped to the arena.

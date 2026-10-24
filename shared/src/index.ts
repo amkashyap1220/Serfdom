@@ -73,6 +73,7 @@ export {
   DRONE,
   TURRET,
   AUTOMATON,
+  WARDEN,
   CASTER,
   GHOST,
   NECROMANCER,
@@ -515,3 +516,9 @@ export {
   VAULT_RECIPE,
   VAULT_SEED,
 } from "./clockwork-vault.ts";
+export {
+  GAUNTLET_ARENA,
+  GAUNTLET_RECIPE,
+  GAUNTLET_WAVES,
+  buildGauntlet,
+} from "./abyssal-gauntlet.ts";

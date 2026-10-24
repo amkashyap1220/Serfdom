@@ -13,6 +13,7 @@ import {
   TIDEPRIEST,
   WRAITH,
   AUTOMATON,
+  WARDEN,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -69,6 +70,22 @@ export type EnemyAi =
       direction: Vec2;
       /** Players already hit by the current charge. */
       hit: readonly number[];
+    }
+  | {
+      kind: "warden";
+      mode: "walk" | "windup" | "charge" | "dazed" | "recover";
+      timer: number;
+      /** Locked when a charge's warning ends. */
+      direction: Vec2;
+      /** Players the current charge has hit. */
+      hit: readonly number[];
+      /** The spiral's angle, and seconds to its next volley. */
+      spin: number;
+      shot: number;
+      /** Seconds until it may charge, or slam, again. */
+      charge: number;
+      slam: number;
+      slams: number;
     }
   | {
       kind: "automaton";
@@ -250,6 +267,19 @@ function initialAi(kind: EnemyKind): EnemyAi {
       };
     case "wraith":
       return { kind, trail: WRAITH.trail.everySeconds / 2 };
+    case "warden":
+      return {
+        kind,
+        mode: "walk",
+        timer: 0,
+        direction: { x: 0, y: 0 },
+        hit: [],
+        spin: 0,
+        shot: FIRST_ATTACK_DELAY.warden,
+        charge: WARDEN.charge.intervalSeconds / 2,
+        slam: 0,
+        slams: 0,
+      };
     case "automaton":
       return {
         kind,

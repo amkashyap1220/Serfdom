@@ -5,6 +5,7 @@ import {
   WARCHIEF,
   WYRM,
   AUTOMATON,
+  WARDEN,
   WARLORD,
   type EnemyKind,
 } from "@serfdom/shared";
@@ -64,6 +65,20 @@ export function bossBar(
           : fraction < LICH.wardBelow[1]!
             ? "  — ENRAGED"
             : "",
+    };
+  }
+  if (kind === "warden") {
+    const phase =
+      fraction < WARDEN.phaseThreeBelow
+        ? 3
+        : fraction < WARDEN.phaseTwoBelow
+          ? 2
+          : 1;
+    return {
+      name: "The Warden of the Abyss",
+      notches: [WARDEN.phaseTwoBelow, WARDEN.phaseThreeBelow],
+      angry: phase > 1,
+      suffix: state.dazed ? "  — DAZED" : phase === 3 ? "  — ENRAGED" : "",
     };
   }
   if (kind === "automaton") {

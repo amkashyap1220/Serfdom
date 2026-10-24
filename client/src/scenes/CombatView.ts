@@ -74,6 +74,7 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   drone: 0xb08d3a,
   turret: 0x6a6f78,
   automaton: 0x8a6a3a,
+  warden: 0x3a1a4a,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */

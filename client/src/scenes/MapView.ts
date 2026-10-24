@@ -46,6 +46,17 @@ const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
     obstacleEdge: 0x7d7472,
     hole: 0x0a0605,
   },
+  // D-138: black stone over the abyss, violet edges.
+  "abyssal-gauntlet": {
+    floor: 0x120f18,
+    gridMinor: 0x1d1826,
+    gridMajor: 0x2e2640,
+    wall: 0x4a3a66,
+    wallEdge: 0x8a70c0,
+    obstacle: 0x3a3348,
+    obstacleEdge: 0x6a5f80,
+    hole: 0x040306,
+  },
   // D-137: brass and dark steel.
   "clockwork-vault": {
     floor: 0x1e1c18,

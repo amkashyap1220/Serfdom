@@ -175,6 +175,13 @@ export interface RoomDef {
   /** Rotating blade arms (D-137): they turn while the room fights. */
   blades?: readonly BladeSpot[];
   /**
+   * Traps that only switch on once this wave (0-based) has come (the
+   * Abyssal Gauntlet, D-138); absent ones run from the start.
+   */
+  trapsFromWave?: { arrows?: number; rockfall?: number; runes?: number };
+  /** The next wave comes after this many seconds even if the last is not cleared (D-138). */
+  waveSeconds?: number;
+  /**
    * An arrow trap (D-113): slits just inside one wall, all firing across the
    * room in `direction` but for a gap, every ARROWS.everySeconds while it
    * fights.

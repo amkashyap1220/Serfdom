@@ -68,6 +68,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v40 (13h): the Abyssal Gauntlet (D-138): the Warden of the Abyss
+ *          (a new enemy kind).
  * v39 (13g): the Clockwork Vault (D-137): snapshots list turning
  *          `blades`; killedBy may be "blades"; `facing` is also a clockwork
  *          sentry's shield.
@@ -141,7 +143,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 39;
+export const PROTOCOL_VERSION = 40;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;

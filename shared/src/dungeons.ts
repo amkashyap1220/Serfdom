@@ -3,6 +3,7 @@ import { buildForge } from "./ember-forge.ts";
 import { buildTemple } from "./sunken-temple.ts";
 import { buildHollow } from "./frost-hollow.ts";
 import { VAULT_LAYOUT } from "./clockwork-vault.ts";
+import { buildGauntlet } from "./abyssal-gauntlet.ts";
 import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
@@ -121,6 +122,16 @@ export const DUNGEONS = [
     blurb: "Level 20 · 8 min · endgame · the same map every run",
     listed: true,
     layout: VAULT_LAYOUT,
+    minLevel: 20,
+  },
+  {
+    // D-138: an endgame dungeon in a special format: one arena, 8 waves.
+    id: "abyssal-gauntlet",
+    name: "Abyssal Gauntlet",
+    blurb: "Level 20 · 8 waves · endgame",
+    listed: true,
+    layout: buildGauntlet(0),
+    generate: buildGauntlet,
     minLevel: 20,
   },
   {

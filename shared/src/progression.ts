@@ -36,6 +36,7 @@ export const DUNGEON_EXP: Record<DungeonId, DungeonExp> = {
   // towards the lifetime total.
   "frost-hollow": { base: 300, topLevel: 20 },
   "clockwork-vault": { base: 300, topLevel: 20 },
+  "abyssal-gauntlet": { base: 300, topLevel: 20 },
   training: { base: 100, topLevel: 9 },
 };
 

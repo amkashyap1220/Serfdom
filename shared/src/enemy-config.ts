@@ -42,6 +42,7 @@ export const ENEMY_KINDS = [
   "drone",
   "turret",
   "automaton",
+  "warden",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -424,7 +425,39 @@ export const BOSS_KINDS: readonly EnemyKind[] = [
   "tidepriest",
   "wyrm",
   "automaton",
+  "warden",
 ];
+
+/**
+ * The Warden of the Abyss (D-138), the Abyssal Gauntlet's last wave: the
+ * Lich's two-armed spiral throughout; below `phaseTwoBelow` the
+ * Warchief's charge as well; below `phaseThreeBelow` the Forgemaster's
+ * shockwave rings too.
+ */
+export const WARDEN = {
+  maxHp: 18000,
+  size: 64,
+  speed: 35,
+  phaseTwoBelow: 0.66,
+  phaseThreeBelow: 0.33,
+  spiral: {
+    arms: 2,
+    degreesPerSecond: 100,
+    intervalSeconds: 0.15,
+    bullet: { damage: 10, speed: 160, size: 8, range: 560 },
+  },
+  charge: {
+    intervalSeconds: 7,
+    triggerRange: 360,
+    windupSeconds: 1,
+    speed: 320,
+    seconds: 1,
+    damage: 16,
+    dazeSeconds: 2,
+    recoverSeconds: 0.8,
+  },
+  slam: { intervalSeconds: 5 },
+} as const;
 
 /** Clockwork sentry (D-137): a grave knight's shield and slam with its own numbers. */
 export const SENTRY = {
@@ -812,6 +845,7 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   drone: DRONE,
   turret: TURRET,
   automaton: AUTOMATON,
+  warden: WARDEN,
 };
 
 /**
@@ -860,6 +894,7 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   drone: DRONE.contactCooldownSeconds / 2,
   turret: TURRET.throwIntervalSeconds / 2,
   automaton: 1.5,
+  warden: 1,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {
