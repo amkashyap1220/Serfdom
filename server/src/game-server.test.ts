@@ -12,6 +12,8 @@ import {
   totalExpForLevel,
   sellPrice,
   STASH_SIZE,
+  RACK_SIZE,
+  SERF_MAX,
   type ServerMessage,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -1459,6 +1461,76 @@ describe("equipping over the network (9b)", () => {
     expect(me.combat.moveSpeed).toBe(
       combatFor({ ...SERF_BASE, speed: 12 }).moveSpeed,
     );
+  });
+});
+
+describe("the potion rack over the network (D-118)", () => {
+  it("drinks and pours out rack potions; no drinking while queued", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      allowTestDungeons: true,
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const { client } = await joined();
+    const serfId = 1;
+    const drops = (await repo.addPotions(
+      1,
+      serfId,
+      ["vitality", "vitality", "mp"],
+      RACK_SIZE,
+    ))!;
+    const [first, second, third] = drops.map((d) => d.potion.id);
+    client.send(encodeMessage({ type: "getStash" }));
+    expect(await nextOfType(client, "stash")).toMatchObject({
+      rackCapacity: RACK_SIZE,
+      rack: drops.map((d) => d.potion),
+      pendingPotions: [],
+    });
+    // Before a class, a Serf drinks up to the Serf max (D-119); here VIT is there already.
+    await repo.saveStats(
+      1,
+      serfId,
+      { ...SERF_BASE, vitality: SERF_MAX.vitality },
+      1,
+      1,
+    );
+    client.send(
+      encodeMessage({ type: "drinkPotion", potionId: first!, serfId }),
+    );
+    expect((await nextOfType(client, "stashError")).reason).toContain(
+      "a class raises it",
+    );
+    await repo.chooseClass(1, serfId, "druid", 0, { ...SERF_BASE }, 1);
+    client.send(
+      encodeMessage({ type: "drinkPotion", potionId: first!, serfId }),
+    );
+    let serfs = await nextOfType(client, "serfList");
+    while (serfs.serfs[0]?.stats.vitality === SERF_BASE.vitality)
+      serfs = await nextOfType(client, "serfList");
+    expect(serfs.serfs[0]?.stats.vitality).toBe(SERF_BASE.vitality + 1);
+    let stash = await nextOfType(client, "stash");
+    while (stash.rack.length === 3) stash = await nextOfType(client, "stash");
+    expect(stash.rack.map((p) => p.id)).toEqual([second, third]);
+
+    client.send(queue);
+    await until(() => server.isQueued(1));
+    client.send(
+      encodeMessage({ type: "drinkPotion", potionId: second!, serfId }),
+    );
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "not while queued or in a run",
+    );
+    // Pouring out is fine while queued, like selling.
+    client.send(encodeMessage({ type: "pourPotion", potionId: third! }));
+    stash = await nextOfType(client, "stash");
+    while (stash.rack.length === 2) stash = await nextOfType(client, "stash");
+    expect(stash.rack.map((p) => p.id)).toEqual([second]);
   });
 });
 

@@ -164,6 +164,7 @@ describe("migrations", () => {
     expect(tables).toEqual([
       "accounts",
       "items",
+      "potions",
       "schema_migrations",
       "serfs",
       "sessions",
@@ -709,6 +710,104 @@ function serfContract(
       ).toBeNull();
       expect((await repo.find(a, serf.id))?.alive).toBe(true);
       expect(await repo.list(b)).toEqual([]);
+    });
+
+    it("potions fill the rack, then wait for the serf that won them (D-118)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const b = await account();
+      const serf = await repo.create(a, `${name}Brewer`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      const drops = await repo.addPotions(
+        a,
+        serf.id,
+        ["attack", "hp", "wisdom"],
+        2,
+      );
+      expect(drops?.map((d) => [d.potion.stat, d.pending])).toEqual([
+        ["attack", false],
+        ["hp", false],
+        ["wisdom", true],
+      ]);
+      expect(await repo.hasPending(a, serf.id)).toBe(true);
+      const stash = await repo.stash(a);
+      expect(stash.rack.map((p) => p.stat)).toEqual(["attack", "hp"]);
+      expect(stash.pendingPotions).toEqual([
+        { potion: drops![2]!.potion, serfId: serf.id },
+      ]);
+      // Not another account's, and never for someone else's serf.
+      expect((await repo.stash(b)).rack).toEqual([]);
+      expect(await repo.addPotions(b, serf.id, ["hp"], 20)).toBeNull();
+      // Pouring one out makes room: the waiting potion moves in.
+      expect(await repo.pourPotion(b, drops![0]!.potion.id, 2)).toBe(false);
+      expect(await repo.pourPotion(a, drops![0]!.potion.id, 2)).toBe(true);
+      expect(await repo.pourPotion(a, drops![0]!.potion.id, 2)).toBe(false);
+      expect(await repo.hasPending(a, serf.id)).toBe(false);
+      expect((await repo.stash(a)).rack.map((p) => p.stat)).toEqual([
+        "hp",
+        "wisdom",
+      ]);
+    });
+
+    it("drinking raises the stat up to the serf's max, once, and checks the serf (D-075, D-118, D-119)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const b = await account();
+      const serf = await repo.create(a, `${name}Sipper`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      const [hp, attack, wisdom, again, defense] = (await repo.addPotions(
+        a,
+        serf.id,
+        ["hp", "attack", "wisdom", "attack", "defense"],
+        20,
+      ))!.map((d) => d.potion.id);
+      // A Serf drinks too, up to the Serf max (D-119); it has no Defense.
+      expect(await repo.drinkPotion(a, serf.id, attack!, 20)).toMatchObject({
+        serf: { stats: { attack: SERF_BASE.attack + 1 } },
+      });
+      expect(await repo.drinkPotion(a, serf.id, defense!, 20)).toMatchObject({
+        refused: expect.stringContaining("needs a class first"),
+      });
+      const near = { ...SERF_BASE, hp: 198, attack: 49, wisdom: 40 };
+      expect(
+        await repo.chooseClass(a, serf.id, "fighter", 0, near, 1),
+      ).not.toBeNull();
+      // +5 HP stops at 200; +1 ATK reaches 50; WIS is already at 40.
+      const drankHp = await repo.drinkPotion(a, serf.id, hp!, 20);
+      expect(drankHp).toMatchObject({
+        stat: "hp",
+        serf: { stats: { hp: 200 } },
+      });
+      const drankAtk = await repo.drinkPotion(a, serf.id, again!, 20);
+      expect(drankAtk).toMatchObject({ serf: { stats: { attack: 50 } } });
+      expect(await repo.drinkPotion(a, serf.id, wisdom!, 20)).toMatchObject({
+        refused: expect.stringContaining("already at its max"),
+      });
+      // A potion is drunk once; someone else's potion or serf does not exist.
+      expect(await repo.drinkPotion(a, serf.id, hp!, 20)).toBeNull();
+      expect(await repo.drinkPotion(b, serf.id, wisdom!, 20)).toBeNull();
+      expect((await repo.find(a, serf.id))?.stats).toMatchObject({
+        hp: 200,
+        attack: 50,
+        wisdom: 40,
+      });
+      expect((await repo.stash(a)).rack.map((p) => p.stat)).toEqual([
+        "wisdom",
+        "defense",
+      ]);
+      // The dead drink nothing, and the rack outlives them (D-079, D-118).
+      await repo.recordRun(
+        a,
+        serf.id,
+        "died",
+        run,
+        { dungeon: "goblin-stronghold", killedBy: "warchief" },
+        0,
+      );
+      expect(await repo.drinkPotion(a, serf.id, wisdom!, 20)).toMatchObject({
+        refused: expect.stringContaining("is dead"),
+      });
+      expect((await repo.stash(a)).rack).toHaveLength(2);
     });
   });
 }

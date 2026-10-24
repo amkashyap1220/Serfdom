@@ -213,6 +213,8 @@ export {
   type LeaderboardEntry,
   type LootDrop,
   type PendingReward,
+  type PendingPotion,
+  type PotionDrop,
   type SnapshotEnemy,
   BLAST_KINDS,
   BUFF_KINDS,
@@ -338,6 +340,8 @@ export {
   rollLevelGains,
   SERF_BASE,
   SERF_GROWTH,
+  SERF_MAX,
+  serfStatMax,
   STAT_KEYS,
   STAT_LABELS,
   statMax,
@@ -368,3 +372,13 @@ export {
   totalExpForLevel,
 } from "./progression.ts";
 export { NAV_CELL, NAV_CLEARANCE, Navigator } from "./pathing.ts";
+export {
+  drinkPotion,
+  POTION_CHANCE,
+  potionAmount,
+  potionName,
+  potionProblem,
+  RACK_SIZE,
+  rollPotions,
+  type Potion,
+} from "./potions.ts";

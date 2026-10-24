@@ -18,6 +18,7 @@ import {
   STAT_KEYS,
   STAT_LABELS,
   statMax,
+  serfStatMax,
   type StatKey,
   type Stats,
   CLASSES,
@@ -45,6 +46,10 @@ import {
   weaponDamage,
   type ItemSpec,
   type DungeonId,
+  potionAmount,
+  potionName,
+  potionProblem,
+  type Potion,
 } from "@serfdom/shared";
 import {
   accuracy,
@@ -70,6 +75,8 @@ export interface ScreenActions {
   sellItem(itemId: number): void;
   equip(itemId: number, serfId: number, slot: EquipSlot): void;
   unequip(serfId: number, slot: EquipSlot): void;
+  drinkPotion(potionId: number, serfId: number): void;
+  pourPotion(potionId: number): void;
   chooseClass(serfId: number, classId: ClassId): void;
   logout(): void;
 }
@@ -94,6 +101,7 @@ const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
   { tab: "dungeons", label: "Dungeons", comingIn: null },
   { tab: "serfs", label: "Serfs", comingIn: null },
   { tab: "stash", label: "Stash", comingIn: null },
+  { tab: "rack", label: "Potion rack", comingIn: null },
   { tab: "leaderboard", label: "Leaderboard", comingIn: null },
 ];
 
@@ -176,10 +184,20 @@ export class ScreenView {
     this.shown = null;
   }
 
-  /** Rewards waiting for room for this serf: it may not start a dungeon (D-088). */
+  /** Items waiting for room for this serf: it may not start a dungeon (D-088). */
   private waitingFor(serfId: number): number {
     return this.stash?.pending.filter((p) => p.serfId === serfId).length ?? 0;
   }
+
+  /** Potions waiting for room in the rack for this serf (D-118): it is blocked too. */
+  private potionsWaitingFor(serfId: number): number {
+    return (
+      this.stash?.pendingPotions.filter((p) => p.serfId === serfId).length ?? 0
+    );
+  }
+
+  /** Who drank which potion, from this browser's clicks (for "Drunk by …" labels). */
+  private readonly drunkBy = new Map<number, string>();
 
   setLeaderboard(entries: LeaderboardEntry[]): void {
     this.leaderboard = entries;
@@ -350,6 +368,8 @@ export class ScreenView {
       this.buildLeaderboard(body);
     } else if (tab === "stash") {
       this.buildStash(body);
+    } else if (tab === "rack") {
+      this.buildRack(body);
     } else if (tab === "serfs") {
       this.buildSerfs(body);
     } else {
@@ -372,6 +392,19 @@ export class ScreenView {
             `Your stash is full: ${waiting} reward${waiting === 1 ? " waits" : "s wait"} for room. Sell something in the Stash tab before the next dungeon.`,
           ),
           button("Open stash", () => this.actions.openTab("stash")),
+        );
+        this.finishMenu(nav, body, notice);
+        return;
+      }
+      const potions = playing ? this.potionsWaitingFor(playing.id) : 0;
+      if (playing && potions > 0) {
+        body.append(
+          el(
+            "p",
+            "notice",
+            `Your potion rack is full: ${potions} potion${potions === 1 ? " waits" : "s wait"} for room. Drink or pour one out in the Potion rack tab before the next dungeon.`,
+          ),
+          button("Open potion rack", () => this.actions.openTab("rack")),
         );
         this.finishMenu(nav, body, notice);
         return;
@@ -620,6 +653,85 @@ export class ScreenView {
     );
   }
 
+  /**
+   * Potion rack tab (D-118): potions waiting for room first, then the rack,
+   * grouped by stat. Any living serf can drink one while below that stat's
+   * class max (the server checks again); any potion can be poured out.
+   */
+  private buildRack(body: HTMLElement): void {
+    const stash = this.stash;
+    if (!stash) {
+      body.append(el("p", "hint", "Loading your potion rack…"));
+      return;
+    }
+    if (this.stashError) body.append(el("p", "error", this.stashError));
+    const waiting = stash.pendingPotions.map((p) => p.potion);
+    if (waiting.length > 0) {
+      body.append(
+        el("h2", "error", `Waiting for room (${waiting.length})`),
+        el(
+          "p",
+          "hint",
+          "Your rack is full. Drink or pour out one of these, or one below; the oldest waiting potion then moves in. The serf that won it cannot start a dungeon until then.",
+        ),
+        this.potionGrid(waiting, "item-grid pending-grid"),
+      );
+    }
+    body.append(
+      el("h2", "", `Potion rack ${stash.rack.length}/${stash.rackCapacity}`),
+    );
+    if (stash.rack.length === 0) {
+      body.append(
+        el(
+          "p",
+          "hint",
+          "Empty. The Goblin Stronghold can give stat potions: each raises a stat toward its class max.",
+        ),
+      );
+      return;
+    }
+    body.append(this.potionGrid(stash.rack, "item-grid"));
+  }
+
+  /** One card per stat, with how many; drinking or pouring uses the oldest. */
+  private potionGrid(
+    potions: readonly Potion[],
+    className: string,
+  ): HTMLElement {
+    const grid = el("div", className);
+    const living = this.serfs?.serfs.filter((s) => s.alive) ?? [];
+    for (const key of STAT_KEYS) {
+      const of = potions.filter((p) => p.stat === key);
+      const first = of[0];
+      if (!first) continue;
+      const card = potionCard(key, of.length);
+      for (const serf of living) card.append(this.drinkControl(first, serf));
+      const pour = button("Pour out one", () =>
+        this.actions.pourPotion(first.id),
+      );
+      pour.classList.add("sell");
+      card.append(pour);
+      grid.append(card);
+    }
+    return grid;
+  }
+
+  /** Drink on this serf, or the reason it cannot (greyed out, D-118). */
+  private drinkControl(potion: Potion, serf: SerfSummary): HTMLElement {
+    const box = el("div", "equip");
+    const problem = potionProblem(serf, potion.stat);
+    // The class max, or the Serf max before a class (D-119).
+    const now = ` (${STAT_LABELS[potion.stat]} ${serf.stats[potion.stat]}/${serfStatMax(serf.classId, potion.stat)})`;
+    const drink = button(`Drink on ${serf.name}${now}`, () => {
+      this.drunkBy.set(potion.id, serf.name);
+      this.actions.drinkPotion(potion.id, serf.id);
+    });
+    drink.disabled = problem !== null;
+    box.append(drink);
+    if (problem) box.append(el("span", "hint", problem));
+    return box;
+  }
+
   private itemGrid(items: readonly Item[], className: string): HTMLElement {
     const grid = el("div", className);
     const playing = this.playing;
@@ -763,6 +875,79 @@ export class ScreenView {
     return box;
   }
 
+  /**
+   * The potions this clear won (D-118), opening after the chests. Each
+   * says where it is (rack, waiting, drunk, poured out) and offers Drink
+   * now for the serf that cleared, and Pour out when it is waiting.
+   */
+  private potionReveal(
+    screen: Extract<Screen, { kind: "results" }>,
+  ): HTMLElement {
+    const box = el("div", "loot");
+    if (screen.potions.length === 0) return box;
+    box.append(
+      el(
+        "p",
+        "hint",
+        `${screen.potions.length} stat potion${screen.potions.length === 1 ? "" : "s"}`,
+      ),
+    );
+    const row = el("div", "loot-row");
+    const statuses: (() => void)[] = [];
+    screen.potions.forEach(({ potion, pending }, i) => {
+      const card = potionCard(potion.stat, 1);
+      card.classList.add("loot-card");
+      card.style.animationDelay = `${LOOT_FIRST_MS + (screen.loot.length + i) * LOOT_GAP_MS}ms`;
+      const status = el("div", "loot-status");
+      card.append(status);
+      const update = () => {
+        status.replaceChildren();
+        const serf = screen.serf
+          ? (this.serfById(screen.serf.id) ?? screen.serf)
+          : null;
+        const inRack = this.stash
+          ? this.stash.rack.some((p) => p.id === potion.id)
+          : !pending;
+        const waiting = this.stash
+          ? this.stash.pendingPotions.some((p) => p.potion.id === potion.id)
+          : pending;
+        card.classList.toggle("waiting", waiting);
+        if (!inRack && !waiting) {
+          const who = this.drunkBy.get(potion.id);
+          status.append(
+            who
+              ? el("span", "roll-good", `Drunk by ${who}`)
+              : el("span", "item-where", "Poured out"),
+          );
+          return;
+        }
+        status.append(
+          waiting
+            ? el("span", "error", "Rack full: drink it or pour one out")
+            : el("span", "item-where", "→ Potion rack"),
+        );
+        if (serf?.alive) status.append(this.drinkControl(potion, serf));
+        if (waiting) {
+          const pour = button("Pour out", () =>
+            this.actions.pourPotion(potion.id),
+          );
+          pour.classList.add("sell");
+          status.append(pour);
+        }
+      };
+      update();
+      statuses.push(update);
+      row.append(card);
+    });
+    const chests = this.lootRefresh;
+    this.lootRefresh = () => {
+      chests?.();
+      statuses.forEach((u) => u());
+    };
+    box.append(row);
+    return box;
+  }
+
   /** Lifetime EXP leaderboard (GDD §12): living and dead, serf names only. */
   private buildLeaderboard(body: HTMLElement): void {
     body.append(el("h2", "", "Lifetime EXP"));
@@ -845,10 +1030,12 @@ export class ScreenView {
     }
     const actions = el("div", "actions");
     const mustChoose = screen.serf !== null && needsClass(screen.serf);
-    const waiting = screen.loot.some((d) => d.pending);
+    const waiting =
+      screen.loot.some((d) => d.pending) ||
+      screen.potions.some((d) => d.pending);
     actions.append(
       waiting
-        ? button("Settle rewards (Enter)", () => this.settleRewards())
+        ? button("Settle rewards (Enter)", () => this.settleRewards(screen))
         : mustChoose
           ? button("Choose your class (Enter)", () =>
               this.actions.dismissResults(),
@@ -881,14 +1068,15 @@ export class ScreenView {
       stats,
       chest,
       this.lootReveal(screen),
+      this.potionReveal(screen),
       actions,
     );
   }
 
-  /** To the Stash tab, where waiting rewards are settled. */
-  private settleRewards(): void {
+  /** To the Stash tab (or the Potion rack, D-118), where waiting rewards are settled. */
+  private settleRewards(screen: Extract<Screen, { kind: "results" }>): void {
     this.actions.dismissResults();
-    this.actions.openTab("stash");
+    this.actions.openTab(screen.loot.some((d) => d.pending) ? "stash" : "rack");
   }
 
   private onKey(e: KeyboardEvent): void {
@@ -905,8 +1093,12 @@ export class ScreenView {
         else if (first) this.actions.queue(first.id);
       } else if (screen.kind === "results" && screen.result === "completed") {
         // A full stash first, then a class at level 5; otherwise requeue.
-        if (screen.loot.some((d) => d.pending)) this.settleRewards();
-        else if (screen.serf && needsClass(screen.serf))
+        if (
+          screen.loot.some((d) => d.pending) ||
+          screen.potions.some((d) => d.pending)
+        ) {
+          this.settleRewards(screen);
+        } else if (screen.serf && needsClass(screen.serf))
           this.actions.dismissResults();
         else this.actions.queue(screen.dungeon);
       } else if (
@@ -1017,6 +1209,24 @@ export function itemCard(item: ItemSpec): HTMLElement {
     card.append(rolls);
   }
   if (item.luck > 0) card.append(el("span", "item-luck", "+1 LUCK"));
+  return card;
+}
+
+/** A stat potion (D-118): its name, what it adds, and how many when grouped. */
+function potionCard(stat: StatKey, count: number): HTMLElement {
+  const card = el("div", "item-card potion-card");
+  card.append(
+    el(
+      "span",
+      "item-name",
+      count > 1 ? `${potionName(stat)} ×${count}` : potionName(stat),
+    ),
+    el(
+      "span",
+      "item-base",
+      `+${potionAmount(stat)} ${STAT_LABELS[stat]}, up to the class max`,
+    ),
+  );
   return card;
 }
 

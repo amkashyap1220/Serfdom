@@ -12,6 +12,10 @@ import {
   luckOf,
   rollItem,
   type LootDrop,
+  potionProblem,
+  type PotionDrop,
+  RACK_SIZE,
+  rollPotions,
   applyGains,
   CLASS_CHOICE_LEVEL,
   classBonus,
@@ -117,6 +121,7 @@ export class SerfService {
     expGained: number;
     statGains: Stats;
     loot: LootDrop[];
+    potions: PotionDrop[];
   } | null> {
     // The level is read before the update. A serf plays one run at a time
     // (it is fixed for the run, one connection per account), so no other
@@ -135,10 +140,11 @@ export class SerfService {
     );
     if (!serf) return null;
     if (result !== "completed" || !serf.alive) {
-      return { serf, expGained, statGains: zeroStats(), loot: [] };
+      return { serf, expGained, statGains: zeroStats(), loot: [], potions: [] };
     }
     const settled = await this.settle(accountId, serfId);
     const loot = await this.rollLoot(accountId, before, dungeon);
+    const potions = await this.rollPotions(accountId, before, dungeon);
     // Read once more so the serf comes back with its new items.
     const latest = await this.repo.find(accountId, serfId);
     return {
@@ -146,7 +152,30 @@ export class SerfService {
       expGained,
       statGains: settled?.gains ?? zeroStats(),
       loot,
+      potions,
     };
+  }
+
+  /**
+   * One potion chance per Luck point (D-089), like the chests, in a
+   * dungeon that gives potions (D-118): into the rack while it has room,
+   * else pending for this serf.
+   */
+  private async rollPotions(
+    accountId: number,
+    serf: SerfSummary,
+    dungeon: DungeonId,
+  ): Promise<PotionDrop[]> {
+    const rolls = luckOf(serf.items.filter((i) => i.equipped !== null));
+    const won = rollPotions(dungeon, rolls, this.random);
+    if (won.length === 0) return [];
+    const drops = await this.repo.addPotions(
+      accountId,
+      serf.id,
+      won,
+      RACK_SIZE,
+    );
+    return drops ?? [];
   }
 
   /**
@@ -173,9 +202,58 @@ export class SerfService {
     return drops ?? [];
   }
 
-  /** The account's stash, gold, and pending rewards (D-085–D-088). */
-  async stash(accountId: number): Promise<Stash & { capacity: number }> {
-    return { ...(await this.repo.stash(accountId)), capacity: STASH_SIZE };
+  /** The account's stash, gold, pending rewards (D-085–D-088), and potion rack (D-118). */
+  async stash(
+    accountId: number,
+  ): Promise<Stash & { capacity: number; rackCapacity: number }> {
+    return {
+      ...(await this.repo.stash(accountId)),
+      capacity: STASH_SIZE,
+      rackCapacity: RACK_SIZE,
+    };
+  }
+
+  /**
+   * One of the account's serfs drinks one of its potions (D-118): alive,
+   * classed, and below that stat's class max (D-075). The repo checks
+   * again in the same write. Reasons are safe to show.
+   */
+  async drink(
+    accountId: number,
+    serfId: number,
+    potionId: number,
+  ): Promise<{ ok: true; serf: SerfSummary } | { ok: false; reason: string }> {
+    const serf = await this.repo.find(accountId, serfId);
+    // Someone else's serf or potion looks exactly like one that does not exist.
+    if (!serf) return { ok: false, reason: "No such serf." };
+    const stash = await this.repo.stash(accountId);
+    const potion = [
+      ...stash.rack,
+      ...stash.pendingPotions.map((p) => p.potion),
+    ].find((p) => p.id === potionId);
+    if (!potion) return { ok: false, reason: "No such potion in your rack." };
+    const problem = potionProblem(serf, potion.stat);
+    if (problem) return { ok: false, reason: problem };
+    const done = await this.repo.drinkPotion(
+      accountId,
+      serfId,
+      potionId,
+      RACK_SIZE,
+    );
+    if (!done) return { ok: false, reason: "No such potion in your rack." };
+    if ("refused" in done) return { ok: false, reason: done.refused };
+    return { ok: true, serf: done.serf };
+  }
+
+  /** Pours out one of the account's potions (D-118); it is gone. */
+  async pour(
+    accountId: number,
+    potionId: number,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const poured = await this.repo.pourPotion(accountId, potionId, RACK_SIZE);
+    return poured
+      ? { ok: true }
+      : { ok: false, reason: "No such potion in your rack." };
   }
 
   /** Sells a stash or pending item for gold (D-087); reasons are safe to show. */

@@ -5,12 +5,13 @@ import {
   type HazardKind,
   type SerfSummary,
   type LootDrop,
+  type PotionDrop,
   type RunStats,
   type ServerMessage,
   type Stats,
 } from "@serfdom/shared";
 
-export type MenuTab = "dungeons" | "serfs" | "stash" | "leaderboard";
+export type MenuTab = "dungeons" | "serfs" | "stash" | "rack" | "leaderboard";
 
 /**
  * Which screen the player sees (D-048, D-050). The server decides every
@@ -49,6 +50,8 @@ export type Screen =
       /** The server's roll for us alone (placeholder until Phase 9); null on death. */
       /** One item per chest (D-080); empty unless completed. */
       loot: LootDrop[];
+      /** Stat potions won (D-118); empty unless completed. */
+      potions: PotionDrop[];
       /** What landed the killing blow (deaths). */
       killedBy: EnemyKind | HazardKind | null;
       /** The serf's life including this run (its final record on death). */
@@ -175,6 +178,7 @@ function onServerMessage(
         dungeon: msg.dungeon,
         stats: msg.stats,
         loot: msg.loot,
+        potions: msg.potions,
         killedBy: msg.killedBy,
         serf: msg.serf,
         expGained: msg.expGained,

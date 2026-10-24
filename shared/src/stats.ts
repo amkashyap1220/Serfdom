@@ -62,6 +62,16 @@ export const SERF_GROWTH: Record<StatKey, Range> = {
   wisdom: [0, 1],
 };
 
+/**
+ * A classless Serf's max per stat (D-119): the best it can roll by level 5
+ * (its start plus the top of every Serf roll). Potions can take a level-1
+ * Serf there early; every value is below every class's max, so choosing a
+ * class never lowers a stat.
+ */
+export const SERF_MAX: Stats = mapStats(
+  (key) => SERF_BASE[key] + (CLASS_CHOICE_LEVEL - 1) * SERF_GROWTH[key][1],
+);
+
 export type Tier = "high" | "mid" | "low";
 
 interface TierStat {
@@ -139,6 +149,11 @@ export function statMax(classId: ClassId, key: StatKey): number {
   return TIERS[classTier(classId, key)][key].max;
 }
 
+/** The max for this serf: its class's, or the Serf max before a class (D-119). */
+export function serfStatMax(classId: ClassId | null, key: StatKey): number {
+  return classId ? statMax(classId, key) : SERF_MAX[key];
+}
+
 /** One-time bonus on choosing a class: its High stats, +10 HP/MP, +3 others. */
 export function classBonus(classId: ClassId): Stats {
   return mapStats((key) =>
@@ -176,7 +191,11 @@ export function rollLevelGains(
   random: () => number,
 ): Stats {
   if (level <= CLASS_CHOICE_LEVEL) {
-    return mapStats((key) => rollRange(SERF_GROWTH[key], random));
+    // Never past the max: a Serf that drank potions gains less (D-119).
+    return mapStats((key) => {
+      const room = Math.max(0, serfStatMax(classId, key) - current[key]);
+      return Math.min(room, rollRange(SERF_GROWTH[key], random));
+    });
   }
   if (classId === null) return zeroStats();
   return mapStats((key) => {

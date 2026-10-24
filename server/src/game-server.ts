@@ -412,6 +412,8 @@ export class GameServer {
       case "sellItem":
       case "equipItem":
       case "unequipItem":
+      case "drinkPotion":
+      case "pourPotion":
         this.onStash(socket, session, message);
         return;
       case "getLeaderboard":
@@ -718,8 +720,13 @@ export class GameServer {
           nowSession.serfNeedsClass = needsClass(serf);
           nowSession.serfClears = serf.life.clears;
           nowSession.serfLoadout = loadoutOf(serf);
-          // A reward that did not fit blocks the next dungeon (D-088).
-          if (saved?.loot.some((d) => d.pending)) nowSession.serfBlocked = true;
+          // A reward that did not fit blocks the next dungeon (D-088, D-118).
+          if (
+            saved?.loot.some((d) => d.pending) ||
+            saved?.potions.some((d) => d.pending)
+          ) {
+            nowSession.serfBlocked = true;
+          }
         }
         if (!notify) return;
         this.sendEncoded(
@@ -730,6 +737,7 @@ export class GameServer {
             result: end.result,
             stats: end.stats,
             loot: saved?.loot ?? [],
+            potions: saved?.potions ?? [],
             killedBy: end.killedBy,
             serf,
             // Only what was actually saved counts.
@@ -740,22 +748,34 @@ export class GameServer {
         const s = this.socketOf.get(id);
         if (s) {
           this.sendSerfList(s);
-          if (saved && saved.loot.length > 0) this.sendStash(s);
+          if (saved && saved.loot.length + saved.potions.length > 0) {
+            this.sendStash(s);
+          }
         }
       });
   }
 
   /**
-   * getStash / sellItem (D-085–D-088): logged in only, one at a time (like
-   * serf requests). Selling may free room for pending rewards, so the
-   * played serf's block is recomputed before the new stash is sent.
+   * getStash / sellItem (D-085–D-088) and the potion rack (D-118): logged
+   * in only, one at a time (like serf requests). Selling or pouring out may
+   * free room for pending rewards, so the played serf's block is
+   * recomputed before the new stash is sent. Gear and stats are fixed for a
+   * run: no equipping or drinking while queued or in one.
    */
   private onStash(
     socket: WebSocket,
     session: Session,
     message: Extract<
       ClientMessage,
-      { type: "getStash" | "sellItem" | "equipItem" | "unequipItem" }
+      {
+        type:
+          | "getStash"
+          | "sellItem"
+          | "equipItem"
+          | "unequipItem"
+          | "drinkPotion"
+          | "pourPotion";
+      }
     >,
   ): void {
     const accountId = session.accountId;
@@ -775,6 +795,7 @@ export class GameServer {
     const id = session.id;
     if (
       message.type !== "sellItem" &&
+      message.type !== "pourPotion" &&
       id !== null &&
       (this.runOf.has(id) || this.matchmaker.has(id))
     ) {
@@ -787,14 +808,18 @@ export class GameServer {
     > =
       message.type === "sellItem"
         ? this.serfs.sell(accountId, message.itemId)
-        : message.type === "equipItem"
-          ? this.serfs.equip(
-              accountId,
-              message.serfId,
-              message.itemId,
-              message.slot,
-            )
-          : this.serfs.unequip(accountId, message.serfId, message.slot);
+        : message.type === "drinkPotion"
+          ? this.serfs.drink(accountId, message.serfId, message.potionId)
+          : message.type === "pourPotion"
+            ? this.serfs.pour(accountId, message.potionId)
+            : message.type === "equipItem"
+              ? this.serfs.equip(
+                  accountId,
+                  message.serfId,
+                  message.itemId,
+                  message.slot,
+                )
+              : this.serfs.unequip(accountId, message.serfId, message.slot);
     attempt
       .then(async (done) => {
         if (session.accountId !== accountId) return;
@@ -805,9 +830,13 @@ export class GameServer {
         this.log.info(
           message.type === "sellItem"
             ? `${label(session)} sold item #${message.itemId} for ${done.price ?? 0} gold`
-            : message.type === "equipItem"
-              ? `${label(session)} equipped item #${message.itemId} on serf #${message.serfId}`
-              : `${label(session)} unequipped serf #${message.serfId} ${message.slot}`,
+            : message.type === "drinkPotion"
+              ? `${label(session)} serf #${message.serfId} drank potion #${message.potionId}`
+              : message.type === "pourPotion"
+                ? `${label(session)} poured out potion #${message.potionId}`
+                : message.type === "equipItem"
+                  ? `${label(session)} equipped item #${message.itemId} on serf #${message.serfId}`
+                  : `${label(session)} unequipped serf #${message.serfId} ${message.slot}`,
         );
         // The played serf's gear or waiting rewards may have changed.
         if (session.serfId !== null) {
@@ -819,7 +848,9 @@ export class GameServer {
           session.serfBlocked = await this.serfs.hasPending(accountId, serfId);
         }
         this.sendStash(socket);
-        if (message.type !== "sellItem") this.sendSerfList(socket);
+        if (message.type !== "sellItem" && message.type !== "pourPotion") {
+          this.sendSerfList(socket);
+        }
       })
       .catch((err: unknown) => {
         this.log.warn(

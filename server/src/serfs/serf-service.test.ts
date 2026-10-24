@@ -5,6 +5,7 @@ import {
   type ItemSpec,
   isValidItemSpec,
   newRunStats,
+  RACK_SIZE,
   SERF_BASE,
   totalExpForLevel,
   zeroStats,
@@ -534,5 +535,110 @@ describe("the free ability item (D-092)", () => {
     expect(picked.ok && picked.serf.items.map((i) => i.type)).toEqual([
       "totem",
     ]);
+  });
+});
+
+describe("stat potions (D-089, D-118)", () => {
+  /** A serf on account 1 whose service rolls `random` every time. */
+  const brewer = async (random: () => number) => {
+    const repo = new MemorySerfRepo();
+    const serfs = new SerfService(repo, 2, random);
+    const made = await serfs.create(1, "Ida Brew");
+    if (!made.ok) throw new Error(made.reason);
+    return { repo, serfs, id: made.serf.id };
+  };
+  const clear = (
+    serfs: SerfService,
+    id: number,
+    dungeon: "goblin-warrens" | "goblin-stronghold",
+    result: "completed" | "died" = "completed",
+  ) =>
+    serfs.recordRun(
+      1,
+      id,
+      dungeon,
+      result,
+      run,
+      result === "died" ? { dungeon, killedBy: "warchief" } : null,
+    );
+
+  it("a Stronghold clear rolls one potion chance per Luck point, into the rack", async () => {
+    // 0 wins every chance (under 20%) and picks the first stat, HP.
+    const { serfs, id } = await brewer(() => 0);
+    const r = await clear(serfs, id, "goblin-stronghold");
+    expect(r?.potions).toEqual([
+      { potion: { id: expect.any(Number), stat: "hp" }, pending: false },
+    ]);
+    const stash = await serfs.stash(1);
+    expect(stash.rackCapacity).toBe(RACK_SIZE);
+    expect(stash.rack).toEqual([r!.potions[0]!.potion]);
+  });
+
+  it("no potions from the Warrens, a losing roll, or a death", async () => {
+    const lucky = await brewer(() => 0);
+    expect(
+      (await clear(lucky.serfs, lucky.id, "goblin-warrens"))?.potions,
+    ).toEqual([]);
+    expect(
+      (await clear(lucky.serfs, lucky.id, "goblin-stronghold", "died"))
+        ?.potions,
+    ).toEqual([]);
+    const unlucky = await brewer(() => 0.5);
+    expect(
+      (await clear(unlucky.serfs, unlucky.id, "goblin-stronghold"))?.potions,
+    ).toEqual([]);
+  });
+
+  it("with a full rack the potion waits and blocks the serf until one is poured out", async () => {
+    const { repo, serfs, id } = await brewer(() => 0);
+    await repo.addPotions(1, id, Array(RACK_SIZE).fill("speed"), RACK_SIZE);
+    const r = await clear(serfs, id, "goblin-stronghold");
+    expect(r?.potions[0]?.pending).toBe(true);
+    expect(await serfs.hasPending(1, id)).toBe(true);
+    const full = await serfs.stash(1);
+    expect(full.rack).toHaveLength(RACK_SIZE);
+    expect(await serfs.pour(2, full.rack[0]!.id)).toEqual({
+      ok: false,
+      reason: "No such potion in your rack.",
+    });
+    expect(await serfs.pour(1, full.rack[0]!.id)).toEqual({ ok: true });
+    expect(await serfs.hasPending(1, id)).toBe(false);
+    expect((await serfs.stash(1)).rack.map((p) => p.id)).toContain(
+      r!.potions[0]!.potion.id,
+    );
+  });
+
+  it("drinking: below the serf's max, your own potion and serf", async () => {
+    const { repo, serfs, id } = await brewer(() => 0);
+    const [drop, shield] = (await repo.addPotions(
+      1,
+      id,
+      ["attack", "defense"],
+      RACK_SIZE,
+    ))!;
+    const potionId = drop!.potion.id;
+    // A Serf has no Defense to raise (D-119); a class gives it one.
+    expect(await serfs.drink(1, id, shield!.potion.id)).toEqual({
+      ok: false,
+      reason: "A Serf has no Defense to raise: Ida Brew needs a class first.",
+    });
+    await repo.chooseClass(1, id, "rogue", 0, { ...SERF_BASE }, 1);
+    expect(await serfs.drink(2, id, potionId)).toEqual({
+      ok: false,
+      reason: "No such serf.",
+    });
+    expect(await serfs.drink(1, id, 999)).toEqual({
+      ok: false,
+      reason: "No such potion in your rack.",
+    });
+    const drunk = await serfs.drink(1, id, potionId);
+    expect(drunk).toMatchObject({
+      ok: true,
+      serf: { stats: { attack: SERF_BASE.attack + 1 } },
+    });
+    expect(await serfs.drink(1, id, potionId)).toEqual({
+      ok: false,
+      reason: "No such potion in your rack.",
+    });
   });
 });

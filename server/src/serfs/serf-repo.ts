@@ -1,5 +1,11 @@
 import {
   addRunToLife,
+  drinkPotion,
+  potionProblem,
+  type PendingPotion,
+  type Potion,
+  type PotionDrop,
+  type StatKey,
   EQUIP_SLOTS,
   isClassId,
   isValidItemSpec,
@@ -158,12 +164,50 @@ export interface SerfRepo {
     slot: EquipSlot,
     capacity: number,
   ): Promise<"ok" | "full" | null>;
+  /**
+   * Gives a living serf's account its won potions (D-118), in order: into
+   * the rack while it has room (`capacity` potions at most), the rest
+   * pending for that serf. Null if the serf is not this account's or is
+   * dead. Atomic per account.
+   */
+  addPotions(
+    accountId: number,
+    serfId: number,
+    stats: readonly StatKey[],
+    capacity: number,
+  ): Promise<PotionDrop[] | null>;
+  /**
+   * One of the account's potions drunk by one of its serfs, checked again
+   * inside the write (alive, classed, below the max: `potionProblem`):
+   * the stat goes up, the potion is gone, and the oldest pending potions
+   * move into any room made. `refused` (no change) with a reason safe to
+   * show; null if the potion or serf is not this account's. Atomic per
+   * account, so a potion is drunk once.
+   */
+  drinkPotion(
+    accountId: number,
+    serfId: number,
+    potionId: number,
+    capacity: number,
+  ): Promise<DrinkOutcome | null>;
+  /** Pours out one of the account's potions (then fills the rack); false if none. */
+  pourPotion(
+    accountId: number,
+    potionId: number,
+    capacity: number,
+  ): Promise<boolean>;
 }
+
+export type DrinkOutcome =
+  { serf: SerfSummary; stat: StatKey } | { refused: string };
 
 export interface Stash {
   gold: number;
   items: Item[];
   pending: PendingReward[];
+  /** The potion rack and potions waiting for room (D-118), oldest first. */
+  rack: Potion[];
+  pendingPotions: PendingPotion[];
 }
 
 const UNIQUE_VIOLATION = "23505";
@@ -221,6 +265,45 @@ function classFromRow(v: string | null): ClassId | null {
   if (v === null) return null;
   if (!isClassId(v)) throw new Error(`unknown class in database: ${v}`);
   return v;
+}
+
+async function rackCount(client: pg.PoolClient, accountId: number) {
+  const r = await client.query<{ n: string }>(
+    "select count(*) n from potions where account_id = $1 and location = 'rack'",
+    [accountId],
+  );
+  return Number(r.rows[0]?.n ?? 0);
+}
+
+/** Moves the oldest pending potions into whatever room the rack has (D-118). */
+async function fillRack(
+  client: pg.PoolClient,
+  accountId: number,
+  capacity: number,
+) {
+  const room = capacity - (await rackCount(client, accountId));
+  if (room <= 0) return;
+  await client.query(
+    `update potions set location = 'rack', serf_id = null
+     where id in (select id from potions where account_id = $1 and location = 'pending'
+                  order by id limit $2)`,
+    [accountId, room],
+  );
+}
+
+interface PotionRow {
+  id: string;
+  serf_id: string | null;
+  location: string;
+  stat: string;
+}
+
+/** A stored potion of a stat the code does not know is a bug, not a potion. */
+function potionFromRow(r: PotionRow): Potion {
+  if (!(STAT_KEYS as readonly string[]).includes(r.stat)) {
+    throw new Error(`bad potion ${r.id} in database`);
+  }
+  return { id: Number(r.id), stat: r.stat as StatKey };
 }
 
 async function stashCount(client: pg.PoolClient, accountId: number) {
@@ -460,6 +543,10 @@ export class PgSerfRepo implements SerfRepo {
       "select * from items where account_id = $1 and location <> 'equipped' order by id",
       [accountId],
     );
+    const potions = await this.pool.query<PotionRow>(
+      "select * from potions where account_id = $1 order by id",
+      [accountId],
+    );
     return {
       gold: Number(gold.rows[0]?.gold ?? 0),
       items: r.rows.filter((row) => row.location === "stash").map(itemFromRow),
@@ -469,7 +556,110 @@ export class PgSerfRepo implements SerfRepo {
           item: itemFromRow(row),
           serfId: Number(row.serf_id),
         })),
+      rack: potions.rows
+        .filter((row) => row.location === "rack")
+        .map(potionFromRow),
+      pendingPotions: potions.rows
+        .filter((row) => row.location === "pending")
+        .map((row) => ({
+          potion: potionFromRow(row),
+          serfId: Number(row.serf_id),
+        })),
     };
+  }
+
+  async addPotions(
+    accountId: number,
+    serfId: number,
+    stats: readonly StatKey[],
+    capacity: number,
+  ): Promise<PotionDrop[] | null> {
+    return this.inAccount(accountId, async (client) => {
+      const owner = await client.query(
+        "select id from serfs where id = $1 and account_id = $2 and died_at is null",
+        [serfId, accountId],
+      );
+      if (owner.rowCount === 0) return null;
+      let room = capacity - (await rackCount(client, accountId));
+      const drops: PotionDrop[] = [];
+      for (const stat of stats) {
+        const pending = room <= 0;
+        const inserted = await client.query<{ id: string }>(
+          `insert into potions (account_id, serf_id, location, stat)
+           values ($1, $2, $3, $4) returning id`,
+          [
+            accountId,
+            pending ? serfId : null,
+            pending ? "pending" : "rack",
+            stat,
+          ],
+        );
+        drops.push({
+          potion: { id: Number(inserted.rows[0]?.id), stat },
+          pending,
+        });
+        if (!pending) room--;
+      }
+      return drops;
+    });
+  }
+
+  async drinkPotion(
+    accountId: number,
+    serfId: number,
+    potionId: number,
+    capacity: number,
+  ): Promise<DrinkOutcome | null> {
+    const outcome = await this.inAccount(accountId, async (client) => {
+      const potion = await client.query<PotionRow>(
+        "select * from potions where id = $1 and account_id = $2",
+        [potionId, accountId],
+      );
+      const found = await client.query<SerfRow>(
+        "select * from serfs where id = $1 and account_id = $2",
+        [serfId, accountId],
+      );
+      const potionRow = potion.rows[0];
+      const serfRow = found.rows[0];
+      if (!potionRow || !serfRow) return null;
+      const { stat } = potionFromRow(potionRow);
+      const serf = fromRow(serfRow);
+      const problem = potionProblem(serf, stat);
+      if (problem) return { refused: problem } as const;
+      const drunk = await client.query<SerfRow>(
+        `update serfs set stats = $3
+         where id = $1 and account_id = $2 and died_at is null returning *`,
+        [
+          serfId,
+          accountId,
+          JSON.stringify(drinkPotion(serf.stats, serf.classId, stat)),
+        ],
+      );
+      await client.query("delete from potions where id = $1", [potionId]);
+      await fillRack(client, accountId, capacity);
+      return { row: drunk.rows[0], stat } as const;
+    });
+    if (!outcome) return null;
+    if (outcome.refused !== undefined) return { refused: outcome.refused };
+    const serf = await this.one(outcome.row);
+    return serf ? { serf, stat: outcome.stat } : null;
+  }
+
+  async pourPotion(
+    accountId: number,
+    potionId: number,
+    capacity: number,
+  ): Promise<boolean> {
+    const poured = await this.inAccount(accountId, async (client) => {
+      const gone = await client.query(
+        "delete from potions where id = $1 and account_id = $2",
+        [potionId, accountId],
+      );
+      if (gone.rowCount === 0) return null;
+      await fillRack(client, accountId, capacity);
+      return true;
+    });
+    return poured === true;
   }
 
   async sell(
@@ -538,8 +728,12 @@ export class PgSerfRepo implements SerfRepo {
   }
 
   async hasPending(accountId: number, serfId: number): Promise<boolean> {
+    // Items or potions (D-118) waiting for room.
     const r = await this.pool.query(
-      "select 1 from items where account_id = $1 and serf_id = $2 and location = 'pending' limit 1",
+      `select 1 from items where account_id = $1 and serf_id = $2 and location = 'pending'
+       union all
+       select 1 from potions where account_id = $1 and serf_id = $2 and location = 'pending'
+       limit 1`,
       [accountId, serfId],
     );
     return (r.rowCount ?? 0) > 0;
@@ -777,6 +971,13 @@ export class MemorySerfRepo implements SerfRepo {
     item: Item;
   }[] = [];
   private readonly gold = new Map<number, number>();
+  private nextPotionId = 1;
+  private potions: {
+    accountId: number;
+    serfId: number | null;
+    location: "rack" | "pending";
+    potion: Potion;
+  }[] = [];
 
   /** A copy for the caller, with what the serf wears. */
   private out(m: MemorySerf): SerfSummary {
@@ -981,13 +1182,101 @@ export class MemorySerfRepo implements SerfRepo {
   }
 
   async stash(accountId: number): Promise<Stash> {
+    const potions = this.potions.filter((x) => x.accountId === accountId);
     return structuredClone({
       gold: this.gold.get(accountId) ?? 0,
       items: this.stashOf(accountId).map((x) => x.item),
       pending: this.items
         .filter((x) => x.accountId === accountId && x.location === "pending")
         .map((x) => ({ item: x.item, serfId: x.serfId ?? 0 })),
+      rack: potions.filter((x) => x.location === "rack").map((x) => x.potion),
+      pendingPotions: potions
+        .filter((x) => x.location === "pending")
+        .map((x) => ({ potion: x.potion, serfId: x.serfId ?? 0 })),
     });
+  }
+
+  async addPotions(
+    accountId: number,
+    serfId: number,
+    stats: readonly StatKey[],
+    capacity: number,
+  ): Promise<PotionDrop[] | null> {
+    const s = this.serfs.find(
+      (x) =>
+        x.accountId === accountId && x.summary.id === serfId && x.summary.alive,
+    );
+    if (!s) return null;
+    let room = capacity - this.rackOf(accountId).length;
+    return stats.map((stat) => {
+      const pending = room <= 0;
+      const potion = { id: this.nextPotionId++, stat };
+      this.potions.push({
+        accountId,
+        serfId: pending ? serfId : null,
+        location: pending ? "pending" : "rack",
+        potion,
+      });
+      if (!pending) room--;
+      return { potion: { ...potion }, pending };
+    });
+  }
+
+  async drinkPotion(
+    accountId: number,
+    serfId: number,
+    potionId: number,
+    capacity: number,
+  ): Promise<DrinkOutcome | null> {
+    const entry = this.potions.find(
+      (x) => x.accountId === accountId && x.potion.id === potionId,
+    );
+    const s = this.serfs.find(
+      (x) => x.accountId === accountId && x.summary.id === serfId,
+    );
+    if (!entry || !s) return null;
+    const { stat } = entry.potion;
+    const problem = potionProblem(s.summary, stat);
+    if (problem) return { refused: problem };
+    s.summary = {
+      ...s.summary,
+      stats: drinkPotion(s.summary.stats, s.summary.classId, stat),
+    };
+    this.potions = this.potions.filter((x) => x !== entry);
+    this.fillRack(accountId, capacity);
+    return { serf: this.out(s), stat };
+  }
+
+  async pourPotion(
+    accountId: number,
+    potionId: number,
+    capacity: number,
+  ): Promise<boolean> {
+    const before = this.potions.length;
+    this.potions = this.potions.filter(
+      (x) => !(x.accountId === accountId && x.potion.id === potionId),
+    );
+    if (this.potions.length === before) return false;
+    this.fillRack(accountId, capacity);
+    return true;
+  }
+
+  private rackOf(accountId: number) {
+    return this.potions.filter(
+      (x) => x.accountId === accountId && x.location === "rack",
+    );
+  }
+
+  private fillRack(accountId: number, capacity: number): void {
+    let room = capacity - this.rackOf(accountId).length;
+    for (const x of this.potions) {
+      if (room <= 0) break;
+      if (x.accountId === accountId && x.location === "pending") {
+        x.location = "rack";
+        x.serfId = null;
+        room--;
+      }
+    }
   }
 
   async sell(
@@ -1046,12 +1335,15 @@ export class MemorySerfRepo implements SerfRepo {
   }
 
   async hasPending(accountId: number, serfId: number): Promise<boolean> {
-    return this.items.some(
-      (x) =>
-        x.accountId === accountId &&
-        x.serfId === serfId &&
-        x.location === "pending",
-    );
+    const waits = (x: {
+      accountId: number;
+      serfId: number | null;
+      location: string;
+    }) =>
+      x.accountId === accountId &&
+      x.serfId === serfId &&
+      x.location === "pending";
+    return this.items.some(waits) || this.potions.some(waits);
   }
 
   async equip(

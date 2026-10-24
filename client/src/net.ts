@@ -160,6 +160,14 @@ export class Connection {
     this.send({ type: "unequipItem", serfId, slot });
   }
 
+  sendDrinkPotion(potionId: number, serfId: number): void {
+    this.send({ type: "drinkPotion", potionId, serfId });
+  }
+
+  sendPourPotion(potionId: number): void {
+    this.send({ type: "pourPotion", potionId });
+  }
+
   sendGetLeaderboard(): void {
     this.send({ type: "getLeaderboard" });
   }

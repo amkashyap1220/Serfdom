@@ -338,6 +338,7 @@ describe("menu, queue, and run messages (v4)", () => {
         result: "died",
         stats,
         loot: [],
+        potions: [],
         killedBy: "brute",
         expGained: 0,
         statGains: zeroStats(),
@@ -363,6 +364,10 @@ describe("menu, queue, and run messages (v4)", () => {
           { item: { ...RING, id: 12, equipped: null }, pending: false },
           { item: { ...RING, id: 13, equipped: null, luck: 0 }, pending: true },
         ],
+        potions: [
+          { potion: { id: 7, stat: "attack" }, pending: false },
+          { potion: { id: 8, stat: "hp" }, pending: true },
+        ],
         killedBy: null,
         serf: null,
         expGained: 100,
@@ -384,12 +389,33 @@ describe("menu, queue, and run messages (v4)", () => {
       type: "runEnded",
       dungeon: "goblin-warrens",
       loot: [],
+      potions: [],
       killedBy: null,
       serf: null,
       expGained: 0,
       statGains: zeroStats(),
     };
     const won = { ...ended, result: "completed", stats, expGained: 100 };
+    // Potions (v27, D-118): completion only, real stats, never Luck.
+    const sip = { potion: { id: 2, stat: "defense" }, pending: false };
+    expect(server({ ...won, potions: [sip] }).ok).toBe(true);
+    expect(server({ ...ended, result: "died", stats, potions: [sip] }).ok).toBe(
+      false,
+    );
+    expect(
+      server({ ...won, potions: [{ ...sip, potion: { id: 2, stat: "luck" } }] })
+        .ok,
+    ).toBe(false);
+    expect(
+      server({ ...won, potions: [{ ...sip, potion: { id: 0, stat: "hp" } }] })
+        .ok,
+    ).toBe(false);
+    expect(
+      server({
+        ...won,
+        potions: [{ ...sip, potion: { id: 2, stat: "hp", amount: 50 } }],
+      }).ok,
+    ).toBe(false);
     // Stat gains (v12): whole, non-negative, every stat, completion only.
     const gains = { ...zeroStats(), hp: 2 };
     expect(server({ ...won, statGains: gains }).ok).toBe(true);
@@ -836,6 +862,9 @@ describe("stash messages (v15, D-085–D-088)", () => {
     gold: 42,
     items: [owned],
     pending: [{ item: { ...owned, id: 5 }, serfId: 2 }],
+    rackCapacity: 20,
+    rack: [{ id: 3, stat: "wisdom" }],
+    pendingPotions: [{ potion: { id: 6, stat: "mp" }, serfId: 2 }],
   };
   it("round-trips a stash and refuses bad ones", () => {
     expect(parseServerMessage(JSON.stringify(stash))).toEqual({
@@ -851,6 +880,32 @@ describe("stash messages (v15, D-085–D-088)", () => {
     expect(bad({ items: [{ ...owned, luck: 2 }] })).toBe(false);
     expect(bad({ pending: [{ item: owned }] })).toBe(false);
     expect(bad({ potions: [] })).toBe(false);
+    expect(bad({ rackCapacity: 0 })).toBe(false);
+    expect(bad({ rack: [{ id: 3, stat: "luck" }] })).toBe(false);
+    expect(bad({ rack: [{ id: 3 }] })).toBe(false);
+    expect(bad({ pendingPotions: [{ potion: { id: 6, stat: "mp" } }] })).toBe(
+      false,
+    );
+  });
+
+  it("accepts drinkPotion and pourPotion only in their exact shapes (v27)", () => {
+    const client = (m: unknown) => parseClientMessage(JSON.stringify(m));
+    expect(client({ type: "drinkPotion", potionId: 3, serfId: 2 })).toEqual({
+      ok: true,
+      message: { type: "drinkPotion", potionId: 3, serfId: 2 },
+    });
+    expect(client({ type: "drinkPotion", potionId: 3 }).ok).toBe(false);
+    expect(client({ type: "drinkPotion", potionId: -1, serfId: 2 }).ok).toBe(
+      false,
+    );
+    expect(
+      client({ type: "drinkPotion", potionId: 3, serfId: 2, amount: 99 }).ok,
+    ).toBe(false);
+    expect(client({ type: "pourPotion", potionId: 3 })).toEqual({
+      ok: true,
+      message: { type: "pourPotion", potionId: 3 },
+    });
+    expect(client({ type: "pourPotion", potionId: "3" }).ok).toBe(false);
   });
 
   it("accepts getStash and sellItem only in their exact shapes", () => {

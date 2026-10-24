@@ -8,7 +8,8 @@ import {
   type AbilityLoadout,
 } from "./abilities.ts";
 import { isClassId, type ClassId } from "./classes.ts";
-import { STAT_KEYS, type Stats } from "./stats.ts";
+import { STAT_KEYS, type StatKey, type Stats } from "./stats.ts";
+import type { Potion } from "./potions.ts";
 import { isDungeonId, type DungeonId } from "./dungeons.ts";
 import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import {
@@ -67,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v27 (12h): stat potions (D-118): runEnded carries potions, stash carries
+ *          the potion rack and potions waiting for room; client
+ *          drinkPotion {potionId, serfId} and pourPotion {potionId}.
  * v26 (12g): the Goblin Warchief; blasts may be its axe sweep's warning
  *          or hit (D-117).
  * v19 (10c): snapshot players list their buffs, enemies say whether
@@ -103,7 +107,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -171,7 +175,11 @@ export type ClientMessage =
   /** Wear a stash or pending item on one of your serfs (D-086); what it replaces goes to the stash. */
   | { type: "equipItem"; itemId: number; serfId: number; slot: EquipSlot }
   /** Take a worn item off into the stash (needs room). */
-  | { type: "unequipItem"; serfId: number; slot: EquipSlot };
+  | { type: "unequipItem"; serfId: number; slot: EquipSlot }
+  /** Drink a rack or waiting potion on one of your serfs (D-118). */
+  | { type: "drinkPotion"; potionId: number; serfId: number }
+  /** Pour out a rack or waiting potion (it is gone, D-118). */
+  | { type: "pourPotion"; potionId: number };
 
 /** One reward chest's item and whether it fit in the bag. */
 export interface LootDrop {
@@ -184,6 +192,18 @@ export interface LootDrop {
 /** A reward that did not fit, held for the serf that won it (D-088). */
 export interface PendingReward {
   item: Item;
+  serfId: number;
+}
+
+/** One potion a completion won (D-118), and whether the rack was full. */
+export interface PotionDrop {
+  potion: Potion;
+  pending: boolean;
+}
+
+/** A potion that did not fit in the rack, held for the serf that won it. */
+export interface PendingPotion {
+  potion: Potion;
   serfId: number;
 }
 
@@ -368,6 +388,8 @@ export type ServerMessage =
       stats: RunStats;
       /** One item per chest, rolled by the server for this player only (D-010, D-080); empty unless completed. */
       loot: LootDrop[];
+      /** Stat potions won (D-118); empty unless completed. */
+      potions: PotionDrop[];
       /** Kind of enemy that landed the killing blow (deaths only). */
       /** An enemy kind, or a room hazard (D-109). */
       killedBy: EnemyKind | HazardKind | null;
@@ -396,6 +418,10 @@ export type ServerMessage =
       gold: number;
       items: Item[];
       pending: PendingReward[];
+      /** The potion rack (D-118): its size, its potions, and those waiting for room. */
+      rackCapacity: number;
+      rack: Potion[];
+      pendingPotions: PendingPotion[];
     }
   /** getStash/sellItem refused; `reason` is safe to show. */
   | { type: "stashError"; reason: string }
@@ -535,6 +561,30 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       return {
         ok: true,
         message: { type: "unequipItem", serfId: obj.serfId, slot: obj.slot },
+      };
+    case "drinkPotion":
+      if (!hasExactKeys(obj, ["type", "potionId", "serfId"])) {
+        return fail("drinkPotion: unexpected fields");
+      }
+      if (!isPlayerId(obj.potionId) || !isPlayerId(obj.serfId)) {
+        return fail("drinkPotion: bad id");
+      }
+      return {
+        ok: true,
+        message: {
+          type: "drinkPotion",
+          potionId: obj.potionId,
+          serfId: obj.serfId,
+        },
+      };
+    case "pourPotion":
+      if (!hasExactKeys(obj, ["type", "potionId"])) {
+        return fail("pourPotion: unexpected fields");
+      }
+      if (!isPlayerId(obj.potionId)) return fail("pourPotion: bad potionId");
+      return {
+        ok: true,
+        message: { type: "pourPotion", potionId: obj.potionId },
       };
     case "getLeaderboard":
       if (!hasExactKeys(obj, ["type"])) {
@@ -718,6 +768,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "result",
           "stats",
           "loot",
+          "potions",
           "killedBy",
           "serf",
           "expGained",
@@ -759,6 +810,11 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (result !== "completed" && loot.length > 0) {
         return fail("runEnded: loot comes with completion only");
       }
+      const potions = parseList(obj.potions, parsePotionDrop);
+      if (!potions) return fail("runEnded: bad potions");
+      if (result !== "completed" && potions.length > 0) {
+        return fail("runEnded: potions come with completion only");
+      }
       return {
         ok: true,
         message: {
@@ -767,6 +823,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           result,
           stats,
           loot,
+          potions,
           killedBy: obj.killedBy as EnemyKind | HazardKind | null,
           serf,
           expGained: obj.expGained,
@@ -825,7 +882,16 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       return { ok: true, message: { type: "stashError", reason: obj.reason } };
     case "stash": {
       if (
-        !hasExactKeys(obj, ["type", "capacity", "gold", "items", "pending"])
+        !hasExactKeys(obj, [
+          "type",
+          "capacity",
+          "gold",
+          "items",
+          "pending",
+          "rackCapacity",
+          "rack",
+          "pendingPotions",
+        ])
       ) {
         return fail("stash: unexpected fields");
       }
@@ -835,6 +901,11 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!items) return fail("stash: bad item");
       const pending = parseList(obj.pending, parsePending);
       if (!pending) return fail("stash: bad pending reward");
+      if (!isPlayerId(obj.rackCapacity)) return fail("stash: bad rackCapacity");
+      const rack = parseList(obj.rack, parsePotion);
+      if (!rack) return fail("stash: bad potion");
+      const pendingPotions = parseList(obj.pendingPotions, parsePendingPotion);
+      if (!pendingPotions) return fail("stash: bad pending potion");
       return {
         ok: true,
         message: {
@@ -843,6 +914,9 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           gold: obj.gold,
           items,
           pending,
+          rackCapacity: obj.rackCapacity,
+          rack,
+          pendingPotions,
         },
       };
     }
@@ -1129,6 +1203,29 @@ function parseLootDrop(v: unknown): LootDrop | null {
   if (typeof v.pending !== "boolean") return null;
   const item = parseUnworn(v.item);
   return item ? { item, pending: v.pending } : null;
+}
+
+function parsePotion(v: unknown): Potion | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["id", "stat"])) return null;
+  if (!isPlayerId(v.id)) return null;
+  if (!(STAT_KEYS as readonly unknown[]).includes(v.stat)) return null;
+  return { id: v.id, stat: v.stat as StatKey };
+}
+
+function parsePotionDrop(v: unknown): PotionDrop | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["potion", "pending"])) {
+    return null;
+  }
+  if (typeof v.pending !== "boolean") return null;
+  const potion = parsePotion(v.potion);
+  return potion ? { potion, pending: v.pending } : null;
+}
+
+function parsePendingPotion(v: unknown): PendingPotion | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["potion", "serfId"])) return null;
+  if (!isPlayerId(v.serfId)) return null;
+  const potion = parsePotion(v.potion);
+  return potion ? { potion, serfId: v.serfId } : null;
 }
 
 function parsePending(v: unknown): PendingReward | null {

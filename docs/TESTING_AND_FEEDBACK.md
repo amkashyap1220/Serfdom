@@ -78,6 +78,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Stat potions checklist (Phase 12h, D-118)
+
+Restart `npm run dev` (protocol v27, migration 010 runs on start) and reload. You need a serf that has completed the Warrens (a class is not needed, D-119).
+
+1. Clear the **Goblin Stronghold** a few times. About 1 clear in 5 (per Luck point) shows "1 stat potion" under the chest: a gold card such as "Potion of Attack, +1 ATK, up to the class max", "→ Potion rack".
+2. Click **Drink on <serf> (ATK x/y)**: the card says "Drunk by <serf>", and the Serfs tab shows that stat up by 1 (HP or MP by 5).
+3. **Potion rack** tab: undrunk potions grouped by stat ("×2"), each with a drink button per living serf showing current/max, and "Pour out one".
+4. A stat already at its max shows the button greyed out with the reason. A Serf without a class drinks up to the Serf max (HP 32, MP 18, the rest 14; the button shows e.g. ATK 10/14); a Defense potion says a Serf needs a class first. After choosing a class, the same stats show the class max and can go higher.
+5. Clearing the Warrens never gives potions.
+6. While queued, drinking is refused; pouring out still works.
+7. (Optional, slow) Fill the rack to 20: the next potion says "Rack full", the Dungeons tab blocks that serf until you drink or pour one out, then the waiting potion moves into the rack.
+
+Report: pass/fail per step, how many Stronghold clears gave how many potions, and whether the rack screen is easy to use.
+
 ### Goblin Warchief checklist (Phase 12g, D-117)
 
 Restart `npm run dev` (protocol v26) and reload. Play the Goblin Stronghold to the War hall (the last room).

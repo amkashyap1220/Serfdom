@@ -759,6 +759,14 @@ button.sell {
   max-height: 200px;
 }
 
+/* Stat potions (D-118). Placeholder colors, not the verified palette. */
+.item-card.potion-card {
+  border-color: #d9a441;
+}
+.potion-card .item-name {
+  color: #f0c98a;
+}
+
 /* Equipping (Phase 9b). */
 .item-card {
   position: relative;
