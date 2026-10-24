@@ -20,7 +20,7 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - [x] Phase 9 — Equipment and rewards
 - [x] Phase 10 — Classes and class abilities
 - [x] Phase 11 — Dungeon variety and procedural assembly
-- [ ] Phase 12 — Dungeon tiers and the endgame loop (in progress: 12a–12k built)
+- [x] Phase 12 — Dungeon tiers and the endgame loop
 - [ ] Phase 13 — Ten dungeons: tiers 4 and 5 and more
 - [ ] Phase 14 — Partying up
 - [ ] Phase 15 — Home screen, HUD, minimap, and leaderboards
@@ -589,4 +589,9 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found and fixed along the way: every dungeon failed to build (the Stronghold's doubled rooms had no free spot for 32 px spawns at 1.5× spacing: now non-overlapping, searched to 240 px); the Barracks dropped out of Stronghold maps (two slingers inside the bunks: moved to the aisles); 32 px goblins stuck on walls following an 8 px-clearance path grid (16 px now), and brutes and knights stuck between rooms (a second 22 px grid, `SizedNavigator`); buff rings hidden under the 32 px sprite; the debug visibility box drawn as if at zoom 1; a Volley test whose dummy grew; a server test with the dummy's old size typed in.
 - Tests: sizes per kind; `circleHitsPlayer` at the box edge and corner; a boulder hitting through the hurtbox edge; 44 px knights reach the boss room in all three dungeons; the zoomed view's extent (720 × 640, past 300) and `px`. `npm run check`: 457 shared, 196 server, 59 client, build.
 - Live (harness, **test** DB): the fixed Warrens' Tunnel with 32 px grunts, the Catacomb, and the Sanctum's 88 px Lich at the new zoom, labels readable, the corrected 300 px debug box. No console errors. Not play-tested: how fights feel with bigger hitboxes, and readability of the now half-size bullets.
-- User ran the D-127 checklist: pass (2026-10-24). Next: close Phase 12 (the user's call), then Phase 13 (tier 4: draft for approval).
+- User ran the D-127 checklist: pass (2026-10-24). Committed and pushed as `f42ecbc`.
+
+### Phase 12 closed — 2026-10-24
+
+- The user closed Phase 12 after the acceptance review (all four criteria passed; the two-window party clear stays covered by the automated two-client tests).
+- Next step: Phase 13, starting with the tier-4 dungeon (about levels 15–18): theme first, then a draft for approval.
