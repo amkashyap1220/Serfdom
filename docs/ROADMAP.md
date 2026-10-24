@@ -4,7 +4,7 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 
 ## Where things stand
 
-**Current phase: 12, next slice 12l (the Lich).** Updated 2026-10-24. The roadmap runs to 23 phases (D-124); each phase below has its goal, tasks, acceptance criteria, and status.
+**Current phase: 12, next slice 12l (the Lich).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
 
 | Phase | Name                                               | Status                                   |
 | ----- | -------------------------------------------------- | ---------------------------------------- |
@@ -21,17 +21,21 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 | 10    | Classes and class abilities                        | Complete                                 |
 | 11    | Dungeon variety and procedural assembly            | Complete                                 |
 | 12    | Dungeon tiers and the endgame loop                 | **In progress:** 12a–12k built; next 12l |
-| 13    | Dungeon tiers 4 and 5 (levels 15–20)               | Not started                              |
-| 14    | Rare loot                                          | Not started                              |
-| 15    | Economy and account systems                        | Not started                              |
-| 16    | Presentation: art, HUD, and sound                  | Not started                              |
-| 17    | Onboarding and settings                            | Not started                              |
-| 18    | Production hosting                                 | Not started                              |
-| 19    | Accounts, sessions, and player safety              | Not started                              |
-| 20    | Closed playtest                                    | Not started                              |
-| 21    | Desktop wrapper and cross-play proof               | Not started                              |
-| 22    | Steam integration                                  | Not started                              |
-| 23    | Launch                                             | Not started                              |
+| 13    | Ten dungeons: tiers 4 and 5 and more               | Not started                              |
+| 14    | Partying up                                        | Not started                              |
+| 15    | Home screen, HUD, minimap, and leaderboards        | Not started                              |
+| 16    | Rare loot                                          | Not started                              |
+| 17    | Economy and account systems                        | Not started                              |
+| 18    | Onboarding and settings                            | Not started                              |
+| 19    | Production hosting                                 | Not started                              |
+| 20    | Accounts, sessions, and player safety              | Not started                              |
+| 21    | **Website alpha**                                  | Not started                              |
+| 22    | Alpha content: toward 40 dungeons                  | Not started                              |
+| 23    | Presentation: art and sound                        | Not started                              |
+| 24    | Beta polish                                        | Not started                              |
+| 25    | Desktop wrapper and cross-play proof               | Not started                              |
+| 26    | Steam integration                                  | Not started                              |
+| 27    | Steam launch                                       | Not started                              |
 
 When a slice or phase finishes, update this table, the phase's Status line, `docs/WORK_LOG.md`, and the README status in the same commit.
 
@@ -90,7 +94,7 @@ Do not add accounts, database, final art, classes, or marketplace.
 
 Art policy: use placeholders initially. Player and player-sized ordinary enemies use 16×16 source pixels; Pokémon Emerald is a palette reference only. Generate original assets just in time. Minimum supported window size and compact/mobile layout remain OPEN.
 
-Status: **complete** (2026-10-22; the user passed the manual checks). Small-window behavior stays PROVISIONAL (T-012) until Phase 17.
+Status: **complete** (2026-10-22; the user passed the manual checks). Small-window behavior stays PROVISIONAL (T-012) until Phase 18.
 
 ## Phase 2 — Movement, collision, and camera following
 
@@ -307,7 +311,7 @@ Acceptance:
 - The server validates ability use.
 - No unapproved mechanics are silently introduced.
 
-Status: **complete** (2026-10-23; closed by the user after the 10d checklist passed): all ten class abilities match D-092–D-102 (GDD §4 table updated in the review); the server checks the worn item, MP, cooldown, and range, refuses malformed targets, and a dead player casts nothing (test added in the review); every number was approved per slice. Not built, by decision: the Artifact twists, moved to Phase 13 (D-103).
+Status: **complete** (2026-10-23; closed by the user after the 10d checklist passed): all ten class abilities match D-092–D-102 (GDD §4 table updated in the review); the server checks the worn item, MP, cooldown, and range, refuses malformed targets, and a dead player casts nothing (test added in the review); every number was approved per slice. Not built, by decision: the Artifact twists, moved to the rare loot phase (D-103; Phase 16 since D-124).
 
 ## Phase 11 — Dungeon variety and procedural assembly
 
@@ -342,7 +346,7 @@ Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, 
 
 Tasks:
 
-- Add a second and third dungeon above the Goblin Warrens (tiers 4 and 5 are Phase 13, D-124), each with its own level range, enemies, boss, and loot tiers (designs drafted for the user's approval, one dungeon at a time).
+- Add a second and third dungeon above the Goblin Warrens (tiers 4 and 5 and more dungeons are Phase 13, D-124), each with its own level range, enemies, boss, and loot tiers (designs drafted for the user's approval, one dungeon at a time).
 - New enemy roles and boss mechanics, readable and tested like the Warlord.
 - Room mechanics so rooms cannot all be beaten by running in a circle (D-109): traps, obstacles, floors, and enemies that punish circling.
 - Stat potions and the account potion rack (D-089, D-075): potion dungeons roll the potion chance once per Luck point; drink at once or send to the rack; potions raise a stat up to the class max.
@@ -355,26 +359,61 @@ Acceptance:
 - Potions are granted exactly once per roll, never above the class max, and survive death in the rack.
 - The server decides every potion, drop, and EXP award.
 
-## Phase 13 — Dungeon tiers 4 and 5 (levels 15–20)
+## Phase 13 — Ten dungeons: tiers 4 and 5 and more
 
-**Goal:** Finish the dungeon ladder. D-108 plans about five tiers from level 1 to 20; the Warrens, the Stronghold, and the Crypt cover levels 1–15 (D-124).
+**Goal:** At least **10 dungeons** before the alpha (the user, D-124), including tiers 4 and 5 for levels 15–20, which finish D-108's ladder of about five tiers. Three exist (the Warrens, the Stronghold, the Crypt).
 
 Tasks:
 
 - Draft tier 4 (about levels 15–18) and tier 5 (about levels 18–20), one dungeon at a time, for the user's approval: theme, level range, rooms, enemies, room mechanics, boss, EXP base, loot tiers, and potion chance. The ranges here are placeholders until each draft is approved.
+- Draft the other new dungeons to reach 10, following the plan for how dungeons spread across levels (open question 24), for example a second dungeon in some level bands or a special format (D-013).
 - Loot continues upward (T5 and above), so the top tiers' items, including the T10 chase of GDD §9, become reachable.
 - Check the whole EXP path against D-071: progressing through the five tiers reaches level 20 in about five dungeons' worth of clears.
 - Decide with the user whether higher tiers need any entry rule beyond D-107.
 
 Acceptance:
 
-- Each new dungeon can be completed solo and by a party, and its loot, EXP, and potions match its approved tables.
+- At least 10 dungeons are listed; each can be completed solo and by a party, and its loot, EXP, and potions match its approved tables.
 - A serf progressing through the tiers reaches level 20 at about the pace D-071 describes (measured by simulation from the real formulas).
 - The server decides every drop, potion, and EXP award, and enforces the entry rules, including a tampered queue request.
 
-## Phase 14 — Rare loot
+## Phase 14 — Partying up
 
-**Goal:** The collectible chase: Artifacts and Shiny items.
+**Goal:** Friends can play together on purpose, not only through the open queue (the user, D-124).
+
+Tasks:
+
+- Draft for approval: how a party forms (invite by serf name, a party code, or both), who leads it, and how it queues for a dungeon together, with the open queue still available.
+- A party's members enter the same run together; the 15-second join window and the 10-player cap (D-012, D-052) still apply.
+- Decide whether launch needs a friends list or chat (open question 22); chat would need moderation (Phase 20).
+- Mixed-level parties follow the entry rules (D-107).
+
+Acceptance:
+
+- Two players who invite each other always land in the same run.
+- A tampered invite (to a stranger, a full party, a locked dungeon) is refused by the server.
+- A party member who disconnects or leaves is handled as the confirmed rules say.
+
+## Phase 15 — Home screen, HUD, minimap, and leaderboards
+
+**Goal:** The screens a player lives in are final, not placeholders (the user, D-124).
+
+Tasks:
+
+- Finalize the home (main menu) layout: serfs, stash, potion rack, dungeons, leaderboards, party, and settings, drafted for approval.
+- A real player HUD in the 240×640 panel; the debug readout moves behind a toggle.
+- A minimap: how much it shows (rooms visited, the whole layout, other players, the portal) and where it sits without covering gameplay, drafted for approval.
+- More leaderboards than lifetime EXP, chosen with the user (GDD §12).
+
+Acceptance:
+
+- The home screen matches the approved layout and every tab works from it.
+- The minimap and HUD never cover the 720×640 gameplay viewport and match the server's state (rooms, players, portal).
+- Every leaderboard is computed on the server from recorded data and cannot be inflated by a client.
+
+## Phase 16 — Rare loot
+
+**Goal:** The collectible chase: Artifacts and Shiny items, in place for the alpha so the economy has rare things to trade (D-124). New item kinds beyond base tiers and Artifacts come during the alpha (Phase 22).
 
 Tasks:
 
@@ -390,9 +429,9 @@ Acceptance:
 - Drop rates match configuration over many simulated rolls.
 - A Resurrection Necklace saves a serf exactly once under the confirmed rule.
 
-## Phase 15 — Economy and account systems
+## Phase 17 — Economy and account systems
 
-**Goal:** Add the marketplace, buying, and upgrades (the shared stash, gold, and selling to the vendor arrived in Phase 9, D-085–D-087).
+**Goal:** The player-driven economy, working before the alpha (the user: "a huge part of this game", D-124). The shared stash, gold, and selling to the vendor arrived in Phase 9 (D-085–D-087); this phase adds the marketplace, buying, and upgrades.
 
 Tasks:
 
@@ -410,24 +449,7 @@ Acceptance:
 - An upgrade is paid for exactly once and applies to the whole account.
 - Economy behavior is identical across platforms.
 
-## Phase 16 — Presentation: art, HUD, and sound
-
-**Goal:** Replace placeholder squares and the debug HUD once the systems are stable.
-
-Tasks:
-
-- Original 16×16 pixel-art sprites for serfs (per class) and ordinary enemies, larger canvases for bosses, tiles, projectiles, and effects, per the confirmed art direction and `docs/ASSET_MANIFEST.md`.
-- Verify palette RGB values from a suitable reference before calling anything the Pokémon Emerald palette.
-- A real player HUD in the 240×640 panel (the debug readout moves behind a toggle).
-- Sound and music only if the user wants them (open question 19).
-
-Acceptance:
-
-- Every asset passes the manifest checks: canvas size, transparency, crisp edges, palette, frame layout.
-- Gameplay readability is no worse than with placeholders (bullets, telegraphs, and ability effects stay clear).
-- The HUD never covers the gameplay viewport.
-
-## Phase 17 — Onboarding and settings
+## Phase 18 — Onboarding and settings
 
 **Goal:** A new player can learn the game without help, and every player can adjust it to their setup (D-124).
 
@@ -445,7 +467,7 @@ Acceptance:
 - Every rebound key works in every screen and cannot bind two actions to one key.
 - The 960×640 layout, the 240-pixel HUD, and camera visibility (at least 300 world pixels each way) hold at every supported window size; the behavior outside that range is documented and tested.
 
-## Phase 18 — Production hosting
+## Phase 19 — Production hosting
 
 **Goal:** The game runs on a real server that strangers can reach safely (D-124).
 
@@ -466,7 +488,7 @@ Acceptance:
 - An old client is refused with a clear message after a protocol change.
 - Every check runs automatically on each push, and a failing check is visible.
 
-## Phase 19 — Accounts, sessions, and player safety
+## Phase 20 — Accounts, sessions, and player safety
 
 **Goal:** Accounts and the community are safe to open to the public (D-124).
 
@@ -478,7 +500,7 @@ Tasks:
 - Account deletion and a copy of a player's own data on request; a privacy policy and terms of service (drafted for the user; not legal advice).
 - Admin tools: look up an account or serf, ban or suspend, restore a lost item, with every admin action logged.
 - A security review of every message handler and database write, and per-account abuse limits.
-- Social features if open question 22 adds them (party invites, friends, chat and its moderation).
+- Moderation for whatever social features exist by then (Phase 14), such as reporting a player.
 
 Acceptance:
 
@@ -487,24 +509,75 @@ Acceptance:
 - A banned account cannot log in, and an admin action shows in the log.
 - A deleted account's personal data is gone, while the leaderboard keeps only what the policy allows.
 
-## Phase 20 — Closed playtest
+## Phase 21 — Website alpha
 
-**Goal:** Real players on the live server, so balance and stability are measured rather than guessed (D-124).
+**Goal:** Serfdom is playable by the public on its website, labelled "alpha" (the user, D-124). It opens with at least 10 dungeons, the economy, Artifacts, and base loot.
 
 Tasks:
 
-- Invite a small group of testers; a simple way for them to report bugs and feedback.
+- Closed playtest first: invite a small group, give them a simple way to report bugs and feedback.
 - Measure clear times, deaths, and EXP pace in every dungeon against their targets (D-047, D-071, D-108, D-120), and tune party scaling (D-045, PROVISIONAL).
 - Load and soak testing: the most players and runs one server must hold, snapshot bandwidth (T-027), and a long run without leaks.
-- Fix what the playtest finds, and decide with the user what blocks launch.
+- Fix what the playtest finds, decide with the user what blocks opening, then open the alpha to the public.
+- The alpha's ground rules, decided with the user: whether progress may be wiped before Steam, and how that is announced (open question 26).
 
 Acceptance:
 
 - Every dungeon's measured clear time is within its target, or the target was changed by the user.
 - The server holds the agreed player count for the agreed time without errors or growing memory.
-- Every bug marked as blocking launch is fixed and has a regression test.
+- Every bug marked as blocking is fixed and has a regression test.
+- Anyone can register and play on the public site, and the alpha label and its rules are shown.
 
-## Phase 21 — Desktop wrapper and cross-play proof
+## Phase 22 — Alpha content: toward 40 dungeons
+
+**Goal:** Grow the game while the alpha runs, in batches that real players test: from 10 to at least **40 dungeons** before the Steam release, plus more item kinds and other content (the user, D-124).
+
+Tasks:
+
+- Follow the agreed spread of the 40 (open question 24): for example several dungeons per level band, endgame dungeons, and special formats (D-013).
+- Ship dungeons in batches; each dungeon is drafted for approval like D-108 and D-120 (theme, rooms, enemies, mechanics, boss, EXP, loot, potions).
+- New item kinds beyond base tiers and Artifacts, drafted for approval one kind at a time, with their place in the economy.
+- Keep drops, rates, and EXP in central configuration, and re-check the EXP pace (D-071) as dungeons are added.
+
+Acceptance:
+
+- At least 40 dungeons are listed, each completable solo and by a party, each with its approved loot, EXP, and potion tables.
+- Every new item kind is tested like the existing ones (bounds, ownership, trading).
+- Each batch passes its checklist on the live alpha before the next one starts.
+
+## Phase 23 — Presentation: art and sound
+
+**Goal:** Replace placeholder squares with real art once the systems are stable. Placed during the alpha; whether the alpha opens with placeholder art is open question 25.
+
+Tasks:
+
+- Original 16×16 pixel-art sprites for serfs (per class) and ordinary enemies, larger canvases for bosses, tiles, projectiles, and effects, per the confirmed art direction and `docs/ASSET_MANIFEST.md`.
+- Verify palette RGB values from a suitable reference before calling anything the Pokémon Emerald palette.
+- Sound and music only if the user wants them (open question 19).
+
+Acceptance:
+
+- Every asset passes the manifest checks: canvas size, transparency, crisp edges, palette, frame layout.
+- Gameplay readability is no worse than with placeholders (bullets, telegraphs, and ability effects stay clear).
+- The HUD never covers the gameplay viewport.
+
+## Phase 24 — Beta polish
+
+**Goal:** Everything a finished game needs ironed out before Steam (the user, D-124).
+
+Tasks:
+
+- A full balance pass across all dungeons, classes, items, and the economy, from alpha data.
+- Performance on modest hardware and slow connections.
+- Fix the alpha's known issues list down to what the user accepts for release.
+- Re-run every feature checklist and the security review against the final build.
+
+Acceptance:
+
+- The known issues list contains only items the user has accepted for release.
+- Every feature checklist passes on the release candidate.
+
+## Phase 25 — Desktop wrapper and cross-play proof
 
 **Goal:** Package the same client as a windowed desktop app and verify it plays with browser users.
 
@@ -522,7 +595,7 @@ Acceptance:
 - Both observe consistent game state and rewards.
 - Both use shared account progression and economy.
 
-## Phase 22 — Steam integration
+## Phase 26 — Steam integration
 
 **Goal:** Steamworks features as their own milestone (split out of the desktop phase).
 
@@ -538,9 +611,9 @@ Acceptance:
 - The Steam build launches and plays with browser users against the same backend.
 - No Steam-only advantage in gameplay or economy.
 
-## Phase 23 — Launch
+## Phase 27 — Steam launch
 
-**Goal:** Open the game to the public and keep it running (D-124).
+**Goal:** Release on Steam beside the website, with browser and Steam players in the same world (D-124).
 
 Tasks:
 

@@ -14,7 +14,7 @@ Both clients connect to the same authoritative multiplayer service and persisten
 ## 2. Stack
 
 - Client: Phaser 4 + TypeScript (T-001).
-- Desktop wrapper: Electron or similar, Phase 21 (T-002, still PROPOSED).
+- Desktop wrapper: Electron or similar, Phase 25 (T-002, still PROPOSED).
 - Real-time transport: WebSockets (`ws`, T-020).
 - Server: Node.js 24 running TypeScript directly, one small authoritative game-server process.
 - Database: PostgreSQL 17 (D-059), since Phase 7.
@@ -117,7 +117,7 @@ PostgreSQL 17 (D-059), reached through `pg` with one connection pool per server 
 - `sessions`: SHA-256 `token_hash` (the token itself is never stored), account_id (cascade delete), expires_at.
 - `serfs`: id, account_id (cascade delete), name (unique among living, case-insensitive, partial index), level, died_at / death_dungeon / killed_by (set once), lifetime stat columns.
 
-Rules in code: every serf query is scoped by `account_id`; slot-limited creation locks the account row; a run is recorded with one `update … where died_at is null`; all SQL uses parameters (no string-built queries). Migrations since then (003–010) add EXP, classes, stats, items, the stash and gold, ability grants, accessory bases, and potions; see `server/migrations/`. Not yet done: backups and restore drills (before real players' data matters, Phase 18).
+Rules in code: every serf query is scoped by `account_id`; slot-limited creation locks the account row; a run is recorded with one `update … where died_at is null`; all SQL uses parameters (no string-built queries). Migrations since then (003–010) add EXP, classes, stats, items, the stash and gold, ability grants, accessory bases, and potions; see `server/migrations/`. Not yet done: backups and restore drills (before real players' data matters, Phase 19).
 
 When persistence is introduced:
 

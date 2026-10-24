@@ -15,7 +15,7 @@ This repository is intended to be developed with Claude as a teaching pair-progr
 
 ## Project status
 
-Phases 0–11 are complete; Phase 12 (dungeon tiers and the endgame loop) is in progress, out of 23 phases. Roadmap and status table: [`docs/ROADMAP.md`](docs/ROADMAP.md). Session-by-session detail: [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
+Phases 0–11 are complete; Phase 12 (dungeon tiers and the endgame loop) is in progress, out of 27 phases (website alpha at Phase 21, Steam after). Roadmap and status table: [`docs/ROADMAP.md`](docs/ROADMAP.md). Session-by-session detail: [`docs/WORK_LOG.md`](docs/WORK_LOG.md).
 
 What exists today:
 

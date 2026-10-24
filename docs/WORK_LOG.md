@@ -6,7 +6,7 @@ Keep this concise and update it after each meaningful milestone.
 
 **Next step:** draft 12l, the Lich (D-120), for approval.
 
-Phase numbering follows the 23-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
+Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
 - [x] Phase 0 — Repository orientation and environment
 - [x] Phase 1 — Playable local client skeleton
@@ -21,17 +21,21 @@ Phase numbering follows the 23-phase roadmap (D-124; entries before 2026-10-24 u
 - [x] Phase 10 — Classes and class abilities
 - [x] Phase 11 — Dungeon variety and procedural assembly
 - [ ] Phase 12 — Dungeon tiers and the endgame loop (in progress: 12a–12k built)
-- [ ] Phase 13 — Dungeon tiers 4 and 5 (levels 15–20)
-- [ ] Phase 14 — Rare loot
-- [ ] Phase 15 — Economy and account systems
-- [ ] Phase 16 — Presentation: art, HUD, and sound
-- [ ] Phase 17 — Onboarding and settings
-- [ ] Phase 18 — Production hosting
-- [ ] Phase 19 — Accounts, sessions, and player safety
-- [ ] Phase 20 — Closed playtest
-- [ ] Phase 21 — Desktop wrapper and cross-play proof
-- [ ] Phase 22 — Steam integration
-- [ ] Phase 23 — Launch
+- [ ] Phase 13 — Ten dungeons: tiers 4 and 5 and more
+- [ ] Phase 14 — Partying up
+- [ ] Phase 15 — Home screen, HUD, minimap, and leaderboards
+- [ ] Phase 16 — Rare loot
+- [ ] Phase 17 — Economy and account systems
+- [ ] Phase 18 — Onboarding and settings
+- [ ] Phase 19 — Production hosting
+- [ ] Phase 20 — Accounts, sessions, and player safety
+- [ ] Phase 21 — Website alpha
+- [ ] Phase 22 — Alpha content: toward 40 dungeons
+- [ ] Phase 23 — Presentation: art and sound
+- [ ] Phase 24 — Beta polish
+- [ ] Phase 25 — Desktop wrapper and cross-play proof
+- [ ] Phase 26 — Steam integration
+- [ ] Phase 27 — Steam launch
 
 ## Session entries
 
@@ -552,5 +556,5 @@ Phase numbering follows the 23-phase roadmap (D-124; entries before 2026-10-24 u
 
 - Compared every planning doc with the code and git history and fixed stale facts: party size 10 (not 4), resolved GDD sections (controls, stats, slots, death rules), superseded T-entries marked, README status in order.
 - Restructured: a status table at the top of the roadmap; the architecture doc opens with a current code map, with the phase-by-phase notes moved to an appendix; the testing guide keeps the workflow up front and the feature checklists in an appendix. Nothing was deleted.
-- User approved the 23-phase roadmap (D-124): tiers 4–5 get their own phase (13), and five new launch phases (17 onboarding and settings, 18 production hosting, 19 accounts and player safety, 20 closed playtest, 23 launch). New open questions 21–23 (business model, social features, crash reporting and analytics).
+- User shaped a 27-phase roadmap (D-124): a website alpha (Phase 21) before Steam; at least 10 dungeons, partying up, the home screen, a minimap, more leaderboards, rare loot, and the player-driven economy before the alpha; growth to 40 dungeons and new item kinds during it; then beta polish and Steam. New open questions 21–26.
 - No code changed. Next: 12l, the Lich.
