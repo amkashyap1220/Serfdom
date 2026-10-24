@@ -48,6 +48,8 @@ export const ENEMY_KINDS = [
   "gargoyle",
   "stormcaller",
   "pylon",
+  "drake",
+  "dragon",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -432,7 +434,73 @@ export const BOSS_KINDS: readonly EnemyKind[] = [
   "automaton",
   "warden",
   "stormcaller",
+  "dragon",
 ];
+
+/** Fire drake (D-140): the bomber's lob, heavier, its fire hotter. */
+export const DRAKE = {
+  maxHp: 700,
+  size: 40,
+  speed: 45,
+  minRange: 200,
+  maxRange: 320,
+  throwRange: 400,
+  throwIntervalSeconds: 3.2,
+  leadSeconds: 0.5,
+  flightSeconds: 0.9,
+  radius: 48,
+  damage: 14,
+  fire: { seconds: 3, tickSeconds: 0.5, damage: 4 },
+} as const;
+
+/**
+ * The Elder Dragon (D-140), Dragon's Roost's boss and the last of the ten.
+ * On the ground: fire breath (a cone that leaves burning floor), a tail
+ * sweep, and a wing gust that blows players back. Below `airBelow` it
+ * takes off once for `air.seconds` (untargetable) while meteors rain; below
+ * `enragedBelow` its breath comes faster and meteors keep falling.
+ */
+export const DRAGON = {
+  maxHp: 26000,
+  size: 104,
+  speed: 30,
+  keep: 150,
+  airBelow: 0.5,
+  enragedBelow: 0.25,
+  breath: {
+    intervalSeconds: 3.5,
+    enragedIntervalSeconds: 2.5,
+    warnSeconds: 1,
+    range: 300,
+    halfAngleDegrees: 35,
+    damage: 18,
+    fire: { radius: 56, seconds: 3, tickSeconds: 0.5, damage: 4 },
+  },
+  tail: {
+    intervalSeconds: 3,
+    triggerRange: 140,
+    windupSeconds: 0.6,
+    radius: 130,
+    damage: 16,
+  },
+  gust: {
+    intervalSeconds: 8,
+    warnSeconds: 1,
+    seconds: 0.5,
+    radius: 260,
+    /** Negative: it blows players away from the dragon. */
+    dragSpeed: -300,
+  },
+  air: { seconds: 14 },
+  meteors: {
+    airIntervalSeconds: 0.5,
+    enragedIntervalSeconds: 1.5,
+    warnSeconds: 1.2,
+    radius: 40,
+    damage: 16,
+    fire: { seconds: 3, tickSeconds: 0.5, damage: 4 },
+  },
+} as const;
 
 /** Storm hawk (D-139): the brute's charge as a quick dive. */
 export const HAWK = {
@@ -923,6 +991,8 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   gargoyle: GARGOYLE,
   stormcaller: STORMCALLER,
   pylon: PYLON,
+  drake: DRAKE,
+  dragon: DRAGON,
 };
 
 /**
@@ -977,6 +1047,8 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   gargoyle: GARGOYLE.contactCooldownSeconds / 2,
   stormcaller: 1,
   pylon: 0,
+  drake: DRAKE.throwIntervalSeconds / 2,
+  dragon: 1.5,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

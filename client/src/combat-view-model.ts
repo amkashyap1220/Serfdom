@@ -133,6 +133,8 @@ export interface WhirlpoolView {
   radius: number;
   warn: number;
   active: boolean;
+  /** A wing gust that blows players away (D-140), not a whirlpool. */
+  push: boolean;
 }
 
 /** A tidal surge (D-135): its band now (empty while it waits), and its gaps. */

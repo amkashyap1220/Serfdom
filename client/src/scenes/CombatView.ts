@@ -80,6 +80,8 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   gargoyle: 0x6f6a66,
   stormcaller: 0x4a5fc8,
   pylon: 0xc8d8ff,
+  drake: 0xc84a1a,
+  dragon: 0x8a1a1a,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -410,6 +412,13 @@ export class CombatView {
     }
     // Whirlpools: a ring closing in while they warn, then turning rings.
     for (const w of view.whirlpools) {
+      // The Elder Dragon's wing gust (D-140): rings racing outward.
+      if (w.push) {
+        h.lineStyle(px(3), COLORS.wind, w.active ? 0.8 : 0.25 + 0.5 * w.warn);
+        const grow = w.active ? (nowMs / 300) % 1 : w.warn;
+        h.strokeCircle(w.x, w.y, w.radius * (0.4 + 0.6 * grow));
+        continue;
+      }
       if (!w.active) {
         h.lineStyle(px(2), COLORS.whirl, 0.3 + 0.6 * w.warn);
         h.strokeCircle(w.x, w.y, w.radius * (1.2 - 0.2 * w.warn));

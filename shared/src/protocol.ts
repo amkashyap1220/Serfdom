@@ -68,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v42 (13j): Dragon's Roost (D-140): its kinds; a whirlpool carries its
+ *          `dragSpeed` (negative: the Elder Dragon's gust pushes players
+ *          away, so prediction needs it).
  * v41 (13i): Stormspire (D-139): its kinds; a beam may warn before it
  *          burns (`startsIn`) and be a Storm Caller's `arc`; killedBy may be
  *          "lightning".
@@ -146,7 +149,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 41;
+export const PROTOCOL_VERSION = 42;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -289,6 +292,8 @@ export interface SnapshotWhirlpool {
   radius: number;
   from: number;
   until: number;
+  /** Its pull (px/s); negative pushes away (D-140). */
+  dragSpeed: number;
 }
 
 /** Frost on the floor (D-136): slows players within `radius` from `from` until `until` (run clock). */
@@ -1618,16 +1623,24 @@ function parseSnapshotCone(v: unknown): SnapshotCone | null {
 function parseSnapshotWhirlpool(v: unknown): SnapshotWhirlpool | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["x", "y", "radius", "from", "until"]) ||
+    !hasExactKeys(v, ["x", "y", "radius", "from", "until", "dragSpeed"]) ||
     !isFiniteNumber(v.x) ||
     !isFiniteNumber(v.y) ||
     !isNonNegative(v.radius) ||
     !isNonNegative(v.from) ||
-    !isNonNegative(v.until)
+    !isNonNegative(v.until) ||
+    !isFiniteNumber(v.dragSpeed)
   ) {
     return null;
   }
-  return { x: v.x, y: v.y, radius: v.radius, from: v.from, until: v.until };
+  return {
+    x: v.x,
+    y: v.y,
+    radius: v.radius,
+    from: v.from,
+    until: v.until,
+    dragSpeed: v.dragSpeed,
+  };
 }
 
 function parseSnapshotSurge(v: unknown): SnapshotSurge | null {

@@ -14,6 +14,7 @@ import {
   WRAITH,
   AUTOMATON,
   WARDEN,
+  DRAGON,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -70,6 +71,20 @@ export type EnemyAi =
       direction: Vec2;
       /** Players already hit by the current charge. */
       hit: readonly number[];
+    }
+  | {
+      kind: "dragon";
+      /** On the ground walking, breathing (holding still), raising its tail, or in the air (D-140). */
+      mode: "walk" | "breath" | "tail" | "air";
+      timer: number;
+      breath: number;
+      tail: number;
+      gust: number;
+      meteor: number;
+      /** It takes off only once. */
+      flown: boolean;
+      /** Meteors so far: where each falls steps on from the last. */
+      meteors: number;
     }
   | {
       kind: "stormcaller";
@@ -281,6 +296,18 @@ function initialAi(kind: EnemyKind): EnemyAi {
       };
     case "wraith":
       return { kind, trail: WRAITH.trail.everySeconds / 2 };
+    case "dragon":
+      return {
+        kind,
+        mode: "walk",
+        timer: 0,
+        breath: FIRST_ATTACK_DELAY.dragon,
+        tail: 0,
+        gust: DRAGON.gust.intervalSeconds / 2,
+        meteor: 0,
+        flown: false,
+        meteors: 0,
+      };
     case "stormcaller":
       return {
         kind,
@@ -457,7 +484,8 @@ export function isFaded(enemy: EnemyState): boolean {
   return (
     (enemy.ai.kind === "ghost" && enemy.ai.faded) ||
     (enemy.ai.kind === "lich" && enemy.ai.mode === "warded") ||
-    (enemy.ai.kind === "stormcaller" && enemy.ai.mode === "warded")
+    (enemy.ai.kind === "stormcaller" && enemy.ai.mode === "warded") ||
+    (enemy.ai.kind === "dragon" && enemy.ai.mode === "air")
   );
 }
 

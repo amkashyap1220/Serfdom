@@ -44,6 +44,8 @@ export const ENEMY_NAMES: Record<EnemyKind | HazardKind, string> = {
   gargoyle: "a Gargoyle",
   stormcaller: "the Storm Caller",
   pylon: "a lightning pylon",
+  drake: "a Fire Drake",
+  dragon: "the Elder Dragon",
   rockfall: "a falling boulder",
   arrows: "an arrow trap",
   braziers: "a spirit brazier",

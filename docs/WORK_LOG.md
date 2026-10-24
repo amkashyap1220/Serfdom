@@ -702,3 +702,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found by tests: two of my own setups were wrong (a pylon test that left no pylons alive; a wind push I over-estimated); the rules were right.
 - `npm run check`: 561 shared, 199 server, 68 client, build.
 - Live (harness, **test** DB, headless): lightning under the player; the Storm Caller warded with its pylons, arcs warning and burning between them every 2 s, stunned once they broke. Not seen live: a gust moving a player (the harness put the player beside the channel, not in it; the movement is unit-tested and prediction-tested).
+
+### Phase 13j — Dragon's Roost, the tenth dungeon — 2026-10-24
+
+- The last endgame dungeon of Phase 13 (D-140, PROVISIONAL): the hardest room mix, fire drakes, and the Elder Dragon (fire breath with burning floor, tail, a wing gust that blows players back, a 14 s flight with meteors, an enraged finish). The only T10 loot.
+- Found while building: a rerun of a half-applied edit script inserted the dragon twice; I restored the files and reran once, and the edit scripts now write nothing unless every change applies. Breath fire was first added before the world step's fire list existed; it is gathered separately now.
+- Found by the tests: two old protocol tests used "dragon" as an example of an invalid name (now "kraken"); my push-distance guess forgot the gust ends at its edge.
+- `npm run check`: 569 shared, 199 server, 69 client, build.
+- Live (harness, **test** DB, headless): breath cones left fire; the gust blew the player back; at 45% it flew, faded, while meteors fell; it landed and breathed again.

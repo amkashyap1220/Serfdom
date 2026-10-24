@@ -55,6 +55,8 @@ export interface WhirlpoolShape {
   radius: number;
   from: number;
   until: number;
+  /** Its pull (px/s); negative pushes players away (the Elder Dragon's gust, D-140). Default WHIRLPOOL.dragSpeed. */
+  dragSpeed?: number;
 }
 
 export const WHIRLPOOL = {
@@ -91,7 +93,8 @@ export function waterDrift(
     const dy = to.y - at.y;
     const d = Math.hypot(dx, dy);
     if (d < 1e-6) return;
-    const s = dt > 0 ? Math.min(speed, d / dt) : speed;
+    // A pull never carries past the point; a push has no such limit.
+    const s = speed > 0 && dt > 0 ? Math.min(speed, d / dt) : speed;
     x += (dx / d) * s;
     y += (dy / d) * s;
   };
@@ -99,8 +102,9 @@ export function waterDrift(
     add(pull.to, pull.speed);
   for (const w of whirlpools) {
     if (!whirlpoolActive(w, clock)) continue;
-    if (Math.hypot(at.x - w.at.x, at.y - w.at.y) <= w.radius)
-      add(w.at, WHIRLPOOL.dragSpeed);
+    if (Math.hypot(at.x - w.at.x, at.y - w.at.y) <= w.radius) {
+      add(w.at, w.dragSpeed ?? WHIRLPOOL.dragSpeed);
+    }
   }
   return { x, y };
 }

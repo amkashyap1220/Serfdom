@@ -57,6 +57,8 @@ describe("32×32 serfs and enemies (D-127)", () => {
       gargoyle: 40,
       stormcaller: 48,
       pylon: 40,
+      drake: 40,
+      dragon: 104,
       forgemaster: 88,
       lich: 32,
     });

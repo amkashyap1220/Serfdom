@@ -401,6 +401,7 @@ export class NetSync {
         Math.max(0, 1 - (w.from - clock) / WHIRLPOOL.warnSeconds),
       ),
       active: clock >= w.from && clock < w.until,
+      push: w.dragSpeed < 0,
     }));
     const surges = snapshot.surges.map((s) => {
       const area = { x: s.x, y: s.y, width: s.width, height: s.height };
@@ -515,6 +516,7 @@ export class NetSync {
             radius: w.radius,
             from: w.from,
             until: w.until,
+            dragSpeed: w.dragSpeed,
           })),
           snapshot.frost.map((f) => ({
             at: { x: f.x, y: f.y },

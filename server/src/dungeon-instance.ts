@@ -15,6 +15,7 @@ import {
   lavaPools,
   tidePools,
   windChannels,
+  WHIRLPOOL,
   trapWarnings,
   isDazed,
   rockfallDrops,
@@ -503,13 +504,15 @@ export class DungeonInstance {
           landsIn: h.landsIn,
           kind: h.rune
             ? ("rune" as const)
-            : h.hazard === "icicles"
-              ? ("icicle" as const)
-              : h.hazard === "slag"
-                ? ("slag" as const)
-                : h.fire
-                  ? ("bomb" as const)
-                  : ("boulder" as const),
+            : h.meteor
+              ? ("slag" as const)
+              : h.hazard === "icicles"
+                ? ("icicle" as const)
+                : h.hazard === "slag"
+                  ? ("slag" as const)
+                  : h.fire
+                    ? ("bomb" as const)
+                    : ("boulder" as const),
         })),
       fires: this.sim.fires.map((f) => ({
         x: roundCoord(f.position.x),
@@ -553,6 +556,7 @@ export class DungeonInstance {
         radius: w.radius,
         from: w.from,
         until: w.until,
+        dragSpeed: w.dragSpeed ?? WHIRLPOOL.dragSpeed,
       })),
       surges: (this.sim.surges ?? []).map((s) => ({
         x: s.area.x,

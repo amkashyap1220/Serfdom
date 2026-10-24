@@ -269,6 +269,15 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
+  // D-140: T8 30%, T9 45%, T10 25%: the only dungeon with T10.
+  "dragons-roost": {
+    tiers: [
+      [8, 30],
+      [9, 45],
+      [10, 25],
+    ],
+    slots: SLOT_WEIGHTS,
+  },
   training: {
     tiers: [
       [0, 50],

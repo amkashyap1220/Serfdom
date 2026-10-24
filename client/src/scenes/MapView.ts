@@ -46,6 +46,17 @@ const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
     obstacleEdge: 0x7d7472,
     hole: 0x0a0605,
   },
+  // D-140: black basalt, glowing seams.
+  "dragons-roost": {
+    floor: 0x1a1414,
+    gridMinor: 0x2a1c1a,
+    gridMajor: 0x43302a,
+    wall: 0x4a2a22,
+    wallEdge: 0xc85a2a,
+    obstacle: 0xb8902a,
+    obstacleEdge: 0xf0c860,
+    hole: 0x070404,
+  },
   // D-139: slate and storm-blue.
   stormspire: {
     floor: 0x161a24,

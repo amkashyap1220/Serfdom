@@ -7,6 +7,7 @@ import {
   AUTOMATON,
   WARDEN,
   STORMCALLER,
+  DRAGON,
   WARLORD,
   type EnemyKind,
 } from "@serfdom/shared";
@@ -66,6 +67,18 @@ export function bossBar(
           : fraction < LICH.wardBelow[1]!
             ? "  — ENRAGED"
             : "",
+    };
+  }
+  if (kind === "dragon") {
+    return {
+      name: "The Elder Dragon",
+      notches: [DRAGON.airBelow, DRAGON.enragedBelow],
+      angry: fraction < DRAGON.airBelow,
+      suffix: state.faded
+        ? "  — AIRBORNE"
+        : fraction < DRAGON.enragedBelow
+          ? "  — ENRAGED"
+          : "",
     };
   }
   if (kind === "stormcaller") {

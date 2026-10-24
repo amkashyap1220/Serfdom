@@ -34,6 +34,8 @@ export const POTION_CHANCE: Partial<Record<DungeonId, number>> = {
   // D-138.
   "abyssal-gauntlet": 0.7,
   stormspire: 0.7,
+  // D-140.
+  "dragons-roost": 0.8,
 };
 
 /** A stat potion on the account: in the rack, or waiting for room. */

@@ -39,6 +39,8 @@ import {
   ADEPT,
   GARGOYLE,
   STORMCALLER,
+  DRAKE,
+  DRAGON,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -97,6 +99,8 @@ export interface HazardSpec {
   fire?: { seconds: number; tickSeconds: number; damage: number };
   /** Drawn as a rune filling in red (the Lich's, D-125), not a falling boulder. */
   rune?: boolean;
+  /** A meteor (the Elder Dragon's, D-140): drawn as a molten boulder. */
+  meteor?: boolean;
 }
 
 /** One enemy's decision for one tick. */
@@ -156,9 +160,18 @@ export interface EnemyAction {
     startsIn: number;
     damage: number;
     frost?: { radius: number; seconds: number };
+    /** Burning floor it leaves along its length (the Elder Dragon's, D-140). */
+    fire?: {
+      radius: number;
+      seconds: number;
+      tickSeconds: number;
+      damage: number;
+    };
     /** Its arena: players outside are not hit (no breathing through walls). */
     area?: Rect;
   };
+  /** The Elder Dragon's wing gust (D-140): from `at`, it blows players within `radius` away. */
+  gust?: { at: Vec2; radius: number };
   /** The Tide Priest's tidal surge (D-135) across `area`. */
   surge?: {
     area: Rect;
@@ -345,6 +358,18 @@ export function enemyAct(
       );
     case "pylon":
       return result(enemy);
+    case "drake":
+      return bomberAct(enemy, target, walls, dtSeconds, result, context, DRAKE);
+    case "dragon":
+      return dragonAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+      );
     case "stormcaller":
       return stormcallerAct(enemy, targets, target, dtSeconds, result, context);
     case "warden":
@@ -941,6 +966,173 @@ function elementalAct(
     dt,
   );
   return result({ ...enemy, position });
+}
+
+/**
+ * The `k`th meteor's spot in `area` (D-140): a golden-ratio walk over the
+ * floor, so meteors spread without a random stream.
+ */
+export function meteorSpot(area: Rect, k: number): Vec2 {
+  const fx = (k * 0.618034 + 0.31) % 1;
+  const fy = (k * 0.754878 + 0.57) % 1;
+  return {
+    x: area.x + 40 + fx * (area.width - 80),
+    y: area.y + 40 + fy * (area.height - 80),
+  };
+}
+
+/**
+ * The Elder Dragon (D-140): on the ground it walks after the nearest
+ * player (stopping short), breathes fire cones (holding still while they
+ * warn), sweeps its tail at players close by, and beats its wings to blow
+ * everyone back. At half HP it flies once for 14 s, out of reach, while
+ * meteors rain (one at each player every few, the rest across the floor);
+ * enraged, it breathes faster and meteors keep falling.
+ */
+function dragonAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "dragon") return result(enemy);
+  const D = DRAGON;
+  const fraction = enemy.hp / enemy.maxHp;
+  const enraged = fraction < D.enragedBelow;
+  const tick = (t: number) => Math.max(0, t - dt);
+  let next = {
+    ...ai,
+    breath: tick(ai.breath),
+    tail: tick(ai.tail),
+    gust: tick(ai.gust),
+    meteor: tick(ai.meteor),
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  const area = enemy.roomId ? context.boundsOf?.(enemy.roomId) : undefined;
+  let position = enemy.position;
+  const meteor = (at: Vec2) =>
+    action.hazards.push({
+      at,
+      radius: D.meteors.radius,
+      damage: D.meteors.damage,
+      delaySeconds: D.meteors.warnSeconds,
+      fire: { ...D.meteors.fire },
+      meteor: true,
+    });
+  // Taking off, once, at half HP.
+  if (!next.flown && fraction < D.airBelow && next.mode !== "air") {
+    next = {
+      ...next,
+      mode: "air",
+      timer: D.air.seconds,
+      flown: true,
+      meteor: 0,
+    };
+  }
+  if (next.mode === "air") {
+    const timer = next.timer - dt;
+    if (next.meteor <= 1e-9 && area) {
+      next.meteor = D.meteors.airIntervalSeconds;
+      // Every fourth falls where a player stands.
+      const onPlayer = next.meteors % 4 === 0 && targets.length > 0;
+      meteor(
+        onPlayer
+          ? { ...targets[next.meteors % targets.length]!.position }
+          : meteorSpot(area, next.meteors),
+      );
+      next.meteors += 1;
+    }
+    next =
+      timer > 1e-9 ? { ...next, timer } : { ...next, mode: "walk", timer: 0 };
+    return result({ ...enemy, ai: next }, action);
+  }
+  if (enraged && area && next.meteor <= 1e-9) {
+    next.meteor = D.meteors.enragedIntervalSeconds;
+    meteor(meteorSpot(area, next.meteors));
+    next.meteors += 1;
+  }
+  if (next.mode === "walk" && target) {
+    if (next.gust <= 1e-9) {
+      next.gust = D.gust.intervalSeconds;
+      action.gust = { at: { ...enemy.position }, radius: D.gust.radius };
+      action.slam = {
+        at: { ...enemy.position },
+        radius: D.gust.radius,
+        warning: true,
+      };
+    }
+    if (next.tail <= 1e-9 && target.distance <= D.tail.triggerRange) {
+      next = { ...next, mode: "tail", timer: D.tail.windupSeconds };
+      action.slam = {
+        at: { ...enemy.position },
+        radius: D.tail.radius,
+        warning: true,
+      };
+    } else if (next.breath <= 1e-9) {
+      const aim = toward(enemy.position, target.target.position);
+      next = {
+        ...next,
+        mode: "breath",
+        timer: D.breath.warnSeconds,
+        breath: enraged
+          ? D.breath.enragedIntervalSeconds
+          : D.breath.intervalSeconds,
+      };
+      action.cone = {
+        at: { ...enemy.position },
+        angle: Math.atan2(aim.y, aim.x),
+        range: D.breath.range,
+        halfAngle: (D.breath.halfAngleDegrees * Math.PI) / 180,
+        startsIn: D.breath.warnSeconds,
+        damage: D.breath.damage,
+        fire: { ...D.breath.fire },
+        ...(area ? { area } : {}),
+      };
+    } else if (target.distance > D.keep) {
+      position = move(
+        enemy,
+        toward(
+          enemy.position,
+          route(
+            enemy.position,
+            target.target.position,
+            enemy.size / 2,
+            walls,
+            context,
+          ),
+        ),
+        D.speed,
+        walls,
+        dt,
+      );
+    }
+  } else if (next.mode === "tail" || next.mode === "breath") {
+    const timer = next.timer - dt;
+    if (timer > 1e-9) {
+      next = { ...next, timer };
+    } else if (next.mode === "tail") {
+      const at = { ...enemy.position };
+      for (const t of targets) {
+        if (circleHitsPlayer(at, D.tail.radius, t.position)) {
+          action.contacts.push({ playerId: t.id, damage: D.tail.damage });
+        }
+      }
+      action.slam = { at, radius: D.tail.radius, warning: false };
+      next = { ...next, mode: "walk", timer: 0, tail: D.tail.intervalSeconds };
+    } else {
+      next = { ...next, mode: "walk", timer: 0 };
+    }
+  }
+  return result({ ...enemy, position, ai: next }, action);
 }
 
 /** Where the Storm Caller's pylons rise (D-139): evenly round it. */
@@ -2410,6 +2602,8 @@ export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
 }
 
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "dragon")
+    return enemy.ai.mode === "breath" || enemy.ai.mode === "tail";
   if (enemy.ai.kind === "hawk") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "warden") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "wyrm") return enemy.ai.mode !== "walk";

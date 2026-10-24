@@ -310,3 +310,64 @@ describe("prediction follows Stormspire's wind (D-139)", () => {
     expect(server.players[0]!.position.y).toBeGreaterThan(30);
   });
 });
+
+describe("prediction follows the Elder Dragon's wing gust (D-140)", () => {
+  it("a push away replays exactly: no correction", () => {
+    const gust = {
+      at: { x: 0, y: 0 },
+      radius: 260,
+      from: 0.3,
+      until: 0.8,
+      dragSpeed: -300,
+    };
+    const predictor = new PlayerPredictor(
+      1,
+      { x: 100, y: 0 },
+      [],
+      combatFor(SERF_BASE),
+    );
+    let server: SimState = {
+      players: [newPlayer(1, { x: 100, y: 0 }, SERF_BASE)],
+      enemies: [],
+      projectiles: [],
+      nextProjectileId: 1,
+      nextEnemyId: 1,
+      hazards: [],
+      blasts: [],
+      zones: [],
+      sludge: [],
+      fires: [],
+      whirlpools: [
+        { ...gust, nextTick: Number.POSITIVE_INFINITY, damage: 0, ownerId: 9 },
+      ],
+      clock: 0,
+    };
+    predictor.setWater(0, [gust]);
+    const states: SimState[] = [];
+    for (let i = 0; i < 60; i++) {
+      predictor.predict(RIGHT);
+      server = applyPlayerInput(server, 1, RIGHT, [], TICK_SECONDS).state;
+      server = { ...server, clock: server.clock! + TICK_SECONDS };
+      states.push(server);
+    }
+    const at = states[9]!;
+    const me = at.players[0]!;
+    predictor.setWater(at.clock!, [gust]);
+    predictor.reconcile({
+      id: 1,
+      x: me.position.x,
+      y: me.position.y,
+      ack: 9,
+      hp: me.hp,
+      maxHp: me.maxHp,
+      mp: me.mp,
+      maxMp: me.combat.maxMp,
+      buffs: [],
+      cooldown: me.fireCooldown,
+      pull: null,
+    });
+    expect(predictor.lastCorrection).toBeCloseTo(0, 9);
+    // Blown east past a plain walk (the push ends once out of its 260 px reach).
+    expect(server.players[0]!.position.x).toBeGreaterThan(100 + 150 + 50);
+  });
+});

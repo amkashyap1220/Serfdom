@@ -78,6 +78,8 @@ export {
   ADEPT,
   GARGOYLE,
   STORMCALLER,
+  DRAKE,
+  DRAGON,
   PYLON,
   CASTER,
   GHOST,
@@ -542,3 +544,9 @@ export {
   type GustState,
   type Wind,
 } from "./storm.ts";
+export {
+  ROOST_PIECES,
+  ROOST_RECIPE,
+  ROOST_SUMMIT,
+  buildRoost,
+} from "./dragons-roost.ts";

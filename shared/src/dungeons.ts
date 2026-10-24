@@ -5,6 +5,7 @@ import { buildHollow } from "./frost-hollow.ts";
 import { VAULT_LAYOUT } from "./clockwork-vault.ts";
 import { buildGauntlet } from "./abyssal-gauntlet.ts";
 import { buildSpire } from "./stormspire.ts";
+import { buildRoost } from "./dragons-roost.ts";
 import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
@@ -143,6 +144,16 @@ export const DUNGEONS = [
     listed: true,
     layout: buildSpire(0),
     generate: buildSpire,
+    minLevel: 20,
+  },
+  {
+    // D-140: the tenth dungeon, the hardest, and the only T10.
+    id: "dragons-roost",
+    name: "Dragon's Roost",
+    blurb: "Level 20 · 9 min · endgame · the Elder Dragon",
+    listed: true,
+    layout: buildRoost(0),
+    generate: buildRoost,
     minLevel: 20,
   },
   {

@@ -474,7 +474,7 @@ describe("menu, queue, and run messages (v4)", () => {
     expect(server({ ...won, reward: { roll: 5 } }).ok).toBe(false);
     expect(server({ ...ended, result: "won", stats }).ok).toBe(false);
     expect(
-      server({ ...ended, result: "died", stats, killedBy: "dragon" }).ok,
+      server({ ...ended, result: "died", stats, killedBy: "kraken" }).ok,
     ).toBe(false);
     expect(
       server({ ...ended, result: "died", stats, serf: { id: 1 } }).ok,
@@ -641,7 +641,10 @@ describe("snapshot messages", () => {
         },
       ],
       clock: 12.5,
-      whirlpools: [{ x: 300, y: 300, radius: 150, from: 13.5, until: 17.5 }],
+      whirlpools: [
+        { x: 300, y: 300, radius: 150, from: 13.5, until: 17.5, dragSpeed: 70 },
+        { x: 500, y: 300, radius: 260, from: 13.5, until: 14, dragSpeed: -300 },
+      ],
       surges: [
         {
           x: 0,
@@ -731,7 +734,7 @@ describe("snapshot messages", () => {
     expect(snap([{ ...player, ack: -2 }])).toBe(false);
     expect(snap([{ ...player, hp: -5 }])).toBe(false);
     expect(snap([], [{ ...enemy, hp: "1" }])).toBe(false);
-    expect(snap([], [{ ...enemy, kind: "dragon" }])).toBe(false);
+    expect(snap([], [{ ...enemy, kind: "kraken" }])).toBe(false);
     expect(snap([], [{ ...enemy, kind: undefined }])).toBe(false);
     expect(snap([], [{ ...enemy, alert: "yes" }])).toBe(false);
     expect(snap([], [], [{ ...shot, owner: "boss" }])).toBe(false);

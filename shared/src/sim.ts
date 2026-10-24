@@ -5,6 +5,7 @@ import {
   SHAMAN,
   SKELETON,
   STORMCALLER,
+  DRAGON,
 } from "./enemy-config.ts";
 import { burningStrips, waveHits } from "./forge-boss.ts";
 import { LIGHTNING, windDrift, type Wind } from "./storm.ts";
@@ -244,6 +245,13 @@ export interface Cone extends ConeShape {
   ownerId: number;
   /** Frost it leaves along its middle. */
   frost?: { radius: number; seconds: number };
+  /** Burning floor it leaves along its length (D-140). */
+  fire?: {
+    radius: number;
+    seconds: number;
+    tickSeconds: number;
+    damage: number;
+  };
   /** Its arena: players outside are not hit. */
   area?: Rect;
 }
@@ -323,6 +331,8 @@ export interface Hazard {
   fire?: { seconds: number; tickSeconds: number; damage: number };
   /** Drawn as a rune (the Lich's, D-125). */
   rune?: boolean;
+  /** Drawn as a molten boulder (the Elder Dragon's meteors, D-140). */
+  meteor?: boolean;
 }
 
 /** Burning floor (D-115): hurts every player inside, each tick, until it goes out. */
@@ -1237,7 +1247,22 @@ export function stepWorld(
         damage: c.damage,
         ownerId: enemy.id,
         ...(c.frost ? { frost: c.frost } : {}),
+        ...(c.fire ? { fire: c.fire } : {}),
         ...(c.area ? { area: c.area } : {}),
+      });
+    }
+    if (action.gust) {
+      // The Elder Dragon's wing gust (D-140): a short push away, after a warning.
+      const from = clock + DRAGON.gust.warnSeconds;
+      newWhirlpools.push({
+        at: { ...action.gust.at },
+        radius: action.gust.radius,
+        from,
+        until: from + DRAGON.gust.seconds,
+        nextTick: Number.POSITIVE_INFINITY,
+        damage: 0,
+        ownerId: enemy.id,
+        dragSpeed: DRAGON.gust.dragSpeed,
       });
     }
     for (const at of action.whirlpools ?? []) {
@@ -1298,6 +1323,7 @@ export function stepWorld(
           ? { fire: { ...h.fire, damage: h.fire.damage * boost } }
           : {}),
         ...(h.rune ? { rune: true } : {}),
+        ...(h.meteor ? { meteor: true } : {}),
       });
     }
     for (const { direction, spec } of action.bullets) {
@@ -1517,8 +1543,9 @@ export function stepWorld(
         : damagePlayer(safe, cut.ownerId, cut.damage, safe.position, events);
     });
   }
-  // Breath cones land once their warning ends (D-136), leaving frost.
+  // Breath cones land once their warning ends (D-136), leaving frost or fire.
   const cones: Cone[] = [];
+  const coneFires: Fire[] = [];
   for (const c of [...(state.cones ?? []), ...newCones]) {
     if (c.startsIn > 1e-9) {
       const startsIn = c.startsIn - dtSeconds;
@@ -1530,6 +1557,24 @@ export function stepWorld(
             ? damagePlayer(pl, c.ownerId, c.damage, pl.position, events)
             : pl,
         );
+        // Fire breath leaves burning floor along its length (D-140).
+        if (c.fire) {
+          for (const share of [0.35, 0.65, 0.92]) {
+            const d = c.range * share;
+            coneFires.push({
+              position: {
+                x: c.at.x + Math.cos(c.angle) * d,
+                y: c.at.y + Math.sin(c.angle) * d,
+              },
+              radius: c.fire.radius,
+              remaining: c.fire.seconds,
+              nextTick: c.fire.tickSeconds,
+              tickSeconds: c.fire.tickSeconds,
+              damage: c.fire.damage,
+              ownerId: c.ownerId,
+            });
+          }
+        }
         if (c.frost) {
           const mid = c.range * 0.6;
           newFrost.push({
@@ -1610,7 +1655,7 @@ export function stepWorld(
   // 2b. Hazards: existing ones count down and land; new ones wait a full delay.
   const hazards: Hazard[] = [];
   // Fires from earlier bombs, plus any lit this tick.
-  const fires: Fire[] = [...(state.fires ?? [])];
+  const fires: Fire[] = [...(state.fires ?? []), ...coneFires];
   for (const h of state.hazards) {
     const landsIn = h.landsIn - dtSeconds;
     if (landsIn > 1e-9) {
