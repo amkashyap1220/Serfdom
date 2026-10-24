@@ -64,6 +64,7 @@ describe("rockfall rooms (D-110)", () => {
         dropped,
         volleys: 0,
         gap: -1,
+        runeSteps: 0,
       },
     ] as RunProgress;
 

@@ -104,6 +104,7 @@ describe("arrow traps (D-113)", () => {
         dropped: 0,
         volleys,
         gap,
+        runeSteps: 0,
       },
     ] as RunProgress;
 

@@ -14,6 +14,7 @@ const base: SnapshotProjectile = {
   size: 4,
   ability: false,
   trap: false,
+  fireball: false,
 };
 
 describe("which server projectiles are drawn", () => {

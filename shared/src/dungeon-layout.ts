@@ -35,6 +35,38 @@ export const ARROWS = {
   size: 6,
 } as const;
 
+/**
+ * Spirit braziers (D-123): arrow traps' timing and look for fire. Every
+ * `everySeconds` alternate braziers glow for `warnSeconds`, then each
+ * sends a slow fireball straight across the room.
+ */
+export const BRAZIERS = {
+  everySeconds: 3,
+  warnSeconds: 0.8,
+  speed: 140,
+  size: 10,
+} as const;
+
+/**
+ * Cursed runes (D-123): while the room fights, one column of runes at a
+ * time glows for `warnSeconds`, then bursts for `damage` on anyone within
+ * `radius`; the next column starts `everySeconds` later, sweeping west to
+ * east and back.
+ */
+export const RUNES = {
+  radius: 32,
+  spacing: 96,
+  warnSeconds: 1,
+  everySeconds: 1.2,
+  damage: 12,
+} as const;
+
+/** One cursed rune: where, and which column of the sweep it is in. */
+export interface RuneSpot {
+  at: Vec2;
+  column: number;
+}
+
 /** Every sludge pool in the dungeon (players' movement checks these). */
 export function sludgePools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.sludge ?? [])]);
@@ -85,7 +117,15 @@ export interface RoomDef {
    * room in `direction` but for a gap, every ARROWS.everySeconds while it
    * fights.
    */
-  arrows?: { slits: readonly Vec2[]; direction: Vec2; damage: number };
+  arrows?: {
+    slits: readonly Vec2[];
+    direction: Vec2;
+    damage: number;
+    /** Spirit braziers (D-123): slow fireballs, alternate braziers in turn. */
+    fire?: boolean;
+  };
+  /** Cursed runes (D-123): columns glow and burst in a sweep while it fights. */
+  runes?: readonly RuneSpot[];
   /**
    * Ambush holes (D-109): floor points just inside its walls. Wave
    * `holeWave` does not appear at once: its goblins come out of the holes,
@@ -282,7 +322,7 @@ export function validateLayout(layout: DungeonLayout): string[] {
       if (Math.abs(Math.hypot(direction.x, direction.y) - 1) > 1e-9) {
         problems.push(`${room.id}: arrow direction is not a unit vector`);
       }
-      if (slits.length <= ARROWS.gap) {
+      if (room.arrows.fire ? slits.length < 2 : slits.length <= ARROWS.gap) {
         problems.push(
           `${room.id}: an arrow trap needs more slits than its gap`,
         );
@@ -299,6 +339,13 @@ export function validateLayout(layout: DungeonLayout): string[] {
             `${room.id}: arrow slit at ${s.x},${s.y} is not just inside a wall`,
           );
         }
+      }
+    }
+    for (const r of room.runes ?? []) {
+      if (!contains(b, r.at) || !Number.isInteger(r.column) || r.column < 0) {
+        problems.push(
+          `${room.id}: rune at ${r.at.x},${r.at.y} is not on its floor`,
+        );
       }
     }
     if (room.holeWave !== undefined) {

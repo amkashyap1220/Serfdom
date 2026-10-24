@@ -78,6 +78,18 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+### Runes and braziers checklist (Phase 12k, D-123)
+
+Restart `npm run dev` (protocol v30) and reload. Forgotten Crypt.
+
+1. **Cursed runes** (Chapel, Embalming room, Charnel pit): faint red circles cover the floor. Once the room wakes, one column at a time fills in red for 1 s and then flashes: standing on one costs 12 before Defense. The glowing column moves across the room and back about every 1.2 s.
+2. **Spirit braziers** (Catacomb on its far wall, Burial vault on the north wall, Tomb of kings on the south wall): round marks on the wall; every 3 s half of them glow, then send slow blue-white fireballs straight across (10 before Defense). The other half fires next time, so the gaps switch. Tombs, slabs, and pillars stop them.
+3. Deaths name them ("Slain by a cursed rune", "a spirit brazier").
+4. Those six rooms should feel a little less crowded than before (20% fewer skeletons and archers).
+5. Time a full clear and tell me your level (expected close to 7 min at level 12).
+
+Report: pass/fail per step, clear time and level, and whether the runes and braziers are readable and fair.
+
 ### New undead checklist (Phase 12j, D-122)
 
 Restart `npm run dev` (protocol v29) and reload. Forgotten Crypt.

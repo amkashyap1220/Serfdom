@@ -1,4 +1,4 @@
-import type { TrapWarning } from "./dungeon-run.ts";
+import type { RuneWarning, TrapWarning } from "./dungeon-run.ts";
 import { HAZARD_KINDS, type HazardKind } from "./sim.ts";
 import { MAX_SEED } from "./seeded-random.ts";
 import { EMAIL_MAX, PASSWORD_MAX } from "./account-rules.ts";
@@ -68,6 +68,10 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v30 (12k): cursed runes and spirit braziers (D-123): snapshots list rune
+ *          columns about to burst; trap projectiles say whether they are
+ *          fireballs; blasts may be a rune's burst; killedBy may be
+ *          "braziers" or "runes".
  * v29 (12j): ghosts, necromancers, grave knights (D-122): snapshot enemies
  *          say whether a ghost is faded and which way a knight faces;
  *          blasts may be a slam (warning, hit), a shield spark, a raise.
@@ -112,7 +116,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 29;
+export const PROTOCOL_VERSION = 30;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -304,6 +308,8 @@ export const BLAST_KINDS = [
   "shieldBlock",
   /** A necromancer raising a bone pile. */
   "raise",
+  /** A cursed rune bursting (D-123). */
+  "rune",
 ] as const;
 export type BlastKind = (typeof BLAST_KINDS)[number];
 
@@ -359,6 +365,8 @@ export interface SnapshotProjectile {
   ability: boolean;
   /** A trap's arrow (D-113): drawn as an arrow. */
   trap: boolean;
+  /** A spirit brazier's fireball (D-123): drawn as fire. */
+  fireball: boolean;
 }
 
 /** Server → client. */
@@ -456,6 +464,8 @@ export type ServerMessage =
       fires: SnapshotFire[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
+      /** Rune columns glowing before they burst (D-123). */
+      runes: RuneWarning[];
       /** The exit portal is open: step into it to complete the run (D-057). */
       portalOpen: boolean;
       /** Ability blasts that landed since the last snapshot (drawing only). */
@@ -950,6 +960,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "hazards",
           "fires",
           "traps",
+          "runes",
           "portalOpen",
           "blasts",
           "chains",
@@ -980,6 +991,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       const closedDoors = obj.closedDoors as string[];
       const traps = parseList(obj.traps, parseTrapWarning);
       if (!traps) return fail("snapshot: bad trap entry");
+      const runes = parseList(obj.runes, parseRuneWarning);
+      if (!runes) return fail("snapshot: bad rune entry");
       const fires = parseList(obj.fires, parseSnapshotFire);
       if (!fires) return fail("snapshot: bad fire entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
@@ -1001,6 +1014,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           hazards,
           fires,
           traps,
+          runes,
           portalOpen: obj.portalOpen,
           blasts,
           chains,
@@ -1384,6 +1398,23 @@ function parseSnapshotZone(v: unknown): SnapshotZone | null {
   return { x: v.x, y: v.y, radius: v.radius, remaining: v.remaining };
 }
 
+function parseRuneWarning(v: unknown): RuneWarning | null {
+  if (!isPlainObject(v) || !hasExactKeys(v, ["room", "column", "warn"])) {
+    return null;
+  }
+  if (typeof v.room !== "string" || v.room.length === 0 || v.room.length > 64) {
+    return null;
+  }
+  if (
+    !isNonNegativeInt(v.column) ||
+    !isNonNegative(v.warn) ||
+    (v.warn as number) > 1
+  ) {
+    return null;
+  }
+  return { room: v.room, column: v.column as number, warn: v.warn as number };
+}
+
 function parseTrapWarning(v: unknown): TrapWarning | null {
   if (!isPlainObject(v) || !hasExactKeys(v, ["room", "gap", "warn"]))
     return null;
@@ -1507,11 +1538,16 @@ function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {
       "size",
       "ability",
       "trap",
+      "fireball",
     ])
   ) {
     return null;
   }
-  if (typeof v.ability !== "boolean" || typeof v.trap !== "boolean")
+  if (
+    typeof v.ability !== "boolean" ||
+    typeof v.trap !== "boolean" ||
+    typeof v.fireball !== "boolean"
+  )
     return null;
   if (!isPlayerId(v.id) || (v.owner !== "player" && v.owner !== "enemy")) {
     return null;
@@ -1531,6 +1567,7 @@ function parseSnapshotProjectile(v: unknown): SnapshotProjectile | null {
     size: v.size,
     ability: v.ability,
     trap: v.trap,
+    fireball: v.fireball,
   };
 }
 

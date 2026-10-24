@@ -288,6 +288,61 @@ describe("the crypt's new undead in a run (D-122)", () => {
   });
 });
 
+describe("the crypt's runes and braziers in a run (D-123)", () => {
+  const seed = 2;
+  const enter = (roomId: string) => {
+    const room = buildCrypt(seed).rooms.find((r) => r.id === roomId)!;
+    const r = new DungeonInstance(1, "forgotten-crypt", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed,
+    });
+    r.setStateForTest({
+      ...r.state,
+      players: r.state.players.map((p) => ({
+        ...p,
+        hp: 1e6,
+        maxHp: 1e6,
+        position: {
+          x: room.bounds.x + 40,
+          y: room.bounds.y + room.bounds.height / 2,
+        },
+      })),
+    });
+    return r;
+  };
+  const snap = (r: DungeonInstance, tick: number) => {
+    const parsed = parseServerMessage(encodeMessage(r.snapshot(tick)));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.message.type !== "snapshot")
+      throw new Error("no snapshot");
+    return parsed.message;
+  };
+
+  it("a rune room sends its glowing column, and its bursts are not drawn as boulders", () => {
+    const r = enter("chapel");
+    r.tick();
+    for (let t = 0; t < 30; t++) r.tick();
+    expect(snap(r, 1).runes).toEqual([
+      { room: "chapel", column: 0, warn: expect.any(Number) },
+    ]);
+    for (let t = 0; t < 40; t++) r.tick();
+    expect(snap(r, 2).hazards).toEqual([]);
+  });
+
+  it("a brazier room's volleys are sent as fireballs", () => {
+    const r = enter("catacomb");
+    let fireballs = 0;
+    for (let t = 0; t < 90 && fireballs === 0; t++) {
+      r.tick();
+      fireballs = snap(r, t).projectiles.filter(
+        (p) => p.fireball && p.trap === false,
+      ).length;
+    }
+    expect(fireballs).toBeGreaterThan(0);
+  });
+});
+
 describe("DungeonInstance layouts (D-104)", () => {
   it("builds the generated Warrens for its seed; seed 0 is the handcrafted one", () => {
     const seeded = new DungeonInstance(1, "goblin-warrens", [1], {

@@ -5,6 +5,7 @@ import {
   type DungeonLayout,
   type EnemySpawnDef,
   type RoomDef,
+  type RuneSpot,
 } from "./dungeon-layout.ts";
 import { overlaps } from "./enemy-ai.ts";
 import { ENEMY_STATS } from "./enemy-config.ts";
@@ -44,8 +45,10 @@ export interface RoomPiece {
   obstacles?: readonly Rect[];
   /** Sludge pools, relative like the spawns (D-113). */
   sludge?: readonly Rect[];
-  /** An arrow trap's slits and firing direction, relative (D-113). */
-  arrows?: { slits: readonly Vec2[]; direction: Vec2 };
+  /** An arrow trap's slits and firing direction, relative (D-113); `fire`: spirit braziers (D-123). */
+  arrows?: { slits: readonly Vec2[]; direction: Vec2; fire?: boolean };
+  /** Cursed runes on the floor, relative, each in a column (D-123). */
+  runes?: readonly RuneSpot[];
   /** Ambush holes and the wave that comes out of them (D-109). */
   holes?: readonly Vec2[];
   holeWave?: number;
@@ -82,7 +85,8 @@ function orient(
   holes: Vec2[];
   obstacles: Rect[];
   sludge: Rect[];
-  arrows: { slits: Vec2[]; direction: Vec2 } | null;
+  arrows: { slits: Vec2[]; direction: Vec2; fire?: boolean } | null;
+  runes: RuneSpot[];
 } {
   const { width: w, height: h } = piece;
   const map: Record<Side, (p: Vec2) => Vec2> = {
@@ -110,8 +114,12 @@ function orient(
             const d = map[entry](piece.arrows.direction);
             return { x: d.x - o.x, y: d.y - o.y };
           })(),
+          ...(piece.arrows.fire ? { fire: true } : {}),
         }
       : null,
+    // A rune keeps its column, so the sweep runs the same way however
+    // the room is turned.
+    runes: (piece.runes ?? []).map((r) => ({ ...r, at: map[entry](r.at) })),
   };
   function turnRect(r: Rect): Rect {
     // Turn two opposite corners, then take the box between them.
@@ -291,8 +299,12 @@ export class RoomAssembly {
                   slits: o.arrows.slits.map(shift),
                   direction: o.arrows.direction,
                   damage: 0,
+                  ...(o.arrows.fire ? { fire: true } : {}),
                 },
               }
+            : {}),
+          ...(o.runes.length > 0
+            ? { runes: o.runes.map((r) => ({ ...r, at: shift(r.at) })) }
             : {}),
         },
         used: new Set([OPPOSITE[side]]),
@@ -345,6 +357,9 @@ export class RoomAssembly {
       ...(room.sludge ? { sludge: room.sludge.map(moveRect) } : {}),
       ...(room.arrows
         ? { arrows: { ...room.arrows, slits: room.arrows.slits.map(move) } }
+        : {}),
+      ...(room.runes
+        ? { runes: room.runes.map((r) => ({ ...r, at: move(r.at) })) }
         : {}),
     }));
     const doors = this.doors.map((d) => ({ ...d, rect: moveRect(d.rect) }));

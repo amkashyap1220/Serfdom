@@ -26,6 +26,7 @@ import {
   type ProjectileView,
   serverProjectilesToDraw,
   slitViews,
+  runeViews,
   type AuraView,
   type BlastView,
   type ChainView,
@@ -270,6 +271,7 @@ export class NetSync {
       chains: this.chainViews(nowMs),
       auras: this.auraViews(latest.snapshot, nowMs),
       slits: slitViews(this.layout, latest.snapshot.traps),
+      runes: runeViews(this.layout, latest.snapshot.runes),
       fires: latest.snapshot.fires.map((f) => ({
         ...f,
         remaining: Math.max(0, f.remaining - age),

@@ -584,6 +584,7 @@ describe("snapshot messages", () => {
     size: 4,
     ability: false,
     trap: false,
+    fireball: false,
   };
 
   it("round-trips a full snapshot", () => {
@@ -600,6 +601,7 @@ describe("snapshot messages", () => {
       hazards: [{ x: 3700, y: 980, radius: 32, landsIn: 0.4, kind: "boulder" }],
       fires: [],
       traps: [],
+      runes: [],
       portalOpen: false,
       blasts: [
         { kind: "arcaneBlast", by: 2, x: 1100.5, y: 990, radius: 40 },
@@ -638,6 +640,7 @@ describe("snapshot messages", () => {
           hazards: [],
           fires: [],
           traps: [],
+          runes: [],
           portalOpen: true,
           blasts: [],
           chains: [],
@@ -671,6 +674,7 @@ describe("snapshot messages", () => {
       hazards: [],
       fires: [],
       traps: [],
+      runes: [],
       portalOpen: false,
       blasts: [],
       chains: [],
@@ -697,6 +701,7 @@ describe("snapshot messages", () => {
       hazards: [],
       fires: [],
       traps: [],
+      runes: [],
       portalOpen: false,
       blasts: [],
       chains: [],
@@ -968,6 +973,7 @@ describe("ability drawing in snapshots (v18, D-097)", () => {
     hazards: [],
     fires: [],
     traps: [],
+    runes: [],
     portalOpen: false,
     blasts: [],
     chains: [],

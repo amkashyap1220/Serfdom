@@ -1,7 +1,7 @@
 import { SHAMAN, SKELETON } from "./enemy-config.ts";
 import type { Navigator } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
-import { ARROWS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
+import { ARROWS, BRAZIERS, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
 import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
 import { enemyAct, shieldBlocks } from "./enemy-ai.ts";
@@ -1064,6 +1064,16 @@ export function stepWorld(
       }
       return hit;
     });
+    // A rune's burst flashes for everyone (D-123).
+    if (h.hazard === "runes") {
+      events.push({
+        type: "blast",
+        kind: "rune",
+        playerId: GOBLIN_BLAST_BY,
+        at: { ...h.position },
+        radius: h.radius,
+      });
+    }
     // A bomb leaves burning floor (D-115).
     if (h.fire) {
       fires.push({
@@ -1313,7 +1323,12 @@ function tickBuffs(buffs: PlayerBuffs, dtSeconds: number): PlayerBuffs {
  * the killing blow).
  */
 /** Room hazards that can hurt a player (D-110). */
-export const HAZARD_KINDS = ["rockfall", "arrows"] as const;
+export const HAZARD_KINDS = [
+  "rockfall",
+  "arrows",
+  "braziers",
+  "runes",
+] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
 /** Arrow traps' projectiles have this owner: no enemy has id 0 (D-113). */
@@ -1328,23 +1343,32 @@ export const GOBLIN_BLAST_BY = 0;
  */
 export function fireArrows(
   state: SimState,
-  shots: readonly { at: Vec2; direction: Vec2; damage: number }[],
+  shots: readonly {
+    at: Vec2;
+    direction: Vec2;
+    damage: number;
+    fire?: boolean;
+  }[],
   range: number,
 ): SimState {
   if (shots.length === 0) return state;
   let nextProjectileId = state.nextProjectileId;
-  const arrows: Projectile[] = shots.map((s) => ({
-    id: nextProjectileId++,
-    owner: "enemy",
-    ownerId: TRAP_OWNER_ID,
-    position: { ...s.at },
-    direction: { ...s.direction },
-    speed: ARROWS.speed,
-    remaining: range,
-    damage: s.damage,
-    size: ARROWS.size,
-    hazard: "arrows",
-  }));
+  const arrows: Projectile[] = shots.map((s) => {
+    // A spirit brazier's fireball is slower and bigger (D-123).
+    const t = s.fire ? BRAZIERS : ARROWS;
+    return {
+      id: nextProjectileId++,
+      owner: "enemy",
+      ownerId: TRAP_OWNER_ID,
+      position: { ...s.at },
+      direction: { ...s.direction },
+      speed: t.speed,
+      remaining: range,
+      damage: s.damage,
+      size: t.size,
+      hazard: s.fire ? "braziers" : "arrows",
+    };
+  });
   return {
     ...state,
     projectiles: [...state.projectiles, ...arrows],
@@ -1357,6 +1381,31 @@ export function fireArrows(
  * ROCKFALL.warnSeconds, like the Warlord's rockfall, but belongs to the
  * room, so its hits are hazard hits (a death names the rockfall).
  */
+/**
+ * Cursed runes burst (D-123): each a hazard landing on the next step, so
+ * its hits are the room's (a death names the rune) and Defense counts.
+ */
+export function burstRunes(
+  state: SimState,
+  bursts: readonly { at: Vec2; radius: number; damage: number }[],
+): SimState {
+  if (bursts.length === 0) return state;
+  return {
+    ...state,
+    hazards: [
+      ...state.hazards,
+      ...bursts.map((b) => ({
+        position: { ...b.at },
+        radius: b.radius,
+        damage: b.damage,
+        landsIn: 0,
+        ownerId: -1,
+        hazard: "runes" as const,
+      })),
+    ],
+  };
+}
+
 export function dropBoulders(
   state: SimState,
   drops: readonly { at: Vec2; damage: number }[],

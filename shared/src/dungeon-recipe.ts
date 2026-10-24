@@ -10,7 +10,7 @@ import {
   type DungeonLayout,
   type EnemySpawnDef,
 } from "./dungeon-layout.ts";
-import { ENEMY_STATS } from "./enemy-config.ts";
+import { ENEMY_STATS, type EnemyKind } from "./enemy-config.ts";
 import { pick, randomInt, seededRandom, shuffled } from "./seeded-random.ts";
 
 /*
@@ -212,14 +212,17 @@ function tryRecipe(
  * slingers, grunts first, picked evenly across the wave so the room keeps
  * its shape. Brutes, skulkers, bombers, shamans, and bosses stay.
  */
-export function thinPiece(entry: RecipePiece, share: number): RecipePiece {
+export function thinPiece(
+  entry: RecipePiece,
+  share: number,
+  /** The kinds thinned, the first first (the crypt thins skeletons and archers, D-123). */
+  kinds: readonly EnemyKind[] = ["grunt", "slinger"],
+): RecipePiece {
   const thinWave = (wave: readonly EnemySpawnDef[]): EnemySpawnDef[] => {
-    const fodder = wave.filter(
-      (s) => s.kind === "grunt" || s.kind === "slinger",
-    );
+    const fodder = wave.filter((s) => kinds.includes(s.kind));
     let remove = Math.round(fodder.length * share);
     const gone = new Set<number>();
-    for (const kind of ["grunt", "slinger"] as const) {
+    for (const kind of kinds) {
       const of = wave
         .map((s, i) => ({ s, i }))
         .filter(({ s }) => s.kind === kind);

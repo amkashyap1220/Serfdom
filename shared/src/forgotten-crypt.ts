@@ -1,7 +1,13 @@
 import type { RoomPiece } from "./dungeon-gen.ts";
-import type { DungeonLayout, EnemySpawnDef } from "./dungeon-layout.ts";
+import {
+  RUNES,
+  type DungeonLayout,
+  type EnemySpawnDef,
+  type RuneSpot,
+} from "./dungeon-layout.ts";
 import {
   buildFromRecipe,
+  thinPiece,
   type DungeonRecipe,
   type RecipePiece,
   type RoomBand,
@@ -36,12 +42,83 @@ const room = (
   height: number,
   band: RoomBand,
   waves: Waves,
-  traps: Pick<RoomPiece, "holes" | "holeWave" | "obstacles" | "gated"> = {},
+  traps: Pick<
+    RoomPiece,
+    "holes" | "holeWave" | "obstacles" | "gated" | "runes" | "arrows"
+  > = {},
 ): RecipePiece => ({
   piece: { key, name, width, height, waves, ...traps },
   band,
   setups: [waves],
 });
+
+/**
+ * Cursed runes over a room's floor (D-123): a grid RUNES.spacing apart,
+ * columns counted from the entrance side (west), clear of the entrance and
+ * of every obstacle.
+ */
+function runeGrid(
+  width: number,
+  height: number,
+  obstacles: readonly {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }[] = [],
+): RuneSpot[] {
+  const clear = (x: number, y: number) =>
+    obstacles.every(
+      (o) =>
+        x + RUNES.radius < o.x ||
+        x - RUNES.radius > o.x + o.width ||
+        y + RUNES.radius < o.y ||
+        y - RUNES.radius > o.y + o.height,
+    );
+  const spots: RuneSpot[] = [];
+  let column = 0;
+  for (let x = 144; x <= width - 64; x += RUNES.spacing, column++) {
+    for (let y = 64; y <= height - 64; y += RUNES.spacing) {
+      if (clear(x, y)) spots.push({ at: { x, y }, column });
+    }
+  }
+  return spots;
+}
+
+/** Spirit braziers along one wall (D-123), 80 px apart, firing `direction`. */
+function braziers(
+  along: "north" | "south" | "east",
+  width: number,
+  height: number,
+): NonNullable<RoomPiece["arrows"]> {
+  const xs = Array.from(
+    { length: Math.floor((width - 80) / 80) },
+    (_, i) => 80 + 80 * i,
+  );
+  const ys = Array.from(
+    { length: Math.floor((height - 80) / 80) },
+    (_, i) => 80 + 80 * i,
+  );
+  if (along === "north") {
+    return {
+      slits: xs.map((x) => ({ x, y: 10 })),
+      direction: { x: 0, y: 1 },
+      fire: true,
+    };
+  }
+  if (along === "south") {
+    return {
+      slits: xs.map((x) => ({ x, y: height - 10 })),
+      direction: { x: 0, y: -1 },
+      fire: true,
+    };
+  }
+  return {
+    slits: ys.map((y) => ({ x: width - 10, y })),
+    direction: { x: -1, y: 0 },
+    fire: true,
+  };
+}
 
 /** Crypt rooms before 12j's undead: skeletons and archers only (D-120). */
 const BASE_PIECES: readonly RecipePiece[] = [
@@ -162,6 +239,8 @@ const BASE_PIECES: readonly RecipePiece[] = [
         { x: 240, y: 120, width: 160, height: 32 },
         { x: 240, y: 248, width: 160, height: 32 },
       ],
+      // D-123: fireballs down the corridor from the far wall.
+      arrows: braziers("east", 720, 400),
     },
   ),
   // 3,800: two stone tables near the door.
@@ -189,6 +268,11 @@ const BASE_PIECES: readonly RecipePiece[] = [
         { x: 200, y: 140, width: 64, height: 32 },
         { x: 200, y: 388, width: 64, height: 32 },
       ],
+      // D-123: runes sweep the floor.
+      runes: runeGrid(560, 560, [
+        { x: 200, y: 140, width: 64, height: 32 },
+        { x: 200, y: 388, width: 64, height: 32 },
+      ]),
     },
   ),
   // 3,680: pews to the north and south, archers at the altar.
@@ -229,6 +313,13 @@ const BASE_PIECES: readonly RecipePiece[] = [
         { x: 240, y: 416, width: 96, height: 24 },
         { x: 400, y: 416, width: 96, height: 24 },
       ],
+      // D-123: runes between the pews.
+      runes: runeGrid(640, 560, [
+        { x: 240, y: 120, width: 96, height: 24 },
+        { x: 400, y: 120, width: 96, height: 24 },
+        { x: 240, y: 416, width: 96, height: 24 },
+        { x: 400, y: 416, width: 96, height: 24 },
+      ]),
     },
   ),
 
@@ -263,24 +354,34 @@ const BASE_PIECES: readonly RecipePiece[] = [
         { x: 700, y: 280 },
       ],
       holeWave: 1,
+      // D-123: braziers along the north wall, between the sarcophagi.
+      arrows: braziers("north", 720, 560),
     },
   ),
-  // 5,760: an open pit full of the dead.
-  room("charnel", "Charnel pit", 640, 640, "heavy", [
+  // 5,760: an open pit full of the dead, runes across its floor (D-123).
+  room(
+    "charnel",
+    "Charnel pit",
+    640,
+    640,
+    "heavy",
     [
-      ...sk(grid([240, 320, 400, 480], [120, 240, 400, 520])),
-      ...ar([
-        [520, 80],
-        [520, 560],
-        [580, 80],
-        [580, 180],
-        [580, 280],
-        [580, 360],
-        [580, 460],
-        [580, 560],
-      ]),
+      [
+        ...sk(grid([240, 320, 400, 480], [120, 240, 400, 520])),
+        ...ar([
+          [520, 80],
+          [520, 560],
+          [580, 80],
+          [580, 180],
+          [580, 280],
+          [580, 360],
+          [580, 460],
+          [580, 560],
+        ]),
+      ],
     ],
-  ]),
+    { runes: runeGrid(640, 640) },
+  ),
   // 5,960: four pillars, and a second wave from the back.
   room(
     "deadhall",
@@ -360,6 +461,8 @@ const BASE_PIECES: readonly RecipePiece[] = [
         { x: 240, y: 448, width: 64, height: 32 },
         { x: 440, y: 448, width: 64, height: 32 },
       ],
+      // D-123: braziers along the south wall; the tombs give cover.
+      arrows: braziers("south", 720, 640),
     },
   ),
 ];
@@ -424,9 +527,28 @@ function withNewUndead(entry: RecipePiece): RecipePiece {
   return { ...entry, piece: { ...entry.piece, waves: setups[0]! }, setups };
 }
 
-/** Crypt rooms: entrance on the west, positions relative to the floor. HP is solo. */
-export const CRYPT_PIECES: readonly RecipePiece[] =
-  BASE_PIECES.map(withNewUndead);
+/** Crypt rooms with runes or braziers (D-123): they need fewer undead. */
+export const CRYPT_MECHANIC_ROOMS: ReadonlySet<string> = new Set([
+  "chapel",
+  "embalming",
+  "charnel",
+  "catacomb",
+  "vault",
+  "kings",
+]);
+
+/**
+ * Crypt rooms: entrance on the west, positions relative to the floor. HP is
+ * solo. 12j's undead in (D-122), then rooms with runes or braziers lose 20%
+ * of their skeletons and archers (D-123).
+ */
+export const CRYPT_PIECES: readonly RecipePiece[] = BASE_PIECES.map(
+  withNewUndead,
+).map((entry) =>
+  CRYPT_MECHANIC_ROOMS.has(entry.piece.key)
+    ? thinPiece(entry, 0.2, ["skeleton", "archer"])
+    : entry,
+);
 
 /**
  * The crypt's boss room. Until the Lich (12l) the Goblin Warchief stands in,
@@ -450,10 +572,11 @@ export const CRYPT_RECIPE: DungeonRecipe = {
   sideRooms: WARRENS_RULES.sideRooms,
   sideBands: WARRENS_RULES.sideBands,
   turnWeights: WARRENS_RULES.turnWeights,
-  // No slingers here (archers always lead); no boulders or arrow traps yet.
+  // No slingers here (archers always lead), no boulders; D-123: a
+  // brazier's fireball does 10.
   leadShare: 1,
   rockfallDamage: 9,
-  arrowDamage: 6,
+  arrowDamage: 10,
 };
 
 /** The Forgotten Crypt for `seed` (seed 0 is seed 1's map, kept fixed). */

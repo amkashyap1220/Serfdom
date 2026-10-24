@@ -5,6 +5,9 @@ import {
   ROCKFALL,
   type DungeonLayout,
   type RoomDef,
+  BRAZIERS,
+  RUNES,
+  type RuneSpot,
 } from "./dungeon-layout.ts";
 import { isAlive } from "./enemy.ts";
 import type { Rect, Vec2 } from "./geometry.ts";
@@ -36,6 +39,8 @@ export interface RoomProgress {
   /** Arrow volleys fired so far, and the gap (first slit) of the next (D-113); -1 until chosen. */
   volleys: number;
   gap: number;
+  /** Rune columns burst so far (D-123). */
+  runeSteps: number;
 }
 
 const DORMANT: RoomProgress = {
@@ -47,6 +52,7 @@ const DORMANT: RoomProgress = {
   dropped: 0,
   volleys: 0,
   gap: -1,
+  runeSteps: 0,
 };
 
 /** One entry per room, in the layout's room order. */
@@ -243,7 +249,12 @@ export interface ArrowShot {
   at: Vec2;
   direction: Vec2;
   damage: number;
+  /** A spirit brazier's fireball (D-123). */
+  fire?: boolean;
 }
+
+/** An arrow trap's or a brazier row's timing (D-113, D-123). */
+const timingOf = (trap: { fire?: boolean }) => (trap.fire ? BRAZIERS : ARROWS);
 
 /**
  * Arrow traps of fighting rooms (D-113): volley k fires at
@@ -262,18 +273,39 @@ export function arrowVolleys(
     let p = progress[i] ?? DORMANT;
     const trap = room.arrows;
     if (!trap || p.status !== "active") return p;
+    const t = timingOf(trap);
+    // Braziers (D-123) take turns: `gap` is which half fires (0 even, 1
+    // odd), switching every time. Arrow traps leave a random gap.
     const pickGap = () =>
-      Math.floor(random() * (trap.slits.length - ARROWS.gap + 1));
+      trap.fire
+        ? p.gap < 0
+          ? 0
+          : 1 - p.gap
+        : Math.floor(random() * (trap.slits.length - ARROWS.gap + 1));
     if (p.gap < 0) p = { ...p, gap: pickGap() };
-    const due = ARROWS.warnSeconds + p.volleys * ARROWS.everySeconds;
+    const due = t.warnSeconds + p.volleys * t.everySeconds;
     if (p.clock + 1e-9 < due) return p;
     trap.slits.forEach((at, k) => {
-      if (k >= p.gap && k < p.gap + ARROWS.gap) return;
-      shots.push({ at, direction: trap.direction, damage: trap.damage });
+      if (!firesThisVolley(trap, p.gap, k)) return;
+      shots.push({
+        at,
+        direction: trap.direction,
+        damage: trap.damage,
+        ...(trap.fire ? { fire: true } : {}),
+      });
     });
     return { ...p, volleys: p.volleys + 1, gap: pickGap() };
   });
   return { progress: next, shots };
+}
+
+/** Whether slit `k` fires in a volley whose gap is `gap` (D-113, D-123). */
+export function firesThisVolley(
+  trap: { fire?: boolean },
+  gap: number,
+  k: number,
+): boolean {
+  return trap.fire ? k % 2 === gap : k < gap || k >= gap + ARROWS.gap;
 }
 
 /** A trap about to fire: its room, the gap's first slit, and 0 → 1 through the glow. */
@@ -292,15 +324,91 @@ export function trapWarnings(
   layout.rooms.forEach((room, i) => {
     const p = progress[i];
     if (!room.arrows || p?.status !== "active" || p.gap < 0) return;
-    const due = ARROWS.warnSeconds + p.volleys * ARROWS.everySeconds;
+    const t = timingOf(room.arrows);
+    const due = t.warnSeconds + p.volleys * t.everySeconds;
     const left = due - p.clock;
-    if (left <= ARROWS.warnSeconds + 1e-9) {
+    if (left <= t.warnSeconds + 1e-9) {
       out.push({
         room: room.id,
         gap: p.gap,
-        warn: Math.min(1, Math.max(0, 1 - left / ARROWS.warnSeconds)),
+        warn: Math.min(1, Math.max(0, 1 - left / t.warnSeconds)),
       });
     }
+  });
+  return out;
+}
+
+/** A rune burst to land: where, how wide, how hard (D-123). */
+export interface RuneBurst {
+  at: Vec2;
+  radius: number;
+  damage: number;
+}
+
+/** The column of sweep step `k` among `columns`: west to east and back. */
+export function runeColumn(k: number, columns: number): number {
+  if (columns <= 1) return 0;
+  const period = 2 * columns - 2;
+  const i = k % period;
+  return i < columns ? i : period - i;
+}
+
+const columnsOf = (runes: readonly RuneSpot[]) =>
+  runes.reduce((n, r) => Math.max(n, r.column + 1), 0);
+
+/**
+ * Cursed runes of fighting rooms (D-123): step k's column glows from
+ * k × RUNES.everySeconds of the room's clock and bursts RUNES.warnSeconds
+ * later on everyone within RUNES.radius of each of its runes.
+ */
+export function runeBursts(
+  progress: RunProgress,
+  layout: DungeonLayout,
+): { progress: RunProgress; bursts: RuneBurst[] } {
+  const bursts: RuneBurst[] = [];
+  const next = layout.rooms.map((room, i): RoomProgress => {
+    const p = progress[i] ?? DORMANT;
+    const runes = room.runes;
+    if (!runes || runes.length === 0 || p.status !== "active") return p;
+    const due = RUNES.warnSeconds + p.runeSteps * RUNES.everySeconds;
+    if (p.clock + 1e-9 < due) return p;
+    const column = runeColumn(p.runeSteps, columnsOf(runes));
+    for (const r of runes) {
+      if (r.column === column) {
+        bursts.push({ at: r.at, radius: RUNES.radius, damage: RUNES.damage });
+      }
+    }
+    return { ...p, runeSteps: p.runeSteps + 1 };
+  });
+  return { progress: next, bursts };
+}
+
+/** A rune column glowing before it bursts: its room, which column, 0 → 1. */
+export interface RuneWarning {
+  room: string;
+  column: number;
+  warn: number;
+}
+
+/** Rune columns glowing right now (D-123), for drawing. */
+export function runeWarnings(
+  progress: RunProgress,
+  layout: DungeonLayout,
+): RuneWarning[] {
+  const out: RuneWarning[] = [];
+  layout.rooms.forEach((room, i) => {
+    const p = progress[i];
+    if (!room.runes || room.runes.length === 0 || p?.status !== "active") {
+      return;
+    }
+    const start = p.runeSteps * RUNES.everySeconds;
+    const into = p.clock - start;
+    if (into < -1e-9 || into > RUNES.warnSeconds + 1e-9) return;
+    out.push({
+      room: room.id,
+      column: runeColumn(p.runeSteps, columnsOf(room.runes)),
+      warn: Math.min(1, Math.max(0, into / RUNES.warnSeconds)),
+    });
   });
   return out;
 }

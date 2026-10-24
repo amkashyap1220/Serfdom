@@ -71,6 +71,9 @@ const COLORS = {
   dazed: 0x9fc6e8,
   bonePile: 0x8f897a,
   shield: 0xdfe6f2,
+  rune: 0xb04545,
+  brazier: 0x3b4a5c,
+  brazierGlow: 0x8fd3ff,
   raise: 0x9b59b6,
   slit: 0x1a1410,
   slitGlow: 0xff9f1c,
@@ -330,13 +333,15 @@ export class CombatView {
           ? COLORS.chant
           : b.kind === "raise"
             ? COLORS.raise
-            : b.kind === "inspiration"
-              ? COLORS.inspire
-              : b.kind === "curse"
-                ? COLORS.curse
-                : b.kind === "heal" || b.kind === "healed"
-                  ? COLORS.heal
-                  : COLORS.blast;
+            : b.kind === "rune"
+              ? COLORS.hazard
+              : b.kind === "inspiration"
+                ? COLORS.inspire
+                : b.kind === "curse"
+                  ? COLORS.curse
+                  : b.kind === "heal" || b.kind === "healed"
+                    ? COLORS.heal
+                    : COLORS.blast;
       const ring =
         b.kind === "inspiration" ||
         b.kind === "heal" ||
@@ -397,8 +402,27 @@ export class CombatView {
     }
 
     const g = this.projectiles.clear();
+    // Cursed runes (D-123): faint circles on the floor; the column about
+    // to burst fills in red.
+    for (const r of view.runes) {
+      g.lineStyle(1, COLORS.rune, 0.35 + 0.65 * r.glow);
+      g.strokeCircle(r.x, r.y, r.radius);
+      if (r.glow > 0) {
+        g.fillStyle(COLORS.hazard, 0.15 + 0.35 * r.glow);
+        g.fillCircle(r.x, r.y, r.radius * r.glow);
+      }
+    }
     // Arrow slits (D-113): dark marks, glowing orange before a volley.
+    // Spirit braziers (D-123): round, glowing blue-white before they fire.
     for (const s of view.slits) {
+      if (s.fire) {
+        g.fillStyle(
+          s.glow > 0 ? COLORS.brazierGlow : COLORS.brazier,
+          s.glow > 0 ? s.glow : 1,
+        );
+        g.fillCircle(s.x, s.y, 6);
+        continue;
+      }
       const across = { x: -s.dy, y: s.dx };
       g.fillStyle(
         s.glow > 0 ? COLORS.slitGlow : COLORS.slit,
@@ -412,6 +436,14 @@ export class CombatView {
       );
     }
     for (const p of view.projectiles) {
+      if (p.fireball) {
+        // A spirit brazier's fireball: a pale flame with a bright core.
+        g.fillStyle(COLORS.brazierGlow, 0.85);
+        g.fillCircle(p.x, p.y, p.size / 2 + 1);
+        g.fillStyle(COLORS.flash, 1);
+        g.fillCircle(p.x, p.y, p.size / 4);
+        continue;
+      }
       if (p.trap) {
         // A trap arrow: a shaft along its flight, its point leading.
         g.lineStyle(2, COLORS.trapArrow, 1);

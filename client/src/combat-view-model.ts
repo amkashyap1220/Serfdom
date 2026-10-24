@@ -1,11 +1,13 @@
 import {
-  ARROWS,
   type BlastKind,
   type BuffKind,
   type DungeonLayout,
   type EnemyKind,
   type SnapshotProjectile,
   type TrapWarning,
+  firesThisVolley,
+  RUNES,
+  type RuneWarning,
 } from "@serfdom/shared";
 
 /**
@@ -65,6 +67,8 @@ export interface ProjectileView {
   ability?: boolean;
   /** A trap's arrow (D-113), drawn as a shaft along its flight. */
   trap?: { dx: number; dy: number };
+  /** A spirit brazier's fireball (D-123), drawn as fire. */
+  fireball?: boolean;
 }
 
 /** One arrow slit (D-113): dark, or glowing (0 → 1) before a volley. */
@@ -74,6 +78,16 @@ export interface SlitView {
   /** Direction its arrow flies. */
   dx: number;
   dy: number;
+  glow: number;
+  /** A spirit brazier (D-123), not an arrow slit. */
+  fire?: boolean;
+}
+
+/** One cursed rune (D-123): faint, or glowing (0 → 1) before it bursts. */
+export interface RuneView {
+  x: number;
+  y: number;
+  radius: number;
   glow: number;
 }
 
@@ -116,6 +130,7 @@ export interface CombatViewModel {
   zones: ZoneView[];
   auras: AuraView[];
   slits: SlitView[];
+  runes: RuneView[];
   fires: FireView[];
   portalOpen: boolean;
 }
@@ -129,6 +144,7 @@ export const EMPTY_VIEW: CombatViewModel = {
   zones: [],
   auras: [],
   slits: [],
+  runes: [],
   fires: [],
   portalOpen: false,
 };
@@ -148,15 +164,38 @@ export function slitViews(
     if (!trap) continue;
     const w = warnings.find((x) => x.room === room.id);
     trap.slits.forEach((at, k) => {
-      const inGap = w !== undefined && k >= w.gap && k < w.gap + ARROWS.gap;
+      // Only those about to fire glow (D-113, D-123).
+      const fires = w !== undefined && firesThisVolley(trap, w.gap, k);
       out.push({
         x: at.x,
         y: at.y,
         dx: trap.direction.x,
         dy: trap.direction.y,
-        glow: w && !inGap ? 0.3 + 0.7 * w.warn : 0,
+        glow: w && fires ? 0.3 + 0.7 * w.warn : 0,
+        ...(trap.fire ? { fire: true } : {}),
       });
     });
+  }
+  return out;
+}
+
+/** Every cursed rune of the run (D-123); a column about to burst glows. */
+export function runeViews(
+  layout: DungeonLayout | null,
+  warnings: readonly RuneWarning[],
+): RuneView[] {
+  if (!layout) return [];
+  const out: RuneView[] = [];
+  for (const room of layout.rooms) {
+    const w = warnings.find((x) => x.room === room.id);
+    for (const r of room.runes ?? []) {
+      out.push({
+        x: r.at.x,
+        y: r.at.y,
+        radius: RUNES.radius,
+        glow: w && w.column === r.column ? w.warn : 0,
+      });
+    }
   }
   return out;
 }
@@ -180,5 +219,6 @@ export function serverProjectilesToDraw(
       size: p.size,
       ability: p.ability,
       ...(p.trap ? { trap: { dx: p.dx, dy: p.dy } } : {}),
+      ...(p.fireball ? { fireball: true } : {}),
     }));
 }

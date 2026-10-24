@@ -5,6 +5,9 @@ import {
   arrowVolleys,
   dropBoulders,
   fireArrows,
+  burstRunes,
+  runeBursts,
+  runeWarnings,
   sludgePools,
   trapWarnings,
   isDazed,
@@ -338,6 +341,10 @@ export class DungeonInstance {
     const volley = arrowVolleys(this.rooms, this.layout, this.rockRandom);
     this.rooms = volley.progress;
     this.sim = fireArrows(this.sim, volley.shots, ARROW_RANGE);
+    // Cursed runes burst column by column (D-123).
+    const runes = runeBursts(this.rooms, this.layout);
+    this.rooms = runes.progress;
+    this.sim = burstRunes(this.sim, runes.bursts);
 
     // Completion (D-057): with a portal, each living player completes by
     // stepping into it once it is open; without one, everyone at once.
@@ -437,15 +444,19 @@ export class DungeonInstance {
         size: p.size,
         ability: p.fromAbility === true,
         trap: p.hazard === "arrows",
+        fireball: p.hazard === "braziers",
       })),
       closedDoors: this.closedDoors,
-      hazards: this.sim.hazards.map((h) => ({
-        x: roundCoord(h.position.x),
-        y: roundCoord(h.position.y),
-        radius: h.radius,
-        landsIn: h.landsIn,
-        kind: h.fire ? ("bomb" as const) : ("boulder" as const),
-      })),
+      // Rune bursts are drawn from `runes`, not as falling hazards (D-123).
+      hazards: this.sim.hazards
+        .filter((h) => h.hazard !== "runes")
+        .map((h) => ({
+          x: roundCoord(h.position.x),
+          y: roundCoord(h.position.y),
+          radius: h.radius,
+          landsIn: h.landsIn,
+          kind: h.fire ? ("bomb" as const) : ("boulder" as const),
+        })),
       fires: this.sim.fires.map((f) => ({
         x: roundCoord(f.position.x),
         y: roundCoord(f.position.y),
@@ -453,6 +464,7 @@ export class DungeonInstance {
         remaining: roundCoord(f.remaining),
       })),
       traps: trapWarnings(this.rooms, this.layout),
+      runes: runeWarnings(this.rooms, this.layout),
       portalOpen: this.portalOpen,
       // Each blast goes out in exactly one snapshot.
       blasts: this.blastsToSend.splice(0),
