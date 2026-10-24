@@ -627,4 +627,5 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - `layout.ts`, `style.css`, `CAMERA_ZOOM` = 1; the confetti falls past the taller box; tests for the new layout and view.
 - `npm run check`: 468 shared, 198 server, 65 client, build.
 - Live (harness, **test** DB, a 1280×920 Chrome window): the container measured 1200×800, HUD 240×800, gameplay 960×800; the menu with all four dungeon cards fits; the Lich at full 32 px in the Sanctum, crisp. No console errors.
-- Next step: user tests the new window (and the Lich sprites and 13a); then push.
+- User ran the D-131, Lich sprite, and 13a checks: all pass (2026-10-24). Pushed 13a, the sprite merge, its fix, and D-131 together.
+- Next step: 13b (fire elementals, magma golems, bellows-keepers).
