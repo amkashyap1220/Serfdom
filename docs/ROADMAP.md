@@ -406,14 +406,14 @@ Acceptance:
 Tasks:
 
 - Finalize the home (main menu) layout: serfs, stash, potion rack, dungeons, leaderboards, party, and settings, drafted for approval; this polishes Phase 14's minimal party screens (D-126).
-- A real player HUD in the 240×640 panel; the debug readout moves behind a toggle.
+- A real player HUD in the 240×800 panel (D-131); the debug readout moves behind a toggle.
 - A minimap: how much it shows (rooms visited, the whole layout, other players, the portal) and where it sits without covering gameplay, drafted for approval.
 - More leaderboards than lifetime EXP, chosen with the user (GDD §12).
 
 Acceptance:
 
 - The home screen matches the approved layout and every tab works from it.
-- The minimap and HUD never cover the 720×640 gameplay viewport and match the server's state (rooms, players, portal).
+- The minimap and HUD never cover the 960×800 gameplay viewport and match the server's state (rooms, players, portal).
 - Every leaderboard is computed on the server from recorded data and cannot be inflated by a client.
 
 ## Phase 16 — Rare loot
@@ -470,7 +470,7 @@ Acceptance:
 
 - A tester who has never played reaches and completes their first Warrens run using only what the game shows them.
 - Every rebound key works in every screen and cannot bind two actions to one key.
-- The 960×640 layout, the 240-pixel HUD, and camera visibility (at least 300 world pixels each way) hold at every supported window size; the behavior outside that range is documented and tested.
+- The 1200×800 layout (D-131), the 240-pixel HUD, and camera visibility (at least 300 world pixels each way) hold at every supported window size; the behavior outside that range is documented and tested.
 
 ## Phase 19 — Production hosting
 

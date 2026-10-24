@@ -19,7 +19,7 @@ Phases 0–11 are complete; Phase 12 (dungeon tiers and the endgame loop) is in 
 
 What exists today:
 
-- **Foundations (Phases 0–5):** the 960×640 layout with its 240-pixel HUD, WASD movement and the camera, a Node game server that owns every player's position and runs all combat.
+- **Foundations (Phases 0–5):** the game layout (now 1200×800, D-131) with its 240-pixel HUD, WASD movement and the camera, a Node game server that owns every player's position and runs all combat.
 - **Dungeons and accounts (Phases 6–7):** main menu, an open queue for runs of up to 10 players, death and completion screens, email + password accounts, and serfs (2 slots, names, lifetime stats, permadeath) in PostgreSQL.
 - **Progression and gear (Phases 8–9):** EXP and levels 1–20, the lifetime EXP leaderboard, a permanent class at level 5 (10 classes), rolled stats, Luck, reward chests into a shared 20-slot stash, gold from selling, and equipping.
 - **Abilities (Phase 10):** MP and one ability per class on Space, four fire modes on T.
@@ -179,8 +179,8 @@ When a design decision changes, update the relevant docs and decision log in the
 
 ## Approved initial visual/layout baseline (v3)
 
-- 960×640 CSS-pixel game container.
-- Fixed 240×640 HUD on the left, 720×640 gameplay viewport on the right.
+- 1200×800 CSS-pixel game container (D-131).
+- Fixed 240×800 HUD on the left, 960×800 gameplay viewport on the right, camera zoom 1.
 - 16×16 source-pixel player and player-sized ordinary enemy sprites.
 - Player-centered camera showing at least 300 world pixels in each cardinal direction in normal play.
 - Crisp pixel-art rendering without smoothing.

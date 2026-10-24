@@ -620,3 +620,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Bug found live and fixed: the branch's new sprite loading (`preload`) means the world scene is created a few frames after the page starts asking it for the HUD readout every frame, so `getDebugState` threw on every frame and the page stayed on "Connecting…". The scene now says when it is `ready`; the per-frame readout, key capture, and the first layout report wait for it.
 - Live (harness, **test** DB): the Lich drawn with its sprite in the Sanctum, spiralling and warded. Small on screen (a 32 px sprite at the 0.5 zoom is 16 CSS px).
 - Not pushed: 13a and the merge wait for the user's test.
+
+### Bigger window, closer camera — 2026-10-24
+
+- User: the 32×32 Lich looked tiny. Measured: at D-127's 0.5 zoom every 32 px sprite drew at 16 CSS px. Offered window sizes and zooms with their trade-offs (zoom 0.75 would scale 32 px art to 24 unevenly); the user chose 1200×800 with the HUD kept 240 wide, and zoom 1 (D-131).
+- `layout.ts`, `style.css`, `CAMERA_ZOOM` = 1; the confetti falls past the taller box; tests for the new layout and view.
+- `npm run check`: 468 shared, 198 server, 65 client, build.
+- Live (harness, **test** DB, a 1280×920 Chrome window): the container measured 1200×800, HUD 240×800, gameplay 960×800; the menu with all four dungeon cards fits; the Lich at full 32 px in the Sanctum, crisp. No console errors.
+- Next step: user tests the new window (and the Lich sprites and 13a); then push.

@@ -4,11 +4,12 @@
 export const PLAYER_SPRITE_SIZE = 32;
 
 /**
- * The world camera's zoom (D-127): 0.5 shows 1440×1280 world px in the
- * 720×640 gameplay viewport (720 and 640 from the player each way, well
- * past D-029's 300), so the 32 px player and enemies draw at 16 CSS px.
+ * The world camera's zoom (D-131; was 0.5 under D-127): 1 draws every 32
+ * px sprite at 32 CSS px, one art pixel per screen pixel, so pixel art
+ * stays crisp. The 960×800 gameplay viewport shows 480 world px left and
+ * right of the player and 400 up and down, past D-029's 300.
  */
-export const CAMERA_ZOOM = 0.5;
+export const CAMERA_ZOOM = 1;
 
 /**
  * A size meant in CSS pixels (line widths, text), in world pixels at the

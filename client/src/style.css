@@ -1,4 +1,4 @@
-/* Approved layout (D-026, D-027). Keep in sync with src/layout.ts. */
+/* Approved layout (D-131). Keep in sync with src/layout.ts. */
 
 html,
 body {
@@ -10,9 +10,9 @@ body {
 
 #game-container {
   display: flex;
-  width: 960px;
-  height: 640px;
-  /* Centered horizontally. Below 960×640 the page scrolls rather than
+  width: 1200px;
+  height: 800px;
+  /* Centered horizontally. Below 1200×800 the page scrolls rather than
      shrinking: PROVISIONAL until smaller-window behavior is decided. */
   margin: 0 auto;
   /* Anchor for the full-container screens (#screen). */
@@ -22,7 +22,7 @@ body {
 #hud {
   /* flex: 0 0 = never grow or shrink, so the HUD can never cover gameplay. */
   flex: 0 0 240px;
-  height: 640px;
+  height: 800px;
   box-sizing: border-box;
   padding: 12px;
   overflow: hidden;
@@ -68,8 +68,8 @@ body {
 }
 
 #gameplay {
-  flex: 0 0 720px;
-  height: 640px;
+  flex: 0 0 960px;
+  height: 800px;
   overflow: hidden;
 }
 

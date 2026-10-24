@@ -106,7 +106,7 @@ const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
 ];
 
 /**
- * Draws the non-gameplay screens as DOM over the whole 960×640 container
+ * Draws the non-gameplay screens as DOM over the whole 1200×800 container
  * (T-032): connecting, main menu, queue, death, and completion. Hidden
  * during a run so nothing covers gameplay. Rebuilt only when the screen
  * changes; the queue countdown updates every frame.

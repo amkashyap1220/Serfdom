@@ -31,9 +31,9 @@ Design pillars:
 
 ### Approved initial desktop layout
 
-- **Total game container:** 960×640 CSS pixels.
-- **Fixed HUD on the left:** 240×640 CSS pixels.
-- **Gameplay viewport on the right:** 720×640 CSS pixels.
+- **Total game container:** 1200×800 CSS pixels (D-131; was 960×640).
+- **Fixed HUD on the left:** 240×800 CSS pixels.
+- **Gameplay viewport on the right:** 960×800 CSS pixels.
 - HUD and gameplay are separate regions. The HUD must not cover the world.
 - These are CSS layout dimensions, not automatically the internal renderer resolution or device-pixel dimensions.
 
@@ -42,7 +42,7 @@ Design pillars:
 - Top-down camera follows the player, who is normally centered **inside the gameplay viewport**.
 - Target visibility is at least **300 world pixels above, below, left, and right** of the player's center in normal gameplay.
 - The gameplay viewport must therefore display at least 600×600 world pixels.
-- At one CSS pixel per world pixel, a 720×640 viewport gives 360 world pixels to the left/right and 320 above/below.
+- At one CSS pixel per world pixel (zoom 1, D-131), the 960×800 viewport gives 480 world pixels to the left/right and 400 above/below.
 - The HUD width is excluded from camera-center calculations.
 - At map boundaries, camera clamping or alternative edge treatment must be chosen intentionally and tested.
 
@@ -58,8 +58,8 @@ Design pillars:
 
 ### First-client acceptance
 
-- Game container measures 960×640 CSS pixels at target desktop size.
-- HUD measures 240×640; gameplay viewport measures 720×640, with no overlap.
+- Game container measures 1200×800 CSS pixels at target desktop size (D-131).
+- HUD measures 240×800; gameplay viewport measures 960×800, with no overlap.
 - A 32×32 player placeholder renders crisply (D-127).
 - Camera centers the player within gameplay, not the whole container.
 - Debug world bounds confirm at least 300 world pixels visible in every cardinal direction.
@@ -72,7 +72,7 @@ Design pillars:
 - **Style reference:** chunky, readable retro pixel art resembling the user's supplied sprite-sheet reference: strong silhouettes, compact shapes, limited clusters of color, and crisp pixel edges.
 - **Player-sized ordinary enemies:** baseline sprite canvas of **32×32 source pixels** (D-127).
 - **Player characters:** baseline sprite canvas of **32×32 source pixels** (D-127).
-- **Camera (D-127):** zoomed out to 0.5, so the gameplay viewport shows 1440×1280 world pixels and sprites draw at half their source size.
+- **Camera (D-131):** zoom 1, so 32×32 sprites draw at 32 CSS pixels, one art pixel per screen pixel (D-127's 0.5 zoom is superseded).
 - **Palette reference:** use the **Pokémon Emerald palette as the requested color reference** for the game's palette direction. Do not copy Pokémon characters, sprites, tiles, logos, or other game assets. Create original Serfdom designs and original sprite assets using the chosen palette reference.
 - The same visual language should apply to enemies, players, items, projectiles, UI icons, and environments, while keeping combat elements easy to distinguish.
 - Larger bosses may use larger canvases when needed, but their pixel density and palette should remain consistent with the ordinary sprites.
@@ -438,7 +438,7 @@ The user wants a **more expansive leaderboard** before the alpha (Phase 15, D-12
 
 The first vertical slice is complete (Phases 1–11): every step below is built except the desktop client (Phase 25). Current work and its order live in `docs/ROADMAP.md`.
 
-1. The browser client shows the approved 960×640 layout, fixed 240-pixel HUD, 720×640 gameplay viewport, 32×32 player (D-127), and player-centered camera with at least 300 world pixels of cardinal visibility.
+1. The browser client shows the approved 1200×800 layout (D-131), fixed 240-pixel HUD, 960×800 gameplay viewport, 32×32 player (D-127), and player-centered camera with at least 300 world pixels of cardinal visibility.
 2. A browser game loads.
 3. Player can move and interact with the world.
 4. One enemy demonstrates the chosen combat model.

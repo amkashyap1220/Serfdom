@@ -132,12 +132,12 @@ Be clear, direct, and practical. Explain important decisions without overwhelmin
 
 The following are CONFIRMED design constraints for the initial desktop-browser layout:
 
-- Total game container: **960×640 CSS pixels**.
-- Fixed left HUD: **240×640 CSS pixels**.
-- Gameplay viewport, to the right of HUD: **720×640 CSS pixels**.
+- Total game container: **1200×800 CSS pixels** (D-131; was 960×640).
+- Fixed left HUD: **240×800 CSS pixels**.
+- Gameplay viewport, to the right of HUD: **960×800 CSS pixels**.
 - HUD is outside the gameplay viewport; it must not obscure gameplay.
 - Camera follows the player and normally centers the player **within the gameplay viewport**, not the entire game container.
-- The target is at least **300 world pixels of visibility in each cardinal direction** from the player's center during normal play. Since D-127 the world camera zooms **0.5**: the 720×640 viewport shows 1440×1280 world pixels (720 horizontally and 640 vertically from the player), and a 32×32 sprite draws at 16 CSS pixels. World-space line widths and text are counter-scaled so they read at their CSS size.
+- The target is at least **300 world pixels of visibility in each cardinal direction** from the player's center during normal play. Since D-131 the world camera zooms **1**: one art pixel per screen pixel, so the 32×32 sprites draw at 32 CSS pixels and stay crisp, and the 960×800 viewport shows 480 world pixels horizontally and 400 vertically from the player. (D-127's 0.5 zoom made the 32×32 Lich look tiny.)
 - Distinguish source sprite pixels, world pixels, CSS pixels, and device pixels. Configure Phaser camera zoom/display scaling deliberately.
 - Keep pixel art crisp; disable texture smoothing. Prefer integer scaling where practical without violating visibility.
 - Camera clamping at world boundaries and smaller-window responsive behavior require deliberate decisions and testing.

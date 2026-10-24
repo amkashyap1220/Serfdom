@@ -13,7 +13,7 @@
   padding: 24px;
   box-sizing: border-box;
   overflow: hidden;
-  /* Exactly the 960×640 game box (HUD + gameplay): a lighter panel with a
+  /* Exactly the 1200×800 game box (HUD + gameplay): a lighter panel with a
      frame, so it reads as the game window rather than the whole page. */
   background: #171a21;
   box-shadow: inset 0 0 0 1px #2c3340;
@@ -365,7 +365,8 @@
     transform: translateY(0) rotate(0deg);
   }
   to {
-    transform: translateY(680px) rotate(720deg);
+    /* Past the bottom of the 800 px game box. */
+    transform: translateY(840px) rotate(720deg);
   }
 }
 

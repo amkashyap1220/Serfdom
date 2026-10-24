@@ -10,13 +10,13 @@ import {
 import { LAYOUT } from "./layout";
 
 describe("visibleExtentFromCenter", () => {
-  it("shows 360 × 320 world pixels from center in the approved 720×640 viewport at zoom 1", () => {
+  it("shows 480 × 400 world pixels from center in the approved 960×800 viewport at zoom 1 (D-131)", () => {
     const extent = visibleExtentFromCenter(
       LAYOUT.gameplay.width,
       LAYOUT.gameplay.height,
       1,
     );
-    expect(extent).toEqual({ horizontal: 360, vertical: 320 });
+    expect(extent).toEqual({ horizontal: 480, vertical: 400 });
     expect(meetsVisibilityTarget(extent)).toBe(true);
   });
 
@@ -148,13 +148,26 @@ describe("screenToWorld", () => {
   });
 });
 
-describe("the zoomed-out view (D-127)", () => {
-  it("0.5 zoom shows 720 world px left and right, 640 up and down, past D-029's 300", () => {
-    const extent = visibleExtentFromCenter(720, 640, CAMERA_ZOOM);
-    expect(extent).toEqual({ horizontal: 720, vertical: 640 });
+describe("the game view (D-131)", () => {
+  it("zoom 1 in the 960×800 viewport shows 480 world px left and right, 400 up and down, past D-029's 300", () => {
+    expect(LAYOUT.gameplay).toEqual({ width: 960, height: 800 });
+    const extent = visibleExtentFromCenter(
+      LAYOUT.gameplay.width,
+      LAYOUT.gameplay.height,
+      CAMERA_ZOOM,
+    );
+    expect(extent).toEqual({ horizontal: 480, vertical: 400 });
     expect(meetsVisibilityTarget(extent)).toBe(true);
-    // A 32 px sprite draws at 16 CSS px; px() keeps lines and text at their CSS size.
-    expect(32 * CAMERA_ZOOM).toBe(16);
+    // A 32 px sprite draws at 32 CSS px: one art pixel per screen pixel.
+    expect(32 * CAMERA_ZOOM).toBe(32);
     expect(px(1) * CAMERA_ZOOM).toBe(1);
+  });
+
+  it("the window is 1200×800: a 240 px HUD beside the gameplay view, no overlap", () => {
+    expect(LAYOUT.container).toEqual({ width: 1200, height: 800 });
+    expect(LAYOUT.hud.width + LAYOUT.gameplay.width).toBe(
+      LAYOUT.container.width,
+    );
+    expect(LAYOUT.hud.height).toBe(LAYOUT.container.height);
   });
 });

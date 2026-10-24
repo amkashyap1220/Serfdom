@@ -151,9 +151,9 @@ At the end of a meaningful session, update `docs/WORK_LOG.md` with:
 
 For Phase 1 and Phase 2, Claude must give executable manual instructions and expected outcomes for:
 
-- Inspecting the game container: 960×640 CSS pixels at target desktop size.
-- Inspecting fixed HUD: 240×640 CSS pixels, on the left, with no gameplay overlap.
-- Inspecting gameplay viewport: 720×640 CSS pixels, to the right.
+- Inspecting the game container: 1200×800 CSS pixels at target desktop size (D-131).
+- Inspecting fixed HUD: 240×800 CSS pixels, on the left, with no gameplay overlap.
+- Inspecting gameplay viewport: 960×800 CSS pixels, to the right.
 - Confirming the player uses a 32×32 source-pixel sprite (D-127) and stays crisp.
 - Checking camera centering relative to gameplay viewport, not total window.
 - Using a world-coordinate grid/debug overlay to verify at least 300 world pixels visible in each cardinal direction during normal play.
@@ -172,19 +172,19 @@ One checklist per built feature, newest first, after the two Phase 1–2 referen
 
 The left HUD currently shows a measured readout (also printed via `console.table`):
 
-| Row                                          | Expected at 100% browser zoom         |
-| -------------------------------------------- | ------------------------------------- |
-| Container / HUD / Gameplay / Canvas (CSS px) | 960×640 / 240×640 / 720×640 / 720×640 |
-| Canvas backing (px)                          | 720×640                               |
-| devicePixelRatio                             | Your display's value (1 = no scaling) |
-| Camera zoom                                  | 1                                     |
-| Visible from center                          | ±360 × ±320                           |
-| ≥300 each way?                               | yes                                   |
-| HUD/gameplay overlap?                        | no                                    |
+| Row                                          | Expected at 100% browser zoom          |
+| -------------------------------------------- | -------------------------------------- |
+| Container / HUD / Gameplay / Canvas (CSS px) | 1200×800 / 240×800 / 960×800 / 960×800 |
+| Canvas backing (px)                          | 960×800                                |
+| devicePixelRatio                             | Your display's value (1 = no scaling)  |
+| Camera zoom                                  | 1                                      |
+| Visible from center                          | ±360 × ±320                            |
+| ≥300 each way?                               | yes                                    |
+| HUD/gameplay overlap?                        | no                                     |
 
 Mismatched sizes also log a `[layout] … expected …` warning in the console. Note: "≥300 each way?" describes what the camera renders. If the browser window is smaller than the container, part of the view is scrolled off-screen; that is the PROVISIONAL small-window behavior (T-012).
 
-The HUD "Live" section (Phase 2) updates every frame. "Player on screen" must read **360, 320** (center of the 720×640 canvas) at all times; "Camera center (world)" equals the player position rounded to whole pixels.
+The HUD "Live" section (Phase 2) updates every frame. "Player on screen" must read **480, 400** (center of the 960×800 gameplay viewport, D-131) at all times; "Camera center (world)" equals the player position rounded to whole pixels.
 
 #### Phase 2 movement/collision map
 
@@ -228,11 +228,23 @@ Restart `npm run dev` (protocol v33) and reload. Any serf that has completed the
 
 Report: pass/fail per step, clear time and level, and whether imps are easy to tell apart from lava.
 
+#### Bigger window, closer camera checklist (D-131)
+
+Restart `npm run dev` (no protocol change) and reload. Make the browser window at least 1200×800 inside (a maximised window on a 1080p screen).
+
+1. The game box is 1200×800: the HUD 240 px wide on the left, the gameplay view 960×800 beside it, nothing overlapping.
+2. Sprites draw at their full 32 px: the Lich in the Sanctum is clearly readable, as big as you.
+3. The view shows about 480 px each side of you and 400 up and down; the green debug box (600×600 CSS px) sits in the middle.
+4. Menus, the login screen, results, the stash and the potion rack fill the new 1200×800 box.
+5. Pixel art stays crisp (no blur): look at the Lich's outline.
+
+Report: pass/fail per step, your screen size, and whether the view feels too close.
+
 #### 32×32 and the zoomed-out view checklist (D-127)
 
 Restart `npm run dev` (no protocol change) and reload.
 
-1. **View:** the camera shows about twice as much world as before; whole rooms fit on screen. The player stays centred. The debug box (green) is 300 CSS px across and the player sits in its middle.
+1. **View (now D-131):** zoom 1 in a 1200×800 window; most of a room fits on screen. The player stays centred. The debug box (green) is 600 CSS px across (300 world px each way) and the player sits in its middle.
 2. **Sizes:** the player and ordinary enemies (grunts, slingers, skeletons, archers, ghosts, …) are the same size; brutes and knights are a bit bigger; the Warchief is large. The Lich is the player's size (D-128).
 3. **Readability:** HP numbers over enemies, room names, and other players' #ids read as before (not tiny); wall outlines and rings are as thick as before. Buff rings (Battle Cry, Guard, Inspiration) show just outside your square.
 4. **Walls and doors:** you and every enemy fit through every doorway; brutes and knights follow you between rooms when you rush.

@@ -47,11 +47,11 @@ Source sprite pixels, world pixels, CSS pixels, and device pixels are distinct. 
 
 ## Rendering and viewport context
 
-- Initial game container: **960×640 CSS pixels**.
-- Fixed left HUD: **240×640 CSS pixels**.
-- Gameplay viewport: **720×640 CSS pixels**.
+- Game container: **1200×800 CSS pixels** (D-131).
+- Fixed left HUD: **240×800 CSS pixels**.
+- Gameplay viewport: **960×800 CSS pixels**, camera zoom 1: a 32×32 sprite is 32 CSS pixels on screen.
 - Camera target: at least **300 world pixels visible from player center in each cardinal direction** during normal gameplay.
-- At the 0.5 camera zoom (D-127), the gameplay viewport shows 720 world pixels horizontally and 640 vertically from center (360 and 320 at the old 1:1 scale), and a 32×32 sprite draws at 16 CSS pixels.
+- At zoom 1 (D-131), the gameplay viewport shows 480 world pixels horizontally and 400 vertically from center, and a 32×32 sprite draws at 32 CSS pixels.
 - Evaluate sprites and projectiles at actual in-game display size, not only zoomed-in previews.
 - Keep projectiles and enemy silhouettes distinguishable in dense combat.
 - Preserve sharp pixels while the camera scrolls.
