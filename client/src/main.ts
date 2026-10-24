@@ -221,10 +221,20 @@ game.events.once(Phaser.Core.Events.READY, () => {
 
   // Wait one frame so the canvas is in the DOM and laid out before measuring.
   requestAnimationFrame(() => {
-    reportLayout(game, true);
+    // Measured once the world scene exists, so its camera has its zoom.
+    const first = worldScene(game);
+    if (first.ready) reportLayout(game, true);
+    else
+      first.events.once(Phaser.Scenes.Events.CREATE, () =>
+        reportLayout(game, true),
+      );
     game.events.on(Phaser.Core.Events.POST_RENDER, () => {
-      worldScene(game).setGameKeysActive(screen.kind === "inRun");
       view.render(screen, performance.now());
+      // Until the world scene exists (its sprites load first), there is no
+      // game to read or key to capture.
+      const scene = worldScene(game);
+      if (!scene.ready) return;
+      scene.setGameKeysActive(screen.kind === "inRun");
       reportLive(game);
     });
   });

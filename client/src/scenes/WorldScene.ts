@@ -145,6 +145,12 @@ export class WorldScene extends Phaser.Scene {
     super("world");
   }
 
+  /**
+   * True once `create` has run. The sprites load first (preload), and the
+   * page asks for this scene every frame from the start, so it must wait.
+   */
+  ready = false;
+
   preload(): void {
     loadSprites(this.load);
   }
@@ -201,6 +207,7 @@ export class WorldScene extends Phaser.Scene {
       .ignore([this.mapLayer, this.world]);
     this.lastLocalHp = this.localView().hp;
     this.syncView(0);
+    this.ready = true;
   }
 
   update(time: number, deltaMs: number): void {
