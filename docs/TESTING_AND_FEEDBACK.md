@@ -194,8 +194,8 @@ Debug map (`shared/src/test-world.ts`), player starts at (1000, 1000), speed 150
 | ---------------------- | ------------------------------------------ | ----------------------------------------------------- |
 | Square block           | x 1100–1164, y 900–964 (up-right of start) | Blocks on every face; slide along it diagonally       |
 | L-shaped inside corner | wall x 868–900 / floor y 1150–1182         | Pushing S+A into it stops cleanly, no jitter          |
-| Wide gap (24 px)       | between x 1200 and 1224 at y 1250          | Player (16 px) fits through                           |
-| Narrow gap (12 px)     | between x 1200 and 1212 at y 1400          | Player cannot pass                                    |
+| Wide gap (48 px)       | between x 1200 and 1248 at y 1250          | Player (32 px, D-127) fits through                    |
+| Narrow gap (24 px)     | between x 1200 and 1224 at y 1400          | Player cannot pass                                    |
 | Border walls           | 32 px thick at the world edge              | Player stops at x/y = 40 or 1960; void (black) beyond |
 
 Rotation (Phase 3a): hold Q/E to turn the view at 120°/s; Z snaps back to 0°. HUD "View rotation" shows the angle. At any angle: W moves up the screen, "Player on screen" stays 360, 320, the player sprite stays upright and crisp, and the green box and blue ticks stay square to the screen. Expected cosmetic artifact: floor, walls, and grid labels look jagged while rotated.

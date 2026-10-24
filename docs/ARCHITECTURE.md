@@ -147,7 +147,7 @@ Do not begin with microservices, Kubernetes, elaborate matchmaking, a large cont
 - Keep HUD layout outside the Phaser world-camera coordinate space. The camera centers the player within the gameplay viewport.
 - Camera must show at least 300 world pixels from the player center in each cardinal direction during normal play.
 - At 1 CSS pixel per world pixel, 720×640 viewport yields 360 horizontal and 320 vertical world pixels from center.
-- Source sprite size is 32×32 pixels for players and player-sized ordinary enemies (D-127; was 16×16). Larger enemies/bosses may vary. Until the D-127 code change lands, `PLAYER_BODY` (`shared/src/movement-config.ts`) is still 16×16 and the hurtbox 15×15.
+- Source sprite size is 32×32 pixels for players and player-sized ordinary enemies (D-127; was 16×16). Larger enemies/bosses may vary. The player's wall-collision body is `PLAYER_BODY` 32×32 (`shared/src/movement-config.ts`) and its hurtbox 31×31; doorways (64 px), `OBSTACLE_MARGIN`, the enemy `Navigator` grid, and enemy hit sizes did not change, and `shared/src/body-fit.test.ts` checks that the 32 px body can still reach every room and the portal.
 - Explicitly distinguish world coordinates, render resolution, CSS layout, device pixel ratio, and Phaser zoom/scale; disable texture smoothing.
 - Prefer a simple DOM layout (HUD sibling of the game canvas) or an equivalent clear separation. Verify actual canvas bounds before choosing implementation details.
 - Camera edges are decided: no clamping, space beyond the map is empty void (D-033). Minimum window size and multiplayer visibility fairness remain unresolved (open questions 11–13, 15). Do not finalize these silently.
