@@ -2,6 +2,7 @@ import type { DungeonLayout } from "./dungeon-layout.ts";
 import { buildForge } from "./ember-forge.ts";
 import { buildTemple } from "./sunken-temple.ts";
 import { buildHollow } from "./frost-hollow.ts";
+import { VAULT_LAYOUT } from "./clockwork-vault.ts";
 import { buildCrypt } from "./forgotten-crypt.ts";
 import { buildStronghold } from "./goblin-stronghold.ts";
 import { buildWarrens, GOBLIN_WARRENS } from "./goblin-warrens.ts";
@@ -111,6 +112,15 @@ export const DUNGEONS = [
     listed: true,
     layout: buildHollow(0),
     generate: buildHollow,
+    minLevel: 20,
+  },
+  {
+    // D-137: an endgame dungeon with a fixed map (D-013): no generate.
+    id: "clockwork-vault",
+    name: "Clockwork Vault",
+    blurb: "Level 20 · 8 min · endgame · the same map every run",
+    listed: true,
+    layout: VAULT_LAYOUT,
     minLevel: 20,
   },
   {

@@ -69,6 +69,10 @@ export {
   FROSTARCHER,
   ICEIMP,
   WYRM,
+  SENTRY,
+  DRONE,
+  TURRET,
+  AUTOMATON,
   CASTER,
   GHOST,
   NECROMANCER,
@@ -137,6 +141,8 @@ export {
   sludgePools,
   lavaPools,
   tidePools,
+  BLADES,
+  type BladeSpot,
   LAVA,
   ROCKFALL,
   JETS,
@@ -154,6 +160,7 @@ export {
   HOLES,
   holeSpot,
   arrowVolleys,
+  activeBlades,
   runeBursts,
   runeWarnings,
   runeColumn,
@@ -227,6 +234,8 @@ export {
   type Whirlpool,
   type Surge,
   type Cone,
+  type LiveBlade,
+  bladeHits,
   burstRunes,
   TRAP_OWNER_ID,
   GOBLIN_BLAST_BY,
@@ -499,3 +508,10 @@ export {
   type FrostPatch,
 } from "./frost.ts";
 export { mixedRoom, type Mix, type Terrain } from "./room-fill.ts";
+export {
+  VAULT_CORE,
+  VAULT_LAYOUT,
+  VAULT_PIECES,
+  VAULT_RECIPE,
+  VAULT_SEED,
+} from "./clockwork-vault.ts";

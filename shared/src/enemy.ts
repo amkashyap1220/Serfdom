@@ -12,6 +12,7 @@ import {
   FORGEMASTER,
   TIDEPRIEST,
   WRAITH,
+  AUTOMATON,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -68,6 +69,15 @@ export type EnemyAi =
       direction: Vec2;
       /** Players already hit by the current charge. */
       hit: readonly number[];
+    }
+  | {
+      kind: "automaton";
+      /** Seconds until it next overheats, and seconds left of overheating (D-137). */
+      vent: number;
+      venting: number;
+      rifle: number;
+      drones: number;
+      called: number;
     }
   | {
       kind: "wraith";
@@ -166,7 +176,8 @@ export type EnemyAi =
       raise: number;
     }
   | {
-      kind: "knight";
+      /** A grave knight, or a clockwork sentry with its own numbers (D-137). */
+      kind: "knight" | "sentry";
       mode: "walk" | "windup";
       /** Where its shield faces (unit vector); turns at a limited rate. */
       facing: Vec2;
@@ -239,6 +250,15 @@ function initialAi(kind: EnemyKind): EnemyAi {
       };
     case "wraith":
       return { kind, trail: WRAITH.trail.everySeconds / 2 };
+    case "automaton":
+      return {
+        kind,
+        vent: AUTOMATON.ventEverySeconds,
+        venting: 0,
+        rifle: FIRST_ATTACK_DELAY.automaton,
+        drones: 0,
+        called: 0,
+      };
     case "wyrm":
       return {
         kind,
@@ -301,6 +321,7 @@ function initialAi(kind: EnemyKind): EnemyAi {
     case "necromancer":
       return { kind, raise: NECROMANCER.raiseIntervalSeconds / 2 };
     case "knight":
+    case "sentry":
       // Facing west: a room's entrance is on its west side.
       return {
         kind,
@@ -394,7 +415,10 @@ export function isHittable(enemy: EnemyState): boolean {
 
 /** A magma golem venting (D-132): it takes double damage now. */
 export function isVenting(enemy: EnemyState): boolean {
-  return enemy.ai.kind === "golem" && enemy.ai.venting > 0;
+  return (
+    (enemy.ai.kind === "golem" || enemy.ai.kind === "automaton") &&
+    enemy.ai.venting > 0
+  );
 }
 
 /** A skeleton lying as a bone pile (D-120): alive, but it neither moves nor attacks. */
@@ -416,12 +440,17 @@ export function damageEnemy(
   if (!isAlive(enemy)) return { enemy, defeated: false, damage: 0 };
   // A cursed enemy takes more from every source (D-098); a magma golem's
   // crust halves it, unless it is venting (D-132: then double).
+  // The Automaton's plating works the same way (D-137).
   const crust =
     enemy.ai.kind === "golem"
       ? enemy.ai.venting > 0
         ? GOLEM.ventTaken
         : GOLEM.crustTaken
-      : 1;
+      : enemy.ai.kind === "automaton"
+        ? enemy.ai.venting > 0
+          ? AUTOMATON.ventTaken
+          : AUTOMATON.armourTaken
+        : 1;
   const taken = damage * (1 + (enemy.curse?.bonus ?? 0)) * crust;
   const { hp, died } = applyDamage(enemy.hp, taken);
   // A skeleton's first death leaves a bone pile instead (D-120); a hit on

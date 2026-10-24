@@ -32,6 +32,8 @@ import type { Waypoints } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
 import {
   ARROWS,
+  BLADES,
+  type BladeSpot,
   BRAZIERS,
   JETS,
   LAVA,
@@ -131,6 +133,8 @@ export interface PlayerState {
   velocity: Vec2;
   /** An eel-priest's pull on them (D-135), and which eel-priest: its death before the pull breaks it. */
   pull?: Pull & { by: number };
+  /** Run clock until which blade arms cannot hurt them again (D-137). */
+  bladeSafeUntil?: number;
 }
 
 /** A timed bonus: `bonus` is a share (0.3 = +30%), `remaining` seconds. */
@@ -210,6 +214,21 @@ export interface SimState {
   frost?: readonly FrostPatch[];
   /** Breath cones waiting to land, or just landed (drawn a moment, D-136). */
   cones?: readonly Cone[];
+  /** The fighting rooms' blade arms, set by the server each tick (D-137). */
+  roomBlades?: readonly BladeSpot[];
+  /** Every blade arm turning this tick, for drawing (D-137). */
+  blades?: readonly LiveBlade[];
+}
+
+/** A blade arm as it is now (D-137): from `pivot` at `angle` (radians), turning `speed` rad/s. */
+export interface LiveBlade {
+  pivot: Vec2;
+  length: number;
+  angle: number;
+  speed: number;
+  damage: number;
+  /** The enemy carrying it, or -1 for a room's. */
+  ownerId: number;
 }
 
 /** A breath cone (D-136): lands once `startsIn` runs out, hitting every player it touches. */
@@ -1082,6 +1101,8 @@ export function stepWorld(
   const clock = state.clock ?? 0;
   const newWhirlpools: Whirlpool[] = [];
   const newSurges: Surge[] = [];
+  /** Blade arms carried by enemies this tick (D-137). */
+  const carried: LiveBlade[] = [];
   /** Frost and breath cones made this tick (D-136). */
   const newFrost: FrostPatch[] = [];
   const newCones: Cone[] = [];
@@ -1154,6 +1175,18 @@ export function stepWorld(
           left: EELPRIEST.pull.seconds,
           by: enemy.id,
         },
+      });
+    }
+    for (const b of action.blades ?? []) {
+      const turn = (b.degreesPerSecond * Math.PI) / 180;
+      carried.push({
+        pivot: { ...action.enemy.position },
+        length: b.length,
+        angle:
+          ((b.phaseDegrees * Math.PI) / 180 + turn * clock) % (2 * Math.PI),
+        speed: turn,
+        damage: b.damage,
+        ownerId: enemy.id,
       });
     }
     for (const f of action.frost ?? []) {
@@ -1420,6 +1453,33 @@ export function stepWorld(
     }
     return pl;
   });
+  // Blade arms cut whoever they touch, at most once a second each (D-137).
+  const blades: LiveBlade[] = [
+    ...(state.roomBlades ?? []).map((b) => {
+      const turn = (b.degreesPerSecond * Math.PI) / 180;
+      return {
+        pivot: b.pivot,
+        length: b.length,
+        angle: (turn * clock) % (2 * Math.PI),
+        speed: turn,
+        damage: BLADES.damage,
+        ownerId: -1,
+      };
+    }),
+    ...carried,
+  ];
+  if (blades.length > 0) {
+    players = players.map((pl) => {
+      if (!isPlayerAlive(pl) || (pl.bladeSafeUntil ?? 0) > clock + 1e-9)
+        return pl;
+      const cut = blades.find((b) => bladeHits(b, pl.position));
+      if (!cut) return pl;
+      const safe = { ...pl, bladeSafeUntil: clock + BLADES.hitCooldownSeconds };
+      return cut.ownerId < 0
+        ? hazardDamage(safe, "blades", cut.damage, events)
+        : damagePlayer(safe, cut.ownerId, cut.damage, safe.position, events);
+    });
+  }
   // Breath cones land once their warning ends (D-136), leaving frost.
   const cones: Cone[] = [];
   for (const c of [...(state.cones ?? []), ...newCones]) {
@@ -1765,6 +1825,7 @@ export function stepWorld(
       whirlpools,
       surges,
       cones,
+      blades,
       // Frost lasts until its time (D-136).
       frost: [...(state.frost ?? []), ...newFrost].filter(
         (f) => clock + dtSeconds < f.until - 1e-9,
@@ -1832,6 +1893,7 @@ export const HAZARD_KINDS = [
   "jets",
   "slag",
   "icicles",
+  "blades",
 ] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
@@ -2129,6 +2191,30 @@ function insideRect(r: Rect, p: Vec2): boolean {
 }
 
 /** Whether two rectangles overlap (edges touching do not count). */
+/**
+ * Does a blade arm touch a player at `p` (D-137)? Its band against the
+ * hurtbox, taken as a circle of half its width.
+ */
+export function bladeHits(
+  b: { pivot: Vec2; length: number; angle: number },
+  p: Vec2,
+): boolean {
+  const ex = b.pivot.x + Math.cos(b.angle) * b.length;
+  const ey = b.pivot.y + Math.sin(b.angle) * b.length;
+  const dx = ex - b.pivot.x;
+  const dy = ey - b.pivot.y;
+  const len2 = dx * dx + dy * dy;
+  const t =
+    len2 > 0
+      ? Math.max(
+          0,
+          Math.min(1, ((p.x - b.pivot.x) * dx + (p.y - b.pivot.y) * dy) / len2),
+        )
+      : 0;
+  const d = Math.hypot(p.x - (b.pivot.x + t * dx), p.y - (b.pivot.y + t * dy));
+  return d <= BLADES.thickness / 2 + PLAYER_HEALTH.hurtboxSize / 2;
+}
+
 /** The player with no pull on them (D-135). */
 function withoutPull(player: PlayerState): PlayerState {
   const copy = { ...player };

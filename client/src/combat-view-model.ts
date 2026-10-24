@@ -143,6 +143,15 @@ export interface SurgeView {
   gaps: { from: number; to: number }[];
 }
 
+/** A blade arm (D-137) as it is now. */
+export interface BladeView {
+  x: number;
+  y: number;
+  length: number;
+  angle: number;
+  laser: boolean;
+}
+
 /** Frost on the floor (D-136). */
 export interface FrostView {
   x: number;
@@ -238,6 +247,7 @@ export interface CombatViewModel {
   tethers: TetherView[];
   frost: FrostView[];
   cones: ConeView[];
+  blades: BladeView[];
   portalOpen: boolean;
 }
 
@@ -261,6 +271,7 @@ export const EMPTY_VIEW: CombatViewModel = {
   tethers: [],
   frost: [],
   cones: [],
+  blades: [],
   portalOpen: false,
 };
 

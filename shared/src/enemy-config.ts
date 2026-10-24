@@ -38,6 +38,10 @@ export const ENEMY_KINDS = [
   "frostarcher",
   "iceimp",
   "wyrm",
+  "sentry",
+  "drone",
+  "turret",
+  "automaton",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -419,7 +423,79 @@ export const BOSS_KINDS: readonly EnemyKind[] = [
   "forgemaster",
   "tidepriest",
   "wyrm",
+  "automaton",
 ];
+
+/** Clockwork sentry (D-137): a grave knight's shield and slam with its own numbers. */
+export const SENTRY = {
+  maxHp: 900,
+  size: 40,
+  speed: 45,
+  turnDegreesPerSecond: 140,
+  shieldArcDegrees: 120,
+  slam: {
+    triggerRange: 70,
+    windupSeconds: 0.8,
+    reach: 36,
+    radius: 50,
+    damage: 15,
+    cooldownSeconds: 2.6,
+  },
+} as const;
+
+/** Cog drone (D-137): the skulker's flanking, quick. */
+export const DRONE = {
+  maxHp: 320,
+  size: 32,
+  speed: 110,
+  leadSeconds: 0.8,
+  lungeRange: 60,
+  contactDamage: 13,
+  contactCooldownSeconds: 1.2,
+} as const;
+
+/** Floor turret (D-137): never moves; fires fans of three bolts at anyone in reach. */
+export const TURRET = {
+  maxHp: 400,
+  size: 32,
+  speed: 0,
+  minRange: 0,
+  maxRange: 100_000,
+  throwRange: 420,
+  throwIntervalSeconds: 2,
+  rock: { damage: 12, speed: 240, size: 6, range: 460 },
+  volley: 3,
+  spreadDegrees: 15,
+} as const;
+
+/**
+ * The Automaton (D-137), the Clockwork Vault's boss: its plating lets
+ * through only `armourTaken` of every hit, except while it overheats
+ * (`ventSeconds` every `ventEverySeconds`), when it takes `ventTaken`
+ * and stops attacking. Rifle bursts and a rotating laser arm; cog drones
+ * below `dronesBelow`; enraged below `enragedBelow`.
+ */
+export const AUTOMATON = {
+  maxHp: 22000,
+  size: 72,
+  speed: 35,
+  keep: 180,
+  dronesBelow: 0.5,
+  enragedBelow: 0.25,
+  armourTaken: 0.25,
+  ventTaken: 2,
+  ventEverySeconds: 10,
+  enragedVentEverySeconds: 7,
+  ventSeconds: 3,
+  rifle: {
+    intervalSeconds: 2.2,
+    count: 7,
+    angleStepDegrees: 10,
+    bullet: { damage: 11, speed: 240, size: 8, range: 520 },
+  },
+  laser: { length: 260, degreesPerSecond: 80, damage: 12 },
+  drones: { intervalSeconds: 10, count: 2, maxAlive: 4, kind: "drone" },
+} as const;
 
 /** Ice wraith (D-136): walks at you like a grunt and leaves a trail of frost that slows you. */
 export const WRAITH = {
@@ -732,6 +808,10 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   frostarcher: FROSTARCHER,
   iceimp: ICEIMP,
   wyrm: WYRM,
+  sentry: SENTRY,
+  drone: DRONE,
+  turret: TURRET,
+  automaton: AUTOMATON,
 };
 
 /**
@@ -776,6 +856,10 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   frostarcher: FROSTARCHER.throwIntervalSeconds / 2,
   iceimp: ICEIMP.contactCooldownSeconds / 2,
   wyrm: 2,
+  sentry: SENTRY.slam.cooldownSeconds / 2,
+  drone: DRONE.contactCooldownSeconds / 2,
+  turret: TURRET.throwIntervalSeconds / 2,
+  automaton: 1.5,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

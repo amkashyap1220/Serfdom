@@ -78,6 +78,20 @@ export function lavaPools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.lava ?? [])]);
 }
 
+/** A rotating blade arm (D-137): from `pivot`, `length` long, turning `degreesPerSecond`. */
+export interface BladeSpot {
+  pivot: Vec2;
+  length: number;
+  degreesPerSecond: number;
+}
+
+/** Blade arms (D-137): a band this thick; a touch hurts, at most once a second per player. */
+export const BLADES = {
+  thickness: 16,
+  damage: 14,
+  hitCooldownSeconds: 1,
+} as const;
+
 /** Every tide pool in the dungeon (D-135). */
 export function tidePools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.tides ?? [])]);
@@ -158,6 +172,8 @@ export interface RoomDef {
   lava?: readonly Rect[];
   /** Tide pools (D-135): deep on the run's tide cycle, slowing players. */
   tides?: readonly Rect[];
+  /** Rotating blade arms (D-137): they turn while the room fights. */
+  blades?: readonly BladeSpot[];
   /**
    * An arrow trap (D-113): slits just inside one wall, all firing across the
    * room in `direction` but for a gap, every ARROWS.everySeconds while it
@@ -366,6 +382,17 @@ export function validateLayout(layout: DungeonLayout): string[] {
       r.y >= b.y &&
       r.x + r.width <= b.x + b.width &&
       r.y + r.height <= b.y + b.height;
+    for (const blade of room.blades ?? []) {
+      const p = blade.pivot;
+      if (
+        p.x - blade.length < b.x ||
+        p.y - blade.length < b.y ||
+        p.x + blade.length > b.x + b.width ||
+        p.y + blade.length > b.y + b.height
+      ) {
+        problems.push(`${room.id}: a blade arm reaches past its walls`);
+      }
+    }
     for (const pool of room.tides ?? []) {
       if (!within(pool))
         problems.push(`${room.id}: a tide pool outside the room`);

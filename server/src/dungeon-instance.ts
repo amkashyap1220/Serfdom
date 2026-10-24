@@ -3,6 +3,7 @@ import {
   type Vec2,
   SizedNavigator,
   arrowVolleys,
+  activeBlades,
   dropBoulders,
   fireArrows,
   fireJets,
@@ -295,6 +296,11 @@ export class DungeonInstance {
 
     // Known before the tick, since a dead enemy may be gone after it.
     const kinds = new Map(this.sim.enemies.map((e) => [e.id, e.kind]));
+    // Blade arms turn in fighting rooms only (D-137).
+    this.sim = {
+      ...this.sim,
+      roomBlades: activeBlades(this.rooms, this.layout),
+    };
     const world = stepWorld(
       this.sim,
       walls,
@@ -462,7 +468,7 @@ export class DungeonInstance {
         pile: isPile(e),
         faded: isFaded(e),
         facing:
-          e.ai.kind === "knight"
+          e.ai.kind === "knight" || e.ai.kind === "sentry"
             ? Math.round(Math.atan2(e.ai.facing.y, e.ai.facing.x) * 100) / 100
             : e.ai.kind === "lich"
               ? Math.round((e.ai.firing ? e.ai.spin : e.ai.look) * 100) / 100
@@ -565,6 +571,14 @@ export class DungeonInstance {
         radius: f.radius,
         from: f.from,
         until: f.until,
+      })),
+      blades: (this.sim.blades ?? []).map((b) => ({
+        x: roundCoord(b.pivot.x),
+        y: roundCoord(b.pivot.y),
+        length: b.length,
+        angle: Math.round(b.angle * 1000) / 1000,
+        speed: Math.round(b.speed * 1000) / 1000,
+        laser: b.ownerId >= 0,
       })),
       cones: (this.sim.cones ?? []).map((c) => ({
         x: roundCoord(c.at.x),

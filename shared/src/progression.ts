@@ -35,6 +35,7 @@ export const DUNGEON_EXP: Record<DungeonId, DungeonExp> = {
   // D-136: the endgame dungeons are for level 20, where EXP only counts
   // towards the lifetime total.
   "frost-hollow": { base: 300, topLevel: 20 },
+  "clockwork-vault": { base: 300, topLevel: 20 },
   training: { base: 100, topLevel: 9 },
 };
 

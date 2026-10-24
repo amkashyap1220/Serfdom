@@ -6,6 +6,7 @@ import {
   type EnemySpawnDef,
   type RoomDef,
   type RuneSpot,
+  type BladeSpot,
 } from "./dungeon-layout.ts";
 import { overlaps } from "./enemy-ai.ts";
 import { ENEMY_STATS } from "./enemy-config.ts";
@@ -52,6 +53,8 @@ export interface RoomPiece {
   lava?: readonly Rect[];
   /** Tide pools, relative like the spawns (D-135). */
   tides?: readonly Rect[];
+  /** Rotating blade arms, their pivots relative like the spawns (D-137). */
+  blades?: readonly BladeSpot[];
   /**
    * An arrow trap's slits and firing direction, relative (D-113); `fire`:
    * spirit braziers (D-123); `jet`: fire jets (D-133).
@@ -102,6 +105,7 @@ function orient(
   sludge: Rect[];
   lava: Rect[];
   tides: Rect[];
+  blades: BladeSpot[];
   arrows: {
     slits: Vec2[];
     direction: Vec2;
@@ -129,6 +133,10 @@ function orient(
     sludge: (piece.sludge ?? []).map(turnRect),
     lava: (piece.lava ?? []).map(turnRect),
     tides: (piece.tides ?? []).map(turnRect),
+    blades: (piece.blades ?? []).map((b) => ({
+      ...b,
+      pivot: map[entry](b.pivot),
+    })),
     arrows: piece.arrows
       ? {
           slits: piece.arrows.slits.map((p) => map[entry](p)),
@@ -341,6 +349,9 @@ export class RoomAssembly {
           ...(o.tides.length > 0
             ? { tides: o.tides.map((r) => ({ ...r, ...shift(r) })) }
             : {}),
+          ...(o.blades.length > 0
+            ? { blades: o.blades.map((b) => ({ ...b, pivot: shift(b.pivot) })) }
+            : {}),
           ...(o.arrows
             ? {
                 arrows: {
@@ -406,6 +417,9 @@ export class RoomAssembly {
       ...(room.sludge ? { sludge: room.sludge.map(moveRect) } : {}),
       ...(room.lava ? { lava: room.lava.map(moveRect) } : {}),
       ...(room.tides ? { tides: room.tides.map(moveRect) } : {}),
+      ...(room.blades
+        ? { blades: room.blades.map((b) => ({ ...b, pivot: move(b.pivot) })) }
+        : {}),
       ...(room.arrows
         ? { arrows: { ...room.arrows, slits: room.arrows.slits.map(move) } }
         : {}),

@@ -371,6 +371,7 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - **The Sunken Temple** (tier 5, D-135, PROVISIONAL numbers): a drowned temple for levels 18–20, the last of the first five dungeons. Drowned acolytes, tide callers that throw water bolts, fishfolk spearmen that charge, and eel-priests that tether you and pull you in (kill one while its tether shows to break it). Tide pools turn deep on a 9-second cycle and halve your speed. The Tide Priest sweeps its arena with tidal surges that have gaps to stand in, and calls whirlpools that drag you towards their core. Loot T5–T7; potions 50% per Luck point.
 - **Endgame dungeons** (D-126, D-136): every dungeon after the first five is for level-20 serfs (the server checks it), with loot one tier higher each, up to T10 in the last.
 - **Frost Hollow** (endgame 1, D-136, PROVISIONAL numbers): ice caves. Ice imps, ice wraiths that leave slowing frost behind them, yetis, frost archers; icicles that fall and leave frost. The Frost Wyrm breathes cones of frost, sweeps its tail round itself, and calls ice wraiths. Loot T6–T8.
+- **The Clockwork Vault** (endgame 2, D-137, PROVISIONAL numbers): the first fixed map, the same every run so it can be learned. Shielded clockwork sentries, cog drones, floor turrets, and steel blade arms that sweep rooms while they fight. The Automaton's plating shrugs off most damage except while it overheats; it fires rifle bursts and turns a laser arm round itself. Loot T6–T8.
 
 ### Toward 40 dungeons
 

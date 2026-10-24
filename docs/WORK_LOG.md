@@ -679,3 +679,10 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found live: the Wyrm's breath could reach past its lair's wall; it now only hits players inside its arena (tested).
 - `npm run check`: 530 shared, 199 server, 67 client, build.
 - Live (harness, **test** DB, seed 2, headless): the card unlocked at level 20; icicles left frost; the breath cone filled in and frosted the floor; two wraiths came out below 50%.
+
+### Phase 13g — The Clockwork Vault, a fixed map — 2026-10-24
+
+- The second endgame dungeon (D-137, PROVISIONAL): the same map every run. Shielded sentries (the knight's code, now reading its numbers by kind), cog drones, floor turrets; blade arms turning in five rooms while they fight; the Automaton (plating that lets through a quarter except while it overheats, rifle bursts, a turning laser arm, drones).
+- Found by a test: my own expectation of a blade's reach forgot the hurtbox's width; the rule was right.
+- `npm run check`: 541 shared, 199 server, 67 client, build.
+- Live (harness, **test** DB, headless): two arms turning in the Escapement with sentries' shields drawn; the Automaton's laser and overheat cycle in the Core.

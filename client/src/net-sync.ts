@@ -326,6 +326,14 @@ export class NetSync {
         const clock = latest.snapshot.clock + age;
         return clock >= f.from && clock < f.until;
       }),
+      // Turned on to "now" (D-137).
+      blades: latest.snapshot.blades.map((b) => ({
+        x: b.x,
+        y: b.y,
+        length: b.length,
+        angle: b.angle + b.speed * age,
+        laser: b.laser,
+      })),
       cones: latest.snapshot.cones.map((c) => ({
         ...c,
         startsIn: Math.max(0, c.startsIn - age),

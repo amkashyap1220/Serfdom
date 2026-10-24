@@ -30,6 +30,10 @@ import {
   FROSTARCHER,
   ICEIMP,
   WYRM,
+  SENTRY,
+  DRONE,
+  TURRET,
+  AUTOMATON,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -127,6 +131,13 @@ export interface EnemyAction {
   pull?: { playerId: number; to: Vec2; startsIn: number };
   /** The Tide Priest's whirlpools (D-135), starting after their warning. */
   whirlpools?: Vec2[];
+  /** Rotating arms this enemy carries this tick (the Automaton's laser, D-137), pivoting on it. */
+  blades?: {
+    length: number;
+    degreesPerSecond: number;
+    phaseDegrees: number;
+    damage: number;
+  }[];
   /** Frost left on the floor (D-136): an ice wraith's trail, the Frost Wyrm's tail. */
   frost?: { at: Vec2; radius: number; seconds: number }[];
   /** The Frost Wyrm's breath (D-136): a cone that lands after `startsIn`. */
@@ -224,6 +235,7 @@ export function enemyAct(
     case "necromancer":
       return necromancerAct(enemy, target, walls, dtSeconds, result, context);
     case "knight":
+    case "sentry":
       return knightAct(
         enemy,
         targets,
@@ -273,6 +285,28 @@ export function enemyAct(
       );
     case "golem":
       return golemAct(enemy, target, walls, dtSeconds, result, context);
+    case "drone":
+      return skulkerAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        DRONE,
+      );
+    case "turret":
+      return slingerAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        TURRET,
+      );
+    case "automaton":
+      return automatonAct(enemy, target, walls, dtSeconds, result, context);
     case "wraith":
       return wraithAct(enemy, target, walls, dtSeconds, result, context);
     case "yeti":
@@ -855,6 +889,117 @@ function elementalAct(
     dt,
   );
   return result({ ...enemy, position });
+}
+
+/**
+ * The Automaton (D-137): walks after the nearest player, stopping short;
+ * rifle bursts and a turning laser arm (two when enraged); cog drones below
+ * half HP. Every few seconds it overheats: it stops, glows, and takes
+ * double damage instead of a quarter.
+ */
+function automatonAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "automaton") return result(enemy);
+  const A = AUTOMATON;
+  const fraction = enemy.hp / enemy.maxHp;
+  const droning = fraction < A.dronesBelow;
+  const enraged = fraction < A.enragedBelow;
+  const tick = (t: number) => Math.max(0, t - dt);
+  let vent = ai.vent - dt;
+  let venting = Math.max(0, ai.venting - dt);
+  if (vent <= 1e-9) {
+    vent += enraged ? A.enragedVentEverySeconds : A.ventEverySeconds;
+    venting = A.ventSeconds;
+  }
+  const next = {
+    ...ai,
+    vent,
+    venting,
+    rifle: tick(ai.rifle),
+    drones: droning ? tick(ai.drones) : ai.drones,
+  };
+  const action: Omit<EnemyAction, "enemy"> = {
+    bullets: [],
+    contacts: [],
+    summons: [],
+    hazards: [],
+  };
+  let position = enemy.position;
+  // Overheated: it stands, glowing, and does nothing else.
+  if (venting > 0 || !target) {
+    return result({ ...enemy, ai: next }, action);
+  }
+  action.blades = [
+    {
+      length: A.laser.length,
+      degreesPerSecond: A.laser.degreesPerSecond,
+      phaseDegrees: 0,
+      damage: A.laser.damage,
+    },
+    ...(enraged
+      ? [
+          {
+            length: A.laser.length,
+            degreesPerSecond: A.laser.degreesPerSecond,
+            phaseDegrees: 180,
+            damage: A.laser.damage,
+          },
+        ]
+      : []),
+  ];
+  if (next.rifle <= 1e-9) {
+    next.rifle = A.rifle.intervalSeconds;
+    const aim = toward(enemy.position, target.target.position);
+    const step = (A.rifle.angleStepDegrees * Math.PI) / 180;
+    const half = (A.rifle.count - 1) / 2;
+    for (let i = 0; i < A.rifle.count; i++) {
+      action.bullets.push({
+        direction: rotateVec(aim, (i - half) * step),
+        spec: A.rifle.bullet,
+      });
+    }
+  }
+  if (droning && next.drones <= 1e-9) {
+    next.drones = A.drones.intervalSeconds;
+    const room = A.drones.maxAlive - context.aliveSummons(enemy.id);
+    const n = Math.min(A.drones.count, Math.max(0, room));
+    for (let i = 0; i < n; i++) {
+      action.summons.push({
+        kind: A.drones.kind,
+        at: {
+          x: enemy.position.x + (i % 2 ? 80 : -80),
+          y: enemy.position.y - 60,
+        },
+      });
+    }
+    next.called += n;
+  }
+  if (target.distance > A.keep) {
+    position = move(
+      enemy,
+      toward(
+        enemy.position,
+        route(
+          enemy.position,
+          target.target.position,
+          enemy.size / 2,
+          walls,
+          context,
+        ),
+      ),
+      A.speed,
+      walls,
+      dt,
+    );
+  }
+  return result({ ...enemy, position, ai: next }, action);
 }
 
 /** Ice wraith (D-136): a grunt's walk that leaves frost behind it every few seconds. */
@@ -1834,10 +1979,14 @@ function necromancerAct(
 }
 
 /** The middle of the circle a grave knight's slam hits (D-122). */
-export function slamCentre(position: Vec2, facing: Vec2): Vec2 {
+export function slamCentre(
+  position: Vec2,
+  facing: Vec2,
+  reach: number = KNIGHT.slam.reach,
+): Vec2 {
   return {
-    x: position.x + facing.x * KNIGHT.slam.reach,
-    y: position.y + facing.y * KNIGHT.slam.reach,
+    x: position.x + facing.x * reach,
+    y: position.y + facing.y * reach,
   };
 }
 
@@ -1867,17 +2016,18 @@ function knightAct(
   context: AiContext,
 ): EnemyAction {
   const ai = enemy.ai;
-  if (ai.kind !== "knight") return result(enemy);
+  if (ai.kind !== "knight" && ai.kind !== "sentry") return result(enemy);
+  const K = ai.kind === "sentry" ? SENTRY : KNIGHT;
   const slam = Math.max(0, ai.slam - dt);
   if (ai.mode === "windup") {
     const timer = ai.timer - dt;
     if (timer > 1e-9) {
       return result({ ...enemy, ai: { ...ai, slam, timer } });
     }
-    const at = slamCentre(enemy.position, ai.facing);
+    const at = slamCentre(enemy.position, ai.facing, K.slam.reach);
     const contacts = targets
-      .filter((t) => circleHitsPlayer(at, KNIGHT.slam.radius, t.position))
-      .map((t) => ({ playerId: t.id, damage: KNIGHT.slam.damage }));
+      .filter((t) => circleHitsPlayer(at, K.slam.radius, t.position))
+      .map((t) => ({ playerId: t.id, damage: K.slam.damage }));
     return result(
       {
         ...enemy,
@@ -1885,19 +2035,19 @@ function knightAct(
           ...ai,
           mode: "walk",
           timer: 0,
-          slam: KNIGHT.slam.cooldownSeconds,
+          slam: K.slam.cooldownSeconds,
         },
       },
-      { contacts, slam: { at, radius: KNIGHT.slam.radius, warning: false } },
+      { contacts, slam: { at, radius: K.slam.radius, warning: false } },
     );
   }
   if (!target) return result({ ...enemy, ai: { ...ai, slam } });
   const facing = turnToward(
     ai.facing,
     toward(enemy.position, target.target.position),
-    ((KNIGHT.turnDegreesPerSecond * Math.PI) / 180) * dt,
+    ((K.turnDegreesPerSecond * Math.PI) / 180) * dt,
   );
-  if (slam <= 1e-9 && target.distance <= KNIGHT.slam.triggerRange) {
+  if (slam <= 1e-9 && target.distance <= K.slam.triggerRange) {
     // It swings the way it faces now: the warning is exactly where it lands.
     return result(
       {
@@ -1906,14 +2056,14 @@ function knightAct(
           ...ai,
           mode: "windup",
           facing,
-          timer: KNIGHT.slam.windupSeconds,
+          timer: K.slam.windupSeconds,
           slam,
         },
       },
       {
         slam: {
           at: slamCentre(enemy.position, facing),
-          radius: KNIGHT.slam.radius,
+          radius: K.slam.radius,
           warning: true,
         },
       },
@@ -1931,7 +2081,7 @@ function knightAct(
         context,
       ),
     ),
-    KNIGHT.speed,
+    K.speed,
     walls,
     dt,
   );
@@ -1943,20 +2093,22 @@ function knightAct(
  * it comes at the knight's front, within the shield's arc.
  */
 export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
-  if (enemy.ai.kind !== "knight") return false;
+  if (enemy.ai.kind !== "knight" && enemy.ai.kind !== "sentry") return false;
+  const arc = (enemy.ai.kind === "sentry" ? SENTRY : KNIGHT).shieldArcDegrees;
   const len = Math.hypot(direction.x, direction.y);
   if (len === 0) return false;
   // The shot travels against the facing when it hits the front.
   const dot =
     (-direction.x * enemy.ai.facing.x - direction.y * enemy.ai.facing.y) / len;
-  return dot >= Math.cos(((KNIGHT.shieldArcDegrees / 2) * Math.PI) / 180);
+  return dot >= Math.cos(((arc / 2) * Math.PI) / 180);
 }
 
 export function isTelegraphing(enemy: EnemyState): boolean {
   if (enemy.ai.kind === "wyrm") return enemy.ai.mode !== "walk";
   if (enemy.ai.kind === "forgemaster") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "elemental") return enemy.ai.fuse !== null;
-  if (enemy.ai.kind === "knight") return enemy.ai.mode === "windup";
+  if (enemy.ai.kind === "knight" || enemy.ai.kind === "sentry")
+    return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "warchief") {
     return enemy.ai.mode === "sweepWindup" || enemy.ai.mode === "chargeWindup";
   }

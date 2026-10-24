@@ -4,6 +4,7 @@ import {
   TIDEPRIEST,
   WARCHIEF,
   WYRM,
+  AUTOMATON,
   WARLORD,
   type EnemyKind,
 } from "@serfdom/shared";
@@ -25,7 +26,7 @@ export function bossBar(
   hp: number,
   maxHp: number,
   /** The Lich: warded (`faded`) or stunned (`dazed`), as the snapshot says. */
-  state: { faded?: boolean; dazed?: boolean } = {},
+  state: { faded?: boolean; dazed?: boolean; vented?: boolean } = {},
 ): BossBar | undefined {
   const fraction = hp / maxHp;
   if (kind === "warlord") {
@@ -63,6 +64,18 @@ export function bossBar(
           : fraction < LICH.wardBelow[1]!
             ? "  — ENRAGED"
             : "",
+    };
+  }
+  if (kind === "automaton") {
+    return {
+      name: "The Automaton",
+      notches: [AUTOMATON.dronesBelow, AUTOMATON.enragedBelow],
+      angry: fraction < AUTOMATON.dronesBelow,
+      suffix: state.vented
+        ? "  — OVERHEATED"
+        : fraction < AUTOMATON.enragedBelow
+          ? "  — ENRAGED"
+          : "",
     };
   }
   if (kind === "wyrm") {

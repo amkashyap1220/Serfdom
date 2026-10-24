@@ -10,6 +10,7 @@ import {
   BRAZIERS,
   RUNES,
   type RuneSpot,
+  type BladeSpot,
 } from "./dungeon-layout.ts";
 import { isAlive } from "./enemy.ts";
 import { ICICLES } from "./frost.ts";
@@ -361,6 +362,16 @@ export function trapWarnings(
     }
   });
   return out;
+}
+
+/** The blade arms of every fighting room (D-137): they turn only then. */
+export function activeBlades(
+  progress: RunProgress,
+  layout: DungeonLayout,
+): BladeSpot[] {
+  return layout.rooms.flatMap((room, i) =>
+    progress[i]?.status === "active" ? [...(room.blades ?? [])] : [],
+  );
 }
 
 /** A rune burst to land: where, how wide, how hard (D-123). */

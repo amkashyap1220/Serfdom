@@ -47,6 +47,10 @@ describe("32×32 serfs and enemies (D-127)", () => {
       frostarcher: 32,
       iceimp: 32,
       wyrm: 96,
+      sentry: 40,
+      drone: 32,
+      turret: 32,
+      automaton: 72,
       forgemaster: 88,
       lich: 32,
     });

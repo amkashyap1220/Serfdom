@@ -68,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v39 (13g): the Clockwork Vault (D-137): snapshots list turning
+ *          `blades`; killedBy may be "blades"; `facing` is also a clockwork
+ *          sentry's shield.
  * v38 (13f): Frost Hollow (D-136): snapshots list `frost` (it slows
  *          players, so prediction needs it) and breath `cones`; hazards may
  *          be an icicle; killedBy may be "icicles".
@@ -138,7 +141,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 38;
+export const PROTOCOL_VERSION = 39;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -290,6 +293,16 @@ export interface SnapshotFrost {
   radius: number;
   from: number;
   until: number;
+}
+
+/** A blade arm (D-137): from (x, y), `angle` now, turning `speed` rad/s; `laser`: the Automaton's. */
+export interface SnapshotBlade {
+  x: number;
+  y: number;
+  length: number;
+  angle: number;
+  speed: number;
+  laser: boolean;
 }
 
 /** A breath cone (D-136): warning while `startsIn` > 0, then landed. */
@@ -590,6 +603,8 @@ export type ServerMessage =
       /** Frost and breath cones (D-136). */
       frost: SnapshotFrost[];
       cones: SnapshotCone[];
+      /** Blade arms turning now (D-137). */
+      blades: SnapshotBlade[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
       /** Rune columns glowing before they burst (D-123). */
@@ -1095,6 +1110,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "surges",
           "frost",
           "cones",
+          "blades",
           "traps",
           "runes",
           "portalOpen",
@@ -1146,6 +1162,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!frost) return fail("snapshot: bad frost entry");
       const cones = parseList(obj.cones, parseSnapshotCone);
       if (!cones) return fail("snapshot: bad cone entry");
+      const blades = parseList(obj.blades, parseSnapshotBlade);
+      if (!blades) return fail("snapshot: bad blade entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -1172,6 +1190,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           surges,
           frost,
           cones,
+          blades,
           traps,
           runes,
           portalOpen: obj.portalOpen,
@@ -1524,6 +1543,29 @@ function parsePull(v: unknown): SnapshotPlayer["pull"] | undefined {
     return undefined;
   }
   return { x: v.x, y: v.y, from: v.from, speed: v.speed, left: v.left };
+}
+
+function parseSnapshotBlade(v: unknown): SnapshotBlade | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["x", "y", "length", "angle", "speed", "laser"]) ||
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isNonNegative(v.length) ||
+    !isFiniteNumber(v.angle) ||
+    !isFiniteNumber(v.speed) ||
+    typeof v.laser !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    x: v.x,
+    y: v.y,
+    length: v.length,
+    angle: v.angle,
+    speed: v.speed,
+    laser: v.laser,
+  };
 }
 
 function parseSnapshotFrost(v: unknown): SnapshotFrost | null {

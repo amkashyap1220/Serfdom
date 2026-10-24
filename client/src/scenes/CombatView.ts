@@ -11,6 +11,7 @@ import {
   beamBox,
   FORGEMASTER,
   WHIRLPOOL,
+  BLADES,
   burningStrips,
   plateColumns,
 } from "@serfdom/shared";
@@ -69,6 +70,10 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   frostarcher: 0x8fb8d8,
   iceimp: 0x5fa8d8,
   wyrm: 0x6f9fc8,
+  sentry: 0x9a8f6a,
+  drone: 0xb08d3a,
+  turret: 0x6a6f78,
+  automaton: 0x8a6a3a,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -135,6 +140,8 @@ const COLORS = {
   breath: 0x9fdcff,
   icicle: 0xdff4ff,
   icicleEdge: 0x7fb0d0,
+  blade: 0xd0d6dc,
+  laser: 0xff3b3b,
   beamCore: 0xfff0a0,
   boulderEdge: 0x4a4238,
 } as const;
@@ -419,6 +426,23 @@ export class CombatView {
         at = Math.max(at, g.to);
       }
     }
+    // Blade arms (D-137): steel bars turning on their pivots; the
+    // Automaton's laser in red.
+    for (const b of view.blades) {
+      h.lineStyle(
+        BLADES.thickness,
+        b.laser ? COLORS.laser : COLORS.blade,
+        b.laser ? 0.75 : 0.9,
+      );
+      h.lineBetween(
+        b.x,
+        b.y,
+        b.x + Math.cos(b.angle) * b.length,
+        b.y + Math.sin(b.angle) * b.length,
+      );
+      h.fillStyle(COLORS.enemyMark, 1);
+      h.fillCircle(b.x, b.y, 6);
+    }
     // Frost (D-136): pale patches that slow you.
     for (const f of view.frost) {
       h.fillStyle(COLORS.frost, 0.3);
@@ -637,7 +661,12 @@ export class CombatView {
     }
     // Grave knights' shields (D-122): a bright arc on the front side.
     for (const e of view.enemies) {
-      if (e.kind !== "knight" || e.facing === null || e.hp <= 0) continue;
+      if (
+        (e.kind !== "knight" && e.kind !== "sentry") ||
+        e.facing === null ||
+        e.hp <= 0
+      )
+        continue;
       const half = ((KNIGHT.shieldArcDegrees / 2) * Math.PI) / 180;
       bl.lineStyle(px(3), COLORS.shield, 1);
       bl.beginPath();

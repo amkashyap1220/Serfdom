@@ -46,6 +46,17 @@ const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
     obstacleEdge: 0x7d7472,
     hole: 0x0a0605,
   },
+  // D-137: brass and dark steel.
+  "clockwork-vault": {
+    floor: 0x1e1c18,
+    gridMinor: 0x2c2922,
+    gridMajor: 0x443e32,
+    wall: 0x8a6a3a,
+    wallEdge: 0xc8a060,
+    obstacle: 0x5a5a5e,
+    obstacleEdge: 0x8f8f96,
+    hole: 0x080706,
+  },
   // D-136: blue-white ice.
   "frost-hollow": {
     floor: 0x1a2230,

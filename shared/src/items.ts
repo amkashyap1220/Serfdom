@@ -242,6 +242,15 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
+  // D-137: like Frost Hollow, T6 30%, T7 45%, T8 25%.
+  "clockwork-vault": {
+    tiers: [
+      [6, 30],
+      [7, 45],
+      [8, 25],
+    ],
+    slots: SLOT_WEIGHTS,
+  },
   training: {
     tiers: [
       [0, 50],
