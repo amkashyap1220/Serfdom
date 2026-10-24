@@ -5,8 +5,8 @@
 /** At Speed 10 (a fresh Serf); scaled by stats.ts since 8c. */
 export const PLAYER_SPEED = 150;
 
-/** Size of the player's collision box against walls, in world pixels (PROVISIONAL: matches the 16×16 sprite). */
-export const PLAYER_BODY = { width: 16, height: 16 } as const;
+/** Size of the player's collision box against walls, in world pixels (D-127: matches the 32×32 sprite). */
+export const PLAYER_BODY = { width: 32, height: 32 } as const;
 
 /** Simulation updates per second. Movement advances in fixed steps of 1/TICK_RATE seconds. */
 export const TICK_RATE = 60;

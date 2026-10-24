@@ -161,9 +161,9 @@ describe("enemy ring attack", () => {
   });
 });
 
-describe("player hurtbox is 15×15, smaller than the 16×16 sprite (D-038)", () => {
+describe("player hurtbox is 31×31, smaller than the 32×32 sprite (D-038, D-127)", () => {
   // An enemy bullet (6×6, half 3) flying west along y = offset toward a
-  // player at the origin. It hits if |offset| < 7.5 (hurtbox half) + 3.
+  // player at the origin. It hits if |offset| < 15.5 (hurtbox half) + 3.
   function hitAtOffset(offset: number): boolean {
     const s = withPlayers([], [[1, { x: 0, y: 0 }]]);
     const withBullet: SimState = {
@@ -185,12 +185,12 @@ describe("player hurtbox is 15×15, smaller than the 16×16 sprite (D-038)", () 
     return count(runWorld(withBullet, 90).events, "playerHit") > 0;
   }
 
-  it("hits just inside the 15×15 edge", () => {
-    expect(hitAtOffset(10.4)).toBe(true);
+  it("hits just inside the 31×31 edge", () => {
+    expect(hitAtOffset(18.4)).toBe(true);
   });
 
-  it("misses at 10.6 px, which a full 16×16 box (edge 11.0) would still hit", () => {
-    expect(hitAtOffset(10.6)).toBe(false);
+  it("misses at 18.6 px, which a full 32×32 box (edge 19.0) would still hit", () => {
+    expect(hitAtOffset(18.6)).toBe(false);
   });
 });
 
