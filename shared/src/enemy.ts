@@ -8,6 +8,7 @@ import {
   GHOST,
   NECROMANCER,
   LICH,
+  GOLEM,
 } from "./enemy-config.ts";
 import type { Vec2 } from "./geometry.ts";
 import { applyDamage } from "./health.ts";
@@ -87,6 +88,17 @@ export type EnemyAi =
       runeTurn: number;
     }
   | {
+      kind: "elemental";
+      /** Seconds left of its flare before it explodes, or null while it rushes (D-132). */
+      fuse: number | null;
+    }
+  | {
+      kind: "golem";
+      /** Seconds until it next vents, and seconds left of the vent (D-132). */
+      vent: number;
+      venting: number;
+    }
+  | {
       kind: "ghost";
       /** Faded out: cannot hit or be hit (D-120). */
       faded: boolean;
@@ -160,6 +172,10 @@ function initialAi(kind: EnemyKind): EnemyAi {
       return { kind, pile: null, revived: false };
     case "ghost":
       return { kind, faded: false, timer: GHOST.visibleSeconds };
+    case "elemental":
+      return { kind, fuse: null };
+    case "golem":
+      return { kind, vent: GOLEM.ventEverySeconds, venting: 0 };
     case "lich":
       return {
         kind,
@@ -270,6 +286,11 @@ export function isHittable(enemy: EnemyState): boolean {
   return isAlive(enemy) && !isFaded(enemy);
 }
 
+/** A magma golem venting (D-132): it takes double damage now. */
+export function isVenting(enemy: EnemyState): boolean {
+  return enemy.ai.kind === "golem" && enemy.ai.venting > 0;
+}
+
 /** A skeleton lying as a bone pile (D-120): alive, but it neither moves nor attacks. */
 export function isPile(enemy: EnemyState): boolean {
   return enemy.ai.kind === "skeleton" && enemy.ai.pile !== null;
@@ -287,8 +308,15 @@ export function damageEnemy(
     throw new RangeError(`damage must be finite and >= 0, got ${damage}`);
   }
   if (!isAlive(enemy)) return { enemy, defeated: false, damage: 0 };
-  // A cursed enemy takes more from every source (D-098).
-  const taken = damage * (1 + (enemy.curse?.bonus ?? 0));
+  // A cursed enemy takes more from every source (D-098); a magma golem's
+  // crust halves it, unless it is venting (D-132: then double).
+  const crust =
+    enemy.ai.kind === "golem"
+      ? enemy.ai.venting > 0
+        ? GOLEM.ventTaken
+        : GOLEM.crustTaken
+      : 1;
+  const taken = damage * (1 + (enemy.curse?.bonus ?? 0)) * crust;
   const { hp, died } = applyDamage(enemy.hp, taken);
   // A skeleton's first death leaves a bone pile instead (D-120); a hit on
   // the pile is the real death.

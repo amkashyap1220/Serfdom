@@ -68,6 +68,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v34 (13b): fire elementals, magma golems, bellows-keepers (D-132):
+ *          snapshot enemies say whether a golem is `vented`; blasts may be
+ *          an elemental's explosion or a bellows-keeper's heal (`stoke`).
  * v33 (13a): the Ember Forge (D-130): forge imps and ember casters;
  *          killedBy may be "lava".
  * v32 (D-129): snapshot enemies say whether the Lich is `spinning`;
@@ -123,7 +126,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 33;
+export const PROTOCOL_VERSION = 34;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -282,6 +285,8 @@ export interface SnapshotEnemy {
   facing: number | null;
   /** The Lich spinning while it attacks (D-129); false for every other enemy. */
   spinning: boolean;
+  /** A magma golem venting (D-132): it takes double damage now. */
+  vented: boolean;
 }
 
 /** Burning floor left by a bomb (D-115). */
@@ -323,6 +328,10 @@ export const BLAST_KINDS = [
   "raise",
   /** A cursed rune bursting (D-123). */
   "rune",
+  /** A fire elemental exploding (D-132). */
+  "explosion",
+  /** A bellows-keeper's heal pulse (D-132). */
+  "stoke",
 ] as const;
 export type BlastKind = (typeof BLAST_KINDS)[number];
 
@@ -1465,6 +1474,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "faded",
       "facing",
       "spinning",
+      "vented",
     ])
   ) {
     return null;
@@ -1478,6 +1488,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     typeof v.pile !== "boolean" ||
     typeof v.faded !== "boolean" ||
     typeof v.spinning !== "boolean" ||
+    typeof v.vented !== "boolean" ||
     (v.facing !== null && !isFiniteNumber(v.facing))
   ) {
     return null;
@@ -1511,6 +1522,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     faded: v.faded,
     facing: v.facing as number | null,
     spinning: v.spinning,
+    vented: v.vented,
   };
 }
 

@@ -458,6 +458,38 @@ describe("the Lich's pose in a snapshot (D-129)", () => {
   });
 });
 
+describe("a magma golem venting in a snapshot (D-132)", () => {
+  it("says `vented` only while it vents", () => {
+    const r = new DungeonInstance(1, "ember-forge", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed: 4,
+    });
+    const at = r.state.players[0]!.position;
+    r.setStateForTest(
+      spawnEnemies(r.state, [
+        { kind: "golem", at: { x: at.x + 250, y: at.y }, roomId: null },
+      ]),
+    );
+    const golem = () => {
+      const parsed = parseServerMessage(encodeMessage(r.snapshot(1)));
+      if (!parsed.ok || parsed.message.type !== "snapshot")
+        throw new Error("no snapshot");
+      return parsed.message.enemies.find((e) => e.kind === "golem")!;
+    };
+    r.tick();
+    expect(golem().vented).toBe(false);
+    r.setStateForTest({
+      ...r.state,
+      enemies: r.state.enemies.map((e) =>
+        e.ai.kind === "golem" ? { ...e, ai: { ...e.ai, vent: 0 } } : e,
+      ),
+    });
+    r.tick();
+    expect(golem().vented).toBe(true);
+  });
+});
+
 describe("DungeonInstance layouts (D-104)", () => {
   it("builds the generated Warrens for its seed; seed 0 is the handcrafted one", () => {
     const seeded = new DungeonInstance(1, "goblin-warrens", [1], {

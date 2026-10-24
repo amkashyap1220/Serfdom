@@ -16,6 +16,9 @@ import {
   LICH,
   IMP,
   CASTER,
+  ELEMENTAL,
+  GOLEM,
+  BELLOWS,
   RING_BULLET,
   SLINGER,
   WARLORD,
@@ -95,6 +98,10 @@ export interface EnemyAction {
   slam?: { at: Vec2; radius: number; warning: boolean };
   /** A necromancer raises this bone pile (an enemy id) as a full skeleton (D-122). */
   raise?: number;
+  /** A bellows-keeper's pulse (D-132): heal enemies in the circle by `share` of their max HP. */
+  stoke?: { at: Vec2; radius: number; share: number };
+  /** A fire elemental exploding (D-132), for drawing. */
+  explosion?: { at: Vec2; radius: number };
 }
 
 /** What the AI knows about the world beyond the targets. */
@@ -206,6 +213,28 @@ export function enemyAct(
       return bomberAct(enemy, target, walls, dtSeconds, result, context);
     case "imp":
       return skulkerAct(enemy, target, walls, dtSeconds, result, context, IMP);
+    case "elemental":
+      return elementalAct(
+        enemy,
+        targets,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+      );
+    case "golem":
+      return golemAct(enemy, target, walls, dtSeconds, result, context);
+    case "bellows":
+      return shamanAct(
+        enemy,
+        target,
+        walls,
+        dtSeconds,
+        result,
+        context,
+        BELLOWS_SUPPORT,
+      );
     case "caster":
       return bomberAct(
         enemy,
@@ -547,6 +576,34 @@ function bomberAct(
   );
 }
 
+/** A support's numbers and effect: shamans chant (D-115), bellows-keepers heal (D-132). */
+interface SupportSpec {
+  speed: number;
+  seekRange: number;
+  keepAway: number;
+  intervalSeconds: number;
+  radius: number;
+  effect: "chant" | "heal";
+}
+
+const SHAMAN_SUPPORT: SupportSpec = {
+  speed: SHAMAN.speed,
+  seekRange: SHAMAN.seekRange,
+  keepAway: SHAMAN.keepAway,
+  intervalSeconds: SHAMAN.chantIntervalSeconds,
+  radius: SHAMAN.chantRadius,
+  effect: "chant",
+};
+
+const BELLOWS_SUPPORT: SupportSpec = {
+  speed: BELLOWS.speed,
+  seekRange: BELLOWS.seekRange,
+  keepAway: BELLOWS.keepAway,
+  intervalSeconds: BELLOWS.pulseSeconds,
+  radius: BELLOWS.radius,
+  effect: "heal",
+};
+
 function shamanAct(
   enemy: EnemyState,
   target: Nearest,
@@ -554,20 +611,21 @@ function shamanAct(
   dt: number,
   result: Result,
   context: AiContext,
+  spec: SupportSpec = SHAMAN_SUPPORT,
 ): EnemyAction {
   const near = (context.allies?.() ?? []).filter(
     (e) =>
       e.id !== enemy.id &&
-      e.kind !== "shaman" &&
+      e.kind !== enemy.kind &&
       isAlive(e) &&
       Math.hypot(
         e.position.x - enemy.position.x,
         e.position.y - enemy.position.y,
-      ) <= SHAMAN.seekRange,
+      ) <= spec.seekRange,
   );
-  // Keep away from players; otherwise go to the thick of the goblins.
+  // Keep away from players; otherwise go to the thick of its allies.
   let direction = NO_MOVE;
-  if (target && target.distance < SHAMAN.keepAway) {
+  if (target && target.distance < spec.keepAway) {
     direction = toward(target.target.position, enemy.position);
   } else if (near.length > 0) {
     const centre = {
@@ -583,24 +641,118 @@ function shamanAct(
       );
     }
   }
-  const position = move(enemy, direction, SHAMAN.speed, walls, dt);
+  const position = move(enemy, direction, spec.speed, walls, dt);
   const inReach = near.some(
     (e) =>
       Math.hypot(e.position.x - position.x, e.position.y - position.y) <=
-      SHAMAN.chantRadius,
+      spec.radius,
   );
-  const chant = stepFireCooldown(
+  const pulse = stepFireCooldown(
     enemy.attackCooldown,
     dt,
     inReach,
-    1 / SHAMAN.chantIntervalSeconds,
+    1 / spec.intervalSeconds,
   );
+  const at = { ...position };
   return result(
-    { ...enemy, position, attackCooldown: chant.remaining },
-    chant.fired
-      ? { chant: { at: { ...position }, radius: SHAMAN.chantRadius } }
-      : {},
+    { ...enemy, position, attackCooldown: pulse.remaining },
+    !pulse.fired
+      ? {}
+      : spec.effect === "chant"
+        ? { chant: { at, radius: spec.radius } }
+        : {
+            stoke: {
+              at,
+              radius: spec.radius,
+              share: BELLOWS.healShare * spec.intervalSeconds,
+            },
+          },
   );
+}
+
+/**
+ * Fire elemental (D-132): rushes the nearest player; close enough, it
+ * stops and flares, then explodes on everyone in reach and is gone.
+ */
+function elementalAct(
+  enemy: EnemyState,
+  targets: readonly AiTarget[],
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "elemental") return result(enemy);
+  if (ai.fuse !== null) {
+    const fuse = ai.fuse - dt;
+    if (fuse > 1e-9)
+      return result({ ...enemy, ai: { kind: "elemental", fuse } });
+    const at = { ...enemy.position };
+    const contacts = targets
+      .filter((t) => circleHitsPlayer(at, ELEMENTAL.radius, t.position))
+      .map((t) => ({ playerId: t.id, damage: ELEMENTAL.damage }));
+    // Gone in its own blast.
+    return result(
+      {
+        ...enemy,
+        hp: 0,
+        respawnIn: enemy.respawnSeconds ?? 0,
+        ai: { kind: "elemental", fuse: null },
+      },
+      { contacts, explosion: { at, radius: ELEMENTAL.radius } },
+    );
+  }
+  if (!target) return result(enemy);
+  if (target.distance <= ELEMENTAL.triggerRange) {
+    return result({
+      ...enemy,
+      ai: { kind: "elemental", fuse: ELEMENTAL.fuseSeconds },
+    });
+  }
+  const position = move(
+    enemy,
+    toward(
+      enemy.position,
+      route(
+        enemy.position,
+        target.target.position,
+        enemy.size / 2,
+        walls,
+        context,
+      ),
+    ),
+    ELEMENTAL.speed,
+    walls,
+    dt,
+  );
+  return result({ ...enemy, position });
+}
+
+/** Magma golem (D-132): a slow walker that vents on a cycle. */
+function golemAct(
+  enemy: EnemyState,
+  target: Nearest,
+  walls: readonly Rect[],
+  dt: number,
+  result: Result,
+  context: AiContext,
+): EnemyAction {
+  const ai = enemy.ai;
+  if (ai.kind !== "golem") return result(enemy);
+  // The cycle runs all the time: it vents every 6 s, for 1.5 s of them.
+  let vent = ai.vent - dt;
+  let venting = Math.max(0, ai.venting - dt);
+  if (vent <= 1e-9) {
+    vent += GOLEM.ventEverySeconds;
+    venting = GOLEM.ventSeconds;
+  }
+  const walked = gruntAct(enemy, target, walls, dt, result, context, GOLEM);
+  return {
+    ...walked,
+    enemy: { ...walked.enemy, ai: { kind: "golem", vent, venting } },
+  };
 }
 
 function bruteAct(
@@ -1189,6 +1341,7 @@ export function shieldBlocks(enemy: EnemyState, direction: Vec2): boolean {
 }
 
 export function isTelegraphing(enemy: EnemyState): boolean {
+  if (enemy.ai.kind === "elemental") return enemy.ai.fuse !== null;
   if (enemy.ai.kind === "knight") return enemy.ai.mode === "windup";
   if (enemy.ai.kind === "warchief") {
     return enemy.ai.mode === "sweepWindup" || enemy.ai.mode === "chargeWindup";

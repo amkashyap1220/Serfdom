@@ -228,6 +228,18 @@ Restart `npm run dev` (protocol v33) and reload. Any serf that has completed the
 
 Report: pass/fail per step, clear time and level, and whether imps are easy to tell apart from lava.
 
+#### Ember Forge newcomers checklist (Phase 13b, D-132)
+
+Restart `npm run dev` (protocol v34) and reload. Any serf that has completed the Warrens can enter the Ember Forge.
+
+1. **Fire elementals** (bright red squares, 200 HP) appear in the Ash antechamber, Smelter, Chain gallery, and Crucible hall. One rushes you fast; when it is next to you it stops and blinks **yellow** for about half a second, then an **orange disc** bursts and it is gone. The burst hurts you (14 before Defense) and any other player in it.
+2. Shoot one dead while it blinks: no burst, no damage, and it counts as slain.
+3. **Magma golems** (big dark brown squares, 1,600 HP) in the Anvil hall, Slag pit, Crucible hall, Great furnace (two), and Foundry. They walk slowly and hit hard (14). Watch the HP number: your shots take off about half as much as usual, except when the golem **glows bright orange** (about 1.5 s every 6 s), when they take off about double. They never walk into lava.
+4. **Bellows-keepers** (rust-brown squares, 450 HP) in the Bellows room, Quench room, Great furnace, and Foundry. They never attack and keep away from you. While other enemies are near one, an **orange ring** pulses every second and hurt enemies' HP numbers tick up. Two bellows-keepers don't heal each other; the Lich is never healed.
+5. Clear the forge and note your time and level (expected about 7.5 min at level 15).
+
+Report: pass/fail per step; whether the yellow blink gives you enough warning; whether the golem's vent glow is easy to see; your clear time and level. If something fails, copy the browser console (F12 → Console) and the server terminal's last lines.
+
 #### Bigger window, closer camera checklist (D-131)
 
 Restart `npm run dev` (no protocol change) and reload. Make the browser window at least 1200×800 inside (a maximised window on a 1080p screen).

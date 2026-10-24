@@ -15,13 +15,32 @@ import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
  * The Ember Forge (D-130, Phase 13a): the fourth dungeon, levels 15–18,
  * opened by completing the Warrens (D-107). Forge imps (the skulker's
  * flanking) and ember casters (the bomber's lob) among lava channels that
- * burn players and that enemies walk round. 13b adds fire elementals,
- * magma golems, and bellows-keepers; 13c fire jets and slag spills; 13d
+ * burn players and that enemies walk round; fire elementals, magma golems,
+ * and bellows-keepers (13b, D-132). 13c adds fire jets and slag spills; 13d
  * the Forgemaster. Until then the Lich stands in as the boss.
  */
 
 /** Spawn boxes keep this far clear of obstacles and lava. */
 const CLEAR = 8;
+
+/** Is a spawn box of `size` at (x, y) clear of every blocked rect? */
+const clearAt = (
+  x: number,
+  y: number,
+  size: number,
+  blocked: readonly Rect[],
+) => {
+  const half = size / 2 + CLEAR;
+  return blocked.every(
+    (r) =>
+      !overlaps(r, {
+        x: x - half,
+        y: y - half,
+        width: 2 * half,
+        height: 2 * half,
+      }),
+  );
+};
 
 const overlaps = (a: Rect, b: Rect) =>
   a.x < b.x + b.width &&
@@ -48,17 +67,8 @@ function fill(
   casters: number,
   blocked: readonly Rect[],
 ): EnemySpawnDef[] {
-  const half = ENEMY_STATS.imp.size / 2 + CLEAR;
   const free = (x: number, y: number) =>
-    blocked.every(
-      (r) =>
-        !overlaps(r, {
-          x: x - half,
-          y: y - half,
-          width: 2 * half,
-          height: 2 * half,
-        }),
-    );
+    clearAt(x, y, ENEMY_STATS.imp.size, blocked);
   const pick = (spots: [number, number][], n: number, what: string) => {
     if (spots.length < n) {
       throw new Error(`no room for ${n} ${what} in a ${width}×${height} room`);
@@ -88,6 +98,65 @@ function fill(
   ];
 }
 
+/** 13b's newcomers in a room (D-132). */
+interface Newcomers {
+  /** Each takes one of the imps nearest the entrance. */
+  elemental?: number;
+  /** Each takes the front-most imp spot clear for its 44 px, and 3 more imps go. */
+  golem?: number;
+  /** Each takes one of the casters farthest back. */
+  bellows?: number;
+}
+
+/** Imps a magma golem replaces (D-132): it stands where four stood. */
+const IMPS_PER_GOLEM = 4;
+
+/** Swap 13b's newcomers into a filled room (D-132). Deterministic. */
+function withNewcomers(
+  key: string,
+  wave: readonly EnemySpawnDef[],
+  newcomers: Newcomers,
+  blocked: readonly Rect[],
+): EnemySpawnDef[] {
+  let out = wave.map((sp) => ({ ...sp }));
+  // Imps front to back (the entrance is on the west), casters back to front.
+  const imps = () =>
+    out.filter((sp) => sp.kind === "imp").sort((a, b) => a.at.x - b.at.x);
+  const need = (what: string) => {
+    throw new Error(`${key}: not enough room for ${what}`);
+  };
+  for (let k = 0; k < (newcomers.golem ?? 0); k++) {
+    const spot =
+      imps().find((sp) =>
+        clearAt(sp.at.x, sp.at.y, ENEMY_STATS.golem.size, blocked),
+      ) ?? need("a magma golem");
+    spot.kind = "golem";
+    // The three imps nearest it go, so it stands where four stood.
+    const gone = new Set(
+      imps()
+        .sort(
+          (a, b) =>
+            Math.hypot(a.at.x - spot.at.x, a.at.y - spot.at.y) -
+            Math.hypot(b.at.x - spot.at.x, b.at.y - spot.at.y),
+        )
+        .slice(0, IMPS_PER_GOLEM - 1),
+    );
+    if (gone.size < IMPS_PER_GOLEM - 1) need("a magma golem");
+    out = out.filter((sp) => !gone.has(sp));
+  }
+  for (let k = 0; k < (newcomers.elemental ?? 0); k++) {
+    (imps()[0] ?? need("a fire elemental")).kind = "elemental";
+  }
+  for (let k = 0; k < (newcomers.bellows ?? 0); k++) {
+    const caster =
+      out
+        .filter((sp) => sp.kind === "caster")
+        .sort((a, b) => b.at.x - a.at.x)[0] ?? need("a bellows-keeper");
+    caster.kind = "bellows";
+  }
+  return out;
+}
+
 const room = (
   key: string,
   name: string,
@@ -96,12 +165,16 @@ const room = (
   band: RoomBand,
   [imps, casters]: [number, number],
   traps: Pick<RoomPiece, "obstacles" | "lava"> = {},
+  newcomers: Newcomers = {},
 ): RecipePiece => {
+  const blocked = [...(traps.obstacles ?? []), ...(traps.lava ?? [])];
   const waves = [
-    fill(width, height, imps, casters, [
-      ...(traps.obstacles ?? []),
-      ...(traps.lava ?? []),
-    ]),
+    withNewcomers(
+      key,
+      fill(width, height, imps, casters, blocked),
+      newcomers,
+      blocked,
+    ),
   ];
   return {
     piece: { key, name, width, height, waves, ...traps },
@@ -110,7 +183,7 @@ const room = (
   };
 };
 
-/** Light rooms: 8 imps and 4 casters (3,520 HP). */
+/** Light rooms: 8 imps and 4 casters (3,520 HP before 13b's swaps). */
 const LIGHT: [number, number] = [8, 4];
 /** Medium rooms: 12 imps and 7 casters (5,560 HP). */
 const MEDIUM: [number, number] = [12, 7];
@@ -119,13 +192,33 @@ const HEAVY: [number, number] = [17, 9];
 
 /** Forge rooms: entrance on the west, positions relative to the floor. HP is solo. */
 export const FORGE_PIECES: readonly RecipePiece[] = [
-  room("ashroom", "Ash antechamber", 640, 480, "light", LIGHT),
-  room("bellows", "Bellows room", 640, 480, "light", LIGHT, {
-    obstacles: [
-      { x: 280, y: 96, width: 64, height: 48 },
-      { x: 280, y: 336, width: 64, height: 48 },
-    ],
-  }),
+  room(
+    "ashroom",
+    "Ash antechamber",
+    640,
+    480,
+    "light",
+    LIGHT,
+    {},
+    {
+      elemental: 2,
+    },
+  ),
+  room(
+    "bellows",
+    "Bellows room",
+    640,
+    480,
+    "light",
+    LIGHT,
+    {
+      obstacles: [
+        { x: 280, y: 96, width: 64, height: 48 },
+        { x: 280, y: 336, width: 64, height: 48 },
+      ],
+    },
+    { bellows: 1 },
+  ),
   room("orestore", "Ore store", 560, 560, "light", LIGHT, {
     obstacles: [
       { x: 240, y: 120, width: 48, height: 48 },
@@ -134,59 +227,131 @@ export const FORGE_PIECES: readonly RecipePiece[] = [
     ],
   }),
   // A lava channel across the middle, open at both ends.
-  room("smelter", "Smelter", 720, 560, "medium", MEDIUM, {
-    lava: [{ x: 200, y: 248, width: 320, height: 64 }],
-  }),
-  room("anvils", "Anvil hall", 720, 560, "medium", MEDIUM, {
-    obstacles: [
-      { x: 240, y: 140, width: 64, height: 40 },
-      { x: 440, y: 140, width: 64, height: 40 },
-      { x: 240, y: 380, width: 64, height: 40 },
-      { x: 440, y: 380, width: 64, height: 40 },
-    ],
-  }),
+  room(
+    "smelter",
+    "Smelter",
+    720,
+    560,
+    "medium",
+    MEDIUM,
+    {
+      lava: [{ x: 200, y: 248, width: 320, height: 64 }],
+    },
+    { elemental: 2 },
+  ),
+  room(
+    "anvils",
+    "Anvil hall",
+    720,
+    560,
+    "medium",
+    MEDIUM,
+    {
+      obstacles: [
+        { x: 240, y: 140, width: 64, height: 40 },
+        { x: 440, y: 140, width: 64, height: 40 },
+        { x: 240, y: 380, width: 64, height: 40 },
+        { x: 440, y: 380, width: 64, height: 40 },
+      ],
+    },
+    { golem: 1 },
+  ),
   // Two staggered channels: the way through zigzags between them.
-  room("quench", "Quench room", 640, 640, "medium", MEDIUM, {
-    lava: [
-      { x: 240, y: 64, width: 48, height: 236 },
-      { x: 400, y: 340, width: 48, height: 236 },
-    ],
-  }),
-  room("chains", "Chain gallery", 800, 480, "medium", MEDIUM, {
-    obstacles: [256, 448, 640].flatMap((x) => [
-      { x, y: 128, width: 32, height: 32 },
-      { x, y: 320, width: 32, height: 32 },
-    ]),
-  }),
+  room(
+    "quench",
+    "Quench room",
+    640,
+    640,
+    "medium",
+    MEDIUM,
+    {
+      lava: [
+        { x: 240, y: 64, width: 48, height: 236 },
+        { x: 400, y: 340, width: 48, height: 236 },
+      ],
+    },
+    { bellows: 1 },
+  ),
+  room(
+    "chains",
+    "Chain gallery",
+    800,
+    480,
+    "medium",
+    MEDIUM,
+    {
+      obstacles: [256, 448, 640].flatMap((x) => [
+        { x, y: 128, width: 32, height: 32 },
+        { x, y: 320, width: 32, height: 32 },
+      ]),
+    },
+    { elemental: 3 },
+  ),
   // A cross of lava; the corners are the ways round.
-  room("slagpit", "Slag pit", 720, 720, "heavy", HEAVY, {
-    lava: [
-      { x: 160, y: 328, width: 400, height: 64 },
-      { x: 328, y: 160, width: 64, height: 400 },
-    ],
-  }),
+  room(
+    "slagpit",
+    "Slag pit",
+    720,
+    720,
+    "heavy",
+    HEAVY,
+    {
+      lava: [
+        { x: 160, y: 328, width: 400, height: 64 },
+        { x: 328, y: 160, width: 64, height: 400 },
+      ],
+    },
+    { golem: 1 },
+  ),
   // Four bars of lava round the middle, gaps at the corners.
-  room("crucible", "Crucible hall", 800, 640, "heavy", HEAVY, {
-    lava: [
-      { x: 280, y: 160, width: 240, height: 48 },
-      { x: 280, y: 432, width: 240, height: 48 },
-      { x: 200, y: 240, width: 48, height: 160 },
-      { x: 552, y: 240, width: 48, height: 160 },
-    ],
-  }),
-  room("furnace", "Great furnace", 800, 640, "heavy", HEAVY, {
-    obstacles: [{ x: 400, y: 240, width: 160, height: 160 }],
-  }),
-  room("foundry", "Foundry", 720, 720, "heavy", HEAVY, {
-    lava: [
-      { x: 160, y: 200, width: 280, height: 48 },
-      { x: 280, y: 472, width: 280, height: 48 },
-    ],
-    obstacles: [
-      { x: 560, y: 120, width: 48, height: 48 },
-      { x: 160, y: 600, width: 48, height: 48 },
-    ],
-  }),
+  room(
+    "crucible",
+    "Crucible hall",
+    800,
+    640,
+    "heavy",
+    HEAVY,
+    {
+      lava: [
+        { x: 280, y: 160, width: 240, height: 48 },
+        { x: 280, y: 432, width: 240, height: 48 },
+        { x: 200, y: 240, width: 48, height: 160 },
+        { x: 552, y: 240, width: 48, height: 160 },
+      ],
+    },
+    { elemental: 2, golem: 1 },
+  ),
+  room(
+    "furnace",
+    "Great furnace",
+    800,
+    640,
+    "heavy",
+    HEAVY,
+    {
+      obstacles: [{ x: 400, y: 240, width: 160, height: 160 }],
+    },
+    { golem: 2, bellows: 1 },
+  ),
+  room(
+    "foundry",
+    "Foundry",
+    720,
+    720,
+    "heavy",
+    HEAVY,
+    {
+      lava: [
+        { x: 160, y: 200, width: 280, height: 48 },
+        { x: 280, y: 472, width: 280, height: 48 },
+      ],
+      obstacles: [
+        { x: 560, y: 120, width: 48, height: 48 },
+        { x: 160, y: 600, width: 48, height: 48 },
+      ],
+    },
+    { golem: 1, bellows: 1 },
+  ),
 ];
 
 /** The forge's boss room. Until the Forgemaster (13d) the Lich stands in. */

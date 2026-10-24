@@ -44,6 +44,8 @@ export interface EnemyView {
   facing: number | null;
   /** The Lich spinning while it attacks (D-129). */
   spinning: boolean;
+  /** A magma golem venting (D-132): a bright orange glow. */
+  vented: boolean;
 }
 
 /** Burning floor (D-115). */

@@ -59,24 +59,94 @@ describe("the Ember Forge (D-130)", () => {
     expect(POTION_CHANCE["ember-forge"]).toBe(0.4);
   });
 
-  it("11 rooms of imps and casters: light 3,520, medium 5,560, heavy 7,620", () => {
+  it("11 rooms, with 13b's newcomers swapped in as D-132 places them", () => {
+    const count = (key: string) => {
+      const n: Record<string, number> = {};
+      const piece = FORGE_PIECES.find((p) => p.piece.key === key)!.piece;
+      for (const s of piece.waves.flat()) n[s.kind] = (n[s.kind] ?? 0) + 1;
+      return { hp: pieceHp(piece), ...n };
+    };
+    // A fire elemental takes an imp, a magma golem four, a bellows-keeper a caster.
+    expect(count("ashroom")).toEqual({
+      hp: 3320,
+      elemental: 2,
+      imp: 6,
+      caster: 4,
+    });
+    expect(count("bellows")).toEqual({
+      hp: 3690,
+      imp: 8,
+      bellows: 1,
+      caster: 3,
+    });
+    expect(count("orestore")).toEqual({ hp: 3520, imp: 8, caster: 4 });
+    expect(count("smelter")).toEqual({
+      hp: 5360,
+      elemental: 2,
+      imp: 10,
+      caster: 7,
+    });
+    expect(count("anvils")).toEqual({ hp: 5960, golem: 1, imp: 8, caster: 7 });
+    expect(count("quench")).toEqual({
+      hp: 5730,
+      imp: 12,
+      bellows: 1,
+      caster: 6,
+    });
+    expect(count("chains")).toEqual({
+      hp: 5260,
+      elemental: 3,
+      imp: 9,
+      caster: 7,
+    });
+    expect(count("slagpit")).toEqual({
+      hp: 8020,
+      golem: 1,
+      imp: 13,
+      caster: 9,
+    });
+    expect(count("crucible")).toEqual({
+      hp: 7820,
+      golem: 1,
+      elemental: 2,
+      imp: 11,
+      caster: 9,
+    });
+    expect(count("furnace")).toEqual({
+      hp: 8590,
+      golem: 2,
+      imp: 9,
+      bellows: 1,
+      caster: 8,
+    });
+    expect(count("foundry")).toEqual({
+      hp: 8190,
+      golem: 1,
+      imp: 13,
+      bellows: 1,
+      caster: 8,
+    });
+  });
+
+  it("main paths come to 54,700–56,540 with the stand-in Lich, inside the band", () => {
     const hp = (band: string) =>
-      FORGE_PIECES.filter((p) => p.band === band).map((p) => pieceHp(p.piece));
-    expect(hp("light")).toEqual([3520, 3520, 3520]);
-    expect(hp("medium")).toEqual([5560, 5560, 5560, 5560]);
-    expect(hp("heavy")).toEqual([7620, 7620, 7620, 7620]);
-    const kinds = new Set(
-      FORGE_PIECES.flatMap((p) => p.piece.waves.flat().map((s) => s.kind)),
-    );
-    expect([...kinds].sort()).toEqual(["caster", "imp"]);
-    // Every main path with the stand-in Lich: 54,060, inside the band.
-    const total = 3520 + 3 * 5560 + 3 * 7620 + pieceHp(FORGE_RECIPE.boss);
-    expect(total).toBe(54_060);
-    expect(total).toBeGreaterThanOrEqual(FORGE_RECIPE.requiredHp.min);
-    expect(total).toBeLessThanOrEqual(FORGE_RECIPE.requiredHp.max);
+      FORGE_PIECES.filter((p) => p.band === band)
+        .map((p) => pieceHp(p.piece))
+        .sort((a, b) => a - b);
+    const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+    const [light, medium, heavy] = [hp("light"), hp("medium"), hp("heavy")];
+    const boss = pieceHp(FORGE_RECIPE.boss);
+    // One light room, three different medium, three different heavy.
+    const least =
+      light[0]! + sum(medium.slice(0, 3)) + sum(heavy.slice(0, 3)) + boss;
+    const most =
+      light.at(-1)! + sum(medium.slice(-3)) + sum(heavy.slice(-3)) + boss;
+    expect([least, most]).toEqual([54_700, 56_540]);
+    expect(least).toBeGreaterThanOrEqual(FORGE_RECIPE.requiredHp.min);
+    expect(most).toBeLessThanOrEqual(FORGE_RECIPE.requiredHp.max);
     // With the Forgemaster (14,000) instead, inside D-130's 52,000–62,000.
-    expect(total + 3_000).toBeGreaterThanOrEqual(52_000);
-    expect(total + 3_000).toBeLessThanOrEqual(62_000);
+    expect(least + 3_000).toBeGreaterThanOrEqual(52_000);
+    expect(most + 3_000).toBeLessThanOrEqual(62_000);
   });
 
   it("1,000 seeds follow the rules (no spawn in lava or obstacles); no wall gaps; seeds rebuild", () => {

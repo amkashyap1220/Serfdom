@@ -4,7 +4,7 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-**Next step:** draft 12l, the Lich (D-120), for approval.
+**Next step:** draft 13c (fire jets, slag spills) for approval.
 
 Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
@@ -629,3 +629,15 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Live (harness, **test** DB, a 1280×920 Chrome window): the container measured 1200×800, HUD 240×800, gameplay 960×800; the menu with all four dungeon cards fits; the Lich at full 32 px in the Sanctum, crisp. No console errors.
 - User ran the D-131, Lich sprite, and 13a checks: all pass (2026-10-24). Pushed 13a, the sprite merge, its fix, and D-131 together.
 - Next step: 13b (fire elementals, magma golems, bellows-keepers).
+
+### Phase 13b — Fire elementals, magma golems, bellows-keepers — 2026-10-24
+
+- Drafted the placement and the rules from D-130's numbers (which room gets which, and how the HP band moves): the user approved it as D-132.
+- Three new building blocks: the exploder (`elementalAct`, a fuse state), the armour cycle (`golemAct` plus a multiplier in `damageEnemy`, so every attack respects it), and the healer (`shamanAct` generalised with a `SupportSpec`; heals applied by the world step). The forge's `withNewcomers` swaps them into the rooms. Protocol v34.
+- Found by the tests: the golem's vent cycle was 7.5 s (its timer paused while venting); now a fixed 6 s.
+- Found live: the elemental's first placeholder colour (yellow) hid the yellow warning blink; it is red now.
+- An elemental that explodes does not count in "Enemies slain" on the results screen (the only thing a kill affects: EXP and loot come from clearing the dungeon). I first wrongly described this as EXP and loot.
+- `npm run check`: 479 shared, 199 server, 65 client, build.
+- Live (harness, **test** DB, 1280×920 Chrome): an elemental rushed, blinked yellow, exploded (an orange disc; the player took 14) and was gone; a venting golem glowed orange; a bellows-keeper's orange ring healed a hurt grunt about 5 HP a second (3% of 170). Not checked live: walking through real forge rooms (the room contents are unit-tested over 1,000 seeds), two players.
+- User ran the 13b checklist: all pass (2026-10-24).
+- Next step: draft 13c (fire jets, slag spills).

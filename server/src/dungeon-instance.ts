@@ -25,6 +25,7 @@ import {
   isPlayerAlive,
   isTelegraphing,
   isPile,
+  isVenting,
   isFaded,
   MAX_PARTY_SIZE,
   PORTAL_RADIUS,
@@ -437,6 +438,7 @@ export class DungeonInstance {
               ? Math.round((e.ai.firing ? e.ai.spin : e.ai.look) * 100) / 100
               : null,
         spinning: e.ai.kind === "lich" && e.ai.firing,
+        vented: isVenting(e),
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,

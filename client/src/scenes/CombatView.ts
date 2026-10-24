@@ -49,6 +49,9 @@ const ENEMY_COLORS: Record<EnemyKind, number> = {
   crystal: 0x7fe3ff,
   imp: 0xd9541e,
   caster: 0xf2a33a,
+  elemental: 0xe8281e,
+  golem: 0x5a3a2e,
+  bellows: 0xa0522d,
 };
 
 /** A faded ghost's alpha (D-122): there, but plainly not hittable. */
@@ -93,6 +96,9 @@ const COLORS = {
   fire: 0xff7a1a,
   fireCore: 0xffd34d,
   chanted: 0xff4a3d,
+  vent: 0xff8c1a,
+  explosion: 0xff6a00,
+  stoke: 0xff9a3c,
   chant: 0xe6cf7a,
   boulder: 0x8c7f6e,
   boulderEdge: 0x4a4238,
@@ -352,21 +358,26 @@ export class CombatView {
       const color =
         b.kind === "chant"
           ? COLORS.chant
-          : b.kind === "raise"
-            ? COLORS.raise
-            : b.kind === "rune"
-              ? COLORS.hazard
-              : b.kind === "inspiration"
-                ? COLORS.inspire
-                : b.kind === "curse"
-                  ? COLORS.curse
-                  : b.kind === "heal" || b.kind === "healed"
-                    ? COLORS.heal
-                    : COLORS.blast;
+          : b.kind === "explosion"
+            ? COLORS.explosion
+            : b.kind === "stoke"
+              ? COLORS.stoke
+              : b.kind === "raise"
+                ? COLORS.raise
+                : b.kind === "rune"
+                  ? COLORS.hazard
+                  : b.kind === "inspiration"
+                    ? COLORS.inspire
+                    : b.kind === "curse"
+                      ? COLORS.curse
+                      : b.kind === "heal" || b.kind === "healed"
+                        ? COLORS.heal
+                        : COLORS.blast;
       const ring =
         b.kind === "inspiration" ||
         b.kind === "heal" ||
         b.kind === "chant" ||
+        b.kind === "stoke" ||
         b.kind === "raise";
       if (!ring) {
         bl.fillStyle(color, 0.5 * (1 - b.fade));
@@ -413,6 +424,14 @@ export class CombatView {
       bl.beginPath();
       bl.arc(e.x, e.y, e.size * 0.75, e.facing - half, e.facing + half);
       bl.strokePath();
+    }
+    // Magma golems venting (D-132): a bright orange glow, pulsing fast.
+    for (const e of view.enemies) {
+      if (!e.vented || e.hp <= 0) continue;
+      bl.fillStyle(COLORS.vent, 0.35 + 0.15 * Math.sin(nowMs / 60));
+      bl.fillCircle(e.x, e.y, e.size * 0.85);
+      bl.lineStyle(px(3), COLORS.vent, 1);
+      bl.strokeCircle(e.x, e.y, e.size * 0.85);
     }
     // Chanted goblins (D-115): a red glow.
     for (const e of view.enemies) {

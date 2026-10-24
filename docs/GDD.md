@@ -365,7 +365,8 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 
 - **The Ember Forge** (tier 4, D-130): a burning forge for levels 15–18, open once a serf has completed the Warrens. Forge gate, 7 combat rooms, then the boss room; about 7.5 minutes solo for a level-15 serf. Loot T4–T6 (the first T6); EXP base 240 up to level 18; stat potions at 40% per Luck point.
 - Built (13a): **forge imps** that cut you off like skulkers but faster and harder; **ember casters** whose fireballs leave burning floor; **lava channels** across some rooms that burn you if you touch them, while enemies walk round them. The Lich stands in as the boss until the Forgemaster.
-- Next: fire elementals that rush and explode, magma golems that are only weak while they vent, bellows-keepers that heal their allies (13b); fire jets and slag spills (13c); the Forgemaster (13d).
+- Built (13b, D-132): **fire elementals** that rush you, flash yellow for 0.6 s, then explode for 14 (kill one during its flash and it doesn't); **magma golems**, slow and heavy, whose crust halves all damage except for 1.5 s every 6 s, when they glow bright orange and take double; **bellows-keepers** that never attack but heal nearby enemies 3% of their max HP every second (an orange ring), never themselves, each other, or bosses.
+- Next: fire jets and slag spills (13c); the Forgemaster (13d).
 - Tier 5 (about levels 18–20) is not designed yet; its theme and numbers wait for the user's approval.
 
 ### Toward 40 dungeons

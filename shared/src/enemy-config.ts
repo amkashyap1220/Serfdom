@@ -24,6 +24,9 @@ export const ENEMY_KINDS = [
   "crystal",
   "imp",
   "caster",
+  "elemental",
+  "golem",
+  "bellows",
 ] as const;
 export type EnemyKind = (typeof ENEMY_KINDS)[number];
 
@@ -346,6 +349,60 @@ export const CASTER = {
   fire: { seconds: 3, tickSeconds: 0.5, damage: 3 },
 } as const;
 
+/**
+ * Fire elemental (D-130, D-132): rushes you; within `triggerRange` it
+ * flares for `fuseSeconds` (a telegraph), then explodes for `damage` on
+ * every player its circle touches and is gone. Killed during the flare, it
+ * does not explode. (New block: the exploder.)
+ */
+export const ELEMENTAL = {
+  maxHp: 200,
+  size: 32,
+  speed: 120,
+  triggerRange: 50,
+  fuseSeconds: 0.6,
+  radius: 50,
+  damage: 14,
+} as const;
+
+/**
+ * Magma golem (D-130, D-132): slow and heavy; its crust halves all damage,
+ * except for `ventSeconds` every `ventEverySeconds` when it vents and
+ * takes double. (New block: the armour cycle.)
+ */
+export const GOLEM = {
+  maxHp: 1600,
+  size: 44,
+  speed: 35,
+  contactDamage: 14,
+  contactCooldownSeconds: 1.2,
+  ventEverySeconds: 6,
+  ventSeconds: 1.5,
+  /** Share of a hit it takes: crusted, and venting. */
+  crustTaken: 0.5,
+  ventTaken: 2,
+} as const;
+
+/**
+ * Bellows-keeper (D-130, D-132): never attacks; moves like a shaman, and
+ * every `pulseSeconds` heals enemies within `radius` by `healShare` of
+ * their max HP per second (not itself, other bellows-keepers, bone piles,
+ * or bosses). (New block: the healer.)
+ */
+export const BELLOWS = {
+  maxHp: 450,
+  size: 32,
+  speed: 60,
+  seekRange: 300,
+  keepAway: 200,
+  pulseSeconds: 1,
+  radius: 120,
+  healShare: 0.03,
+} as const;
+
+/** Bosses: never healed by a bellows-keeper (D-132), so a fight cannot stall. */
+export const BOSS_KINDS: readonly EnemyKind[] = ["warlord", "warchief", "lich"];
+
 /** Never attacks; strengthens goblins near it (D-108, D-115). */
 export const SHAMAN = {
   maxHp: 200,
@@ -436,6 +493,9 @@ export const ENEMY_STATS: Record<EnemyKind, { maxHp: number; size: number }> = {
   crystal: CRYSTAL,
   imp: IMP,
   caster: CASTER,
+  elemental: ELEMENTAL,
+  golem: GOLEM,
+  bellows: BELLOWS,
 };
 
 /**
@@ -466,6 +526,9 @@ export const FIRST_ATTACK_DELAY: Record<EnemyKind, number> = {
   crystal: 0,
   imp: IMP.contactCooldownSeconds / 2,
   caster: CASTER.throwIntervalSeconds / 2,
+  elemental: 0,
+  golem: GOLEM.contactCooldownSeconds / 2,
+  bellows: BELLOWS.pulseSeconds,
 };
 
 export function isEnemyKind(v: unknown): v is EnemyKind {

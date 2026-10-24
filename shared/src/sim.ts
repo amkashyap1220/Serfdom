@@ -1,4 +1,4 @@
-import { SHAMAN, SKELETON } from "./enemy-config.ts";
+import { BOSS_KINDS, SHAMAN, SKELETON } from "./enemy-config.ts";
 import type { Waypoints } from "./pathing.ts";
 import type { BlastKind } from "./protocol.ts";
 import { ARROWS, BRAZIERS, LAVA, ROCKFALL, SLUDGE } from "./dungeon-layout.ts";
@@ -900,6 +900,8 @@ export function stepWorld(
   const chants: { at: Vec2; radius: number }[] = [];
   /** Bone piles necromancers raise this tick (D-122). */
   const raises: number[] = [];
+  /** Bellows-keepers' heal pulses this tick (D-132). */
+  const stokes: { at: Vec2; radius: number; share: number }[] = [];
   const context = {
     allies: () => allies,
     aliveSummons: (id: number) =>
@@ -944,6 +946,16 @@ export function stepWorld(
       });
     }
     if (action.raise !== undefined) raises.push(action.raise);
+    if (action.stoke) stokes.push(action.stoke);
+    if (action.explosion) {
+      events.push({
+        type: "blast",
+        kind: "explosion",
+        playerId: GOBLIN_BLAST_BY,
+        at: { ...action.explosion.at },
+        radius: action.explosion.radius,
+      });
+    }
     // A shaman's chant (D-115): everything this goblin deals is stronger.
     const boost = (enemy.chant ?? 0) > 0 ? 1 + SHAMAN.damageBonus : 1;
     for (const h of action.hazards) {
@@ -1015,6 +1027,27 @@ export function stepWorld(
       playerId: GOBLIN_BLAST_BY,
       at: { ...pile.position },
       radius: 18,
+    });
+  }
+  // Bellows-keepers heal everyone in their circle but themselves, each
+  // other, bone piles, and bosses (D-132).
+  for (const k of stokes) {
+    enemies = enemies.map((e) =>
+      isAlive(e) &&
+      e.kind !== "bellows" &&
+      !isPile(e) &&
+      !BOSS_KINDS.includes(e.kind) &&
+      e.hp < e.maxHp &&
+      Math.hypot(e.position.x - k.at.x, e.position.y - k.at.y) <= k.radius
+        ? { ...e, hp: Math.min(e.maxHp, e.hp + e.maxHp * k.share) }
+        : e,
+    );
+    events.push({
+      type: "blast",
+      kind: "stoke",
+      playerId: GOBLIN_BLAST_BY,
+      at: { ...k.at },
+      radius: k.radius,
     });
   }
   // Chants land on every other goblin inside their circle (not shamans).
