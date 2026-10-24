@@ -8,7 +8,9 @@ import {
   KNIGHT,
   LICH,
 } from "@serfdom/shared";
-import type { CombatViewModel } from "../combat-view-model";
+import type { CombatViewModel, EnemyView } from "../combat-view-model";
+import { lichPose } from "../lich-pose";
+import { spriteKey } from "../sprites";
 
 const texture = (kind: EnemyKind) => `enemy-${kind}`;
 const flashTexture = (kind: EnemyKind) => `enemy-${kind}-flash`;
@@ -203,8 +205,11 @@ export class CombatView {
         .setAlpha(enemy.faded ? FADED_ALPHA : 1)
         .setVisible(alive)
         .setPosition(x, y)
-        .setRotation(-viewRotation)
-        .setTexture(
+        .setRotation(-viewRotation);
+      if (enemy.kind === "lich") {
+        this.drawLich(sprite, enemy, viewRotation, nowMs);
+      } else {
+        sprite.image.setTexture(
           enemy.pile
             ? PILE_TEXTURE
             : nowMs < sprite.flashUntil
@@ -217,6 +222,7 @@ export class CombatView {
                     ? LEADING_TEXTURE
                     : texture(enemy.kind),
         );
+      }
 
       const above = rotateVec(
         { x: 0, y: -(enemy.size / 2 + 3) },
@@ -401,7 +407,7 @@ export class CombatView {
     }
     // Grave knights' shields (D-122): a bright arc on the front side.
     for (const e of view.enemies) {
-      if (e.facing === null || e.hp <= 0) continue;
+      if (e.kind !== "knight" || e.facing === null || e.hp <= 0) continue;
       const half = ((KNIGHT.shieldArcDegrees / 2) * Math.PI) / 180;
       bl.lineStyle(px(3), COLORS.shield, 1);
       bl.beginPath();
@@ -490,6 +496,36 @@ export class CombatView {
         p.size,
         p.size,
       );
+    }
+  }
+
+  /**
+   * The Lich uses the user's art (the first real sprite): spinning in its
+   * attack pose while it attacks, else idle facing the player the server
+   * picked. Hits
+   * flash it white and the stun blinks it pale blue, as the squares do.
+   */
+  private drawLich(
+    sprite: EnemySprite,
+    enemy: EnemyView,
+    viewRotation: number,
+    nowMs: number,
+  ): void {
+    const pose = lichPose({
+      spinning: enemy.spinning,
+      // A world angle shows on screen turned by the view's rotation.
+      facing: enemy.facing === null ? null : enemy.facing + viewRotation,
+    });
+    // 32×32 art on a 32 px body (D-128): one source pixel per world pixel.
+    const image = sprite.image.setTexture(
+      spriteKey("lich", pose.state, pose.direction),
+    );
+    if (nowMs < sprite.flashUntil) {
+      image.setTint(COLORS.flash).setTintMode(Phaser.TintModes.FILL);
+    } else if (enemy.dazed && Math.floor(nowMs / DAZED_BLINK_MS) % 2 === 0) {
+      image.setTint(COLORS.dazed).setTintMode(Phaser.TintModes.MULTIPLY);
+    } else {
+      image.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
     }
   }
 

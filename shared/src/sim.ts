@@ -149,7 +149,7 @@ export interface SimState {
   sludge: readonly Rect[];
   /** Burning floor left by bombs (D-115). */
   fires: readonly Fire[];
-  /** Lava channels (D-128): they burn players and block enemies. */
+  /** Lava channels (D-130): they burn players and block enemies. */
   lava?: readonly Rect[];
   /** Seconds until lava next burns (every LAVA.tickSeconds). */
   lavaIn?: number;
@@ -894,7 +894,7 @@ export function stepWorld(
   const summons: EnemySpawn[] = [];
   const newHazards: Hazard[] = [];
   const allies = state.enemies.filter(isAlive);
-  // Enemies walk round lava as if it were wall (D-128).
+  // Enemies walk round lava as if it were wall (D-130).
   const enemyWalls =
     state.lava && state.lava.length > 0 ? [...walls, ...state.lava] : walls;
   const chants: { at: Vec2; radius: number }[] = [];
@@ -1041,7 +1041,7 @@ export function stepWorld(
     nextEnemyId = added.nextEnemyId;
   }
 
-  // 2a. Lava burns every player whose hurtbox touches it (D-128).
+  // 2a. Lava burns every player whose hurtbox touches it (D-130).
   let lavaIn = state.lavaIn ?? LAVA.tickSeconds;
   if (state.lava && state.lava.length > 0) {
     lavaIn -= dtSeconds;

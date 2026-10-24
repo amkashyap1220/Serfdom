@@ -16,11 +16,20 @@ Add inventory entries only when assets are actually needed and generated/integra
 
 ## Asset inventory
 
-| Asset path                                                                | Purpose                    | Canvas/frame size | Frames | Palette                                                                               | Source/prompt notes                              | Verified in game?                                                  |
-| ------------------------------------------------------------------------- | -------------------------- | ----------------- | ------ | ------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
-| `player-placeholder` (runtime texture, `client/src/scenes/WorldScene.ts`) | Phase 1 player placeholder | 32×32 (D-127)     | 1      | Placeholder colors only (yellow fill, 2×2 dark center mark); not the verified palette | Generated in code; no image file. Not final art. | Rendered in headless Chrome screenshot; awaiting user visual check |
+| Asset path                                                                | Purpose                                  | Canvas/frame size | Frames                        | Palette                                                                               | Source/prompt notes                                                         | Verified in game?                                                                             |
+| ------------------------------------------------------------------------- | ---------------------------------------- | ----------------- | ----------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `player-placeholder` (runtime texture, `client/src/scenes/WorldScene.ts`) | Phase 1 player placeholder               | 32×32 (D-127)     | 1                             | Placeholder colors only (yellow fill, 2×2 dark center mark); not the verified palette | Generated in code; no image file. Not final art.                            | Rendered in headless Chrome screenshot; awaiting user visual check                            |
+| `client/src/assets/sprites/lich/idle/<direction>.png`                     | The Lich, idle (D-128)                   | 32×32             | 1 per direction, 8 directions | The user's own (violet robe, gold crown, teal glow); not the verified palette         | Supplied by the user (an 8-direction "high top-down" export, prompt "lich") | Loaded and drawn in headless Chrome beside a 32 px square; awaiting user check in the Sanctum |
+| `client/src/assets/sprites/lich/attacking/<direction>.png`                | The Lich's spinning staff attack (D-128) | 32×32             | 1 per direction, 8 directions | As above                                                                              | Supplied by the user                                                        | As above                                                                                      |
 
 Record the size of individual frames, not just the overall spritesheet.
+
+## Adding a sprite
+
+1. Export one 8-direction set per state, each frame its own PNG with a transparent background.
+2. Put the files at `client/src/assets/sprites/<character>/<state>/<direction>.png`, all lower case. Directions: `south`, `south-east`, `east`, `north-east`, `north`, `north-west`, `west`, `south-west` (the names the export already uses).
+3. That is enough to load it, as the texture `sprite-<character>-<state>-<direction>`; a file in the wrong place stops the game with an error naming it. Drawing it still needs code (see `CombatView.drawLich`).
+4. Add it to the inventory above.
 
 ## Source dimensions by category
 
@@ -29,6 +38,7 @@ Record the size of individual frames, not just the overall spritesheet.
 | Player character                  | 32×32 pixels         | CONFIRMED |
 | Player-sized ordinary enemy       | 32×32 pixels         | CONFIRMED |
 | Larger enemy / boss               | By design            | OPEN      |
+| The Lich                          | 32×32 pixels (D-128) | CONFIRMED |
 | Projectiles / effects             | By readability needs | OPEN      |
 | Environment tiles                 | To be determined     | OPEN      |
 | Inventory / equipment / HUD icons | To be determined     | OPEN      |

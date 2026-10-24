@@ -28,7 +28,7 @@ export const DUNGEON_EXP: Record<DungeonId, DungeonExp> = {
   "goblin-stronghold": { base: 160, topLevel: 12 },
   // D-120: aimed at levels 12–15; about 4–5 clears take a serf from 12 to 15.
   "forgotten-crypt": { base: 200, topLevel: 15 },
-  // D-128: aimed at levels 15–18; about 4 clears take a serf from 15 to 18.
+  // D-130: aimed at levels 15–18; about 4 clears take a serf from 15 to 18.
   "ember-forge": { base: 240, topLevel: 18 },
   training: { base: 100, topLevel: 9 },
 };

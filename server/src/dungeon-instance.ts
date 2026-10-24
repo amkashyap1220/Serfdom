@@ -376,7 +376,7 @@ export class DungeonInstance {
   private navigatorFor(walls: readonly Rect[]): SizedNavigator {
     const key = this.closedDoors.join(",");
     if (!this.navigator || this.navigatorKey !== key) {
-      // Enemies path round lava (D-128).
+      // Enemies path round lava (D-130).
       this.navigator = new SizedNavigator([...walls, ...(this.sim.lava ?? [])]);
       this.navigatorKey = key;
     }
@@ -433,7 +433,10 @@ export class DungeonInstance {
         facing:
           e.ai.kind === "knight"
             ? Math.round(Math.atan2(e.ai.facing.y, e.ai.facing.x) * 100) / 100
-            : null,
+            : e.ai.kind === "lich"
+              ? Math.round((e.ai.firing ? e.ai.spin : e.ai.look) * 100) / 100
+              : null,
+        spinning: e.ai.kind === "lich" && e.ai.firing,
       })),
       projectiles: this.sim.projectiles.map((p) => ({
         id: p.id,

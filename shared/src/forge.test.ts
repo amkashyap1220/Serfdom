@@ -29,7 +29,7 @@ const still = (x: number, y: number): AiTarget => ({
   velocity: { x: 0, y: 0 },
 });
 
-describe("the Ember Forge (D-128)", () => {
+describe("the Ember Forge (D-130)", () => {
   it("is listed for levels 15–18 and opens once the Warrens is completed (D-107)", () => {
     expect(dungeonInfo("ember-forge")).toMatchObject({
       name: "Ember Forge",
@@ -74,7 +74,7 @@ describe("the Ember Forge (D-128)", () => {
     expect(total).toBe(54_060);
     expect(total).toBeGreaterThanOrEqual(FORGE_RECIPE.requiredHp.min);
     expect(total).toBeLessThanOrEqual(FORGE_RECIPE.requiredHp.max);
-    // With the Forgemaster (14,000) instead, inside D-128's 52,000–62,000.
+    // With the Forgemaster (14,000) instead, inside D-130's 52,000–62,000.
     expect(total + 3_000).toBeGreaterThanOrEqual(52_000);
     expect(total + 3_000).toBeLessThanOrEqual(62_000);
   });
@@ -96,7 +96,7 @@ describe("the Ember Forge (D-128)", () => {
   });
 });
 
-describe("forge imps and ember casters (D-128)", () => {
+describe("forge imps and ember casters (D-130)", () => {
   it("an imp flanks like a skulker, faster and harder: touch 10 per 1.2 s", () => {
     let e = {
       ...newEnemy(1, "imp", { x: 30, y: 0 }, null, null),
@@ -151,7 +151,7 @@ describe("forge imps and ember casters (D-128)", () => {
   });
 });
 
-describe("lava channels (D-128)", () => {
+describe("lava channels (D-130)", () => {
   const lava = [{ x: 100, y: -50, width: 100, height: 100 }];
   const world = (at: { x: number; y: number }): SimState => ({
     ...addPlayer(createSimState([], { respawnSeconds: null }), 1, at),

@@ -4,7 +4,7 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 
 ## Where things stand
 
-**Current phase: 13, in progress: 13a (the Ember Forge, D-128) built; next 13b (fire elementals, magma golems, bellows-keepers).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
+**Current phase: 13, in progress: 13a (the Ember Forge, D-130) built; next 13b (fire elementals, magma golems, bellows-keepers).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
 
 | Phase | Name                                               | Status                               |
 | ----- | -------------------------------------------------- | ------------------------------------ |
@@ -362,7 +362,7 @@ Acceptance:
 
 ## Phase 13 — Ten dungeons: tiers 4 and 5 and more
 
-Status: in progress. 13a (the Ember Forge, dungeon 4: levels 15–18, forge imps, ember casters, lava channels, D-128) built; next 13b fire elementals, magma golems, bellows-keepers; 13c fire jets and slag spills; 13d the Forgemaster.
+Status: in progress. 13a (the Ember Forge, dungeon 4: levels 15–18, forge imps, ember casters, lava channels, D-130) built; next 13b fire elementals, magma golems, bellows-keepers; 13c fire jets and slag spills; 13d the Forgemaster.
 
 **Goal:** At least **10 dungeons** before the alpha (the user, D-124): tiers 4 and 5 for levels 15–20, which finish the first five dungeons' ladder from level 1 to 20, then **five endgame dungeons for level 20 and up** (D-126). Three exist (the Warrens, the Stronghold, the Crypt).
 

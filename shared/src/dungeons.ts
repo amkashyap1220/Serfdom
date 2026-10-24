@@ -82,7 +82,7 @@ export const DUNGEONS = [
     generate: buildCrypt,
   },
   {
-    // D-128: the fourth dungeon; opens on the same rule (D-107).
+    // D-130: the fourth dungeon; opens on the same rule (D-107).
     id: "ember-forge",
     name: "Ember Forge",
     blurb: "Levels 15–18 · 7–8 min · opens after the Warrens",

@@ -12,7 +12,7 @@ import type { Rect } from "./geometry.ts";
 import { WARRENS_ENTRANCE, WARRENS_RULES } from "./goblin-warrens.ts";
 
 /*
- * The Ember Forge (D-128, Phase 13a): the fourth dungeon, levels 15–18,
+ * The Ember Forge (D-130, Phase 13a): the fourth dungeon, levels 15–18,
  * opened by completing the Warrens (D-107). Forge imps (the skulker's
  * flanking) and ember casters (the bomber's lob) among lava channels that
  * burn players and that enemies walk round. 13b adds fire elementals,
@@ -202,7 +202,7 @@ export const FORGE_RECIPE: DungeonRecipe = {
   boss: FORGE_HEART,
   pieces: FORGE_PIECES,
   mainPath: ["light", "medium", "medium", "medium", "heavy", "heavy", "heavy"],
-  // D-128: 52,000–62,000 with the Forgemaster (14,000); 3,000 less while
+  // D-130: 52,000–62,000 with the Forgemaster (14,000); 3,000 less while
   // the Lich (11,000) stands in. About 7.5 minutes for a level-15 serf.
   requiredHp: { min: 49_000, max: 59_000 },
   sideRooms: WARRENS_RULES.sideRooms,

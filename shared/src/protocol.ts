@@ -68,8 +68,11 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
- * v32 (13a): the Ember Forge (D-128): forge imps and ember casters;
+ * v33 (13a): the Ember Forge (D-130): forge imps and ember casters;
  *          killedBy may be "lava".
+ * v32 (D-129): snapshot enemies say whether the Lich is `spinning`;
+ *          `facing` is also the Lich's way: its spiral angle while it
+ *          spins, else toward the player it faces.
  * v31 (12l): the Lich and its soul crystals (D-125): hazards may be a rune
  *          (drawn filling in red); `faded` also means the Lich is warded.
  * v30 (12k): cursed runes and spirit braziers (D-123): snapshots list rune
@@ -120,7 +123,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 32;
+export const PROTOCOL_VERSION = 33;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -271,8 +274,14 @@ export interface SnapshotEnemy {
   pile: boolean;
   /** Cannot be hit: a ghost faded out (D-122), or the Lich warded (D-125). */
   faded: boolean;
-  /** Where a grave knight's shield faces, in radians; null for every other enemy. */
+  /**
+   * Radians: where a grave knight's shield faces, or which way the Lich
+   * faces (D-129: its spiral angle while it spins, else toward the player
+   * it looks at); null for every other enemy.
+   */
   facing: number | null;
+  /** The Lich spinning while it attacks (D-129); false for every other enemy. */
+  spinning: boolean;
 }
 
 /** Burning floor left by a bomb (D-115). */
@@ -1455,6 +1464,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
       "pile",
       "faded",
       "facing",
+      "spinning",
     ])
   ) {
     return null;
@@ -1467,6 +1477,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     typeof v.chanted !== "boolean" ||
     typeof v.pile !== "boolean" ||
     typeof v.faded !== "boolean" ||
+    typeof v.spinning !== "boolean" ||
     (v.facing !== null && !isFiniteNumber(v.facing))
   ) {
     return null;
@@ -1499,6 +1510,7 @@ function parseSnapshotEnemy(v: unknown): SnapshotEnemy | null {
     pile: v.pile,
     faded: v.faded,
     facing: v.facing as number | null,
+    spinning: v.spinning,
   };
 }
 

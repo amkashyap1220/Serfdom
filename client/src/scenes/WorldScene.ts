@@ -31,6 +31,7 @@ import {
 import { NetSync } from "../net-sync";
 import { CAMERA_ZOOM, PLAYER_SPRITE_SIZE } from "../render-config";
 import { CombatView, makeSquareTexture } from "./CombatView";
+import { loadSprites } from "../sprite-files";
 import { MapView } from "./MapView";
 import { RemotePlayersView, VANISHED_ALPHA } from "./RemotePlayersView";
 
@@ -142,6 +143,10 @@ export class WorldScene extends Phaser.Scene {
 
   constructor() {
     super("world");
+  }
+
+  preload(): void {
+    loadSprites(this.load);
   }
 
   create(): void {

@@ -393,7 +393,7 @@ describe("the Lich in a run (D-125)", () => {
   });
 });
 
-describe("the Ember Forge in a run (D-128)", () => {
+describe("the Ember Forge in a run (D-130)", () => {
   it("loads the dungeon's lava, and a player standing in it burns", () => {
     const seed = Array.from({ length: 50 }, (_, i) => i + 1).find(
       (n) => lavaPools(buildForge(n)).length > 0,
@@ -420,6 +420,41 @@ describe("the Ember Forge in a run (D-128)", () => {
     });
     for (let t = 0; t < 70; t++) r.tick();
     expect(r.state.players[0]!.hp).toBeLessThan(1000);
+  });
+});
+
+describe("the Lich's pose in a snapshot (D-129)", () => {
+  it("idle, it faces the nearest player; spinning, `facing` is its spiral angle", () => {
+    const r = new DungeonInstance(1, "forgotten-crypt", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+      seed: 4,
+    });
+    const at = r.state.players[0]!.position;
+    r.setStateForTest(
+      spawnEnemies(r.state, [
+        { kind: "lich", at: { x: at.x + 250, y: at.y }, roomId: null },
+      ]),
+    );
+    const lich = () => {
+      const parsed = parseServerMessage(encodeMessage(r.snapshot(1)));
+      if (!parsed.ok || parsed.message.type !== "snapshot")
+        throw new Error("no snapshot");
+      return parsed.message.enemies.find((e) => e.kind === "lich")!;
+    };
+    r.tick();
+    // Its first volley is still 1.5 s off: idle, looking west at the player.
+    expect(lich().spinning).toBe(false);
+    expect(Math.abs(lich().facing!)).toBeCloseTo(Math.PI, 1);
+    r.setStateForTest({
+      ...r.state,
+      enemies: r.state.enemies.map((e) =>
+        e.ai.kind === "lich" ? { ...e, ai: { ...e.ai, shot: 0, spin: 1 } } : e,
+      ),
+    });
+    r.tick();
+    expect(lich().spinning).toBe(true);
+    expect(lich().facing).toBeCloseTo(1, 1);
   });
 });
 

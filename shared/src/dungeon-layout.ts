@@ -68,12 +68,12 @@ export interface RuneSpot {
 }
 
 /**
- * Lava channels (D-128): a player whose hurtbox touches one burns for
+ * Lava channels (D-130): a player whose hurtbox touches one burns for
  * `damage` every `tickSeconds`; enemies treat lava as wall and walk round.
  */
 export const LAVA = { tickSeconds: 0.5, damage: 4 } as const;
 
-/** Every lava channel in the dungeon (D-128). */
+/** Every lava channel in the dungeon (D-130). */
 export function lavaPools(layout: DungeonLayout): Rect[] {
   return layout.rooms.flatMap((r) => [...(r.lava ?? [])]);
 }
@@ -123,7 +123,7 @@ export interface RoomDef {
   obstacles?: readonly Rect[];
   /** Sludge pools (D-113): players standing in one move at SLUDGE.speedFactor. */
   sludge?: readonly Rect[];
-  /** Lava channels (D-128): burn players, block enemies. */
+  /** Lava channels (D-130): burn players, block enemies. */
   lava?: readonly Rect[];
   /**
    * An arrow trap (D-113): slits just inside one wall, all firing across the

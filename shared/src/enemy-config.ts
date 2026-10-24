@@ -176,10 +176,11 @@ export const KNIGHT = {
  * sarcophagi; below 60% and again below 30% it is warded (cannot be hit)
  * while 3 soul crystals stand, firing rings; breaking them stuns it for
  * 4 s. After the second ward its spiral is faster and runes burst round it.
+ * Human-sized: 32 px like a serf (D-128; was 88 under D-127).
  */
 export const LICH = {
   maxHp: 11000,
-  size: 88,
+  size: 32,
   wardBelow: [0.6, 0.3],
   spiral: {
     arms: 2,
@@ -194,6 +195,8 @@ export const LICH = {
     crystals: 3,
     crystalDistance: 200,
     ringIntervalSeconds: 2.5,
+    /** Each ring comes with one quick full turn of the Lich, this long (D-129). */
+    ringSpinSeconds: 0.5,
     ringBullets: 16,
     bullet: { damage: 8, speed: 120, size: 8, range: 520 },
   },
@@ -293,7 +296,7 @@ export const SKULKER = {
 } as const;
 
 /**
- * Forge imp (D-128, the Ember Forge): the skulker's flanking on the
+ * Forge imp (D-130, the Ember Forge): the skulker's flanking on the
  * forge's scale: fast, runs to where you are heading, lunges.
  */
 export const IMP = {
@@ -325,7 +328,7 @@ export const BOMBER = {
 } as const;
 
 /**
- * Ember caster (D-128): the bomber's lob on the forge's scale: a fireball
+ * Ember caster (D-130): the bomber's lob on the forge's scale: a fireball
  * that lands where you will be, then burning floor.
  */
 export const CASTER = {

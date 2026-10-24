@@ -35,7 +35,7 @@ type Palette = typeof COLORS;
 
 /** A dungeon's own look over the default (D-120). Placeholder colors only. */
 const PALETTES: Partial<Record<DungeonId, Partial<Palette>>> = {
-  // D-128: dark iron floor, red-brown brick walls.
+  // D-130: dark iron floor, red-brown brick walls.
   "ember-forge": {
     floor: 0x1c1a1a,
     gridMinor: 0x2b2524,
@@ -132,7 +132,7 @@ export class MapView {
         );
       }
     }
-    // Lava channels (D-128): glowing orange strips.
+    // Lava channels (D-130): glowing orange strips.
     for (const room of layout.rooms) {
       for (const l of room.lava ?? []) {
         g.fillStyle(this.colors.lava, 0.85);

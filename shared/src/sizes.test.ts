@@ -12,7 +12,7 @@ describe("32×32 serfs and enemies (D-127)", () => {
     expect(PLAYER_HEALTH.hurtboxSize).toBe(31);
   });
 
-  it("ordinary enemies are the player's size; bigger ones doubled", () => {
+  it("ordinary enemies and the Lich are the player's size; bigger ones doubled", () => {
     const sizes = Object.fromEntries(
       ENEMY_KINDS.map((k) => [k, ENEMY_STATS[k].size]),
     );
@@ -34,7 +34,7 @@ describe("32×32 serfs and enemies (D-127)", () => {
       crystal: 40,
       warlord: 56,
       warchief: 80,
-      lich: 88,
+      lich: 32,
     });
   });
 

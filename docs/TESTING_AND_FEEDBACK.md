@@ -214,9 +214,9 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
-#### Ember Forge checklist (Phase 13a, D-128)
+#### Ember Forge checklist (Phase 13a, D-130)
 
-Restart `npm run dev` (protocol v32) and reload. Any serf that has completed the Warrens can enter (it is aimed at levels 15–18).
+Restart `npm run dev` (protocol v33) and reload. Any serf that has completed the Warrens can enter (it is aimed at levels 15–18).
 
 1. The Dungeons tab lists **Ember Forge**, "Levels 15–18 · 7–8 min · opens after the Warrens"; a serf that has not completed the Warrens sees it locked.
 2. The forge looks different: dark iron floor, red-brown brick walls; the first room is the Forge gate.
@@ -233,7 +233,7 @@ Report: pass/fail per step, clear time and level, and whether imps are easy to t
 Restart `npm run dev` (no protocol change) and reload.
 
 1. **View:** the camera shows about twice as much world as before; whole rooms fit on screen. The player stays centred. The debug box (green) is 300 CSS px across and the player sits in its middle.
-2. **Sizes:** the player and ordinary enemies (grunts, slingers, skeletons, archers, ghosts, …) are the same size; brutes and knights are a bit bigger; the Warchief and the Lich are large.
+2. **Sizes:** the player and ordinary enemies (grunts, slingers, skeletons, archers, ghosts, …) are the same size; brutes and knights are a bit bigger; the Warchief is large. The Lich is the player's size (D-128).
 3. **Readability:** HP numbers over enemies, room names, and other players' #ids read as before (not tiny); wall outlines and rings are as thick as before. Buff rings (Battle Cry, Guard, Inspiration) show just outside your square.
 4. **Walls and doors:** you and every enemy fit through every doorway; brutes and knights follow you between rooms when you rush.
 5. **Hazards:** a boulder, bomb, rune, sweep, or slam hits you if its circle touches any part of your square.
@@ -245,7 +245,7 @@ Report: pass/fail per step, and whether anything now looks too small (bullets ar
 
 Restart `npm run dev` (protocol v31) and reload. Play the Forgotten Crypt to its last room, the Sanctum.
 
-1. **Sanctum:** an open room, 4 dark sarcophagi in the walls, a large violet Lich in the middle. The bar reads "The Lich" with two notches (60% and 30%).
+1. **Sanctum:** an open room, 4 dark sarcophagi in the walls, the Lich in the middle, drawn with its crowned, robed sprite and the same size as your serf (D-128). It stands still, looking at the nearest player (in a party, every screen shows it facing the same player), for a moment, then spins with its staff in step with its bullet spiral (D-129). Warded, it turns once quickly as each ring goes out and stands still between rings; stunned, it stands still. The bar reads "The Lich" with two notches (60% and 30%).
 2. **Phase 1:** a two-armed spiral of bullets turns out of it (8 each); every 12 s two skeletons climb out of the sarcophagi (never more than 4).
 3. **Below 60%:** the bar says WARDED, the Lich turns see-through, and violet lines join it to 3 light-blue soul crystals. Your shots pass through it; it fires rings of 16. Break all 3 crystals: the bar says STUNNED for 4 s and it takes hits without attacking.
 4. **Below 30%:** the same again; after that stun the bar says ENRAGED, the spiral is faster, and red circles fill in under you and around it every 1.5 s (12 if you stay in one).

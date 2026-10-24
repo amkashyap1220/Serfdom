@@ -83,6 +83,21 @@ describe("the Lich (D-125)", () => {
     expect(isHittable(lichOf(r.sim))).toBe(true);
   });
 
+  it("stands idle until its spiral starts, then spins while it fires (D-129)", () => {
+    const firing = (s: SimState) => {
+      const ai = lichOf(s).ai;
+      if (ai.kind !== "lich") throw new Error("not the Lich");
+      return ai.firing;
+    };
+    // The first volley waits 1.5 s.
+    let r = run(sanctum(), 1.4);
+    expect(firing(r.sim)).toBe(false);
+    r = run(r.sim, 0.2);
+    expect(firing(r.sim)).toBe(true);
+    r = run(r.sim, 3);
+    expect(firing(r.sim)).toBe(true);
+  });
+
   it("calls 2 skeletons out of the sarcophagi every 12 s, at most 4 alive", () => {
     let sim = setLich(sanctum(), (e) =>
       e.ai.kind === "lich" ? { ...e, ai: { ...e.ai, rise: 0 } } : e,
@@ -133,6 +148,25 @@ describe("the Lich (D-125)", () => {
     expect(lichOf(through).hp).toBe(lich.hp);
   });
 
+  it("warded, it turns once quickly with each ring, otherwise stands idle (D-129)", () => {
+    const state = (s: SimState) => {
+      const ai = lichOf(s).ai;
+      if (ai.kind !== "lich") throw new Error("not the Lich");
+      return ai;
+    };
+    // Warded on the first step; its first ring goes out on the next.
+    let sim = run(setLich(sanctum(), atShare(0.59)), 0.1).sim;
+    const start = state(sim).spin;
+    expect(state(sim).firing).toBe(true);
+    sim = run(sim, 0.6).sim;
+    expect(state(sim).firing).toBe(false);
+    // One full turn, give or take a step.
+    expect(state(sim).spin - start).toBeGreaterThan(1.6 * Math.PI);
+    expect(state(sim).spin - start).toBeLessThan(2.1 * Math.PI);
+    sim = run(sim, 1.5).sim;
+    expect(state(sim).firing).toBe(false);
+  });
+
   it("breaking the crystals stuns it for 4 s (hittable, no attacks), then the spiral returns", () => {
     let sim = run(setLich(sanctum(), atShare(0.59)), 0.5).sim;
     sim = {
@@ -144,6 +178,8 @@ describe("the Lich (D-125)", () => {
     expect(isHittable(lichOf(sim))).toBe(true);
     const stunned = run(sim, LICH.stunSeconds - 0.1);
     expect(shotsFired(stunned.events)).toEqual([]);
+    const ai = lichOf(stunned.sim).ai;
+    expect(ai.kind === "lich" && ai.firing).toBe(false);
     const after = run(stunned.sim, 0.5);
     expect(isDazed(lichOf(after.sim))).toBe(false);
     expect(shotsFired(after.events).length).toBeGreaterThan(0);

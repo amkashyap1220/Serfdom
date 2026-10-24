@@ -518,7 +518,7 @@ describe("menu, queue, and run messages (v4)", () => {
     expect(
       server({ ...ended, result: "died", stats, killedBy: "rockfall" }).ok,
     ).toBe(true);
-    // v32: lava is a room hazard too (D-128); a made-up one is not.
+    // v33: lava is a room hazard too (D-130); a made-up one is not.
     expect(
       server({ ...ended, result: "died", stats, killedBy: "lava" }).ok,
     ).toBe(true);
@@ -575,6 +575,7 @@ describe("snapshot messages", () => {
     pile: false,
     faded: false,
     facing: null,
+    spinning: false,
   };
   const shot: SnapshotProjectile = {
     id: 5,

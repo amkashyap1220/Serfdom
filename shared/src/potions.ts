@@ -24,7 +24,7 @@ export const POTION_CHANCE: Partial<Record<DungeonId, number>> = {
   "goblin-stronghold": 0.2,
   // D-120: the harder dungeon pays faster.
   "forgotten-crypt": 0.3,
-  // D-128.
+  // D-130.
   "ember-forge": 0.4,
 };
 

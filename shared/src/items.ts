@@ -215,7 +215,7 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     ],
     slots: SLOT_WEIGHTS,
   },
-  // D-128: T4 30%, T5 45%, T6 25% (the first T6).
+  // D-130: T4 30%, T5 45%, T6 25% (the first T6).
   "ember-forge": {
     tiers: [
       [4, 30],

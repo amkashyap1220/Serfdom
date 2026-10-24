@@ -45,7 +45,7 @@ export interface RoomPiece {
   obstacles?: readonly Rect[];
   /** Sludge pools, relative like the spawns (D-113). */
   sludge?: readonly Rect[];
-  /** Lava channels, relative like the spawns (D-128). */
+  /** Lava channels, relative like the spawns (D-130). */
   lava?: readonly Rect[];
   /** An arrow trap's slits and firing direction, relative (D-113); `fire`: spirit braziers (D-123). */
   arrows?: { slits: readonly Vec2[]; direction: Vec2; fire?: boolean };
