@@ -4,7 +4,9 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-Phase numbering follows the 18-phase roadmap (D-103); `docs/ROADMAP.md` holds each phase's acceptance criteria.
+**Next step:** draft 12l, the Lich (D-120), for approval.
+
+Phase numbering follows the 23-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
 - [x] Phase 0 — Repository orientation and environment
 - [x] Phase 1 — Playable local client skeleton
@@ -18,13 +20,18 @@ Phase numbering follows the 18-phase roadmap (D-103); `docs/ROADMAP.md` holds ea
 - [x] Phase 9 — Equipment and rewards
 - [x] Phase 10 — Classes and class abilities
 - [x] Phase 11 — Dungeon variety and procedural assembly
-- [ ] Phase 12 — Dungeon tiers and the endgame loop (in progress: 12a–12k built; next 12l, the Lich)
-- [ ] Phase 13 — Rare loot
-- [ ] Phase 14 — Economy and account systems
-- [ ] Phase 15 — Presentation: art, HUD, and sound
-- [ ] Phase 16 — Desktop wrapper and cross-play proof
-- [ ] Phase 17 — Steam integration
-- [ ] Phase 18 — Release hardening
+- [ ] Phase 12 — Dungeon tiers and the endgame loop (in progress: 12a–12k built)
+- [ ] Phase 13 — Dungeon tiers 4 and 5 (levels 15–20)
+- [ ] Phase 14 — Rare loot
+- [ ] Phase 15 — Economy and account systems
+- [ ] Phase 16 — Presentation: art, HUD, and sound
+- [ ] Phase 17 — Onboarding and settings
+- [ ] Phase 18 — Production hosting
+- [ ] Phase 19 — Accounts, sessions, and player safety
+- [ ] Phase 20 — Closed playtest
+- [ ] Phase 21 — Desktop wrapper and cross-play proof
+- [ ] Phase 22 — Steam integration
+- [ ] Phase 23 — Launch
 
 ## Session entries
 
@@ -540,3 +547,10 @@ Phase numbering follows the 18-phase roadmap (D-103); `docs/ROADMAP.md` holds ea
 - Measured over 500 seeds: no rule problems; main paths 37,980–41,300 HP.
 - Live (harness, **test** DB, crypt seed 2): the Chapel's rune grid with a column filling red; the Catacomb's fireballs crossing the corridor (and its braziers visible through the wall from the Chapel). No console errors. Not play-tested: clear time and readability in a full fight.
 - User ran the 12k checklist: pass (2026-10-24). Next: 12l (the Lich: draft for approval).
+
+### Planning docs reconciled — 2026-10-24
+
+- Compared every planning doc with the code and git history and fixed stale facts: party size 10 (not 4), resolved GDD sections (controls, stats, slots, death rules), superseded T-entries marked, README status in order.
+- Restructured: a status table at the top of the roadmap; the architecture doc opens with a current code map, with the phase-by-phase notes moved to an appendix; the testing guide keeps the workflow up front and the feature checklists in an appendix. Nothing was deleted.
+- User approved the 23-phase roadmap (D-124): tiers 4–5 get their own phase (13), and five new launch phases (17 onboarding and settings, 18 production hosting, 19 accounts and player safety, 20 closed playtest, 23 launch). New open questions 21–23 (business model, social features, crash reporting and analytics).
+- No code changed. Next: 12l, the Lich.

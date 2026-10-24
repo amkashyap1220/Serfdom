@@ -2,6 +2,39 @@
 
 The roadmap is deliberately incremental. Each phase should leave the repository runnable and testable. Do not jump ahead simply because generating more code is possible.
 
+## Where things stand
+
+**Current phase: 12, next slice 12l (the Lich).** Updated 2026-10-24. The roadmap runs to 23 phases (D-124); each phase below has its goal, tasks, acceptance criteria, and status.
+
+| Phase | Name                                               | Status                                   |
+| ----- | -------------------------------------------------- | ---------------------------------------- |
+| 0     | Repository orientation and development environment | Complete                                 |
+| 1     | Playable local client skeleton                     | Complete                                 |
+| 2     | Movement, collision, and camera following          | Complete                                 |
+| 3     | Combat prototype                                   | Complete                                 |
+| 4     | Authoritative multiplayer foundation               | Complete                                 |
+| 5     | Shared combat and enemies                          | Complete                                 |
+| 6     | Dungeon vertical slice                             | Complete                                 |
+| 7     | Account and persistent data                        | Complete                                 |
+| 8     | Progression and permadeath                         | Complete                                 |
+| 9     | Equipment and rewards                              | Complete                                 |
+| 10    | Classes and class abilities                        | Complete                                 |
+| 11    | Dungeon variety and procedural assembly            | Complete                                 |
+| 12    | Dungeon tiers and the endgame loop                 | **In progress:** 12a–12k built; next 12l |
+| 13    | Dungeon tiers 4 and 5 (levels 15–20)               | Not started                              |
+| 14    | Rare loot                                          | Not started                              |
+| 15    | Economy and account systems                        | Not started                              |
+| 16    | Presentation: art, HUD, and sound                  | Not started                              |
+| 17    | Onboarding and settings                            | Not started                              |
+| 18    | Production hosting                                 | Not started                              |
+| 19    | Accounts, sessions, and player safety              | Not started                              |
+| 20    | Closed playtest                                    | Not started                              |
+| 21    | Desktop wrapper and cross-play proof               | Not started                              |
+| 22    | Steam integration                                  | Not started                              |
+| 23    | Launch                                             | Not started                              |
+
+When a slice or phase finishes, update this table, the phase's Status line, `docs/WORK_LOG.md`, and the README status in the same commit.
+
 ## Phase 0 — Repository orientation and development environment
 
 **Goal:** Know what is in the repository and make the local environment reproducible.
@@ -23,6 +56,8 @@ Acceptance:
 - The available checks and their commands are documented.
 
 Ask the user if a significant framework or deployment choice is needed. Do not ask about trivial reversible preferences.
+
+Status: **complete** (2026-10-22): Node 24, npm workspaces, Prettier, and the README setup (T-007–T-010).
 
 ## Phase 1 — Playable local client skeleton
 
@@ -55,6 +90,8 @@ Do not add accounts, database, final art, classes, or marketplace.
 
 Art policy: use placeholders initially. Player and player-sized ordinary enemies use 16×16 source pixels; Pokémon Emerald is a palette reference only. Generate original assets just in time. Minimum supported window size and compact/mobile layout remain OPEN.
 
+Status: **complete** (2026-10-22; the user passed the manual checks). Small-window behavior stays PROVISIONAL (T-012) until Phase 17.
+
 ## Phase 2 — Movement, collision, and camera following
 
 **Goal:** The player moves through a test world while the camera follows and preserves approved visibility.
@@ -84,6 +121,8 @@ Acceptance:
 
 Blocking questions: confirm final movement controls, map-edge treatment when needed, and smaller-window behavior before finalizing responsive scaling.
 
+Status: **complete** (2026-10-22): WASD, instant movement, no camera clamping (D-031–D-033), Q/E view rotation (D-040).
+
 ## Phase 3 — Combat prototype
 
 **Goal:** Validate the intended hybrid auto-combat and dodging loop against one enemy.
@@ -103,6 +142,8 @@ Acceptance:
 - Tests cover at least normal hits and one edge case.
 
 Do not invent final balance formulas. Use clearly labeled prototype values only after the user approves or agrees to a temporary test assumption.
+
+Status: **complete** (2026-10-22): a target dummy, three fire modes (now four, D-099), ring attacks, prototype death (T-018, T-019).
 
 ## Phase 4 — Authoritative multiplayer foundation
 
@@ -127,6 +168,8 @@ Acceptance:
 
 Do not add public matchmaking or production-scale infrastructure yet.
 
+Status: **complete** (2026-10-22): Node + `ws` server, server-owned movement, delay under 100 ms on localhost (D-042, T-026).
+
 ## Phase 5 — Shared combat and enemies
 
 **Goal:** Multiplayer clients interact with the same server-authoritative enemy and combat state.
@@ -145,6 +188,8 @@ Acceptance:
 - Client-side tampering cannot award arbitrary damage or rewards.
 - Combat tests pass.
 - Manual two-client test steps are documented.
+
+Status: **complete** (2026-10-22): the server decides every hit (D-043, D-044); two-client checklist passed.
 
 ## Phase 6 — Dungeon vertical slice
 
@@ -166,6 +211,8 @@ Acceptance:
 - Multiplayer players share encounter state.
 - Individual rewards are rolled per qualifying completing player.
 
+Status: **complete** (2026-10-22): menu, open queue, the Goblin Warrens with the Warlord, portal, per-player rewards; tuned in 6d (T-040).
+
 ## Phase 7 — Account and persistent data
 
 **Goal:** Characters and accounts survive a server restart.
@@ -186,6 +233,8 @@ Acceptance:
 - Migrations and local database setup are documented.
 
 Do not store passwords in plaintext or put secrets in source control.
+
+Status: **complete** (2026-10-22): email + password accounts and serfs in PostgreSQL 17 (D-058–D-064).
 
 ## Phase 8 — Progression and permadeath
 
@@ -293,7 +342,7 @@ Status: in progress. 12a (the Goblin Stronghold, D-108), 12b (leading slingers, 
 
 Tasks:
 
-- Add a second and third dungeon above the Goblin Warrens, each with its own level range, enemies, boss, and loot tiers (designs drafted for the user's approval, one dungeon at a time).
+- Add a second and third dungeon above the Goblin Warrens (tiers 4 and 5 are Phase 13, D-124), each with its own level range, enemies, boss, and loot tiers (designs drafted for the user's approval, one dungeon at a time).
 - New enemy roles and boss mechanics, readable and tested like the Warlord.
 - Room mechanics so rooms cannot all be beaten by running in a circle (D-109): traps, obstacles, floors, and enemies that punish circling.
 - Stat potions and the account potion rack (D-089, D-075): potion dungeons roll the potion chance once per Luck point; drink at once or send to the rack; potions raise a stat up to the class max.
@@ -306,7 +355,24 @@ Acceptance:
 - Potions are granted exactly once per roll, never above the class max, and survive death in the rack.
 - The server decides every potion, drop, and EXP award.
 
-## Phase 13 — Rare loot
+## Phase 13 — Dungeon tiers 4 and 5 (levels 15–20)
+
+**Goal:** Finish the dungeon ladder. D-108 plans about five tiers from level 1 to 20; the Warrens, the Stronghold, and the Crypt cover levels 1–15 (D-124).
+
+Tasks:
+
+- Draft tier 4 (about levels 15–18) and tier 5 (about levels 18–20), one dungeon at a time, for the user's approval: theme, level range, rooms, enemies, room mechanics, boss, EXP base, loot tiers, and potion chance. The ranges here are placeholders until each draft is approved.
+- Loot continues upward (T5 and above), so the top tiers' items, including the T10 chase of GDD §9, become reachable.
+- Check the whole EXP path against D-071: progressing through the five tiers reaches level 20 in about five dungeons' worth of clears.
+- Decide with the user whether higher tiers need any entry rule beyond D-107.
+
+Acceptance:
+
+- Each new dungeon can be completed solo and by a party, and its loot, EXP, and potions match its approved tables.
+- A serf progressing through the tiers reaches level 20 at about the pace D-071 describes (measured by simulation from the real formulas).
+- The server decides every drop, potion, and EXP award, and enforces the entry rules, including a tampered queue request.
+
+## Phase 14 — Rare loot
 
 **Goal:** The collectible chase: Artifacts and Shiny items.
 
@@ -324,14 +390,14 @@ Acceptance:
 - Drop rates match configuration over many simulated rolls.
 - A Resurrection Necklace saves a serf exactly once under the confirmed rule.
 
-## Phase 14 — Economy and account systems
+## Phase 15 — Economy and account systems
 
 **Goal:** Add the marketplace, buying, and upgrades (the shared stash, gold, and selling to the vendor arrived in Phase 9, D-085–D-087).
 
 Tasks:
 
 - Confirm the marketplace's launch scope (open question 9), item eligibility, pricing, and fees.
-- Account upgrades bought with gold: more serf slots (D-061), a bigger stash (D-090), a bigger potion rack; prices drafted for approval.
+- Account upgrades bought with gold: more serf slots (D-061), a bigger stash (D-090), a bigger potion rack; prices drafted for approval. Decide what happens to them on death (open question 5).
 - Implement atomic, server-side transactions.
 - Test simultaneous trades and duplicate/negative balance exploits.
 - Ensure browser and desktop users use the same economy.
@@ -344,7 +410,7 @@ Acceptance:
 - An upgrade is paid for exactly once and applies to the whole account.
 - Economy behavior is identical across platforms.
 
-## Phase 15 — Presentation: art, HUD, and sound
+## Phase 16 — Presentation: art, HUD, and sound
 
 **Goal:** Replace placeholder squares and the debug HUD once the systems are stable.
 
@@ -361,7 +427,84 @@ Acceptance:
 - Gameplay readability is no worse than with placeholders (bullets, telegraphs, and ability effects stay clear).
 - The HUD never covers the gameplay viewport.
 
-## Phase 16 — Desktop wrapper and cross-play proof
+## Phase 17 — Onboarding and settings
+
+**Goal:** A new player can learn the game without help, and every player can adjust it to their setup (D-124).
+
+Tasks:
+
+- First-run flow: what a new account sees from registering to its first Warrens clear (a short tutorial room, hints, or both, drafted for approval).
+- A settings menu: key binds (WASD, Q/E/Z, T, Space, R today), volume if sound exists, and the fire mode names (D-099 names are PROVISIONAL).
+- Decide and build window-size behavior: minimum size, smaller windows, larger windows and fullscreen, and whether a bigger screen may show more of the world (open questions 11–13, 15).
+- Accessibility basics: readable text sizes, colour choices that do not rely on red/green alone, and a check of the busiest fights for readability.
+- Settings are stored per account or per device (decided with the user).
+
+Acceptance:
+
+- A tester who has never played reaches and completes their first Warrens run using only what the game shows them.
+- Every rebound key works in every screen and cannot bind two actions to one key.
+- The 960×640 layout, the 240-pixel HUD, and camera visibility (at least 300 world pixels each way) hold at every supported window size; the behavior outside that range is documented and tested.
+
+## Phase 18 — Production hosting
+
+**Goal:** The game runs on a real server that strangers can reach safely (D-124).
+
+Tasks:
+
+- Choose hosting for the game server and PostgreSQL, and a domain, with costs explained; nothing paid is set up without the user's approval.
+- wss:// (TLS) for every non-local connection (T-042) and HTTPS for the client.
+- Automatic checks on every push (`npm run check` in CI) and a repeatable deploy from a clean build.
+- Database backups on a schedule, and a tested restore.
+- Server logs, uptime and error monitoring without private data (crash reporting or analytics only if open question 23 approves them).
+- A protocol and client update policy: what a player with an old client sees after a deploy, and how a deploy treats runs in progress.
+- Secrets only in the host's environment; `.env.example` stays placeholders.
+
+Acceptance:
+
+- A clean deploy from the repository brings up a working game that two players on different networks can play together.
+- A backup is restored into a fresh database and the game runs on it.
+- An old client is refused with a clear message after a protocol change.
+- Every check runs automatically on each push, and a failing check is visible.
+
+## Phase 19 — Accounts, sessions, and player safety
+
+**Goal:** Accounts and the community are safe to open to the public (D-124).
+
+Tasks:
+
+- Choose an email provider; add email verification and password reset (D-060).
+- Disconnect, reconnect, session ownership, and party rules (GDD §11), confirmed and tested; reward timing for disconnects and late joiners (open question 6).
+- An offensive-name filter for serf names (T-044).
+- Account deletion and a copy of a player's own data on request; a privacy policy and terms of service (drafted for the user; not legal advice).
+- Admin tools: look up an account or serf, ban or suspend, restore a lost item, with every admin action logged.
+- A security review of every message handler and database write, and per-account abuse limits.
+- Social features if open question 22 adds them (party invites, friends, chat and its moderation).
+
+Acceptance:
+
+- A forgotten password can be reset by email, and an unverified email is handled as decided.
+- A reconnecting player gets what the confirmed rules say, and a disconnect never loses or duplicates a reward.
+- A banned account cannot log in, and an admin action shows in the log.
+- A deleted account's personal data is gone, while the leaderboard keeps only what the policy allows.
+
+## Phase 20 — Closed playtest
+
+**Goal:** Real players on the live server, so balance and stability are measured rather than guessed (D-124).
+
+Tasks:
+
+- Invite a small group of testers; a simple way for them to report bugs and feedback.
+- Measure clear times, deaths, and EXP pace in every dungeon against their targets (D-047, D-071, D-108, D-120), and tune party scaling (D-045, PROVISIONAL).
+- Load and soak testing: the most players and runs one server must hold, snapshot bandwidth (T-027), and a long run without leaks.
+- Fix what the playtest finds, and decide with the user what blocks launch.
+
+Acceptance:
+
+- Every dungeon's measured clear time is within its target, or the target was changed by the user.
+- The server holds the agreed player count for the agreed time without errors or growing memory.
+- Every bug marked as blocking launch is fixed and has a regression test.
+
+## Phase 21 — Desktop wrapper and cross-play proof
 
 **Goal:** Package the same client as a windowed desktop app and verify it plays with browser users.
 
@@ -379,34 +522,38 @@ Acceptance:
 - Both observe consistent game state and rewards.
 - Both use shared account progression and economy.
 
-## Phase 17 — Steam integration
+## Phase 22 — Steam integration
 
 **Goal:** Steamworks features as their own milestone (split out of the desktop phase).
 
 Tasks:
 
-- Decide with the user which Steamworks features launch needs (open question 20).
+- Decide with the user which Steamworks features launch needs (open question 20) and the business model (open question 21).
 - Integrate the Steamworks SDK in the desktop wrapper only; the browser client is unaffected.
 - Keep accounts, progression, and the economy shared with browser players.
+- Steam store page assets and the store's technical requirements.
 
 Acceptance:
 
 - The Steam build launches and plays with browser users against the same backend.
 - No Steam-only advantage in gameplay or economy.
 
-## Phase 18 — Release hardening
+## Phase 23 — Launch
 
-Only after the game loop is fun and core systems are stable:
+**Goal:** Open the game to the public and keep it running (D-124).
 
-- Security review and input validation.
-- wss:// (TLS) before any non-local play (T-042).
-- Disconnect, reconnect, session ownership, and party-leader rules (GDD §11) confirmed and tested.
-- Load and soak testing.
-- Database backups/migration strategy.
-- Error handling and useful diagnostics.
-- Accessibility and window-size testing, including the 960×640 container, 240-pixel HUD, 720×640 viewport, camera visibility, and resizing; minimum, responsive, and larger-window behavior decided first (open questions 11–13, 15).
-- Deployment, monitoring, and incident recovery.
-- Store page, onboarding, and release checklist.
+Tasks:
+
+- A release checklist covering every phase's acceptance, backups, monitoring, and a rollback plan.
+- The public website page and the store page.
+- A launch-day plan: who watches what, and what to do if the server falls over (incident steps written down beforehand).
+- A post-launch plan: how new content, fixes, and balance changes ship, and how players hear about them.
+
+Acceptance:
+
+- Every item on the release checklist is checked off or knowingly waived by the user.
+- A rollback to the previous version has been rehearsed.
+- The incident steps have been walked through once before launch day.
 
 ## Rule for advancing phases
 

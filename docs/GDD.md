@@ -174,7 +174,7 @@ Confirmed controls and rules (built):
 
 Still open:
 
-- Weapon attack identities: every weapon type currently fires the same basic shot; each type's own style is planned for Phase 13.
+- Weapon attack identities: every weapon type currently fires the same basic shot; each type's own style is planned for Phase 14.
 
 Never implement a new combat formula or input scheme based only on a prior proposal. Ask if the missing decision materially affects the milestone.
 
@@ -217,7 +217,7 @@ Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a r
 - Character permadeath is a core game pillar.
 - A character that dies before dungeon completion does not receive completion rewards.
 - A dead character's final lifetime EXP remains on the lifetime EXP leaderboard.
-- A Resurrection Necklace Artifact is intended to preserve a character once; the exact rule is still to be confirmed (Phase 13).
+- A Resurrection Necklace Artifact is intended to preserve a character once; the exact rule is still to be confirmed (Phase 14).
 
 ### Confirmed item and reward rules (Phase 9)
 
@@ -226,13 +226,13 @@ Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a r
 - **Gold** is account-wide and survives death; it comes from selling items (D-087).
 - Stat potions not drunk at once wait in the account's **potion rack** (D-089).
 
-- An account has **2 serf slots**; a dead serf frees its slot (D-061). Buying more slots with gold is Phase 14.
+- An account has **2 serf slots**; a dead serf frees its slot (D-061). Buying more slots with gold is Phase 15.
 - Drunk potions die with the serf; undrunk potions in the rack survive (D-118).
 
 ### Still open
 
-- Gold upgrades (more serf slots, a bigger stash and potion rack) and what happens to them on death: Phase 14 (open question 5).
-- The Resurrection Necklace's exact rule and its edge cases: Phase 13.
+- Gold upgrades (more serf slots, a bigger stash and potion rack) and what happens to them on death: Phase 15 (open question 5).
+- The Resurrection Necklace's exact rule and its edge cases: Phase 14.
 
 ## 8. Equipment
 
@@ -360,6 +360,10 @@ Dungeon design is a mix of procedural assembly and handcrafted content:
 - Built (12k, D-123): **cursed runes** in the Chapel, Embalming room, and Charnel pit glow red one column at a time and burst a second later, sweeping across the room and back, so you keep stepping over the wave; **spirit braziers** in the Catacomb, Burial vault, and Tomb of kings take turns sending slow blue-white fireballs across the room. Those rooms have 20% fewer skeletons and archers.
 - Next: the Lich with its soul crystals (12l).
 
+### Tiers 4 and 5
+
+- Not designed yet (Phase 13, D-124): two more dungeons for about levels 15–20 complete D-108's ladder of about five tiers. Themes, ranges, and numbers wait for the user's approval.
+
 ### Room mechanics (D-109)
 
 Pace (D-111): in the intro dungeons enemies attack 1.5× less often and move 20% slower than first tuned, and each hit does 1.5× the damage, so the screen stays readable.
@@ -385,11 +389,11 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 - A player who dies before completion receives no completion rewards.
 - Enemy HP scales by party size: × (1 + 0.5 × (players − 1)) (D-045, PROVISIONAL).
 - Solo play should remain viable.
-- Reconnect, disconnect, session ownership, and party-leader behavior require explicit rules (Phase 18). Today: one connection per account (T-042); a player who disconnects leaves the run and cannot rejoin it (D-052).
+- Reconnect, disconnect, session ownership, and party-leader behavior require explicit rules (Phase 19). Today: one connection per account (T-042); a player who disconnects leaves the run and cannot rejoin it (D-052).
 
 ## 12. Economy and leaderboards
 
-Confirmed in Phase 9 (D-085–D-087): a shared account stash, account gold that survives death, and selling to the vendor for 50% of an item's reference value. Buying, the marketplace, and upgrades remain Phase 14 (D-103).
+Confirmed in Phase 9 (D-085–D-087): a shared account stash, account gold that survives death, and selling to the vendor for 50% of an item's reference value. Buying, the marketplace, and upgrades remain Phase 15 (D-124).
 
 Prior economy direction:
 
@@ -422,7 +426,7 @@ Other leaderboard ideas (survival time, dungeon clears, bosses, fastest clears, 
 
 ## 14. First vertical slice (achieved)
 
-The first vertical slice is complete (Phases 1–11): every step below is built except the desktop client (Phase 16). Current work and its order live in `docs/ROADMAP.md`.
+The first vertical slice is complete (Phases 1–11): every step below is built except the desktop client (Phase 21). Current work and its order live in `docs/ROADMAP.md`.
 
 1. The browser client shows the approved 960×640 layout, fixed 240-pixel HUD, 720×640 gameplay viewport, 16×16 player, and player-centered camera with at least 300 world pixels of cardinal visibility.
 2. A browser game loads.
