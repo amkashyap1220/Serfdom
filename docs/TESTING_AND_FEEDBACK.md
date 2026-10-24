@@ -154,7 +154,7 @@ For Phase 1 and Phase 2, Claude must give executable manual instructions and exp
 - Inspecting the game container: 960×640 CSS pixels at target desktop size.
 - Inspecting fixed HUD: 240×640 CSS pixels, on the left, with no gameplay overlap.
 - Inspecting gameplay viewport: 720×640 CSS pixels, to the right.
-- Confirming the player uses a 16×16 source-pixel sprite and stays crisp.
+- Confirming the player uses a 32×32 source-pixel sprite (D-127; 16×16 before) and stays crisp.
 - Checking camera centering relative to gameplay viewport, not total window.
 - Using a world-coordinate grid/debug overlay to verify at least 300 world pixels visible in each cardinal direction during normal play.
 - Moving the player to verify camera following and fixed HUD.

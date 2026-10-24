@@ -65,7 +65,7 @@ Status: **complete** (2026-10-22): Node 24, npm workspaces, Prettier, and the RE
 
 ## Phase 1 — Playable local client skeleton
 
-**Goal:** A browser page loads the approved game layout with a 16×16 player placeholder and a testable camera.
+**Goal:** A browser page loads the approved game layout with a 16×16 player placeholder (32×32 since D-127) and a testable camera.
 
 Candidate stack: Phaser + TypeScript, pending repository inspection and confirmation.
 
@@ -92,7 +92,7 @@ Acceptance:
 
 Do not add accounts, database, final art, classes, or marketplace.
 
-Art policy: use placeholders initially. Player and player-sized ordinary enemies use 16×16 source pixels; Pokémon Emerald is a palette reference only. Generate original assets just in time. Minimum supported window size and compact/mobile layout remain OPEN.
+Art policy: use placeholders initially. Player and player-sized ordinary enemies use 32×32 source pixels (D-127; 16×16 when Phase 1 was built); Pokémon Emerald is a palette reference only. Generate original assets just in time. Minimum supported window size and compact/mobile layout remain OPEN.
 
 Status: **complete** (2026-10-22; the user passed the manual checks). Small-window behavior stays PROVISIONAL (T-012) until Phase 18.
 
@@ -554,7 +554,7 @@ Acceptance:
 
 Tasks:
 
-- Original 16×16 pixel-art sprites for serfs (per class) and ordinary enemies, larger canvases for bosses, tiles, projectiles, and effects, per the confirmed art direction and `docs/ASSET_MANIFEST.md`.
+- Original 32×32 pixel-art sprites for serfs (per class) and ordinary enemies, larger canvases for bosses, tiles, projectiles, and effects, per the confirmed art direction and `docs/ASSET_MANIFEST.md`.
 - Verify palette RGB values from a suitable reference before calling anything the Pokémon Emerald palette.
 - Sound and music only if the user wants them (open question 19).
 

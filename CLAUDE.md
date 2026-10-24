@@ -121,7 +121,7 @@ Be clear, direct, and practical. Explain important decisions without overwhelmin
 ## Art direction and AI-generated assets
 
 - The confirmed art direction is chunky, crisp retro pixel art based on the user's supplied sprite-sheet reference.
-- Player characters and player-sized ordinary enemies use 16×16 source-pixel sprites; larger enemies and bosses may use larger canvases.
+- Player characters and player-sized ordinary enemies use 32×32 source-pixel sprites (D-127; was 16×16); larger enemies and bosses may use larger canvases. The player's collision body is 32×32 world pixels.
 - The requested palette reference is Pokémon Emerald. Use it as a palette reference only; create original Serfdom sprites and never copy Pokémon characters, sprites, tiles, logos, or other game assets.
 - Generate art only when a current milestone needs it. Use placeholder shapes until then.
 - Use an actual available image-generation capability if the environment provides one. If not, say so honestly and ask how the user wants to proceed or provide a ready-to-use prompt; never claim a prompt is a generated asset.
