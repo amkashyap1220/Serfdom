@@ -150,6 +150,8 @@ const COLORS = {
   icicleEdge: 0x7fb0d0,
   blade: 0xd0d6dc,
   laser: 0xff3b3b,
+  swing: 0xe8f0ff,
+  swingEdge: 0xffffff,
   wind: 0xdfe8f0,
   arc: 0xf0f4ff,
   beamCore: 0xfff0a0,
@@ -359,6 +361,29 @@ export class CombatView {
       h.fillCircle(f.x, f.y, f.radius * 0.5);
     }
 
+    // Melee swings (D-141): a pale wedge sweeping the arc, fading fast; a
+    // full circle for the mace's smash.
+    for (const s of view.swings) {
+      const half = ((s.arcDegrees / 2) * Math.PI) / 180;
+      const alpha = 0.55 * (1 - s.fade);
+      h.fillStyle(COLORS.swing, alpha);
+      if (s.arcDegrees >= 360) {
+        h.fillCircle(s.x, s.y, s.reach);
+      } else {
+        h.slice(s.x, s.y, s.reach, s.angle - half, s.angle + half, false);
+        h.fillPath();
+      }
+      h.lineStyle(px(2), COLORS.swingEdge, 1 - s.fade);
+      h.beginPath();
+      h.arc(
+        s.x,
+        s.y,
+        s.reach,
+        s.angle - Math.min(half, Math.PI),
+        s.angle + Math.min(half, Math.PI),
+      );
+      h.strokePath();
+    }
     // Fire jets' beams (D-133): a strip of fire with a bright core,
     // fading as it goes out.
     for (const b of view.beams) {

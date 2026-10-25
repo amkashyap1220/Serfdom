@@ -215,6 +215,16 @@ export interface RuneView {
   glow: number;
 }
 
+/** A melee swing shortly after it was made (D-141); `fade` runs 0 → 1. */
+export interface SwingView {
+  x: number;
+  y: number;
+  angle: number;
+  arcDegrees: number;
+  reach: number;
+  fade: number;
+}
+
 /** An ability blast shortly after it landed; `fade` runs 0 → 1. */
 export interface BlastView {
   kind: BlastKind;
@@ -250,6 +260,7 @@ export interface CombatViewModel {
   projectiles: ProjectileView[];
   hazards: HazardView[];
   blasts: BlastView[];
+  swings: SwingView[];
   chains: ChainView[];
   zones: ZoneView[];
   auras: AuraView[];
@@ -275,6 +286,7 @@ export const EMPTY_VIEW: CombatViewModel = {
   projectiles: [],
   hazards: [],
   blasts: [],
+  swings: [],
   chains: [],
   zones: [],
   auras: [],

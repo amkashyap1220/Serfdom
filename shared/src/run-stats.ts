@@ -49,12 +49,13 @@ export function recordRunEvents(
 ): RunStats {
   let next = stats;
   for (const e of events) {
-    if (e.type === "shot" && e.playerId === playerId) {
+    // A swing is a shot too (D-141); one that cuts several counts one hit.
+    if ((e.type === "shot" || e.type === "swing") && e.playerId === playerId) {
       next = { ...next, shotsFired: next.shotsFired + 1 };
     } else if (e.type === "hit" && e.playerId === playerId) {
       next = {
         ...next,
-        shotsHit: next.shotsHit + 1,
+        shotsHit: next.shotsHit + (e.extra ? 0 : 1),
         damageDealt: next.damageDealt + e.damage,
       };
     } else if (e.type === "defeated" && e.playerId === playerId) {

@@ -94,7 +94,7 @@ import {
   type AbilityLoadout,
 } from "./abilities.ts";
 import { weaponDamage, type WeaponType } from "./items.ts";
-import { patternOf, patternVolley } from "./weapon-patterns.ts";
+import { attackOf, swingCatches } from "./weapon-patterns.ts";
 import {
   combatFor,
   SERF_BASE,
@@ -717,6 +717,17 @@ export type SimEvent =
       playerId: number;
       damage: number;
       position: Vec2;
+      /** A further enemy hit by the same swing, burst, or arrow: not another accurate shot (D-141). */
+      extra?: boolean;
+    }
+  /** A melee swing (D-141): its arc, for drawing and for accuracy. */
+  | {
+      type: "swing";
+      playerId: number;
+      at: Vec2;
+      angle: number;
+      arcDegrees: number;
+      reach: number;
     }
   | { type: "defeated"; enemyId: number; playerId: number }
   | { type: "respawned"; enemyId: number }
@@ -1036,12 +1047,13 @@ export function applyPlayerInput(
       nextProjectileId: id + 1,
     };
   }
-  // A shot fires the weapon's whole pattern (D-141); prediction runs this too.
+  // The weapon's attack (D-141): a shot, or a swing that cuts at once.
+  // Prediction runs this too (with no enemies, so a swing only draws).
   if (cooldown.fired && aim) {
-    const pattern = patternOf(player.combat.weapon);
+    const attack = attackOf(player.combat.weapon);
     const damage =
-      player.combat.shotDamage * pattern.damage * damageMultiplier(player);
-    for (const shot of patternVolley(pattern, position, aim)) {
+      player.combat.shotDamage * attack.damage * damageMultiplier(player);
+    if (attack.kind === "shot") {
       const id = next.nextProjectileId;
       next = {
         ...next,
@@ -1051,18 +1063,65 @@ export function applyPlayerInput(
             id,
             owner: "player",
             ownerId: playerId,
-            position: shot.position,
-            direction: shot.direction,
-            speed: pattern.speed,
-            remaining: pattern.range,
+            position: { ...position },
+            direction: aim,
+            speed: attack.speed,
+            remaining: attack.range,
             damage,
-            size: pattern.size,
-            ...(pattern.pierce ? { pierce: true, pierced: [] } : {}),
+            size: attack.size,
+            ...(attack.pierce ? { pierce: true, pierced: [] } : {}),
+            ...(attack.burst ? { burst: attack.burst } : {}),
           },
         ],
         nextProjectileId: id + 1,
       };
       events.push({ type: "shot", playerId, projectileId: id });
+    } else {
+      events.push({
+        type: "swing",
+        playerId,
+        at: { ...position },
+        angle: Math.atan2(aim.y, aim.x),
+        arcDegrees: attack.arcDegrees,
+        reach: attack.reach,
+      });
+      let first = true;
+      const enemies = [...next.enemies];
+      enemies.forEach((target, i) => {
+        if (!isHittable(target)) return;
+        if (!swingCatches(attack, position, aim, target.position, target.size))
+          return;
+        // A shield stops a swing from the front, as it stops a shot (D-122).
+        const dx = target.position.x - position.x;
+        const dy = target.position.y - position.y;
+        const len = Math.hypot(dx, dy) || 1;
+        if (shieldBlocks(target, { x: dx / len, y: dy / len })) {
+          events.push({
+            type: "blast",
+            kind: "shieldBlock",
+            playerId: GOBLIN_BLAST_BY,
+            at: { ...target.position },
+            radius: 6,
+          });
+          return;
+        }
+        const result = damageEnemy(target, damage);
+        enemies[i] = result.enemy;
+        events.push({
+          type: "hit",
+          enemyId: target.id,
+          playerId,
+          damage: result.damage,
+          position: { ...target.position },
+          // One swing counts once towards accuracy, however many it cuts.
+          ...(first ? {} : { extra: true }),
+        });
+        first = false;
+        if (result.defeated) {
+          events.push({ type: "defeated", enemyId: target.id, playerId });
+        }
+      });
+      next = { ...next, enemies };
     }
   }
   return { state: next, events };
@@ -1819,6 +1878,39 @@ export function stepWorld(
   // 3. Projectiles. Targets are rebuilt per projectile so anything defeated
   // earlier in this tick stops absorbing hits.
   const surviving: Projectile[] = [];
+  /** The staff's orb bursting where it stopped (D-141): every hittable enemy in reach, once. */
+  const burstAt = (p: Projectile, at: Vec2) => {
+    const radius = p.burst ?? 0;
+    events.push({
+      type: "blast",
+      kind: "burst",
+      playerId: p.ownerId,
+      at: { ...at },
+      radius,
+    });
+    let first = true;
+    enemies = enemies.map((e) => {
+      if (!isHittable(e)) return e;
+      if (
+        Math.hypot(e.position.x - at.x, e.position.y - at.y) >
+        radius + e.size / 2
+      )
+        return e;
+      const result = damageEnemy(e, p.damage);
+      events.push({
+        type: "hit",
+        enemyId: e.id,
+        playerId: p.ownerId,
+        damage: result.damage,
+        position: { ...e.position },
+        ...(first ? {} : { extra: true }),
+      });
+      first = false;
+      if (result.defeated)
+        events.push({ type: "defeated", enemyId: e.id, playerId: p.ownerId });
+      return result.enemy;
+    });
+  };
   for (const p of projectiles) {
     const outcome = stepProjectile(
       p,
@@ -1830,6 +1922,9 @@ export function stepWorld(
       surviving.push(outcome.projectile);
     } else if (outcome.kind === "blocked") {
       events.push({ type: "blocked", position: outcome.position });
+      if (p.burst) burstAt(p, outcome.position);
+    } else if (outcome.kind === "expired") {
+      if (p.burst) burstAt(p, outcome.position);
     } else if (outcome.kind === "hit" && p.owner === "enemy") {
       players = players.map((pl) => {
         if (pl.id !== outcome.targetId) return pl;
@@ -1869,6 +1964,11 @@ export function stepWorld(
         });
         continue;
       }
+      // The staff's orb bursts on whatever it hits (D-141).
+      if (p.burst) {
+        burstAt(p, outcome.position);
+        continue;
+      }
       const result = damageEnemy(target, p.damage);
       enemies[i] = result.enemy;
       events.push({
@@ -1877,8 +1977,10 @@ export function stepWorld(
         playerId: p.ownerId,
         damage: result.damage,
         position: outcome.position,
+        // An arrow's second and later victims are not further accurate shots.
+        ...((p.pierced ?? []).length > 0 ? { extra: true } : {}),
       });
-      // A piercing orb flies on from where it hit, never hitting that
+      // A piercing arrow flies on from where it hit, never hitting that
       // enemy again (D-141).
       if (p.pierce) {
         const moved = Math.hypot(

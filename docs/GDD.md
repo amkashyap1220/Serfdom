@@ -276,19 +276,19 @@ Accessories:
 
 Class restrictions (CONFIRMED, D-081, D-083): each class can use certain weapon types and one armor type; a classless Serf can use T0 weapons and armor and every accessory. Weapon damage is 27 + 4 × tier. Ability items are wearable only by their class (D-096).
 
-### Weapon attack patterns (D-141)
+### Weapon attacks (D-141)
 
-Each weapon type fires its own pattern; the wand is the only long-range single shot:
+Each weapon type attacks in its own way; the wand is the only long-range single shot:
 
 - **Wand:** one fast bolt, the longest reach.
-- **Bow:** three arrows in a narrow fan, long reach.
-- **Staff:** one big, slow orb that passes through every enemy in its path.
-- **Dagger:** two quick stabs side by side, very fast, short reach.
-- **Sword:** a slash of three short blades.
-- **Axe:** a wide chop of five blades, built to hit groups.
-- **Mace:** a ring of shockwaves all round you.
+- **Bow:** one arrow that pierces every enemy in its line.
+- **Staff:** a slow orb that bursts where it lands, hitting everything round it.
+- **Sword:** a slash: an instant swing cutting everything in an arc in front of you.
+- **Axe:** a heavy cleave: slower, wider, and further than the sword.
+- **Dagger:** rapid, narrow stabs straight ahead.
+- **Mace:** a ground smash hitting everything all round you.
 
-Shorter reach hits harder; with everything on one target each comes close to the wand's damage.
+Melee weapons swing rather than shoot; their shorter reach hits harder. On one target each comes close to the wand's damage.
 
 ## 9. Tiers, modifiers, Artifacts, and Shiny items
 

@@ -1,128 +1,125 @@
 import { PLAYER_WEAPON } from "./combat-config.ts";
-import { rotateVec, type Vec2 } from "./geometry.ts";
+import type { Vec2 } from "./geometry.ts";
 import type { WeaponType } from "./items.ts";
 
 /*
- * Each base weapon's attack pattern (D-141, approved by the user
- * 2026-10-24; numbers tunable). The wand is the only long-range single
- * shot; the others trade range for spread, piercing, or speed. With every
- * projectile on one target, each comes close to the wand's damage per
- * second. Damage still scales with the weapon's tier and Attack, and the
- * fire rate with Dexterity (D-078).
+ * Each base weapon's attack (D-141, redesigned and approved by the user
+ * 2026-10-24; numbers tunable). Not more projectiles, but different kinds
+ * of attack: the wand fires the only long-range single bolt; the bow's
+ * arrow pierces; the staff's orb bursts; the sword, axe, dagger, and mace
+ * swing, cutting everything in an arc in front of you at once. At its own
+ * range each comes close to the wand's damage on one target. Damage still
+ * scales with the weapon's tier and Attack, the rate with Dexterity (D-078).
  */
 
-/** One projectile of a pattern: turned `angleDegrees` from the aim, `offset` px to its side. */
-export interface PatternShot {
-  angleDegrees: number;
-  offset: number;
-}
-
-export interface WeaponPattern {
-  /** How far each projectile flies (and the auto-aim range). */
+/** A projectile weapon: one shot per pull. */
+export interface ShotAttack {
+  kind: "shot";
+  /** How far it flies (and the auto-aim range). */
   range: number;
   speed: number;
   /** Square hit box, world px. */
   size: number;
   /** Shots per second, times the base (4 × the Dexterity factor). */
   rate: number;
-  /** Each projectile's share of the weapon's damage. */
+  /** Its share of the weapon's damage. */
   damage: number;
-  /** Flies on through every enemy it hits, each once (the staff's orb). */
+  /** Flies on through every enemy in its line, each hit once (the bow's arrow). */
   pierce?: boolean;
-  shots: readonly PatternShot[];
+  /** Bursts where it stops, hitting every enemy this close (the staff's orb). */
+  burst?: number;
 }
 
-const fan = (...angles: number[]): PatternShot[] =>
-  angles.map((angleDegrees) => ({ angleDegrees, offset: 0 }));
+/** A melee weapon: an instant swing, hitting every enemy in the arc once. */
+export interface SwingAttack {
+  kind: "swing";
+  /** How far in front it cuts, from your centre (also the auto-aim range). */
+  reach: number;
+  /** The arc's full width, centred on your aim (360: all round you). */
+  arcDegrees: number;
+  rate: number;
+  damage: number;
+}
 
-export const WEAPON_PATTERNS: Record<WeaponType, WeaponPattern> = {
+export type WeaponAttack = ShotAttack | SwingAttack;
+
+export const WEAPON_ATTACKS: Record<WeaponType, WeaponAttack> = {
   // One fast bolt: the only long-range single shot.
-  wand: { range: 340, speed: 400, size: 4, rate: 1, damage: 1, shots: fan(0) },
-  // Three arrows in a 12° fan; it thins out with distance.
+  wand: { kind: "shot", range: 340, speed: 400, size: 4, rate: 1, damage: 1 },
+  // One arrow through every enemy in its line.
   bow: {
+    kind: "shot",
     range: 320,
-    speed: 420,
-    size: 4,
-    rate: 0.75,
-    damage: 0.5,
-    shots: fan(-12, 0, 12),
-  },
-  // One big, slow orb through every enemy in its path.
-  staff: {
-    range: 260,
-    speed: 220,
-    size: 12,
-    rate: 0.5,
-    damage: 2.2,
+    speed: 450,
+    size: 6,
+    rate: 0.6,
+    damage: 1.8,
     pierce: true,
-    shots: fan(0),
   },
-  // Two quick stabs side by side.
-  dagger: {
-    range: 160,
-    speed: 450,
-    size: 4,
-    rate: 1.5,
-    damage: 0.4,
-    shots: [
-      { angleDegrees: 0, offset: -6 },
-      { angleDegrees: 0, offset: 6 },
-    ],
+  // A slow orb that bursts on impact, hitting everything round it.
+  staff: {
+    kind: "shot",
+    range: 260,
+    speed: 240,
+    size: 10,
+    rate: 0.5,
+    damage: 2,
+    burst: 40,
   },
-  // A slash: three short blades 20° apart.
-  sword: {
-    range: 140,
-    speed: 450,
-    size: 6,
-    rate: 1,
-    damage: 0.45,
-    shots: fan(-20, 0, 20),
-  },
-  // A wide chop: five blades across 80°.
-  axe: {
-    range: 120,
-    speed: 400,
-    size: 6,
-    rate: 0.7,
-    damage: 0.4,
-    shots: fan(-40, -20, 0, 20, 40),
-  },
-  // A smash: a ring of six shockwaves all round you.
-  mace: {
-    range: 110,
-    speed: 300,
-    size: 8,
-    rate: 0.7,
-    damage: 1.4,
-    shots: fan(0, 60, 120, 180, 240, 300),
-  },
+  // A slash: everything in a 100° arc in front of you.
+  sword: { kind: "swing", reach: 70, arcDegrees: 100, rate: 1, damage: 1.2 },
+  // A heavy cleave: slower, wider, further.
+  axe: { kind: "swing", reach: 85, arcDegrees: 180, rate: 0.6, damage: 2 },
+  // Rapid stabs: a narrow thrust straight ahead.
+  dagger: { kind: "swing", reach: 90, arcDegrees: 30, rate: 1.6, damage: 0.8 },
+  // A ground smash: everything all round you.
+  mace: { kind: "swing", reach: 70, arcDegrees: 360, rate: 0.45, damage: 2.6 },
 };
 
 /** No weapon (a classless serf's bare hands): the original single shot, unchanged. */
-export const UNARMED: WeaponPattern = {
+export const UNARMED: ShotAttack = {
+  kind: "shot",
   range: PLAYER_WEAPON.range,
   speed: PLAYER_WEAPON.projectileSpeed,
   size: PLAYER_WEAPON.projectileSize,
   rate: 1,
   damage: 1,
-  shots: fan(0),
 };
 
-export function patternOf(
-  weapon: WeaponType | null | undefined,
-): WeaponPattern {
-  return weapon ? WEAPON_PATTERNS[weapon] : UNARMED;
+export function attackOf(weapon: WeaponType | null | undefined): WeaponAttack {
+  return weapon ? WEAPON_ATTACKS[weapon] : UNARMED;
 }
 
-/** Where each projectile of a pattern starts and flies, fired from `at` towards `aim` (a unit vector). */
-export function patternVolley(
-  pattern: WeaponPattern,
+/**
+ * How far auto-aim looks for a target (centre to centre): a shot's range;
+ * for a swing, its reach plus half an enemy's body (SWING_AIM_BODY), since a
+ * swing cuts any enemy whose body is within reach, not only its centre.
+ */
+export function attackRange(attack: WeaponAttack): number {
+  return attack.kind === "shot" ? attack.range : attack.reach + SWING_AIM_BODY;
+}
+
+/** Half the body of an enemy up to 48 px: auto-aim swings at anything this much past the reach. */
+export const SWING_AIM_BODY = 24;
+
+/**
+ * Does a swing from \`at\` aimed along \`aim\` (a unit vector) catch an enemy
+ * of \`size\` at \`enemy\`? Its body must come within the reach, and its
+ * centre must lie inside the arc (an enemy pressed against you counts
+ * whatever the angle).
+ */
+export function swingCatches(
+  swing: Pick<SwingAttack, "reach" | "arcDegrees">,
   at: Vec2,
   aim: Vec2,
-): { position: Vec2; direction: Vec2 }[] {
-  const side = { x: -aim.y, y: aim.x };
-  return pattern.shots.map((s) => ({
-    position: { x: at.x + side.x * s.offset, y: at.y + side.y * s.offset },
-    direction: rotateVec(aim, (s.angleDegrees * Math.PI) / 180),
-  }));
+  enemy: Vec2,
+  size: number,
+): boolean {
+  const dx = enemy.x - at.x;
+  const dy = enemy.y - at.y;
+  const d = Math.hypot(dx, dy);
+  if (d > swing.reach + size / 2) return false;
+  if (swing.arcDegrees >= 360 || d <= size / 2) return true;
+  const cos = (dx * aim.x + dy * aim.y) / d;
+  return cos >= Math.cos(((swing.arcDegrees / 2) * Math.PI) / 180) - 1e-9;
 }

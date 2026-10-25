@@ -1,7 +1,7 @@
 import type { ClassId } from "./classes.ts";
 import { PLAYER_WEAPON } from "./combat-config.ts";
 import type { WeaponType } from "./items.ts";
-import { patternOf } from "./weapon-patterns.ts";
+import { attackOf } from "./weapon-patterns.ts";
 import { PLAYER_SPEED } from "./movement-config.ts";
 import { CLASS_CHOICE_LEVEL } from "./progression.ts";
 
@@ -243,7 +243,7 @@ export interface PlayerCombat {
   maxMp: number;
   /** MP regenerated per second, always on (D-096). */
   mpRegenPerSecond: number;
-  /** The weapon type, whose attack pattern each shot fires (D-141); null: bare hands. */
+  /** The weapon type, whose attack each pull makes (D-141); null: bare hands. */
   weapon: WeaponType | null;
 }
 
@@ -274,7 +274,7 @@ export function combatFor(
     shotsPerSecond:
       PLAYER_WEAPON.shotsPerSecond *
       (0.75 + stats.dexterity / 40) *
-      patternOf(weapon).rate,
+      attackOf(weapon).rate,
     shotDamage: weaponDamage * (0.5 + stats.attack / 20),
     attackFactor: 0.5 + stats.attack / 20,
     damageTakenFactor: DEFENSE_SCALE / (DEFENSE_SCALE + stats.defense),

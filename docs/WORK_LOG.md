@@ -731,3 +731,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found by the tests: my damage check compared the mace's whole ring with the one-target limit (the ring can only put one shockwave on one enemy). A slow obstacle test brushed the 5 s timeout under a full run (now 30 s), like the pathing test before.
 - `npm run check`: 577 shared, 207 server, 73 client, build.
 - Live (harness, **test** DB, headless): the axe's chop, the dagger's twin stabs, the mace's ring, the bow's fan, and the staff's orb, with a 0 px correction while firing.
+
+### Weapon attacks, redesigned — 2026-10-24
+
+- User feedback on the first version: "melee should be slashing, maybe arrows could pierce; I don't like that most of the uniqueness just comes from more projectiles." Redrafted as different kinds of attack: the wand's bolt, the bow's piercing arrow, the staff's bursting orb, and four melee swings (a slash, a cleave, stabs, a smash); approved as is (D-141 rewritten).
+- Swings are instant arc hits on the server, drawn at once on your own screen; the server sends others' swings in snapshots. One swing (or arrow, or burst) that hits several counts as one accurate shot.
+- Found live: auto-aim swung only when an enemy's centre was within the reach, so a grunt pressed against a sword-wielder never got hit; auto-aim now reaches the reach plus half a body (24 px), and a test pins it. Abilities' auto-cast keeps its 300 px reach (a melee weapon must not shrink it).
+- `npm run check`: 582 shared, 207 server, 76 client, build.
+- Live (harness, **test** DB, headless): each weapon in turn against three grunts: the sword's wedge, the axe's half-circle, the dagger's thrust, the mace's ring, the bow, the staff, the wand; 0 px corrections.

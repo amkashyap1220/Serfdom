@@ -1,7 +1,8 @@
 import {
   FORGEMASTER,
   layoutFor,
-  patternOf,
+  attackOf,
+  attackRange,
   type WeaponType,
   sludgePools,
   tidePools,
@@ -41,12 +42,13 @@ import {
   runeViews,
   type AuraView,
   type BlastView,
+  type SwingView,
   type ChainView,
 } from "./combat-view-model";
 import { RemoteInterpolator } from "./interpolation";
 import { LocalShots } from "./local-shots";
 import { Connection, type LobbyMessage, type SnapshotMessage } from "./net";
-import { PlayerPredictor } from "./prediction";
+import { PlayerPredictor, type SwingDraw } from "./prediction";
 
 /**
  * Server projectiles are drawn at their estimated *current* position
@@ -68,6 +70,9 @@ const MAX_EXTRAPOLATION_S = 0.1;
  * screens cover the game until then). Every run starts from scratch: new
  * predictor, seq numbers from 0 (the server makes a new input queue too).
  */
+/** How long a melee swing stays drawn (presentation only, D-141). */
+const SWING_SHOW_MS = 160;
+
 /** How long a landed blast stays drawn (presentation only). */
 const BLAST_SHOW_MS = 350;
 
@@ -118,6 +123,8 @@ export class NetSync {
     atMs: number;
   }[] = [];
   private chains: { points: { x: number; y: number }[]; atMs: number }[] = [];
+  /** Melee swings to draw (D-141): yours at once, others' from snapshots. */
+  private swings: (SwingDraw & { atMs: number })[] = [];
   /** Forwarded to the screen flow (set by main.ts). */
   onLobby: (message: LobbyMessage, receivedAtMs: number) => void = () => {};
   onConnected: () => void = () => {};
@@ -197,7 +204,7 @@ export class NetSync {
 
   /** How far your weapon reaches: its pattern's range (D-141), for auto-aim. */
   get weaponRange(): number {
-    return patternOf(this.myWeaponType).range;
+    return attackRange(attackOf(this.myWeaponType));
   }
 
   /** Our authoritative HP etc. from the latest snapshot. */
@@ -239,9 +246,11 @@ export class NetSync {
    */
   tick(input: PlayerInput): boolean {
     if (!this.predictor) return false;
-    const { seq, shots } = this.predictor.predict(input);
-    for (const shot of shots) this.shots.add(shot);
-    const shot = shots.length > 0;
+    const { seq, shots, swings } = this.predictor.predict(input);
+    for (const s of shots) this.shots.add(s);
+    // Your own swing shows at once (D-141); the server decides what it cuts.
+    for (const s of swings) this.swings.push({ ...s, atMs: performance.now() });
+    const shot = shots.length > 0 || swings.length > 0;
     this.connection.sendInput(seq, input);
     return shot !== null;
   }
@@ -296,6 +305,7 @@ export class NetSync {
       })),
       portalOpen: latest.snapshot.portalOpen,
       blasts: this.blastViews(nowMs),
+      swings: this.swingViews(nowMs),
       chains: this.chainViews(nowMs),
       auras: this.auraViews(latest.snapshot, nowMs),
       slits: slitViews(this.layout, latest.snapshot.traps),
@@ -454,6 +464,19 @@ export class NetSync {
   }
 
   /** Blasts still showing, with how far each has faded. */
+  /** Swings still showing, each fading over SWING_SHOW_MS (D-141). */
+  private swingViews(nowMs: number): SwingView[] {
+    this.swings = this.swings.filter((s) => nowMs - s.atMs < SWING_SHOW_MS);
+    return this.swings.map((s) => ({
+      x: s.x,
+      y: s.y,
+      angle: s.angle,
+      arcDegrees: s.arcDegrees,
+      reach: s.reach,
+      fade: Math.max(0, (nowMs - s.atMs) / SWING_SHOW_MS),
+    }));
+  }
+
   private blastViews(nowMs: number): BlastView[] {
     this.blasts = this.blasts.filter(
       (b) => nowMs - b.atMs < blastShowMs(b.kind),
@@ -477,6 +500,18 @@ export class NetSync {
     this.latest = { snapshot, receivedAtMs };
     for (const c of snapshot.chains) {
       this.chains.push({ points: c.points, atMs: receivedAtMs });
+    }
+    // Others' swings; yours were drawn the moment you swung.
+    for (const s of snapshot.swings) {
+      if (s.by === status.playerId) continue;
+      this.swings.push({
+        x: s.x,
+        y: s.y,
+        angle: s.angle,
+        arcDegrees: s.arcDegrees,
+        reach: s.reach,
+        atMs: receivedAtMs,
+      });
     }
     for (const b of snapshot.blasts) {
       this.blasts.push({

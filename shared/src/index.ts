@@ -294,6 +294,7 @@ export {
   type BlastKind,
   type BuffKind,
   type SnapshotBlast,
+  type SnapshotSwing,
   type SnapshotChain,
   type SnapshotZone,
   type SnapshotHazard,
@@ -552,9 +553,11 @@ export {
 } from "./dragons-roost.ts";
 export {
   UNARMED,
-  WEAPON_PATTERNS,
-  patternOf,
-  patternVolley,
-  type PatternShot,
-  type WeaponPattern,
+  WEAPON_ATTACKS,
+  attackOf,
+  attackRange,
+  swingCatches,
+  type ShotAttack,
+  type SwingAttack,
+  type WeaponAttack,
 } from "./weapon-patterns.ts";

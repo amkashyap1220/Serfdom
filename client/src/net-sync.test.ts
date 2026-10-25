@@ -203,11 +203,15 @@ describe("RemoteInterpolator", () => {
   });
 });
 
-describe("prediction fires each weapon's pattern exactly (D-141)", () => {
-  for (const weapon of ["bow", "mace", "dagger", "staff"] as const) {
-    it(`a ${weapon}: the same projectiles as the server`, () => {
-      const combat = combatFor(SERF_BASE, 39, weapon);
-      const p = new PlayerPredictor(1, { x: 0, y: 0 }, [], combat);
+describe("prediction matches each weapon (D-141)", () => {
+  for (const weapon of ["wand", "bow", "staff"] as const) {
+    it(`a ${weapon}: the same projectile as the server`, () => {
+      const p = new PlayerPredictor(
+        1,
+        { x: 0, y: 0 },
+        [],
+        combatFor(SERF_BASE, 39, weapon),
+      );
       let server = addPlayer(
         createSimState([]),
         1,
@@ -219,16 +223,50 @@ describe("prediction fires each weapon's pattern exactly (D-141)", () => {
       );
       const local = p.predict(SHOOT_UP);
       server = applyPlayerInput(server, 1, SHOOT_UP, [], TICK_SECONDS).state;
-      const shape = (
-        ps: readonly {
-          position: unknown;
-          direction: unknown;
-          damage: number;
-          size: number;
-        }[],
-      ) => ps.map((q) => [q.position, q.direction, q.damage, q.size]);
-      expect(local.shots.length).toBeGreaterThan(0);
-      expect(shape(local.shots)).toEqual(shape(server.projectiles));
+      expect(local.shots).toHaveLength(1);
+      expect(local.shots).toEqual(server.projectiles);
+    });
+  }
+  for (const weapon of ["sword", "axe", "dagger", "mace"] as const) {
+    it(`a ${weapon}: the same swing as the server, drawn at once, no projectile`, () => {
+      const p = new PlayerPredictor(
+        1,
+        { x: 0, y: 0 },
+        [],
+        combatFor(SERF_BASE, 39, weapon),
+      );
+      const server = applyPlayerInput(
+        addPlayer(
+          createSimState([]),
+          1,
+          { x: 0, y: 0 },
+          SERF_BASE,
+          3,
+          null,
+          weapon,
+        ),
+        1,
+        SHOOT_UP,
+        [],
+        TICK_SECONDS,
+      );
+      const local = p.predict(SHOOT_UP);
+      expect(local.shots).toEqual([]);
+      const swing = server.events.find((e) => e.type === "swing") as {
+        at: { x: number; y: number };
+        angle: number;
+        arcDegrees: number;
+        reach: number;
+      };
+      expect(local.swings).toEqual([
+        {
+          x: swing.at.x,
+          y: swing.at.y,
+          angle: swing.angle,
+          arcDegrees: swing.arcDegrees,
+          reach: swing.reach,
+        },
+      ]);
     });
   }
 });

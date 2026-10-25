@@ -58,6 +58,7 @@ import {
   BUFF_KINDS,
   type SimEvent,
   type SnapshotBlast,
+  type SnapshotSwing,
   type SnapshotChain,
   type SnapshotPlayer,
   type Loadout,
@@ -119,6 +120,8 @@ export class DungeonInstance {
   private sim: SimState;
   /** Blasts landed since the last snapshot (drawing only). */
   private readonly blastsToSend: SnapshotBlast[] = [];
+  /** Melee swings since the last snapshot (D-141). */
+  private readonly swingsToSend: SnapshotSwing[] = [];
   /** Chain Lightning paths since the last snapshot (drawing only). */
   private readonly chainsToSend: SnapshotChain[] = [];
   private rooms: RunProgress;
@@ -261,6 +264,15 @@ export class DungeonInstance {
           x: roundCoord(e.at.x),
           y: roundCoord(e.at.y),
           radius: e.radius,
+        });
+      } else if (e.type === "swing") {
+        this.swingsToSend.push({
+          by: e.playerId,
+          x: roundCoord(e.at.x),
+          y: roundCoord(e.at.y),
+          angle: Math.round(e.angle * 1000) / 1000,
+          arcDegrees: e.arcDegrees,
+          reach: e.reach,
         });
       } else if (e.type === "chain") {
         this.chainsToSend.push({
@@ -607,6 +619,7 @@ export class DungeonInstance {
       portalOpen: this.portalOpen,
       // Each blast goes out in exactly one snapshot.
       blasts: this.blastsToSend.splice(0),
+      swings: this.swingsToSend.splice(0),
       chains: this.chainsToSend.splice(0),
       zones: this.sim.zones.map((z) => ({
         x: roundCoord(z.at.x),

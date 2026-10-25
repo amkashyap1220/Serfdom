@@ -70,8 +70,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
- * v43: weapon attack patterns (D-141): runStarted carries your
- *          `weaponType`, so prediction fires the same pattern as the server.
+ * v43: weapon attacks (D-141): runStarted carries your `weaponType`;
+ *          snapshots list melee `swings`; blasts may be a staff's `burst`.
  * v42 (13j): Dragon's Roost (D-140): its kinds; a whirlpool carries its
  *          `dragSpeed` (negative: the Elder Dragon's gust pushes players
  *          away, so prediction needs it).
@@ -309,6 +309,16 @@ export interface SnapshotFrost {
   until: number;
 }
 
+/** A melee swing (D-141): by a player, from (x, y), aimed at `angle`, `arcDegrees` wide, `reach` long. */
+export interface SnapshotSwing {
+  by: number;
+  x: number;
+  y: number;
+  angle: number;
+  arcDegrees: number;
+  reach: number;
+}
+
 /** A blade arm (D-137): from (x, y), `angle` now, turning `speed` rad/s; `laser`: the Automaton's. */
 export interface SnapshotBlade {
   x: number;
@@ -452,6 +462,8 @@ export const BLAST_KINDS = [
   "raise",
   /** A cursed rune bursting (D-123). */
   "rune",
+  /** The staff's orb bursting (D-141). */
+  "burst",
   /** A fire elemental exploding (D-132). */
   "explosion",
   /** A bellows-keeper's heal pulse (D-132). */
@@ -625,6 +637,8 @@ export type ServerMessage =
       cones: SnapshotCone[];
       /** Blade arms turning now (D-137). */
       blades: SnapshotBlade[];
+      /** Melee swings since the last snapshot (D-141), each sent once. */
+      swings: SnapshotSwing[];
       /** Arrow traps glowing before a volley (D-113). */
       traps: TrapWarning[];
       /** Rune columns glowing before they burst (D-123). */
@@ -1139,6 +1153,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "frost",
           "cones",
           "blades",
+          "swings",
           "traps",
           "runes",
           "portalOpen",
@@ -1192,6 +1207,8 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!cones) return fail("snapshot: bad cone entry");
       const blades = parseList(obj.blades, parseSnapshotBlade);
       if (!blades) return fail("snapshot: bad blade entry");
+      const swings = parseList(obj.swings, parseSnapshotSwing);
+      if (!swings) return fail("snapshot: bad swing entry");
       if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
       const players = parseList(obj.players, parseSnapshotPlayer);
       if (!players) return fail("snapshot: bad player entry");
@@ -1219,6 +1236,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           frost,
           cones,
           blades,
+          swings,
           traps,
           runes,
           portalOpen: obj.portalOpen,
@@ -1571,6 +1589,30 @@ function parsePull(v: unknown): SnapshotPlayer["pull"] | undefined {
     return undefined;
   }
   return { x: v.x, y: v.y, from: v.from, speed: v.speed, left: v.left };
+}
+
+function parseSnapshotSwing(v: unknown): SnapshotSwing | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["by", "x", "y", "angle", "arcDegrees", "reach"]) ||
+    !isPlayerId(v.by) ||
+    !isFiniteNumber(v.x) ||
+    !isFiniteNumber(v.y) ||
+    !isFiniteNumber(v.angle) ||
+    !isNonNegative(v.arcDegrees) ||
+    (v.arcDegrees as number) > 360 ||
+    !isNonNegative(v.reach)
+  ) {
+    return null;
+  }
+  return {
+    by: v.by,
+    x: v.x,
+    y: v.y,
+    angle: v.angle,
+    arcDegrees: v.arcDegrees,
+    reach: v.reach,
+  };
 }
 
 function parseSnapshotBlade(v: unknown): SnapshotBlade | null {

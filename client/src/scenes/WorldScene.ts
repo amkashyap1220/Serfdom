@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import {
   consumeFixedSteps,
+  PLAYER_WEAPON,
   dungeonInfo,
   MAX_FRAME_SECONDS,
   NO_INPUT,
@@ -312,7 +313,7 @@ export class WorldScene extends Phaser.Scene {
         { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
         this.net.position,
         targets,
-        this.net.weaponRange,
+        PLAYER_WEAPON.range,
       );
       const fired = this.net.tick({ move, fire, ability });
       if (fired) this.totals.shots++;

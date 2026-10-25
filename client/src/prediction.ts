@@ -16,6 +16,15 @@ import {
   type Wind,
 } from "@serfdom/shared";
 
+/** A melee swing to draw (D-141): from (x, y), aimed at `angle`. */
+export interface SwingDraw {
+  x: number;
+  y: number;
+  angle: number;
+  arcDegrees: number;
+  reach: number;
+}
+
 export interface PendingInput {
   seq: number;
   input: PlayerInput;
@@ -119,14 +128,18 @@ export class PlayerPredictor {
   }
 
   /** Applies one tick locally; returns the input to send and the shots it fired (a pattern, D-141). */
-  predict(input: PlayerInput): { seq: number; shots: Projectile[] } {
+  predict(input: PlayerInput): {
+    seq: number;
+    shots: Projectile[];
+    swings: SwingDraw[];
+  } {
     const seq = this.nextSeq++;
-    const { player, shots } = this.step(this.me, input, this.clock);
+    const { player, shots, swings } = this.step(this.me, input, this.clock);
     this.clock += TICK_SECONDS;
     this.me = player;
     this.pending.push({ seq, input });
     if (this.pending.length > MAX_PENDING) this.pending.shift();
-    return { seq, shots };
+    return { seq, shots, swings };
   }
 
   /** Accepts the server's authoritative state for this player after it processed inputs up to `ack`. */
@@ -160,7 +173,7 @@ export class PlayerPredictor {
     from: PlayerState,
     input: PlayerInput,
     clock: number,
-  ): { player: PlayerState; shots: Projectile[] } {
+  ): { player: PlayerState; shots: Projectile[]; swings: SwingDraw[] } {
     const solo: SimState = {
       players: [from],
       enemies: [],
@@ -187,6 +200,19 @@ export class PlayerPredictor {
     return {
       player: r.state.players[0] ?? from,
       shots: [...r.state.projectiles],
+      swings: r.events.flatMap((e) =>
+        e.type === "swing"
+          ? [
+              {
+                x: e.at.x,
+                y: e.at.y,
+                angle: e.angle,
+                arcDegrees: e.arcDegrees,
+                reach: e.reach,
+              },
+            ]
+          : [],
+      ),
     };
   }
 }
