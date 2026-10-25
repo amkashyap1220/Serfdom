@@ -8,9 +8,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* "safe": if a screen is ever taller than the box, keep its top (the
+     title and tabs) in view rather than cutting both ends off. */
+  justify-content: safe center;
   gap: 10px;
   padding: 24px;
+  /* Dark, thin scrollbars for the tabs that scroll (inherited). */
+  scrollbar-color: #46505f #0e1014;
+  scrollbar-width: thin;
   box-sizing: border-box;
   overflow: hidden;
   /* Exactly the 1200×800 game box (HUD + gameplay): a lighter panel with a
@@ -88,7 +93,11 @@
   align-items: center;
   gap: 12px;
   min-height: 220px;
-  justify-content: center;
+  justify-content: safe center;
+  /* No tab may push the title and tabs out of the 800 px box: a tall one
+     scrolls inside its own space instead. */
+  max-height: 540px;
+  overflow-y: auto;
 }
 
 .dungeon-card {
@@ -580,6 +589,10 @@
   flex-direction: column;
   gap: 2px;
   width: 460px;
+  /* The top 20 scroll here, so the heading and note stay in view. */
+  max-height: 420px;
+  overflow-y: auto;
+  flex-shrink: 0;
 }
 
 .lb-row {
