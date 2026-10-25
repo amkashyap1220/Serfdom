@@ -285,10 +285,10 @@ Each weapon type attacks in its own way; the wand is the only long-range single 
 - **Staff:** a slow orb that bursts where it lands, hitting everything round it.
 - **Sword:** a slash: an instant swing cutting everything in an arc in front of you.
 - **Axe:** a heavy cleave: slower, wider, and further than the sword.
-- **Dagger:** rapid, narrow stabs straight ahead.
+- **Dagger:** quick, narrow stabs straight ahead, the fastest melee weapon.
 - **Mace:** a ground smash hitting everything all round you.
 
-Melee weapons swing rather than shoot; their shorter reach hits harder. On one target each comes close to the wand's damage.
+Melee weapons swing rather than shoot, slowly and heavily: a new character's sword swings once a second, each blow several times a wand bolt. On one target each comes close to the wand's damage.
 
 ## 9. Tiers, modifiers, Artifacts, and Shiny items
 

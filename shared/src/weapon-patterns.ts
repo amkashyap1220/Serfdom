@@ -66,14 +66,16 @@ export const WEAPON_ATTACKS: Record<WeaponType, WeaponAttack> = {
     damage: 2,
     burst: 40,
   },
+  // Melee swings are slow and heavy (the user, 2026-10-24): at a new
+  // character's Dexterity (10) a sword swings once a second.
   // A slash: everything in a 100° arc in front of you.
-  sword: { kind: "swing", reach: 70, arcDegrees: 100, rate: 1, damage: 1.2 },
+  sword: { kind: "swing", reach: 70, arcDegrees: 100, rate: 0.25, damage: 4.8 },
   // A heavy cleave: slower, wider, further.
-  axe: { kind: "swing", reach: 85, arcDegrees: 180, rate: 0.6, damage: 2 },
-  // Rapid stabs: a narrow thrust straight ahead.
-  dagger: { kind: "swing", reach: 90, arcDegrees: 30, rate: 1.6, damage: 0.8 },
+  axe: { kind: "swing", reach: 85, arcDegrees: 180, rate: 0.15, damage: 8 },
+  // Quick stabs: a narrow thrust straight ahead, the fastest melee.
+  dagger: { kind: "swing", reach: 90, arcDegrees: 30, rate: 0.4, damage: 3.2 },
   // A ground smash: everything all round you.
-  mace: { kind: "swing", reach: 70, arcDegrees: 360, rate: 0.45, damage: 2.6 },
+  mace: { kind: "swing", reach: 70, arcDegrees: 360, rate: 0.125, damage: 9.4 },
 };
 
 /** No weapon (a classless serf's bare hands): the original single shot, unchanged. */

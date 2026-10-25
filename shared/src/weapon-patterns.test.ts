@@ -112,16 +112,18 @@ describe("every base weapon has its own kind of attack (D-141)", () => {
     }
   });
 
-  it("each weapon swings or fires at its own pace; bare hands keep the old shot", () => {
-    const base = combatFor(SERF_BASE).shotsPerSecond;
-    expect(combatFor(SERF_BASE, 30, "dagger").shotsPerSecond).toBeCloseTo(
-      base * 1.6,
-      9,
-    );
-    expect(combatFor(SERF_BASE, 30, "mace").shotsPerSecond).toBeCloseTo(
-      base * 0.45,
-      9,
-    );
+  it("melee swings slow and heavy: a sword once a second at Dexterity 10", () => {
+    const pace = (w: WeaponType) => combatFor(SERF_BASE, 30, w).shotsPerSecond;
+    expect(SERF_BASE.dexterity).toBe(10);
+    expect(pace("sword")).toBeCloseTo(1, 9);
+    expect(pace("dagger")).toBeCloseTo(1.6, 9);
+    expect(pace("axe")).toBeCloseTo(0.6, 9);
+    expect(pace("mace")).toBeCloseTo(0.5, 9);
+    expect(pace("wand")).toBeCloseTo(4, 9);
+    // Each swing hits several times as hard as a wand bolt.
+    for (const w of ["sword", "axe", "dagger", "mace"] as const) {
+      expect(WEAPON_ATTACKS[w].damage, w).toBeGreaterThanOrEqual(3);
+    }
     expect(attackOf(null)).toMatchObject({ kind: "shot", range: 300 });
   });
 });

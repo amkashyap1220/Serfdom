@@ -739,3 +739,7 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Found live: auto-aim swung only when an enemy's centre was within the reach, so a grunt pressed against a sword-wielder never got hit; auto-aim now reaches the reach plus half a body (24 px), and a test pins it. Abilities' auto-cast keeps its 300 px reach (a melee weapon must not shrink it).
 - `npm run check`: 582 shared, 207 server, 76 client, build.
 - Live (harness, **test** DB, headless): each weapon in turn against three grunts: the sword's wedge, the axe's half-circle, the dagger's thrust, the mace's ring, the bow, the staff, the wand; 0 px corrections.
+
+### Melee slowed — 2026-10-24
+
+- User feedback: "the melee stuff is too fast, they should hit harder but slower"; for reference, a level-1 Fighter with a T0 sword should swing once a second. Classes start at level 5, so the anchor is a new character's Dexterity (10): the sword swings 1/s there (a fresh level-5 Fighter, Dex 13–17, about 1.1/s). The axe (0.6/s), dagger (1.6/s), and mace (0.5/s) keep their pace relative to the sword; every melee weapon keeps its damage per second, so each blow hits 4× as hard (D-141 updated).
