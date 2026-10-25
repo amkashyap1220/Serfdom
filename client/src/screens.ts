@@ -415,6 +415,18 @@ export class ScreenView {
         this.finishMenu(nav, body, notice);
         return;
       }
+      // Ten dungeons no longer fit one column (Phase 13): two rows, the
+      // 1–20 ladder and the level-20 endgame, scrolling if ever too tall.
+      const list = el("div", "dungeon-list");
+      const grids = new Map<boolean, HTMLElement>();
+      for (const [endgame, title] of [
+        [false, "The ladder · levels 1–20"],
+        [true, "Endgame · level 20"],
+      ] as const) {
+        const grid = el("div", "dungeon-grid");
+        grids.set(endgame, grid);
+        list.append(el("h3", "dungeon-group", title), grid);
+      }
       for (const d of LISTED_DUNGEONS) {
         const card = el("div", "dungeon-card");
         // Locked until this serf completes the Warrens (D-107); the server
@@ -431,8 +443,9 @@ export class ScreenView {
               ? el("p", "notice", `Locked: ${locked}`)
               : button("Enter queue (Enter)", () => this.actions.queue(d.id)),
         );
-        body.append(card);
+        grids.get(("minLevel" in d ? d.minLevel : 1) >= 20)!.append(card);
       }
+      body.append(list);
       body.append(
         el(
           "p",

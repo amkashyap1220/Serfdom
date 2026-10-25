@@ -102,6 +102,46 @@
   background: #171a21;
 }
 
+/* Phase 13: ten dungeons in two rows of five (the ladder, the endgame). */
+.dungeon-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.screen h3.dungeon-group {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #8a94a6;
+  letter-spacing: 0.06em;
+}
+
+.dungeon-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 206px);
+  gap: 8px;
+}
+
+.dungeon-grid .dungeon-card {
+  width: auto;
+  padding: 10px 8px;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.dungeon-grid .dungeon-card h2 {
+  font-size: 15px;
+}
+
+.dungeon-grid .dungeon-card button,
+.dungeon-grid .dungeon-card .notice {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
 .screen .countdown {
   font-size: 22px;
   color: #f0c419;

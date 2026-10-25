@@ -717,3 +717,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - EXP pace, simulated from the real formulas: level 1 to 20 in 29 clears (Warrens 13, Stronghold 4, Crypt 5, Forge 4, Temple 3). Worth the user's eye: the Warrens take 13 of the 29, from its own approved numbers.
 - `npm run check`: 571 shared, 207 server, 69 client, build.
 - Phase 13 is built and committed locally on `phase-13-rest` (13d–13k), awaiting the user's combined test; nothing pushed.
+
+### Menu fix and level-20 test serfs — 2026-10-24
+
+- User report: the dungeon select covered parts of the menu and the list did not fit. Cause: ten 360 px cards in one column (about 1,100 px) inside the 800 px game box, which hides overflow, so the title, tabs, and the last cards were cut off. Fix: two labelled rows of five smaller cards (the ladder, levels 1–20; the endgame, level 20) in a list that scrolls if it ever grows. Measured headless: title, tabs, and all ten cards inside the box, no scrolling needed.
+- For the user's Phase 13 test (dev DB, through the game's service code, temporary script deleted): a level-20 Fighter (Bran Holloway) on serfdom@test.com and a level-20 Wizard (Wynne Ashby) on serfdom1@test.com, each in T7 gear with random rolls; the user chose the classes.
