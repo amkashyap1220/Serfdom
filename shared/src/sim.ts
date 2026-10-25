@@ -45,7 +45,7 @@ import {
   SLUDGE,
 } from "./dungeon-layout.ts";
 import { boxAround } from "./collision.ts";
-import { DUMMY_ENEMY, PLAYER_HEALTH, PLAYER_WEAPON } from "./combat-config.ts";
+import { DUMMY_ENEMY, PLAYER_HEALTH } from "./combat-config.ts";
 import { circleHitsPlayer, enemyAct, shieldBlocks } from "./enemy-ai.ts";
 import type { EnemyKind } from "./enemy-config.ts";
 import {
@@ -93,7 +93,8 @@ import {
   volleyArrowDamage,
   type AbilityLoadout,
 } from "./abilities.ts";
-import { weaponDamage } from "./items.ts";
+import { weaponDamage, type WeaponType } from "./items.ts";
+import { patternOf, patternVolley } from "./weapon-patterns.ts";
 import {
   combatFor,
   SERF_BASE,
@@ -817,8 +818,9 @@ export function newPlayer(
   stats: Stats = SERF_BASE,
   weaponTier: number | null = null,
   ability: AbilityLoadout | null = null,
+  weaponType: WeaponType | null = null,
 ): PlayerState {
-  const combat = combatFor(stats, weaponDamage(weaponTier));
+  const combat = combatFor(stats, weaponDamage(weaponTier), weaponType);
   return {
     id,
     position: { ...spawn },
@@ -842,11 +844,15 @@ export function addPlayer(
   stats: Stats = SERF_BASE,
   weaponTier: number | null = null,
   ability: AbilityLoadout | null = null,
+  weaponType: WeaponType | null = null,
 ): SimState {
   const others = state.players.filter((p) => p.id !== id);
   return {
     ...state,
-    players: [...others, newPlayer(id, spawn, stats, weaponTier, ability)],
+    players: [
+      ...others,
+      newPlayer(id, spawn, stats, weaponTier, ability, weaponType),
+    ],
   };
 }
 
@@ -1030,27 +1036,34 @@ export function applyPlayerInput(
       nextProjectileId: id + 1,
     };
   }
+  // A shot fires the weapon's whole pattern (D-141); prediction runs this too.
   if (cooldown.fired && aim) {
-    const id = next.nextProjectileId;
-    next = {
-      ...next,
-      projectiles: [
-        ...next.projectiles,
-        {
-          id,
-          owner: "player",
-          ownerId: playerId,
-          position: { ...position },
-          direction: aim,
-          speed: PLAYER_WEAPON.projectileSpeed,
-          remaining: PLAYER_WEAPON.range,
-          damage: player.combat.shotDamage * damageMultiplier(player),
-          size: PLAYER_WEAPON.projectileSize,
-        },
-      ],
-      nextProjectileId: id + 1,
-    };
-    events.push({ type: "shot", playerId, projectileId: id });
+    const pattern = patternOf(player.combat.weapon);
+    const damage =
+      player.combat.shotDamage * pattern.damage * damageMultiplier(player);
+    for (const shot of patternVolley(pattern, position, aim)) {
+      const id = next.nextProjectileId;
+      next = {
+        ...next,
+        projectiles: [
+          ...next.projectiles,
+          {
+            id,
+            owner: "player",
+            ownerId: playerId,
+            position: shot.position,
+            direction: shot.direction,
+            speed: pattern.speed,
+            remaining: pattern.range,
+            damage,
+            size: pattern.size,
+            ...(pattern.pierce ? { pierce: true, pierced: [] } : {}),
+          },
+        ],
+        nextProjectileId: id + 1,
+      };
+      events.push({ type: "shot", playerId, projectileId: id });
+    }
   }
   return { state: next, events };
 }
@@ -1865,6 +1878,20 @@ export function stepWorld(
         damage: result.damage,
         position: outcome.position,
       });
+      // A piercing orb flies on from where it hit, never hitting that
+      // enemy again (D-141).
+      if (p.pierce) {
+        const moved = Math.hypot(
+          outcome.position.x - p.position.x,
+          outcome.position.y - p.position.y,
+        );
+        surviving.push({
+          ...p,
+          position: { ...outcome.position },
+          remaining: Math.max(0, p.remaining - moved),
+          pierced: [...(p.pierced ?? []), target.id],
+        });
+      }
       if (result.defeated) {
         events.push({
           type: "defeated",
@@ -2277,7 +2304,7 @@ function targetsFor(
     }));
   }
   return enemies
-    .filter(isHittable)
+    .filter((e) => isHittable(e) && !(p.pierced ?? []).includes(e.id))
     .map((e) => ({ id: e.id, box: boxAround(e.position, e.size) }));
 }
 

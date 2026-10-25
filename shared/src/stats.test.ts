@@ -138,6 +138,8 @@ describe("combat from stats (D-077, D-078)", () => {
       maxMp: 10,
       mpRegenPerSecond: 1, // WIS 10 / 10 (D-096)
       attackFactor: 1,
+      // Bare hands: the original single shot (D-141).
+      weapon: null,
     });
   });
 

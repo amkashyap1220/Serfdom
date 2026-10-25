@@ -76,7 +76,12 @@ interface Member {
 }
 
 /** A fresh Serf with nothing equipped. */
-const FRESH: Loadout = { stats: SERF_BASE, weaponTier: null, ability: null };
+const FRESH: Loadout = {
+  stats: SERF_BASE,
+  weaponTier: null,
+  weaponType: null,
+  ability: null,
+};
 
 /** One player's run is over; the caller sends them `runEnded` and back to the menu. */
 export interface RunEnd {
@@ -192,6 +197,7 @@ export class DungeonInstance {
       loadout.stats,
       loadout.weaponTier,
       loadout.ability,
+      loadout.weaponType,
     );
     this.members.set(playerId, {
       inputs: newInputQueue(),

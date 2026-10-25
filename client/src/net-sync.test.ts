@@ -2,6 +2,8 @@ import {
   addPlayer,
   applyPlayerInput,
   createSimState,
+  combatFor,
+  SERF_BASE,
   PLAYER_SPEED,
   TICK_SECONDS,
   type PlayerInput,
@@ -80,7 +82,8 @@ describe("PlayerPredictor", () => {
   it("predicts shots with the fire-rate rule: immediately, then every 15 ticks", () => {
     const p = predictor();
     const fired: number[] = [];
-    for (let i = 0; i < 31; i++) if (p.predict(SHOOT_UP).shot) fired.push(i);
+    for (let i = 0; i < 31; i++)
+      if (p.predict(SHOOT_UP).shots.length > 0) fired.push(i);
     expect(fired).toEqual([0, 15, 30]);
   });
 
@@ -97,7 +100,7 @@ describe("PlayerPredictor", () => {
       const before = sim.projectiles.length;
       sim = applyPlayerInput(sim, 1, input, [], TICK_SECONDS).state;
       const serverShot = sim.projectiles[before] ?? null;
-      expect(local.shot?.position ?? null).toEqual(
+      expect(local.shots[0]?.position ?? null).toEqual(
         serverShot?.position ?? null,
       );
       expect(p.position).toEqual(sim.players[0]!.position);
@@ -118,7 +121,7 @@ describe("PlayerPredictor", () => {
     p.reconcile(server(0, -1, { hp: 0 }));
     p.predict(MOVE_RIGHT);
     expect(p.position.x).toBe(0);
-    expect(p.predict(SHOOT_UP).shot).toBeNull();
+    expect(p.predict(SHOOT_UP).shots).toEqual([]);
   });
 
   it("caps unacknowledged inputs if the server stops answering", () => {
@@ -198,4 +201,34 @@ describe("RemoteInterpolator", () => {
   it("is empty before any snapshot", () => {
     expect(new RemoteInterpolator().sample(1000).size).toBe(0);
   });
+});
+
+describe("prediction fires each weapon's pattern exactly (D-141)", () => {
+  for (const weapon of ["bow", "mace", "dagger", "staff"] as const) {
+    it(`a ${weapon}: the same projectiles as the server`, () => {
+      const combat = combatFor(SERF_BASE, 39, weapon);
+      const p = new PlayerPredictor(1, { x: 0, y: 0 }, [], combat);
+      let server = addPlayer(
+        createSimState([]),
+        1,
+        { x: 0, y: 0 },
+        SERF_BASE,
+        3,
+        null,
+        weapon,
+      );
+      const local = p.predict(SHOOT_UP);
+      server = applyPlayerInput(server, 1, SHOOT_UP, [], TICK_SECONDS).state;
+      const shape = (
+        ps: readonly {
+          position: unknown;
+          direction: unknown;
+          damage: number;
+          size: number;
+        }[],
+      ) => ps.map((q) => [q.position, q.direction, q.damage, q.size]);
+      expect(local.shots.length).toBeGreaterThan(0);
+      expect(shape(local.shots)).toEqual(shape(server.projectiles));
+    });
+  }
 });

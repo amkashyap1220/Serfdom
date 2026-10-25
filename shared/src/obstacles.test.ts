@@ -55,7 +55,8 @@ describe("obstacles in the rooms (D-112)", () => {
         expect(findLeak(layout), where).toBeNull();
       }
     }
-  });
+    // Many generated maps: under a full parallel run it needs more than the default 5 s.
+  }, 30_000);
 });
 
 describe("goblins and cover (D-112)", () => {

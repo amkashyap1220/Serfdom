@@ -330,6 +330,7 @@ describe("menu, queue, and run messages (v4)", () => {
         players: [1, 4],
         stats: { ...SERF_BASE, speed: 14 },
         weaponTier: 2,
+        weaponType: null,
         ability: null,
       },
       {
@@ -497,6 +498,7 @@ describe("menu, queue, and run messages (v4)", () => {
       players: [1],
       stats: SERF_BASE,
       weaponTier: null,
+      weaponType: null,
       ability: null,
     };
     expect(server(started).ok).toBe(true);

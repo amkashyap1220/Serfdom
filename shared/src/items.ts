@@ -525,6 +525,8 @@ export interface Loadout {
   stats: Stats;
   /** Tier of the equipped weapon, or null (no weapon: 25 damage). */
   weaponTier: number | null;
+  /** Its type, whose attack pattern it fires (D-141); null: no weapon. */
+  weaponType: WeaponType | null;
   /** What Space casts, from the worn ability item (D-092); null = nothing. */
   ability: AbilityLoadout | null;
 }
@@ -552,6 +554,7 @@ export function loadoutOf(serf: {
   return {
     stats,
     weaponTier: weapon ? weapon.tier : null,
+    weaponType: weapon ? (weapon.type as WeaponType) : null,
     ability: book
       ? abilityForItem(book.type as AbilityItemType, book.tier)
       : null,

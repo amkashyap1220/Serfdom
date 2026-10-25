@@ -264,7 +264,8 @@ Restart `npm run dev` (protocol v42) and reload. The ladder dungeons open once a
 6. **Abyssal Gauntlet**: one arena; eight waves, each when you beat the last or after 45 s; braziers from wave 2, runes from wave 4, slag from wave 6. **The Warden** (wave 8) spirals, then charges (a wall dazes it), then slams shockwave rings.
 7. **Stormspire**: the path climbs north; lightning circles fill in under you, then strike; wind channels gust (streaks speed up) and push you; hawks dive. **The Storm Caller** calls lightning on everyone; at 60% and 30% it raises 3 pylons (WARDED: shots pass through it) with lightning arcs between them (a crackle, then a burn); break the pylons and it is STUNNED.
 8. **Dragon's Roost**: lava, slag, jets, wind, and lightning together; fire drakes lob burning bombs. **The Elder Dragon** breathes fire cones that leave the floor burning, sweeps its tail, and beats its wings (a ring, then you are blown back); at half it flies (AIRBORNE, untouchable) while meteors fall, then lands. Its chests can hold T10.
-9. **Two players** (two browser windows), any one dungeon: both see the same waves, traps, and boss; both get a chest at the end.
+9. **Weapons** (D-141): equip each weapon type in turn (the stash has some) and fire at a group: the wand one long bolt; the bow a three-arrow fan; the staff one big orb that goes through a line of enemies; the dagger two stabs side by side, fast and short; the sword three short blades; the axe a wide five-blade chop; the mace a ring all round you. Your own shots must not stutter or jump.
+10. **Two players** (two browser windows), any one dungeon: both see the same waves, traps, and boss; both get a chest at the end.
 
 #### Known issue: snapshot size in crowded rooms (found in 13e)
 

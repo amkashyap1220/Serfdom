@@ -20,6 +20,8 @@ import {
   type Item,
   type ItemSpec,
   type StatRoll,
+  WEAPON_TYPES,
+  type WeaponType,
 } from "./items.ts";
 import {
   LIFE_STAT_KEYS,
@@ -68,6 +70,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v43: weapon attack patterns (D-141): runStarted carries your
+ *          `weaponType`, so prediction fires the same pattern as the server.
  * v42 (13j): Dragon's Roost (D-140): its kinds; a whirlpool carries its
  *          `dragSpeed` (negative: the Elder Dragon's gust pushes players
  *          away, so prediction needs it).
@@ -149,7 +153,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 42;
+export const PROTOCOL_VERSION = 43;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -545,6 +549,8 @@ export type ServerMessage =
       players: number[];
       stats: Stats;
       weaponTier: number | null;
+      /** Your weapon's type, whose attack pattern you fire (D-141), or null. */
+      weaponType: WeaponType | null;
       /** What your Space casts this run (D-092), or null. */
       ability: AbilityLoadout | null;
     }
@@ -906,10 +912,17 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           "players",
           "stats",
           "weaponTier",
+          "weaponType",
           "ability",
         ])
       ) {
         return fail("runStarted: unexpected fields");
+      }
+      if (
+        obj.weaponType !== null &&
+        !(WEAPON_TYPES as readonly unknown[]).includes(obj.weaponType)
+      ) {
+        return fail("runStarted: bad weaponType");
       }
       if (!isNonNegativeInt(obj.seed) || (obj.seed as number) > MAX_SEED) {
         return fail("runStarted: seed must be a whole number 0–4294967295");
@@ -941,6 +954,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
             players: [...obj.players],
             stats,
             weaponTier: obj.weaponTier as number | null,
+            weaponType: obj.weaponType as WeaponType | null,
             ability,
           },
         };

@@ -426,6 +426,7 @@ describe("gear on a serf (9b, D-083, T-048)", () => {
     expect(loadoutOf({ stats: SERF_BASE, items: [] })).toEqual({
       stats: SERF_BASE,
       weaponTier: null,
+      weaponType: null,
       ability: null,
     });
   });

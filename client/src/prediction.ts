@@ -118,15 +118,15 @@ export class PlayerPredictor {
     return this.pending.length;
   }
 
-  /** Applies one tick locally; returns the input to send and the shot it fired, if any. */
-  predict(input: PlayerInput): { seq: number; shot: Projectile | null } {
+  /** Applies one tick locally; returns the input to send and the shots it fired (a pattern, D-141). */
+  predict(input: PlayerInput): { seq: number; shots: Projectile[] } {
     const seq = this.nextSeq++;
-    const { player, shot } = this.step(this.me, input, this.clock);
+    const { player, shots } = this.step(this.me, input, this.clock);
     this.clock += TICK_SECONDS;
     this.me = player;
     this.pending.push({ seq, input });
     if (this.pending.length > MAX_PENDING) this.pending.shift();
-    return { seq, shot };
+    return { seq, shots };
   }
 
   /** Accepts the server's authoritative state for this player after it processed inputs up to `ack`. */
@@ -160,7 +160,7 @@ export class PlayerPredictor {
     from: PlayerState,
     input: PlayerInput,
     clock: number,
-  ): { player: PlayerState; shot: Projectile | null } {
+  ): { player: PlayerState; shots: Projectile[] } {
     const solo: SimState = {
       players: [from],
       enemies: [],
@@ -186,7 +186,7 @@ export class PlayerPredictor {
     const r = applyPlayerInput(solo, from.id, input, this.walls, TICK_SECONDS);
     return {
       player: r.state.players[0] ?? from,
-      shot: r.state.projectiles[0] ?? null,
+      shots: [...r.state.projectiles],
     };
   }
 }

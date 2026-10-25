@@ -1,6 +1,8 @@
 import {
   FORGEMASTER,
   layoutFor,
+  patternOf,
+  type WeaponType,
   sludgePools,
   tidePools,
   windChannels,
@@ -98,6 +100,8 @@ export class NetSync {
   /** Your stats this run, from runStarted (prediction must match the server). */
   private myStats: Stats = SERF_BASE;
   private myWeaponTier: number | null = null;
+  /** Your weapon's type, for its pattern and range (D-141). */
+  private myWeaponType: WeaponType | null = null;
   /** What Space casts this run, from runStarted (D-092); null = nothing. */
   myAbility: AbilityLoadout | null = null;
   private latest: { snapshot: SnapshotMessage; receivedAtMs: number } | null =
@@ -138,6 +142,7 @@ export class NetSync {
           this.currentLayout = layoutFor(message.dungeon, message.seed);
           this.myStats = message.stats;
           this.myWeaponTier = message.weaponTier;
+          this.myWeaponType = message.weaponType;
           this.myAbility = message.ability;
           // Until the first snapshot says otherwise, every door is closed.
           const layout = this.currentLayout;
@@ -190,6 +195,11 @@ export class NetSync {
     return this.predictor?.lastCorrection ?? 0;
   }
 
+  /** How far your weapon reaches: its pattern's range (D-141), for auto-aim. */
+  get weaponRange(): number {
+    return patternOf(this.myWeaponType).range;
+  }
+
   /** Our authoritative HP etc. from the latest snapshot. */
   get selfState(): SnapshotPlayer | null {
     return this.self;
@@ -229,8 +239,9 @@ export class NetSync {
    */
   tick(input: PlayerInput): boolean {
     if (!this.predictor) return false;
-    const { seq, shot } = this.predictor.predict(input);
-    if (shot) this.shots.add(shot);
+    const { seq, shots } = this.predictor.predict(input);
+    for (const shot of shots) this.shots.add(shot);
+    const shot = shots.length > 0;
     this.connection.sendInput(seq, input);
     return shot !== null;
   }
@@ -501,7 +512,11 @@ export class NetSync {
             p.id,
             { x: p.x, y: p.y },
             this.walls,
-            combatFor(this.myStats, weaponDamage(this.myWeaponTier)),
+            combatFor(
+              this.myStats,
+              weaponDamage(this.myWeaponTier),
+              this.myWeaponType,
+            ),
             this.currentLayout ? sludgePools(this.currentLayout) : [],
             this.currentLayout ? tidePools(this.currentLayout) : [],
             this.currentLayout ? windChannels(this.currentLayout) : [],

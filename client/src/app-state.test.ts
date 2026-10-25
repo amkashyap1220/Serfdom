@@ -106,6 +106,7 @@ describe("screen flow", () => {
         players: [1],
         stats: SERF_BASE,
         weaponTier: null,
+        weaponType: null,
         ability: null,
       }),
     );
@@ -149,6 +150,7 @@ describe("screen flow", () => {
           players: [1, 2],
           stats: SERF_BASE,
           weaponTier: null,
+          weaponType: null,
           ability: null,
         }),
       ),
@@ -166,6 +168,7 @@ describe("screen flow", () => {
           players: [1],
           stats: SERF_BASE,
           weaponTier: null,
+          weaponType: null,
           ability: null,
         }),
         server({
@@ -276,6 +279,7 @@ describe("screen flow", () => {
           players: [1],
           stats: SERF_BASE,
           weaponTier: null,
+          weaponType: null,
           ability: null,
         }),
       ),
@@ -292,6 +296,7 @@ describe("screen flow", () => {
         players: [1],
         stats: SERF_BASE,
         weaponTier: null,
+        weaponType: null,
         ability: null,
       }),
     );

@@ -428,6 +428,7 @@ describe("menu and queue (6a)", () => {
       players: [1],
       stats: SERF_BASE,
       weaponTier: null,
+      weaponType: null,
       ability: null,
     });
     const snap = await nextOfType(client, "snapshot");
@@ -613,6 +614,7 @@ describe("menu and queue (6a)", () => {
       players: [1, 2],
       stats: SERF_BASE,
       weaponTier: null,
+      weaponType: null,
       ability: null,
     });
     expect(server.instanceOf(2)).toBe(server.instanceOf(1));

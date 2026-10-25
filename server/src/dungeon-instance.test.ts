@@ -727,6 +727,7 @@ describe("abilities reach the snapshot (10b)", () => {
       loadoutFor: () => ({
         stats: { ...SERF_BASE, mp: 40 },
         weaponTier: null,
+        weaponType: null,
         ability: { kind: "chainLightning", tier: 0 },
       }),
     });
@@ -763,6 +764,7 @@ describe("abilities reach the snapshot (10b)", () => {
       loadoutFor: () => ({
         stats: { ...SERF_BASE, mp: 40 },
         weaponTier: null,
+        weaponType: null,
         ability: { kind: "naturesReach", tier: 0 },
       }),
     });
@@ -786,6 +788,7 @@ describe("cast-time flashes reach the snapshot (10c)", () => {
       loadoutFor: () => ({
         stats: { ...SERF_BASE, mp: 40 },
         weaponTier: null,
+        weaponType: null,
         ability: { kind: "curse", tier: 0 },
       }),
     });

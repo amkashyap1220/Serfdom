@@ -20,6 +20,9 @@ export interface Projectile {
   fromAbility?: boolean;
   /** A room's arrow (D-113): its hits are hazard hits. */
   hazard?: "arrows" | "braziers";
+  /** Flies on through enemies (the staff's orb, D-141), each hit once: those it has hit. */
+  pierce?: boolean;
+  pierced?: readonly number[];
 }
 
 /** Something a projectile can hit: an id and its hit box. */

@@ -307,7 +307,12 @@ export class GameServer {
       serfBlocked: false,
       serfClears: 0,
       serfLevel: 1,
-      serfLoadout: { stats: SERF_BASE, weaponTier: null, ability: null },
+      serfLoadout: {
+        stats: SERF_BASE,
+        weaponTier: null,
+        weaponType: null,
+        ability: null,
+      },
     };
     this.sessions.set(socket, session);
 
@@ -634,6 +639,7 @@ export class GameServer {
           players: best.playerIds,
           stats: loadout.stats,
           weaponTier: loadout.weaponTier,
+          weaponType: loadout.weaponType,
           ability: loadout.ability,
         }),
       );
@@ -669,6 +675,7 @@ export class GameServer {
           players: [...players],
           stats: this.loadoutOf(id).stats,
           weaponTier: this.loadoutOf(id).weaponTier,
+          weaponType: this.loadoutOf(id).weaponType,
           ability: this.loadoutOf(id).ability,
         }),
       );
@@ -898,6 +905,7 @@ export class GameServer {
       session?.serfLoadout ?? {
         stats: SERF_BASE,
         weaponTier: null,
+        weaponType: null,
         ability: null,
       }
     );

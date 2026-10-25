@@ -5,7 +5,6 @@ import {
   MAX_FRAME_SECONDS,
   NO_INPUT,
   nextFireMode,
-  PLAYER_WEAPON,
   resolveFireIntent,
   abilityIntent,
   TICK_SECONDS,
@@ -313,7 +312,7 @@ export class WorldScene extends Phaser.Scene {
         { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
         this.net.position,
         targets,
-        PLAYER_WEAPON.range,
+        this.net.weaponRange,
       );
       const fired = this.net.tick({ move, fire, ability });
       if (fired) this.totals.shots++;
@@ -328,7 +327,7 @@ export class WorldScene extends Phaser.Scene {
       { world: this.lastPointerWorld, down: this.lastPointer.leftDown },
       from,
       targets,
-      PLAYER_WEAPON.range,
+      this.net.weaponRange,
       this.net.selfState?.buffs.includes("vanish") ?? false,
     );
   }

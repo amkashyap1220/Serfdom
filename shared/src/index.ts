@@ -550,3 +550,11 @@ export {
   ROOST_SUMMIT,
   buildRoost,
 } from "./dragons-roost.ts";
+export {
+  UNARMED,
+  WEAPON_PATTERNS,
+  patternOf,
+  patternVolley,
+  type PatternShot,
+  type WeaponPattern,
+} from "./weapon-patterns.ts";
