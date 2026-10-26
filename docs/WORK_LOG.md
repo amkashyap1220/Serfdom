@@ -24,7 +24,7 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - [x] Phase 13 — Ten dungeons: tiers 4 and 5 and more
 - [x] Phase 14 — Partying up
 - [x] Phase 15 — Home screen, HUD, minimap, and leaderboards
-- [ ] Phase 16 — Rare loot
+- [x] Phase 16 — Rare loot
 - [ ] Phase 17 — Economy and account systems
 - [ ] Phase 18 — Onboarding and settings
 - [ ] Phase 19 — Production hosting
@@ -837,3 +837,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - `npm run check`: 619 shared, 251 server (purchases on memory and PostgreSQL; buying over the network: refused without gold, a third serf slot that really holds a third serf, stash space), 92 client, build. Live: 3,000 gold bought the first serf slot (3/10), the next one greyed out at 4,000.
 - Set up serfdom1@test.com for testing (temporary scripts through the game's own code, refusing the test database, deleted after): 200,000 gold, every upgrade bought with it (10 serf slots, stash 100, rack 60; 100,002 gold left); a level-20 serf of each class it lacked (8 "… Rook" serfs beside Wynne and Maud); every serf wears its class ability Artifact, a weapon Artifact it can use, its armor type's chest Artifact, the Ouroboros, the Resurrection Necklace, and the Veil; the stash holds one of each of the 23 Artifacts, a Shiny Excalibur, and two Shiny tiered items.
 - Found on the way: the dev database had run migration 013's first draft (before its tier check was added), so it refused every Artifact. Migration 015 replaces the check wherever that happened (a committed migration is never edited).
+
+### Phase 16 complete — 2026-10-26
+
+- The user ran the Phase 16 and upgrade checks with the serfdom1@test.com set-up: pass. `phase-16` merged into `main` and pushed.
+- Next step: Phase 17 (economy and account systems): the marketplace; upgrades are already done (D-154).
