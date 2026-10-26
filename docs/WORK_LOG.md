@@ -868,3 +868,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Seeded the **dev** Exchange for a full simulation (the user asked): 10,549 listings from ~1,050 bot sellers (10 each; Tiers 1–10, 140 Artifacts, 641 potions, 277 Shiny), 1,000 buy orders from 100 buyer bots (under each kind's cheapest listing; a fifth with a roll; first those the user's accounts can sell into), 495 past sales; bots `market-bot-NNNN` / `market-buyer-NNNN@test.example` cannot log in. Measured: browse ~75 ms with a ~40 ms server stall. The user chose to fix it before the Phase 17 test, with the 5 s pool wait and run-save retries (T-051, T-052). After: browse 1.6–8.8 ms median, longest stall under 10 ms; my trades 1 ms; one kind's market 0.5 ms. Also fixed: a test that failed when an endgame chest rolled an Artifact (1 in 500), and migration 020's duplicate index (it never applied anywhere).
 - The user asked how the game copes with many players and whether everyone in the world can play together. Explained the limits (one process ticking every run at 60 Hz, snapshot bandwidth, the shared database, distance and ping) and recommended one world with regional dungeon servers; the user approved it: D-158, details in open question 27, tasks added to Phases 19 and 21. Nothing built yet.
 - Answered: "there shouldn't be any exchange fee" meant coin conversion (already automatic and free); the Exchange's 5% seller fee stays (the user, 2026-10-26).
+
+### Phase 17 complete — 2026-10-26
+
+- The user ran the Phase 17 checklist (the Exchange, coins, Sell to Lord, Tier 0 starter gear, on the dev database seeded with 10,549 listings and 1,000 buy orders): all pass. `phase-17` merged into `main` and pushed.
+- Next step: Phase 18 (onboarding and settings).
