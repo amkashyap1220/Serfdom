@@ -255,6 +255,7 @@ export {
   isPlayerAlive,
   newPlayer,
   removePlayer,
+  PLAYER_BUFF_KEYS,
   spawnEnemies,
   stepSim,
   stepWorld,

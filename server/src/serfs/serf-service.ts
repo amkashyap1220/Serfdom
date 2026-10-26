@@ -24,6 +24,7 @@ import {
   dungeonInfo,
   normalizeLeaderboardQuery,
   type LeaderboardQuery,
+  type ArtifactId,
   rollLevelGains,
   zeroStats,
   type Stats,
@@ -450,6 +451,15 @@ export class SerfService {
       rolls: [],
       luck: 0,
     });
+  }
+
+  /** An Artifact the serf wears used itself up (D-153): it is gone. */
+  spendArtifact(
+    accountId: number,
+    serfId: number,
+    artifact: ArtifactId,
+  ): Promise<boolean> {
+    return this.repo.destroyWorn(accountId, serfId, artifact);
   }
 
   /** A leaderboard (D-148): serf names and scores only, never account data. */

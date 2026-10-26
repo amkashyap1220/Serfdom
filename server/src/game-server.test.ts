@@ -19,6 +19,7 @@ import {
   type ServerMessage,
   LOOT_POOLS,
   layoutFor,
+  rollArtifact,
   type DungeonId,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -2218,5 +2219,71 @@ describe("room states for the minimap (15c, D-147)", () => {
       seen: first.seen,
       cleared: first.cleared,
     });
+  });
+});
+
+describe("the Resurrection Necklace on the server (16c, D-153)", () => {
+  it("saves a dying serf once, and the necklace is gone from it at once", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      allowTestDungeons: true,
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      dungeonSeed: () => 0,
+      log: silentLogger,
+    });
+    const { client } = await joined();
+    const serfId = (await repo.list(1))[0]!.id;
+    const [drop] = (await repo.addLoot(
+      1,
+      serfId,
+      [rollArtifact("resurrection", () => 0.5)],
+      STASH_SIZE,
+    ))!;
+    client.send(
+      encodeMessage({
+        type: "equipItem",
+        itemId: drop!.item.id,
+        serfId,
+        slot: "necklace",
+      }),
+    );
+    for (let i = 0; i < 10; i++) {
+      const list = await nextOfType(client, "serfList");
+      if (list.serfs[0]?.items.some((x) => x.artifact === "resurrection"))
+        break;
+    }
+    client.send(queue);
+    await until(() => server.isQueued(1));
+    server.tick();
+    await nextOfType(client, "runStarted");
+    expect(
+      server.instanceOf(1)!.state.players.find((p) => p.id === 1)!.artifacts,
+    ).toEqual(["resurrection"]);
+    // Into the dummy's ring at 1 HP: it should kill, but the necklace saves.
+    placePlayer(1, { x: 1250, y: 1100 }, 1);
+    let saved = false;
+    for (let t = 0; t < 120 && !saved; t++) {
+      server.tick();
+      const me = server.instanceOf(1)?.state.players.find((p) => p.id === 1);
+      saved = (me?.invulnerable ?? 0) > 0;
+    }
+    expect(saved).toBe(true);
+    expect(server.instanceOf(1)).toBeDefined();
+    // Gone from the serf in storage, whatever the run does next.
+    for (let i = 0; i < 50; i++) {
+      const items = (await repo.find(1, serfId))!.items;
+      if (!items.some((x) => x.artifact === "resurrection")) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    expect(
+      (await repo.find(1, serfId))!.items.some(
+        (x) => x.artifact === "resurrection",
+      ),
+    ).toBe(false);
   });
 });

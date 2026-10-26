@@ -55,13 +55,14 @@ import {
   type RunStats,
   type ServerMessage,
   type SimState,
-  BUFF_KINDS,
   type SimEvent,
   type SnapshotBlast,
   type SnapshotSwing,
   type SnapshotChain,
   type SnapshotPlayer,
   type Loadout,
+  PLAYER_BUFF_KEYS,
+  type ArtifactId,
 } from "@serfdom/shared";
 import {
   newInputQueue,
@@ -128,6 +129,8 @@ export class DungeonInstance {
   private readonly members = new Map<number, Member>();
   /** Everyone who was ever in this run, so nobody rejoins it. */
   private readonly everJoined = new Set<number>();
+  /** Artifacts used up this tick (the Resurrection Necklace, D-153). */
+  private spent: { playerId: number; artifact: ArtifactId }[] = [];
   private peak = 0;
   private readonly maxQueuedInputs: number;
   private readonly joinWindowTicks: number;
@@ -277,7 +280,9 @@ export class DungeonInstance {
    */
   private collectEffects(events: readonly SimEvent[]): void {
     for (const e of events) {
-      if (e.type === "blast") {
+      if (e.type === "artifactSpent") {
+        this.spent.push({ playerId: e.playerId, artifact: e.artifact });
+      } else if (e.type === "blast") {
         this.blastsToSend.push({
           kind: e.kind,
           by: e.playerId,
@@ -316,8 +321,13 @@ export class DungeonInstance {
    * any player whose input made the shared rules throw (should be
    * impossible after validation; the caller drops them).
    */
-  tick(): { ended: RunEnd[]; faulted: number[] } {
+  tick(): {
+    ended: RunEnd[];
+    faulted: number[];
+    spent: { playerId: number; artifact: ArtifactId }[];
+  } {
     this.age++;
+    this.spent = [];
     const walls = blockingWalls(this.layout, this.closedDoors);
     const faulted: number[] = [];
     for (const [id, member] of this.members) {
@@ -426,7 +436,7 @@ export class DungeonInstance {
         if (end) ended.push(end);
       }
     }
-    return { ended, faulted };
+    return { ended, faulted, spent: this.spent };
   }
 
   /**
@@ -470,9 +480,16 @@ export class DungeonInstance {
         maxHp: p.maxHp,
         mp: roundCoord(p.mp),
         maxMp: p.combat.maxMp,
-        buffs: BUFF_KINDS.filter((b) => p.buffs[b] !== undefined),
+        // Buffs, then the Artifacts' glows (D-153).
+        buffs: [
+          ...PLAYER_BUFF_KEYS.filter((b) => p.buffs[b] !== undefined),
+          ...(p.shield || p.mantle ? (["shielded"] as const) : []),
+          ...((p.invulnerable ?? 0) > 0 ? (["phased"] as const) : []),
+        ],
         cooldown: p.fireCooldown,
         abilityCooldown: roundCoord(p.abilityCooldown),
+        // Exact: prediction moves with it (D-153).
+        boost: p.hideBoost ?? 0,
         // Exact, like the position: prediction must pull the same way.
         pull: p.pull
           ? {

@@ -1,5 +1,5 @@
 import type { ArtifactId } from "./artifacts.ts";
-import { WEAPON_ARTIFACT, wears } from "./artifact-effects.ts";
+import { GEAR_ARTIFACT, WEAPON_ARTIFACT, wears } from "./artifact-effects.ts";
 import {
   BOSS_KINDS,
   EELPRIEST,
@@ -147,6 +147,22 @@ export interface PlayerState {
   attacks?: number;
   /** Seconds left of Whisper's empowered stab (D-153). */
   whisper?: number;
+  /** Damage it soaks up first, and for how long (Aegis of the Eternal King, D-153). */
+  shield?: { amount: number; left: number };
+  /** Seconds in which nothing hurts them (the Veil, the Resurrection Necklace). */
+  invulnerable?: number;
+  /** Seconds until the Veil can trigger again. */
+  veilReady?: number;
+  /** The Aegis's shield was used this run (once a run). */
+  aegisUsed?: boolean;
+  /** The Mantle's projectile blocks left, and for how long. */
+  mantle?: { blocks: number; left: number };
+  /** Seconds of the Hide's speed (on the player's own timeline, so prediction matches). */
+  hideBoost?: number;
+  /** The Hide's stronger next attack is ready. */
+  hideStrike?: boolean;
+  /** Seconds until the Hide can trigger again. */
+  hideReady?: number;
 }
 
 /** A timed bonus: `bonus` is a share (0.3 = +30%), `remaining` seconds. */
@@ -768,7 +784,9 @@ export type SimEvent =
       radius: number;
     }
   /** Chain Lightning's path: the caster, then each enemy hit (drawn). */
-  | { type: "chain"; playerId: number; points: Vec2[] };
+  | { type: "chain"; playerId: number; points: Vec2[] }
+  /** An Artifact used itself up (the Resurrection Necklace shatters, D-153). */
+  | { type: "artifactSpent"; playerId: number; artifact: ArtifactId };
 
 export function isPlayerAlive(player: PlayerState): boolean {
   return player.hp > 0;
@@ -940,7 +958,9 @@ export function applyPlayerInput(
     PLAYER_BODY,
     walls,
     dtSeconds,
-    player.combat.moveSpeed * slow,
+    player.combat.moveSpeed *
+      slow *
+      ((player.hideBoost ?? 0) > 1e-9 ? 1 + GEAR_ARTIFACT.hide.speed : 1),
   );
   // Water drags them on top (D-135): an eel-priest's pull, whirlpools.
   const drift = {
@@ -1015,6 +1035,22 @@ export function applyPlayerInput(
     fireCooldown: cooldown.remaining,
     mp,
     abilityCooldown,
+    ...(player.hideBoost !== undefined
+      ? { hideBoost: Math.max(0, player.hideBoost - dtSeconds) }
+      : {}),
+    // The Hide's stronger attack is spent on the next one (D-153).
+    ...(player.hideStrike && cooldown.fired && aim
+      ? { hideStrike: false }
+      : {}),
+    // The Mantle: casting arms it against projectiles (D-153).
+    ...(cast && wears(player, "mantle")
+      ? {
+          mantle: {
+            blocks: GEAR_ARTIFACT.mantle.blocks,
+            left: GEAR_ARTIFACT.mantle.seconds,
+          },
+        }
+      : {}),
     // Artifacts count attacks and run Whisper's clock on the player's own
     // timeline (D-153); a player without one carries neither.
     ...(player.artifacts
@@ -1072,7 +1108,10 @@ export function applyPlayerInput(
   if (cooldown.fired && aim) {
     const attack = attackOf(player.combat.weapon);
     const damage =
-      player.combat.shotDamage * attack.damage * damageMultiplier(player);
+      player.combat.shotDamage *
+      attack.damage *
+      damageMultiplier(player) *
+      (player.hideStrike ? 1 + GEAR_ARTIFACT.hide.strike : 1);
     if (attack.kind === "shot") {
       const id = next.nextProjectileId;
       next = {
@@ -1168,7 +1207,71 @@ export function applyPlayerInput(
       }
     }
   }
+  next = ouroboros(next, events);
   return { state: next, events };
+}
+
+/** The Ouroboros (D-153): each kill restores a share of the killer's max HP and MP. */
+function ouroboros(state: SimState, events: readonly SimEvent[]): SimState {
+  const kills = new Map<number, number>();
+  for (const e of events) {
+    if (e.type === "defeated")
+      kills.set(e.playerId, (kills.get(e.playerId) ?? 0) + 1);
+  }
+  if (kills.size === 0) return state;
+  return {
+    ...state,
+    players: state.players.map((p) => {
+      const n = kills.get(p.id) ?? 0;
+      if (n === 0 || !wears(p, "ouroboros") || !isPlayerAlive(p)) return p;
+      const r = GEAR_ARTIFACT.ouroboros;
+      return {
+        ...p,
+        hp: Math.min(p.maxHp, p.hp + n * r.hp * p.maxHp),
+        mp: Math.min(p.combat.maxMp, p.mp + n * r.mp * p.combat.maxMp),
+      };
+    }),
+  };
+}
+
+/** The gear Artifacts' timers run down on the world's clock (D-153). */
+function tickGear(player: PlayerState, dtSeconds: number): PlayerState {
+  const down = (v: number | undefined) =>
+    v === undefined ? undefined : Math.max(0, v - dtSeconds);
+  if (
+    !player.shield &&
+    player.invulnerable === undefined &&
+    player.veilReady === undefined &&
+    !player.mantle &&
+    player.hideReady === undefined
+  ) {
+    return player;
+  }
+  const out: PlayerState = { ...player };
+  out.invulnerable = down(player.invulnerable);
+  out.veilReady = down(player.veilReady);
+  out.hideReady = down(player.hideReady);
+  if (player.shield) {
+    const left = player.shield.left - dtSeconds;
+    out.shield = left > 1e-9 ? { ...player.shield, left } : undefined;
+  }
+  if (player.mantle) {
+    const left = player.mantle.left - dtSeconds;
+    out.mantle =
+      left > 1e-9 && player.mantle.blocks > 0
+        ? { ...player.mantle, left }
+        : undefined;
+  }
+  for (const key of [
+    "invulnerable",
+    "veilReady",
+    "hideReady",
+    "shield",
+    "mantle",
+  ] as const) {
+    if (out[key] === undefined || out[key] === 0) delete out[key];
+  }
+  return out;
 }
 
 /** What a weapon Artifact adds to a shot (D-153), by the attack count. */
@@ -2129,6 +2232,12 @@ export function stepWorld(
     );
     if (outcome.kind === "flying") {
       surviving.push(outcome.projectile);
+      // The Hide (D-153): an enemy shot just missing you.
+      if (p.owner === "enemy") {
+        players = players.map((pl) =>
+          hideNearMiss(pl, outcome.projectile.position),
+        );
+      }
     } else if (outcome.kind === "blocked") {
       events.push({ type: "blocked", position: outcome.position });
       if (p.burst) burstAt(p, outcome.position);
@@ -2137,6 +2246,20 @@ export function stepWorld(
     } else if (outcome.kind === "hit" && p.owner === "enemy") {
       players = players.map((pl) => {
         if (pl.id !== outcome.targetId) return pl;
+        // The Mantle stops the projectile (D-153).
+        if (pl.mantle && pl.mantle.blocks > 0) {
+          events.push({
+            type: "blast",
+            kind: "shieldBlock",
+            playerId: GOBLIN_BLAST_BY,
+            at: { ...outcome.position },
+            radius: 8,
+          });
+          return {
+            ...pl,
+            mantle: { ...pl.mantle, blocks: pl.mantle.blocks - 1 },
+          };
+        }
         const before = events.length;
         const hit = damagePlayer(
           pl,
@@ -2272,6 +2395,8 @@ export function stepWorld(
       return result.enemy;
     });
 
+  // Kills this tick heal Ouroboros wearers (D-153).
+  players = [...ouroboros({ ...state, players }, events).players];
   return {
     state: {
       ...state,
@@ -2306,8 +2431,9 @@ export function stepWorld(
  * Always-on HP and MP regeneration (D-056, D-096), plus Inspiration's
  * extra HP (D-098); buffs run down. The dead do not regenerate.
  */
-function regenerate(player: PlayerState, dtSeconds: number): PlayerState {
-  if (!isPlayerAlive(player)) return player;
+function regenerate(before: PlayerState, dtSeconds: number): PlayerState {
+  if (!isPlayerAlive(before)) return before;
+  const player = tickGear(before, dtSeconds);
   const { combat } = player;
   const buffs = tickBuffs(player.buffs, dtSeconds);
   const hpPerSecond =
@@ -2606,12 +2732,27 @@ function damagePlayer(
   events: SimEvent[],
 ): PlayerState {
   if (!isPlayerAlive(player)) return player;
+  // Untouchable: the Veil, or the Necklace's grace (D-153).
+  if ((player.invulnerable ?? 0) > 1e-9) return player;
   // Defense, then Guard and Vanish, each block a share (D-078, D-100).
-  const damage =
+  const blocked =
     hit *
     player.combat.damageTakenFactor *
     (1 - (player.buffs.guard?.bonus ?? 0)) *
     (1 - (player.buffs.vanish?.bonus ?? 0));
+  // The Aegis's shield soaks up what it can first (D-153).
+  const soaked = Math.min(player.shield?.amount ?? 0, blocked);
+  const damage = blocked - soaked;
+  let out: PlayerState = player.shield
+    ? {
+        ...player,
+        shield:
+          player.shield.amount - soaked > 1e-9
+            ? { ...player.shield, amount: player.shield.amount - soaked }
+            : undefined,
+      }
+    : player;
+  if (out.shield === undefined) delete out.shield;
   const { hp, died } = applyDamage(player.hp, damage);
   events.push({
     type: "playerHit",
@@ -2620,8 +2761,75 @@ function damagePlayer(
     damage,
     position,
   });
-  if (died) events.push({ type: "playerDied", playerId: player.id });
-  return { ...player, hp };
+  out = { ...out, hp };
+  if (died && wears(player, "resurrection")) {
+    // The Resurrection Necklace (D-153): survive, then it shatters.
+    const r = GEAR_ARTIFACT.resurrection;
+    events.push(
+      { type: "artifactSpent", playerId: player.id, artifact: "resurrection" },
+      {
+        type: "blast",
+        kind: "artifact",
+        playerId: player.id,
+        at: { ...player.position },
+        radius: 60,
+      },
+    );
+    return {
+      ...out,
+      hp: player.maxHp * r.hp,
+      invulnerable: r.seconds,
+      artifacts: (player.artifacts ?? []).filter((a) => a !== "resurrection"),
+    };
+  }
+  if (died) {
+    events.push({ type: "playerDied", playerId: player.id });
+    return out;
+  }
+  // The Veil: a hit makes you untouchable a moment (D-153).
+  if (damage > 0 && wears(player, "veil") && (player.veilReady ?? 0) <= 1e-9) {
+    out = {
+      ...out,
+      invulnerable: GEAR_ARTIFACT.veil.seconds,
+      veilReady: GEAR_ARTIFACT.veil.every,
+    };
+  }
+  // The Aegis of the Eternal King: once a run, low on HP, a shield (D-153).
+  const aegis = GEAR_ARTIFACT.aegisKing;
+  if (
+    wears(player, "aegisKing") &&
+    !player.aegisUsed &&
+    hp < player.maxHp * aegis.below
+  ) {
+    events.push({
+      type: "blast",
+      kind: "artifact",
+      playerId: player.id,
+      at: { ...player.position },
+      radius: 40,
+    });
+    out = {
+      ...out,
+      aegisUsed: true,
+      shield: { amount: player.maxHp * aegis.shield, left: aegis.seconds },
+    };
+  }
+  return out;
+}
+
+/** The Hide of the First Beast (D-153): an enemy shot passing close, unhit. */
+function hideNearMiss(player: PlayerState, shot: Vec2): PlayerState {
+  if (!wears(player, "hide") || !isPlayerAlive(player)) return player;
+  if ((player.hideReady ?? 0) > 1e-9) return player;
+  const h = GEAR_ARTIFACT.hide;
+  const d = Math.hypot(shot.x - player.position.x, shot.y - player.position.y);
+  if (d > PLAYER_BODY.width / 2 + h.nearMiss) return player;
+  return {
+    ...player,
+    hideBoost: h.seconds,
+    hideStrike: true,
+    hideReady: h.every,
+  };
 }
 
 /**

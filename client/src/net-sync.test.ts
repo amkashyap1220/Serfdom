@@ -43,6 +43,7 @@ function server(
     buffs: [],
     cooldown: 0,
     abilityCooldown: 0,
+    boost: 0,
     pull: null,
     ...extra,
   };

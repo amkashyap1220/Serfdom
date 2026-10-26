@@ -19,6 +19,7 @@ const player = (id: number, hp: number, maxHp = 100): SnapshotPlayer => ({
   buffs: [],
   cooldown: 0,
   abilityCooldown: 0,
+  boost: 0,
   pull: null,
 });
 

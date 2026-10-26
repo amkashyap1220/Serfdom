@@ -22,6 +22,7 @@ import {
   normalizeSerfName,
   normalizeLeaderboardQuery,
   type LeaderboardQuery,
+  type ArtifactId,
   MAX_PARTY_SIZE,
   type ClassId,
   type PartyMember,
@@ -299,7 +300,8 @@ export class GameServer {
     this.tickCount++;
     const sendSnapshots = this.tickCount % this.snapshotEveryTicks === 0;
     for (const instance of this.instances.values()) {
-      const { ended, faulted } = instance.tick();
+      const { ended, faulted, spent } = instance.tick();
+      for (const s of spent) this.spendArtifact(s.playerId, s.artifact);
       for (const id of faulted) {
         // Should be impossible after validation; drop only this player
         // rather than crashing the server for everyone.
@@ -847,6 +849,27 @@ export class GameServer {
     this.log.info(
       `run #${instance.id} started: ${dungeon} (seed ${instance.seed}) with ${players.map((p) => `#${p}`).join(" ")}`,
     );
+  }
+
+  /**
+   * An Artifact used itself up mid-run (the Resurrection Necklace shatters,
+   * D-153): it is gone from the serf at once, whatever happens next.
+   */
+  private spendArtifact(playerId: number, artifact: ArtifactId): void {
+    const owner = this.runOwner.get(playerId);
+    if (!owner) return;
+    this.serfs
+      .spendArtifact(owner.accountId, owner.serfId, artifact)
+      .then((gone) =>
+        this.log.info(
+          `serf #${owner.serfId} ${gone ? "spent" : "could not spend"} ${artifact}`,
+        ),
+      )
+      .catch((err: unknown) =>
+        this.log.warn(
+          `serf #${owner.serfId} ${artifact} not spent: ${String(err)}`,
+        ),
+      );
   }
 
   /** A player's run is over: back to the menu with their stats. */

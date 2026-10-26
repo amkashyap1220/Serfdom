@@ -57,6 +57,7 @@ describe("prediction uses your stats (8c-2)", () => {
       buffs: [],
       cooldown: me.fireCooldown,
       abilityCooldown: 0,
+      boost: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBe(0);
@@ -102,6 +103,7 @@ describe("prediction wades through sludge like the server (D-113)", () => {
       buffs: [],
       cooldown: me.fireCooldown,
       abilityCooldown: 0,
+      boost: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBe(0);
@@ -155,6 +157,7 @@ describe("prediction follows the Sunken Temple's water (D-135)", () => {
         buffs: [],
         cooldown: me.fireCooldown,
         abilityCooldown: 0,
+        boost: 0,
         pull: me.pull
           ? {
               x: me.pull.to.x,
@@ -232,6 +235,7 @@ describe("prediction follows Frost Hollow's frost (D-136)", () => {
       buffs: [],
       cooldown: me.fireCooldown,
       abilityCooldown: 0,
+      boost: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBeCloseTo(0, 9);
@@ -285,6 +289,7 @@ describe("prediction follows Stormspire's wind (D-139)", () => {
       buffs: [],
       cooldown: 0,
       abilityCooldown: 0,
+      boost: 0,
       pull: null,
     });
     const states: SimState[] = [];
@@ -309,6 +314,7 @@ describe("prediction follows Stormspire's wind (D-139)", () => {
       buffs: [],
       cooldown: me.fireCooldown,
       abilityCooldown: 0,
+      boost: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBeCloseTo(0, 9);
@@ -371,10 +377,59 @@ describe("prediction follows the Elder Dragon's wing gust (D-140)", () => {
       buffs: [],
       cooldown: me.fireCooldown,
       abilityCooldown: 0,
+      boost: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBeCloseTo(0, 9);
     // Blown east past a plain walk (the push ends once out of its 260 px reach).
     expect(server.players[0]!.position.x).toBeGreaterThan(100 + 150 + 50);
+  });
+});
+
+describe("prediction runs at the Hide's speed like the server (D-153)", () => {
+  it("replays from the snapshot's boost, so the run ends where the server's does", () => {
+    const predictor = new PlayerPredictor(
+      1,
+      { x: 0, y: 0 },
+      [],
+      combatFor(SERF_BASE),
+    );
+    let server: SimState = {
+      players: [{ ...newPlayer(1, { x: 0, y: 0 }), hideBoost: 1.5 }],
+      enemies: [],
+      projectiles: [],
+      nextProjectileId: 1,
+      nextEnemyId: 1,
+      hazards: [],
+      blasts: [],
+      zones: [],
+      sludge: [],
+      fires: [],
+    };
+    for (let i = 0; i < 60; i++) predictor.predict(RIGHT);
+    for (let i = 0; i < 30; i++)
+      server = applyPlayerInput(server, 1, RIGHT, [], TICK_SECONDS).state;
+    const me = server.players[0]!;
+    // The snapshot tells the client how much boost is left.
+    predictor.reconcile({
+      id: 1,
+      x: me.position.x,
+      y: me.position.y,
+      ack: 29,
+      hp: me.hp,
+      maxHp: me.maxHp,
+      mp: me.mp,
+      maxMp: me.combat.maxMp,
+      buffs: [],
+      cooldown: me.fireCooldown,
+      abilityCooldown: 0,
+      boost: me.hideBoost ?? 0,
+      pull: null,
+    });
+    for (let i = 30; i < 60; i++)
+      server = applyPlayerInput(server, 1, RIGHT, [], TICK_SECONDS).state;
+    expect(predictor.position.x).toBeCloseTo(server.players[0]!.position.x, 9);
+    // Faster than a plain serf would have gone.
+    expect(predictor.position.x).toBeGreaterThan(150 * 1.0 + 1);
   });
 });

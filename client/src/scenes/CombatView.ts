@@ -130,6 +130,9 @@ const COLORS = {
   explosion: 0xff6a00,
   // An Artifact's ring (D-153): Golgorr's shockwave.
   artifact: 0xffb066,
+  // Artifact glows on players (D-153): a shield, and untouchable.
+  shielded: 0xfff2c0,
+  phased: 0xc792ff,
   stoke: 0xff9a3c,
   chant: 0xe6cf7a,
   boulder: 0x8c7f6e,
@@ -729,7 +732,11 @@ export class CombatView {
               ? COLORS.rage
               : buff === "guard"
                 ? COLORS.guard
-                : COLORS.inspire;
+                : buff === "shielded"
+                  ? COLORS.shielded
+                  : buff === "phased"
+                    ? COLORS.phased
+                    : COLORS.inspire;
           bl.lineStyle(px(buff === "guard" ? 3 : 2), color, 0.9);
           // Just outside the player's sprite (D-127: 32 px), one ring per buff.
           bl.strokeCircle(a.x, a.y, PLAYER_SPRITE_SIZE / 2 + 4 + 6 * i);

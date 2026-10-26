@@ -70,6 +70,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v51 (16c): snapshot players carry `boost` (the Hide of the First
+ *          Beast's speed, seconds, so prediction moves as the server does)
+ *          and buffs may be "shielded" or "phased" (D-153).
  * v50 (16a): items may carry `artifact` (its id, D-153) and `shiny`
  *          (D-152); weapon and ability tiers go up to an Artifact's 12.
  * v49: serfs carry `potionStats`, what potions added to their stats,
@@ -174,7 +177,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 50;
+export const PROTOCOL_VERSION = 51;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -362,6 +365,8 @@ export interface SnapshotPlayer {
   cooldown: number;
   /** Seconds until their ability may be cast again (the HUD, D-146). */
   abilityCooldown: number;
+  /** Seconds left of the Hide's speed (D-153), so prediction matches. */
+  boost: number;
   /** An eel-priest's pull (D-135): towards (x, y) from run clock `from`, `left` seconds of it to go; else null. */
   pull: {
     x: number;
@@ -562,6 +567,10 @@ export const BUFF_KINDS = [
   "inspiration",
   "guard",
   "vanish",
+  /** A shield soaking damage, or the Mantle's block (D-153). */
+  "shielded",
+  /** Untouchable: the Veil, or the Resurrection Necklace's grace (D-153). */
+  "phased",
 ] as const;
 export type BuffKind = (typeof BUFF_KINDS)[number];
 
@@ -1877,6 +1886,7 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
       "buffs",
       "cooldown",
       "abilityCooldown",
+      "boost",
       "pull",
     ])
   ) {
@@ -1900,7 +1910,8 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
     !isNonNegative(v.mp) ||
     !isNonNegative(v.maxMp) ||
     !isNonNegative(v.cooldown) ||
-    !isNonNegative(v.abilityCooldown)
+    !isNonNegative(v.abilityCooldown) ||
+    !isNonNegative(v.boost)
   ) {
     return null;
   }
@@ -1923,6 +1934,7 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
     buffs: v.buffs as BuffKind[],
     cooldown: v.cooldown,
     abilityCooldown: v.abilityCooldown,
+    boost: v.boost,
     pull,
   };
 }

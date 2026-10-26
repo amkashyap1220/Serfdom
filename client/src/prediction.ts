@@ -222,6 +222,8 @@ function fromSnapshot(p: SnapshotPlayer, combat: PlayerCombat): PlayerState {
     id: p.id,
     position: { x: p.x, y: p.y },
     fireCooldown: p.cooldown,
+    // The Hide's speed (D-153): the server's, replayed exactly.
+    ...(p.boost > 0 ? { hideBoost: p.boost } : {}),
     hp: p.hp,
     maxHp: p.maxHp,
     mp: p.mp,

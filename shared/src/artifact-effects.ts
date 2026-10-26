@@ -39,3 +39,19 @@ export function wears(
 ): boolean {
   return player.artifacts?.includes(id) ?? false;
 }
+
+/** The six armor and accessory Artifacts (16c). */
+export const GEAR_ARTIFACT = {
+  /** Casting the ability blocks the next `blocks` enemy projectiles within `seconds`. */
+  mantle: { blocks: 2, seconds: 2 },
+  /** An enemy shot passing within `nearMiss` px of you (unhit): faster, and the next attack stronger. */
+  hide: { nearMiss: 24, speed: 0.3, strike: 0.5, seconds: 1.5, every: 4 },
+  /** Once a run, below `below` of max HP: a shield of `shield` × max HP for `seconds`. */
+  aegisKing: { below: 0.25, shield: 0.3, seconds: 5 },
+  /** Each kill restores these shares of max HP and max MP. */
+  ouroboros: { hp: 0.02, mp: 0.02 },
+  /** A death becomes `hp` × max HP and `seconds` of invulnerability; the necklace shatters. */
+  resurrection: { hp: 0.5, seconds: 2 },
+  /** After a hit: untouchable for `seconds`, at most once every `every` seconds. */
+  veil: { seconds: 1, every: 10 },
+} as const;

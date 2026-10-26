@@ -29,6 +29,7 @@ import {
   type SerfSummary,
   drinkPotionTally,
   zeroStats,
+  type ArtifactId,
 } from "@serfdom/shared";
 import type pg from "pg";
 
@@ -83,6 +84,12 @@ export interface SerfRepo {
     query: LeaderboardQuery,
     limit: number,
   ): Promise<LeaderboardEntry[]>;
+  /** Deletes the worn item that is this Artifact (D-153); false if there is none. */
+  destroyWorn(
+    accountId: number,
+    serfId: number,
+    artifact: ArtifactId,
+  ): Promise<boolean>;
   /**
    * Sets a serf's permanent class, only if it is this account's, alive,
    * classless, and has at least `minExp` lifetime EXP, all checked in the
@@ -947,6 +954,20 @@ export class PgSerfRepo implements SerfRepo {
     );
   }
 
+  async destroyWorn(
+    accountId: number,
+    serfId: number,
+    artifact: ArtifactId,
+  ): Promise<boolean> {
+    const r = await this.pool.query(
+      `delete from items where id = (
+         select id from items where account_id = $1 and serf_id = $2
+           and location = 'equipped' and artifact = $3 limit 1)`,
+      [accountId, serfId, artifact],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
+
   async chooseClass(
     accountId: number,
     serfId: number,
@@ -1227,6 +1248,23 @@ export class MemorySerfRepo implements SerfRepo {
       .sort((a, b) => score(b) - score(a) || a.summary.id - b.summary.id)
       .slice(0, limit)
       .map((s, i) => entry(s, i, score(s), null));
+  }
+
+  async destroyWorn(
+    accountId: number,
+    serfId: number,
+    artifact: ArtifactId,
+  ): Promise<boolean> {
+    const i = this.items.findIndex(
+      (x) =>
+        x.accountId === accountId &&
+        x.serfId === serfId &&
+        x.location === "equipped" &&
+        x.item.artifact === artifact,
+    );
+    if (i < 0) return false;
+    this.items.splice(i, 1);
+    return true;
   }
 
   async chooseClass(
