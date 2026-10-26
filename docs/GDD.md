@@ -166,11 +166,14 @@ Confirmed high-level intent:
 
 Confirmed controls and rules (built):
 
-- **Movement:** WASD only, 8 directions, diagonals normalized, instant start and stop (D-031, D-032); W is always up the screen (D-040). Dodging is movement only, no dash (D-037).
+- **Keys:** every game key below is the default and can be rebound in Settings (D-159): a key in use offers a swap, so no key does two things; Escape and Enter stay the menus'. Settings follow the account.
+- **Movement:** WASD by default, 8 directions, diagonals normalized, instant start and stop (D-031, D-032); up is always up the screen (D-040). Dodging is movement only, no dash (D-037).
 - **View:** Q/E rotate the camera, Z resets it (D-040; speed and keys PROVISIONAL, T-017).
-- **Attacks and aiming:** four fire modes cycled with T (D-099; names PROVISIONAL): Full auto, Auto aim + Space (default), Auto fire + Space, Manual (left click). Basic attacks are projectiles (D-041).
+- **Attacks and aiming:** four fire modes cycled with T (D-099; names D-159): **Full auto** (the default, D-149), **Auto aim**, **Mouse aim**, **Manual** (left click). The mode is kept on the account between runs. Basic attacks follow the weapon (D-141).
 - **Ability:** Space (D-035); costs and cooldowns per class in §4.
 - **Leave a run:** R, at no cost except that run's rewards (D-036, D-053).
+- **First run (D-159):** a welcome card on the home screen, one-at-a-time hints in the first runs (moving, the fire mode, turning, leaving; being hit, a boss, the portal, the ability), and a note after the first clear; each once per account (Settings: Show hints, Show all hints again).
+- **Window and text (D-159):** the 1200×800 game scales to fit any window from 900×600 up (Full screen in Settings), always showing the same amount of world; text size Normal or Large; enemy bullets are round and yours square.
 - **Formulas:** damage, fire rate, speed, Defense, and regen are D-078, with Defense changed by D-121 (§6). Hit authority is the server's (D-043, D-044).
 
 Still open:

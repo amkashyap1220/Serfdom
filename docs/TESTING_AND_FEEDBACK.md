@@ -214,6 +214,21 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+#### Phase 18 checklist: onboarding and settings (D-159)
+
+Restart `npm run dev` (migration 021 runs on start) and hard-refresh.
+
+1. **Keys.** **Settings → Keys**: click a key, press a new one (e.g. Move up → Up arrow): it changes. Pick a key another action uses: it offers a swap; Swap moves both. Enter is refused; Escape cancels. In a run the new keys work and the old ones do not; the HUD names your keys. Reset keys to defaults.
+2. **Fire mode.** The names are Full auto, Auto aim, Mouse aim, Manual, each with a line saying what it does. The fire mode key in a run changes it, and it is kept for the next run.
+3. **Follows the account.** Change a key, log in from another browser: the same keys and fire mode.
+4. **Window size.** Make the window bigger and smaller (and try Full screen in Settings, and F11): the whole game scales, keeps its shape, stays centred, and always shows the same amount of world; the mouse still aims exactly. Below about 900×600 a red notice asks for a bigger window.
+5. **First run.** Register a brand-new account: a welcome card (before and after naming the serf; Got it). In the first Warrens run, hints appear one at a time at the top (moving, the fire mode, turning, leaving; being hit, the boss, the portal), each going once done. After the clear, a note says where the loot went. A second run shows none again. **Settings → Show all hints again** brings them back; **Show hints** off hides them.
+6. **Text and colour.** **Settings → Text size → Large**: menu and HUD text gets bigger, nothing is cut off. In the Exchange, a picked roll chip shows ✓. In a fight, enemy bullets are round and yours square.
+7. **A first-time tester (the roadmap's acceptance):** someone who has never played registers and clears the Goblin Warrens using only what the game shows them. Note where they got stuck or asked a question.
+8. Consoles: no red errors.
+
+Report: pass or fail per step, with the exact text for any failure, and what the first-time tester said.
+
 #### Phase 17 checklist: the Grand Serf Exchange, coins, and Tier 0 (D-155, D-156, D-157)
 
 Restart `npm run dev` (migrations up to 019 run on start) and hard-refresh. Two different browsers: A = serfdom1@test.com, B = serfdom@test.com. The dev Exchange already holds about 53 listings and 9 buy orders from six trader accounts.
