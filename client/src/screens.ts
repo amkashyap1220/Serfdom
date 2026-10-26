@@ -43,6 +43,11 @@ import {
   type PartyInviter,
   MAX_LEVEL,
   boughtFor,
+  ANY_LISTING,
+  EXCHANGE,
+  exchangeFee,
+  isValidPrice,
+  type ExchangeQuery,
   nextPrice,
   UPGRADE_KINDS,
   UPGRADES,
@@ -103,6 +108,14 @@ export interface ScreenActions {
   getLeaderboard(query: LeaderboardQuery): void;
   /** Buy the next step of an account upgrade with gold (D-154). */
   buyUpgrade(kind: UpgradeKind): void;
+  /** The Exchange (D-155). */
+  listOnExchange(
+    what: { itemId: number } | { potionId: number },
+    price: number,
+  ): void;
+  cancelListing(listingId: number): void;
+  buyListing(listingId: number): void;
+  browseExchange(query: ExchangeQuery): void;
 }
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
@@ -130,6 +143,7 @@ const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
   { tab: "party", label: "Party", comingIn: null },
   { tab: "stash", label: "Stash", comingIn: null },
   { tab: "rack", label: "Potion rack", comingIn: null },
+  { tab: "exchange", label: "Exchange", comingIn: null },
   { tab: "leaderboard", label: "Leaderboards", comingIn: null },
   { tab: "settings", label: "Settings", comingIn: null },
 ];
@@ -518,6 +532,8 @@ export class ScreenView {
       this.buildParty(body);
     } else if (tab === "settings") {
       this.buildSettings(body);
+    } else if (tab === "exchange") {
+      this.buildExchange(body);
     } else {
       const playing = this.playing;
       // The played serf is in the home panel (D-145).
@@ -754,6 +770,255 @@ export class ScreenView {
       bar.append(row);
     }
     return bar;
+  }
+
+  /** The Exchange's view and query (D-155); a reply for an older query is ignored. */
+  exchangeQuery: ExchangeQuery = { ...ANY_LISTING };
+  private exchangeView: "browse" | "mine" = "browse";
+  private exchangePage: Extract<
+    ServerMessage,
+    { type: "exchangePage" }
+  > | null = null;
+  private exchangeMine: Extract<
+    ServerMessage,
+    { type: "exchangeMine" }
+  > | null = null;
+
+  setExchangePage(
+    page: Extract<ServerMessage, { type: "exchangePage" }>,
+  ): void {
+    if (JSON.stringify(page.query) !== JSON.stringify(this.exchangeQuery))
+      return;
+    this.exchangePage = page;
+    this.redraw();
+  }
+
+  setExchangeMine(
+    mine: Extract<ServerMessage, { type: "exchangeMine" }>,
+  ): void {
+    this.exchangeMine = mine;
+    this.redraw();
+  }
+
+  private queryExchange(change: Partial<ExchangeQuery>): void {
+    // Any filter change starts from the first page.
+    this.exchangeQuery = { ...this.exchangeQuery, page: 0, ...change };
+    this.exchangePage = null;
+    this.shown = null;
+    this.actions.browseExchange(this.exchangeQuery);
+  }
+
+  /**
+   * The Grand Serf Exchange (D-155): Browse (filters, cards with a price
+   * and Buy, pages) and My listings (Cancel, and the latest sales).
+   */
+  private buildExchange(body: HTMLElement): void {
+    body.append(el("h2", "", "The Grand Serf Exchange"));
+    if (this.stashError) body.append(el("p", "error", this.stashError));
+    const views = el("div", "lb-boards");
+    for (const [v, label] of [
+      ["browse", "Browse"],
+      ["mine", "My listings"],
+    ] as const) {
+      const b = button(label, () => {
+        this.exchangeView = v;
+        this.shown = null;
+      });
+      if (v === this.exchangeView) b.classList.add("active");
+      views.append(b);
+    }
+    body.append(views);
+    const gold = this.stash?.gold ?? 0;
+    if (this.exchangeView === "mine") {
+      this.buildMyListings(body);
+      return;
+    }
+    const q = this.exchangeQuery;
+    const filters = el("div", "lb-filters exchange-filters");
+    filters.append(
+      select(
+        [
+          ["", "Everything"],
+          ["weapon", "Weapons"],
+          ["ability", "Ability items"],
+          ["head", "Head"],
+          ["chest", "Chest"],
+          ["legs", "Legs"],
+          ["gloves", "Gloves"],
+          ["ring", "Rings"],
+          ["necklace", "Necklaces"],
+          ["cape", "Capes"],
+          ["potion", "Potions"],
+        ],
+        q.slot ?? "",
+        (v) =>
+          this.queryExchange({
+            slot: v === "" ? null : (v as ExchangeQuery["slot"]),
+          }),
+      ),
+      select(
+        Array.from(
+          { length: 11 },
+          (_, t) => [String(t), `From T${t}`] as const,
+        ),
+        String(Math.min(q.minTier, 10)),
+        (v) => this.queryExchange({ minTier: Number(v) }),
+      ),
+      select(
+        [
+          ...Array.from(
+            { length: 11 },
+            (_, t) => [String(t), `To T${t}`] as const,
+          ),
+          ["12", "To Artifacts"],
+        ],
+        String(q.maxTier),
+        (v) => this.queryExchange({ maxTier: Number(v) }),
+      ),
+    );
+    for (const [key, label] of [
+      ["artifacts", "Artifacts"],
+      ["shiny", "Shiny"],
+    ] as const) {
+      const l = document.createElement("label");
+      l.className = "setting";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = q[key];
+      box.addEventListener("change", () =>
+        this.queryExchange({ [key]: box.checked }),
+      );
+      l.append(box, ` ${label}`);
+      filters.append(l);
+    }
+    const playing = this.playing;
+    if (playing?.classId) {
+      const l = document.createElement("label");
+      l.className = "setting";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = q.usableBy !== null;
+      box.addEventListener("change", () =>
+        this.queryExchange({ usableBy: box.checked ? playing.classId : null }),
+      );
+      l.append(box, ` ${className(playing.classId)} can use`);
+      filters.append(l);
+    }
+    const search = document.createElement("form");
+    const text = document.createElement("input");
+    text.type = "text";
+    text.placeholder = "Search names";
+    text.maxLength = EXCHANGE.maxSearch;
+    text.value = q.search;
+    text.setAttribute("aria-label", "Search names");
+    search.append(text);
+    search.addEventListener("submit", (e) => {
+      e.preventDefault();
+      this.queryExchange({ search: text.value });
+    });
+    filters.append(
+      search,
+      select(
+        [
+          ["newest", "Newest"],
+          ["cheapest", "Cheapest"],
+          ["dearest", "Dearest"],
+        ],
+        q.sort,
+        (v) => this.queryExchange({ sort: v as ExchangeQuery["sort"] }),
+      ),
+    );
+    body.append(filters);
+    const page = this.exchangePage;
+    if (!page) {
+      body.append(el("p", "hint", "Loading…"));
+      return;
+    }
+    if (page.listings.length === 0) {
+      body.append(el("p", "hint", "Nothing listed matches."));
+      return;
+    }
+    const grid = el("div", "item-grid");
+    for (const l of page.listings) {
+      const card = l.item ? itemCard(l.item) : potionCard(l.potion!.stat, 1);
+      card.append(el("span", "price", `${l.price.toLocaleString("en")} gold`));
+      if (l.mine) {
+        card.append(el("span", "hint", "Your listing"));
+      } else {
+        const buy = button("Buy", () => this.actions.buyListing(l.id));
+        buy.disabled = gold < l.price;
+        card.append(buy);
+      }
+      grid.append(card);
+    }
+    body.append(grid);
+    const pages = Math.max(1, Math.ceil(page.total / EXCHANGE.pageSize));
+    const pager = el("div", "lb-filters");
+    const prev = button("Previous", () =>
+      this.queryExchange({ page: q.page - 1 }),
+    );
+    prev.disabled = q.page <= 0;
+    const next = button("Next", () => this.queryExchange({ page: q.page + 1 }));
+    next.disabled = q.page + 1 >= pages;
+    pager.append(
+      prev,
+      el(
+        "span",
+        "hint",
+        `Page ${q.page + 1} of ${pages} · ${page.total} listed`,
+      ),
+      next,
+    );
+    body.append(pager);
+  }
+
+  private buildMyListings(body: HTMLElement): void {
+    const mine = this.exchangeMine;
+    if (!mine) {
+      body.append(el("p", "hint", "Loading…"));
+      return;
+    }
+    body.append(
+      el(
+        "p",
+        "hint",
+        `${mine.listings.length}/${EXCHANGE.maxListings} listings. List items from your Stash or Potion rack tab.`,
+      ),
+    );
+    if (mine.listings.length > 0) {
+      const grid = el("div", "item-grid short");
+      for (const l of mine.listings) {
+        const card = l.item ? itemCard(l.item) : potionCard(l.potion!.stat, 1);
+        card.append(
+          el("span", "price", `${l.price.toLocaleString("en")} gold`),
+          button("Take back", () => this.actions.cancelListing(l.id)),
+        );
+        grid.append(card);
+      }
+      body.append(grid);
+    }
+    body.append(el("h3", "dungeon-group", "Latest sales"));
+    if (mine.sales.length === 0) {
+      body.append(el("p", "hint", "Nothing sold or bought yet."));
+      return;
+    }
+    const list = el("div", "leaderboard");
+    for (const s of mine.sales) {
+      const row = el("div", "lb-row");
+      row.append(
+        el("span", "lb-name", s.what),
+        el(
+          "span",
+          "lb-exp",
+          s.role === "sold"
+            ? `Sold for ${s.price.toLocaleString("en")} (−${s.fee} fee)`
+            : `Bought for ${s.price.toLocaleString("en")}`,
+        ),
+        el("span", "hint", new Date(s.at).toLocaleString()),
+      );
+      list.append(row);
+    }
+    body.append(list);
   }
 
   /** Settings (D-145): only the debug readout for now; key binds and more are Phase 18. */
@@ -1148,6 +1413,13 @@ export class ScreenView {
       );
       pour.classList.add("sell");
       card.append(pour);
+      if (className === "item-grid") {
+        card.append(
+          this.listControl((price) =>
+            this.actions.listOnExchange({ potionId: first.id }, price),
+          ),
+        );
+      }
       grid.append(card);
     }
     return grid;
@@ -1176,9 +1448,58 @@ export class ScreenView {
       const card = itemCard(item);
       if (playing) card.append(this.equipControls(item, playing));
       card.append(sellButton(item, () => this.actions.sellItem(item.id)));
+      // Pending rewards cannot be listed until they are in the stash.
+      if (!className.includes("pending")) {
+        card.append(
+          this.listControl((price) =>
+            this.actions.listOnExchange({ itemId: item.id }, price),
+          ),
+        );
+      }
       grid.append(card);
     }
     return grid;
+  }
+
+  /**
+   * "List on the Exchange" (D-155): a price, what the seller gets after
+   * the fee, and List. The server checks the price again.
+   */
+  private listControl(onList: (price: number) => void): HTMLElement {
+    const box = document.createElement("details");
+    box.className = "list-control";
+    const summary = document.createElement("summary");
+    summary.textContent = "List on the Exchange";
+    const form = document.createElement("form");
+    const price = document.createElement("input");
+    price.type = "number";
+    price.min = String(EXCHANGE.minPrice);
+    price.max = String(EXCHANGE.maxPrice);
+    price.step = "1";
+    price.placeholder = "Price";
+    price.setAttribute("aria-label", "Price in gold");
+    const net = el("span", "hint", "");
+    price.addEventListener("input", () => {
+      const p = Number(price.value);
+      net.textContent = isValidPrice(p)
+        ? `You get ${(p - exchangeFee(p)).toLocaleString("en")} (5% fee)`
+        : "";
+    });
+    const go = document.createElement("button");
+    go.type = "submit";
+    go.textContent = "List";
+    form.append(price, go, net);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const p = Number(price.value);
+      if (!isValidPrice(p)) {
+        net.textContent = `A whole number from 1 to ${EXCHANGE.maxPrice.toLocaleString("en")}`;
+        return;
+      }
+      onList(p);
+    });
+    box.append(summary, form);
+    return box;
   }
 
   /** The serf's 10 slots (D-082), each with what it wears and Unequip. */

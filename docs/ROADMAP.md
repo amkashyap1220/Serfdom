@@ -6,36 +6,36 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 
 **Current phase: 13, built, awaiting the user's combined test: all ten dungeons exist (13a–13c done and tested; 13d the Forgemaster, 13e the Sunken Temple, 13f–13j the endgame dungeons, and 13k the acceptance checks built and committed locally on `phase-13-rest`).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
 
-| Phase | Name                                               | Status      |
-| ----- | -------------------------------------------------- | ----------- |
-| 0     | Repository orientation and development environment | Complete    |
-| 1     | Playable local client skeleton                     | Complete    |
-| 2     | Movement, collision, and camera following          | Complete    |
-| 3     | Combat prototype                                   | Complete    |
-| 4     | Authoritative multiplayer foundation               | Complete    |
-| 5     | Shared combat and enemies                          | Complete    |
-| 6     | Dungeon vertical slice                             | Complete    |
-| 7     | Account and persistent data                        | Complete    |
-| 8     | Progression and permadeath                         | Complete    |
-| 9     | Equipment and rewards                              | Complete    |
-| 10    | Classes and class abilities                        | Complete    |
-| 11    | Dungeon variety and procedural assembly            | Complete    |
-| 12    | Dungeon tiers and the endgame loop                 | Complete    |
-| 13    | Ten dungeons: tiers 4 and 5 and more               | Complete    |
-| 14    | Partying up                                        | Complete    |
-| 15    | Home screen, HUD, minimap, and leaderboards        | Complete    |
-| 16    | Rare loot                                          | Complete    |
-| 17    | Economy and account systems                        | Not started |
-| 18    | Onboarding and settings                            | Not started |
-| 19    | Production hosting                                 | Not started |
-| 20    | Accounts, sessions, and player safety              | Not started |
-| 21    | **Website alpha**                                  | Not started |
-| 22    | Alpha content: toward 40 dungeons                  | Not started |
-| 23    | Presentation: art and sound                        | Not started |
-| 24    | Beta polish                                        | Not started |
-| 25    | Desktop wrapper and cross-play proof               | Not started |
-| 26    | Steam integration                                  | Not started |
-| 27    | Steam launch                                       | Not started |
+| Phase | Name                                               | Status                              |
+| ----- | -------------------------------------------------- | ----------------------------------- |
+| 0     | Repository orientation and development environment | Complete                            |
+| 1     | Playable local client skeleton                     | Complete                            |
+| 2     | Movement, collision, and camera following          | Complete                            |
+| 3     | Combat prototype                                   | Complete                            |
+| 4     | Authoritative multiplayer foundation               | Complete                            |
+| 5     | Shared combat and enemies                          | Complete                            |
+| 6     | Dungeon vertical slice                             | Complete                            |
+| 7     | Account and persistent data                        | Complete                            |
+| 8     | Progression and permadeath                         | Complete                            |
+| 9     | Equipment and rewards                              | Complete                            |
+| 10    | Classes and class abilities                        | Complete                            |
+| 11    | Dungeon variety and procedural assembly            | Complete                            |
+| 12    | Dungeon tiers and the endgame loop                 | Complete                            |
+| 13    | Ten dungeons: tiers 4 and 5 and more               | Complete                            |
+| 14    | Partying up                                        | Complete                            |
+| 15    | Home screen, HUD, minimap, and leaderboards        | Complete                            |
+| 16    | Rare loot                                          | Complete                            |
+| 17    | Economy and account systems                        | **Built:** awaiting the user's test |
+| 18    | Onboarding and settings                            | Not started                         |
+| 19    | Production hosting                                 | Not started                         |
+| 20    | Accounts, sessions, and player safety              | Not started                         |
+| 21    | **Website alpha**                                  | Not started                         |
+| 22    | Alpha content: toward 40 dungeons                  | Not started                         |
+| 23    | Presentation: art and sound                        | Not started                         |
+| 24    | Beta polish                                        | Not started                         |
+| 25    | Desktop wrapper and cross-play proof               | Not started                         |
+| 26    | Steam integration                                  | Not started                         |
+| 27    | Steam launch                                       | Not started                         |
 
 When a slice or phase finishes, update this table, the phase's Status line, `docs/WORK_LOG.md`, and the README status in the same commit.
 
@@ -441,6 +441,8 @@ Acceptance:
 - A Resurrection Necklace saves a serf exactly once under the confirmed rule.
 
 ## Phase 17 — Economy and account systems
+
+Status: built (2026-10-26), awaiting the user's test on branch `phase-17`: account upgrades (D-154, earlier) and the Grand Serf Exchange (D-155): listing, buying, taking back, the Exchange tab, sale notices, and the history. Acceptance as measured: a trade cannot duplicate an item or gold (five buyers racing on PostgreSQL: one gets it, the gold sums exactly); a refused purchase changes nothing on either side (contract tests); storage is shared by every serf on an account; an upgrade is paid once and is account-wide (D-154 tests); the same server and storage serve every client, so the browser and the future desktop build see one economy.
 
 **Goal:** The player-driven economy, working before the alpha (the user: "a huge part of this game", D-124). The shared stash, gold, and selling to the vendor arrived in Phase 9 (D-085–D-087); this phase adds the marketplace, buying, and upgrades.
 

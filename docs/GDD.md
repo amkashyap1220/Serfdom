@@ -433,7 +433,7 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 
 ## 12. Economy and leaderboards
 
-Confirmed in Phase 9 (D-085–D-087): a shared account stash, account gold that survives death, and selling to the vendor for 50% of an item's reference value. Buying, the marketplace, and upgrades remain Phase 17 (D-124).
+Confirmed in Phase 9 (D-085–D-087): a shared account stash, account gold that survives death, and selling to the vendor for 50% of an item's reference value. Since 2026-10-26: gold buys account upgrades (D-154), and the **Grand Serf Exchange** (D-155) is a listing board: list a stash item or rack potion at a price (1 to 1,000,000 gold, up to 10 listings, no expiry); anyone else buys it at once; the seller gets the price less a **5% fee** (destroyed); unsold listings can be taken back. The Exchange tab browses with filters (slot, tier, Artifacts, Shiny, usable by your class, a name search) and keeps your latest 20 sales.
 
 Prior economy direction:
 

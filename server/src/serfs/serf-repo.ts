@@ -33,6 +33,11 @@ import {
   NO_UPGRADES,
   type UpgradeKind,
   type Upgrades,
+  exchangeFee,
+  potionName,
+  itemName,
+  type Listing,
+  type Sale,
 } from "@serfdom/shared";
 import type pg from "pg";
 
@@ -87,6 +92,35 @@ export interface SerfRepo {
     query: LeaderboardQuery,
     limit: number,
   ): Promise<LeaderboardEntry[]>;
+  /**
+   * The Exchange (D-155). Listing moves a stash item or rack potion to
+   * 'listed' (at most `max` at once); cancelling moves it back if there is
+   * room; buying moves it to the buyer and the gold to the seller, less
+   * the fee, all in one transaction.
+   */
+  listOnExchange(
+    accountId: number,
+    what: { itemId: number } | { potionId: number },
+    price: number,
+    max: number,
+  ): Promise<"ok" | "notYours" | "tooMany">;
+  cancelListing(
+    accountId: number,
+    listingId: number,
+    room: { stash: number; rack: number },
+  ): Promise<"ok" | "notYours" | "noRoom">;
+  buyListing(
+    buyerId: number,
+    listingId: number,
+    room: { stash: number; rack: number },
+  ): Promise<
+    | { ok: true; sellerId: number; what: string; price: number; fee: number }
+    | { ok: false; reason: "gone" | "own" | "gold" | "room" }
+  >;
+  /** Every listing on the Exchange, with its seller. */
+  allListings(): Promise<(Listing & { sellerId: number })[]>;
+  /** An account's latest sales and purchases, newest first. */
+  sales(accountId: number, limit: number): Promise<Sale[]>;
   /** How many of each upgrade the account has bought (D-154). */
   upgrades(accountId: number): Promise<Upgrades>;
   /** Adds gold to an account (tests and admin scripts; play earns it by selling). */
@@ -592,11 +626,11 @@ export class PgSerfRepo implements SerfRepo {
       [accountId],
     );
     const r = await this.pool.query<ItemRow>(
-      "select * from items where account_id = $1 and location <> 'equipped' order by id",
+      "select * from items where account_id = $1 and location in ('stash', 'pending') order by id",
       [accountId],
     );
     const potions = await this.pool.query<PotionRow>(
-      "select * from potions where account_id = $1 order by id",
+      "select * from potions where account_id = $1 and location <> 'listed' order by id",
       [accountId],
     );
     return {
@@ -664,7 +698,7 @@ export class PgSerfRepo implements SerfRepo {
   ): Promise<DrinkOutcome | null> {
     const outcome = await this.inAccount(accountId, async (client) => {
       const potion = await client.query<PotionRow>(
-        "select * from potions where id = $1 and account_id = $2",
+        "select * from potions where id = $1 and account_id = $2 and location <> 'listed'",
         [potionId, accountId],
       );
       const found = await client.query<SerfRow>(
@@ -708,7 +742,7 @@ export class PgSerfRepo implements SerfRepo {
   ): Promise<boolean> {
     const poured = await this.inAccount(accountId, async (client) => {
       const gone = await client.query(
-        "delete from potions where id = $1 and account_id = $2",
+        "delete from potions where id = $1 and account_id = $2 and location <> 'listed'",
         [potionId, accountId],
       );
       if (gone.rowCount === 0) return null;
@@ -725,7 +759,7 @@ export class PgSerfRepo implements SerfRepo {
   ): Promise<{ price: number } | null> {
     return this.inAccount(accountId, async (client) => {
       const gone = await client.query<ItemRow>(
-        "delete from items where id = $1 and account_id = $2 and location <> 'equipped' returning *",
+        "delete from items where id = $1 and account_id = $2 and location in ('stash', 'pending') returning *",
         [itemId, accountId],
       );
       const row = gone.rows[0];
@@ -808,7 +842,7 @@ export class PgSerfRepo implements SerfRepo {
         [serfId, accountId],
       );
       const item = await client.query<{ location: string }>(
-        "select location from items where id = $1 and account_id = $2 and location <> 'equipped'",
+        "select location from items where id = $1 and account_id = $2 and location in ('stash', 'pending')",
         [itemId, accountId],
       );
       const from = item.rows[0]?.location;
@@ -971,6 +1005,207 @@ export class PgSerfRepo implements SerfRepo {
     );
   }
 
+  async listOnExchange(
+    accountId: number,
+    what: { itemId: number } | { potionId: number },
+    price: number,
+    max: number,
+  ): Promise<"ok" | "notYours" | "tooMany"> {
+    const out = await this.inAccount(accountId, async (client) => {
+      const n = await client.query<{ n: string }>(
+        "select count(*) n from listings where seller_id = $1",
+        [accountId],
+      );
+      if (Number(n.rows[0]?.n ?? 0) >= max) return "tooMany" as const;
+      const moved =
+        "itemId" in what
+          ? await client.query(
+              "update items set location = 'listed' where id = $1 and account_id = $2 and location = 'stash'",
+              [what.itemId, accountId],
+            )
+          : await client.query(
+              "update potions set location = 'listed' where id = $1 and account_id = $2 and location = 'rack'",
+              [what.potionId, accountId],
+            );
+      if ((moved.rowCount ?? 0) === 0) return null;
+      await client.query(
+        "insert into listings (seller_id, item_id, potion_id, price) values ($1, $2, $3, $4)",
+        [
+          accountId,
+          "itemId" in what ? what.itemId : null,
+          "potionId" in what ? what.potionId : null,
+          price,
+        ],
+      );
+      return "ok" as const;
+    });
+    return out ?? "notYours";
+  }
+
+  async cancelListing(
+    accountId: number,
+    listingId: number,
+    room: { stash: number; rack: number },
+  ): Promise<"ok" | "notYours" | "noRoom"> {
+    const out = await this.inAccount(accountId, async (client) => {
+      const l = await client.query<ListingRow>(
+        "select * from listings where id = $1 and seller_id = $2 for update",
+        [listingId, accountId],
+      );
+      const row = l.rows[0];
+      if (!row) return null;
+      if (row.item_id !== null) {
+        if ((await stashCount(client, accountId)) >= room.stash)
+          return "noRoom" as const;
+        await client.query(
+          "update items set location = 'stash' where id = $1",
+          [row.item_id],
+        );
+      } else {
+        if ((await rackCount(client, accountId)) >= room.rack)
+          return "noRoom" as const;
+        await client.query(
+          "update potions set location = 'rack' where id = $1",
+          [row.potion_id],
+        );
+      }
+      await client.query("delete from listings where id = $1", [listingId]);
+      return "ok" as const;
+    });
+    return out ?? "notYours";
+  }
+
+  async buyListing(
+    buyerId: number,
+    listingId: number,
+    room: { stash: number; rack: number },
+  ): Promise<
+    | { ok: true; sellerId: number; what: string; price: number; fee: number }
+    | { ok: false; reason: "gone" | "own" | "gold" | "room" }
+  > {
+    const client = await this.pool.connect();
+    const fail = async (reason: "gone" | "own" | "gold" | "room") => {
+      await client.query("rollback");
+      return { ok: false as const, reason };
+    };
+    try {
+      await client.query("begin");
+      // The listing first: a second buyer waits here, then finds it gone.
+      const l = await client.query<ListingRow>(
+        "select * from listings where id = $1 for update",
+        [listingId],
+      );
+      const row = l.rows[0];
+      if (!row) return await fail("gone");
+      const sellerId = Number(row.seller_id);
+      if (sellerId === buyerId) return await fail("own");
+      // Both accounts, in id order so two trades never deadlock.
+      const accounts = await client.query<{ id: string; gold: string }>(
+        "select id, gold from accounts where id = any($1) order by id for update",
+        [[buyerId, sellerId]],
+      );
+      const price = Number(row.price);
+      const buyerGold = Number(
+        accounts.rows.find((a) => Number(a.id) === buyerId)?.gold ?? 0,
+      );
+      if (buyerGold < price) return await fail("gold");
+      let what: string;
+      if (row.item_id !== null) {
+        if ((await stashCount(client, buyerId)) >= room.stash)
+          return await fail("room");
+        const moved = await client.query<ItemRow>(
+          "update items set account_id = $2, location = 'stash' where id = $1 returning *",
+          [row.item_id, buyerId],
+        );
+        what = itemName(itemFromRow(moved.rows[0]!));
+      } else {
+        if ((await rackCount(client, buyerId)) >= room.rack)
+          return await fail("room");
+        const moved = await client.query<PotionRow>(
+          "update potions set account_id = $2, location = 'rack' where id = $1 returning *",
+          [row.potion_id, buyerId],
+        );
+        what = potionName(potionFromRow(moved.rows[0]!).stat);
+      }
+      const fee = exchangeFee(price);
+      await client.query("update accounts set gold = gold - $2 where id = $1", [
+        buyerId,
+        price,
+      ]);
+      await client.query("update accounts set gold = gold + $2 where id = $1", [
+        sellerId,
+        price - fee,
+      ]);
+      await client.query("delete from listings where id = $1", [listingId]);
+      await client.query(
+        "insert into sales (seller_id, buyer_id, what, price, fee) values ($1, $2, $3, $4, $5)",
+        [sellerId, buyerId, what, price, fee],
+      );
+      await client.query("commit");
+      return { ok: true, sellerId, what, price, fee };
+    } catch (err) {
+      await client.query("rollback").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  async allListings(): Promise<(Listing & { sellerId: number })[]> {
+    const r = await this.pool.query<ListingRow>(
+      "select * from listings order by id",
+    );
+    if (r.rows.length === 0) return [];
+    const items = await this.pool.query<ItemRow>(
+      "select * from items where id = any($1)",
+      [r.rows.flatMap((x) => (x.item_id !== null ? [x.item_id] : []))],
+    );
+    const potions = await this.pool.query<PotionRow>(
+      "select * from potions where id = any($1)",
+      [r.rows.flatMap((x) => (x.potion_id !== null ? [x.potion_id] : []))],
+    );
+    const itemOf = new Map(items.rows.map((i) => [i.id, itemFromRow(i)]));
+    const potionOf = new Map(
+      potions.rows.map((p) => [String(p.id), potionFromRow(p)]),
+    );
+    return r.rows.map((x) => ({
+      id: Number(x.id),
+      sellerId: Number(x.seller_id),
+      price: Number(x.price),
+      listedAt: x.listed_at.getTime(),
+      item: x.item_id !== null ? (itemOf.get(x.item_id) ?? null) : null,
+      potion:
+        x.potion_id !== null
+          ? (potionOf.get(String(x.potion_id)) ?? null)
+          : null,
+      mine: false,
+    }));
+  }
+
+  async sales(accountId: number, limit: number): Promise<Sale[]> {
+    const r = await this.pool.query<{
+      seller_id: string;
+      what: string;
+      price: number;
+      fee: number;
+      sold_at: Date;
+    }>(
+      `select seller_id, what, price, fee, sold_at from sales
+       where seller_id = $1 or buyer_id = $1 order by sold_at desc, id desc limit $2`,
+      [accountId, limit],
+    );
+    return r.rows.map((x) => {
+      const sold = Number(x.seller_id) === accountId;
+      return {
+        what: x.what,
+        price: x.price,
+        fee: sold ? x.fee : 0,
+        at: x.sold_at.getTime(),
+        role: sold ? "sold" : "bought",
+      };
+    });
+  }
+
   async upgrades(accountId: number): Promise<Upgrades> {
     const r = await this.pool.query<{
       serf_slots_bought: number;
@@ -1098,6 +1333,15 @@ function toEntry(
   };
 }
 
+interface ListingRow {
+  id: string;
+  seller_id: string;
+  item_id: string | null;
+  potion_id: string | null;
+  price: number;
+  listed_at: Date;
+}
+
 /** Where each upgrade's purchases are stored (migration 014). */
 const UPGRADE_COLUMNS: Record<UpgradeKind, string> = {
   serfSlots: "serf_slots_bought",
@@ -1139,7 +1383,7 @@ export class MemorySerfRepo implements SerfRepo {
   private items: {
     accountId: number;
     serfId: number | null;
-    location: "stash" | "equipped" | "pending";
+    location: "stash" | "equipped" | "pending" | "listed";
     item: Item;
   }[] = [];
   private readonly gold = new Map<number, number>();
@@ -1147,7 +1391,7 @@ export class MemorySerfRepo implements SerfRepo {
   private potions: {
     accountId: number;
     serfId: number | null;
-    location: "rack" | "pending";
+    location: "rack" | "pending" | "listed";
     potion: Potion;
   }[] = [];
 
@@ -1314,6 +1558,165 @@ export class MemorySerfRepo implements SerfRepo {
       .sort((a, b) => score(b) - score(a) || a.summary.id - b.summary.id)
       .slice(0, limit)
       .map((s, i) => entry(s, i, score(s), null));
+  }
+
+  private listed: {
+    id: number;
+    sellerId: number;
+    itemId: number | null;
+    potionId: number | null;
+    price: number;
+    at: number;
+  }[] = [];
+  private nextListingId = 1;
+  private sold: {
+    sellerId: number;
+    buyerId: number;
+    sale: Omit<Sale, "role">;
+  }[] = [];
+
+  async listOnExchange(
+    accountId: number,
+    what: { itemId: number } | { potionId: number },
+    price: number,
+    max: number,
+  ): Promise<"ok" | "notYours" | "tooMany"> {
+    if (this.listed.filter((l) => l.sellerId === accountId).length >= max) {
+      return "tooMany";
+    }
+    const entry =
+      "itemId" in what
+        ? this.items.find(
+            (x) =>
+              x.accountId === accountId &&
+              x.item.id === what.itemId &&
+              x.location === "stash",
+          )
+        : this.potions.find(
+            (x) =>
+              x.accountId === accountId &&
+              x.potion.id === what.potionId &&
+              x.location === "rack",
+          );
+    if (!entry) return "notYours";
+    entry.location = "listed";
+    this.listed.push({
+      id: this.nextListingId++,
+      sellerId: accountId,
+      itemId: "itemId" in what ? what.itemId : null,
+      potionId: "potionId" in what ? what.potionId : null,
+      price,
+      at: Date.now() + this.nextListingId / 1000,
+    });
+    return "ok";
+  }
+
+  async cancelListing(
+    accountId: number,
+    listingId: number,
+    room: { stash: number; rack: number },
+  ): Promise<"ok" | "notYours" | "noRoom"> {
+    const l = this.listed.find(
+      (x) => x.id === listingId && x.sellerId === accountId,
+    );
+    if (!l) return "notYours";
+    if (l.itemId !== null) {
+      if (this.stashOf(accountId).length >= room.stash) return "noRoom";
+      const e = this.items.find((x) => x.item.id === l.itemId);
+      if (e) e.location = "stash";
+    } else {
+      const rack = this.potions.filter(
+        (x) => x.accountId === accountId && x.location === "rack",
+      );
+      if (rack.length >= room.rack) return "noRoom";
+      const e = this.potions.find((x) => x.potion.id === l.potionId);
+      if (e) e.location = "rack";
+    }
+    this.listed = this.listed.filter((x) => x !== l);
+    return "ok";
+  }
+
+  async buyListing(
+    buyerId: number,
+    listingId: number,
+    room: { stash: number; rack: number },
+  ): Promise<
+    | { ok: true; sellerId: number; what: string; price: number; fee: number }
+    | { ok: false; reason: "gone" | "own" | "gold" | "room" }
+  > {
+    const l = this.listed.find((x) => x.id === listingId);
+    if (!l) return { ok: false, reason: "gone" };
+    if (l.sellerId === buyerId) return { ok: false, reason: "own" };
+    if ((this.gold.get(buyerId) ?? 0) < l.price)
+      return { ok: false, reason: "gold" };
+    let what: string;
+    if (l.itemId !== null) {
+      if (this.stashOf(buyerId).length >= room.stash)
+        return { ok: false, reason: "room" };
+      const e = this.items.find((x) => x.item.id === l.itemId)!;
+      e.accountId = buyerId;
+      e.location = "stash";
+      what = itemName(e.item);
+    } else {
+      const rack = this.potions.filter(
+        (x) => x.accountId === buyerId && x.location === "rack",
+      );
+      if (rack.length >= room.rack) return { ok: false, reason: "room" };
+      const e = this.potions.find((x) => x.potion.id === l.potionId)!;
+      e.accountId = buyerId;
+      e.location = "rack";
+      what = potionName(e.potion.stat);
+    }
+    const fee = exchangeFee(l.price);
+    this.gold.set(buyerId, (this.gold.get(buyerId) ?? 0) - l.price);
+    this.gold.set(l.sellerId, (this.gold.get(l.sellerId) ?? 0) + l.price - fee);
+    this.listed = this.listed.filter((x) => x !== l);
+    this.sold.push({
+      sellerId: l.sellerId,
+      buyerId,
+      sale: {
+        what,
+        price: l.price,
+        fee,
+        at: Date.now() + this.sold.length / 1000,
+      },
+    });
+    return { ok: true, sellerId: l.sellerId, what, price: l.price, fee };
+  }
+
+  async allListings(): Promise<(Listing & { sellerId: number })[]> {
+    return this.listed.map((l) => ({
+      id: l.id,
+      sellerId: l.sellerId,
+      price: l.price,
+      listedAt: l.at,
+      item:
+        l.itemId !== null
+          ? structuredClone(
+              this.items.find((x) => x.item.id === l.itemId)?.item ?? null,
+            )
+          : null,
+      potion:
+        l.potionId !== null
+          ? structuredClone(
+              this.potions.find((x) => x.potion.id === l.potionId)?.potion ??
+                null,
+            )
+          : null,
+      mine: false,
+    }));
+  }
+
+  async sales(accountId: number, limit: number): Promise<Sale[]> {
+    return this.sold
+      .filter((x) => x.sellerId === accountId || x.buyerId === accountId)
+      .reverse()
+      .slice(0, limit)
+      .map((x) =>
+        x.sellerId === accountId
+          ? { ...x.sale, role: "sold" as const }
+          : { ...x.sale, fee: 0, role: "bought" as const },
+      );
   }
 
   private readonly bought = new Map<number, Upgrades>();
@@ -1487,7 +1890,10 @@ export class MemorySerfRepo implements SerfRepo {
     capacity: number,
   ): Promise<DrinkOutcome | null> {
     const entry = this.potions.find(
-      (x) => x.accountId === accountId && x.potion.id === potionId,
+      (x) =>
+        x.accountId === accountId &&
+        x.potion.id === potionId &&
+        x.location !== "listed",
     );
     const s = this.serfs.find(
       (x) => x.accountId === accountId && x.summary.id === serfId,
@@ -1518,7 +1924,12 @@ export class MemorySerfRepo implements SerfRepo {
   ): Promise<boolean> {
     const before = this.potions.length;
     this.potions = this.potions.filter(
-      (x) => !(x.accountId === accountId && x.potion.id === potionId),
+      (x) =>
+        !(
+          x.accountId === accountId &&
+          x.potion.id === potionId &&
+          x.location !== "listed"
+        ),
     );
     if (this.potions.length === before) return false;
     this.fillRack(accountId, capacity);
@@ -1552,7 +1963,7 @@ export class MemorySerfRepo implements SerfRepo {
       (x) =>
         x.accountId === accountId &&
         x.item.id === itemId &&
-        x.location !== "equipped",
+        (x.location === "stash" || x.location === "pending"),
     );
     if (!found) return null;
     this.items = this.items.filter((x) => x !== found);
@@ -1625,7 +2036,7 @@ export class MemorySerfRepo implements SerfRepo {
       (x) =>
         x.accountId === accountId &&
         x.item.id === itemId &&
-        x.location !== "equipped",
+        (x.location === "stash" || x.location === "pending"),
     );
     if (!serf || !entry) return null;
     const room =

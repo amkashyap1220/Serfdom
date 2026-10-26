@@ -36,6 +36,12 @@ import {
   nextPrice,
   UPGRADES,
   type UpgradeKind,
+  EXCHANGE,
+  filterListings,
+  isValidPrice,
+  type ExchangeQuery,
+  type Listing,
+  type Sale,
 } from "@serfdom/shared";
 import type { Death, SerfRepo, Stash } from "./serf-repo.ts";
 
@@ -499,6 +505,117 @@ export class SerfService {
       rolls: [],
       luck: 0,
     });
+  }
+
+  /** Lists a stash item or rack potion on the Exchange (D-155). */
+  async listOnExchange(
+    accountId: number,
+    what: { itemId: number } | { potionId: number },
+    price: number,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    if (!isValidPrice(price)) {
+      return {
+        ok: false,
+        reason: `A price is a whole number from ${EXCHANGE.minPrice} to ${EXCHANGE.maxPrice.toLocaleString("en")} gold.`,
+      };
+    }
+    const r = await this.repo.listOnExchange(
+      accountId,
+      what,
+      price,
+      EXCHANGE.maxListings,
+    );
+    if (r === "tooMany") {
+      return {
+        ok: false,
+        reason: `You already have ${EXCHANGE.maxListings} listings.`,
+      };
+    }
+    if (r === "notYours") {
+      return {
+        ok: false,
+        reason:
+          "itemId" in what
+            ? "Only an item in your stash can be listed (not one a serf wears)."
+            : "Only a potion in your rack can be listed.",
+      };
+    }
+    return { ok: true };
+  }
+
+  async cancelListing(
+    accountId: number,
+    listingId: number,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const r = await this.repo.cancelListing(
+      accountId,
+      listingId,
+      await this.room(accountId),
+    );
+    if (r === "notYours") return { ok: false, reason: "That listing is gone." };
+    if (r === "noRoom") return { ok: false, reason: "Make room for it first." };
+    return { ok: true };
+  }
+
+  async buyListing(
+    accountId: number,
+    listingId: number,
+  ): Promise<
+    | { ok: true; sellerId: number; what: string; price: number; fee: number }
+    | { ok: false; reason: string }
+  > {
+    const r = await this.repo.buyListing(
+      accountId,
+      listingId,
+      await this.room(accountId),
+    );
+    if (r.ok) return r;
+    const reasons = {
+      gone: "That has already sold, or was taken back.",
+      own: "That is your own listing.",
+      gold: "Not enough gold.",
+      room: "Make room for it first (stash or rack).",
+    };
+    return { ok: false, reason: reasons[r.reason] };
+  }
+
+  /** A page of the Exchange for this account (its own listings marked). */
+  async browse(accountId: number, query: ExchangeQuery) {
+    const all = (await this.repo.allListings()).map(({ sellerId, ...l }) => ({
+      ...l,
+      mine: sellerId === accountId,
+    }));
+    return filterListings(all, query);
+  }
+
+  /** This account's listings and its latest sales and purchases. */
+  async myExchange(
+    accountId: number,
+  ): Promise<{ listings: Listing[]; sales: Sale[] }> {
+    const listings = (await this.repo.allListings())
+      .filter((l) => l.sellerId === accountId)
+      .map((l) => ({
+        id: l.id,
+        price: l.price,
+        listedAt: l.listedAt,
+        item: l.item,
+        potion: l.potion,
+        mine: true,
+      }));
+    return {
+      listings,
+      sales: await this.repo.sales(accountId, EXCHANGE.history),
+    };
+  }
+
+  /** How much room this account has for an item or a potion arriving. */
+  private async room(
+    accountId: number,
+  ): Promise<{ stash: number; rack: number }> {
+    return {
+      stash: await this.capacity(accountId, "stash"),
+      rack: await this.capacity(accountId, "rack"),
+    };
   }
 
   /** An Artifact the serf wears used itself up (D-153): it is gone. */

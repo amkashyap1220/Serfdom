@@ -214,6 +214,19 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+#### Phase 17 checklist: the Grand Serf Exchange (D-155)
+
+Restart `npm run dev` (migration 016 runs on start) and hard-refresh. Two different browsers: A = serfdom1@test.com (has gold and Artifacts), B = serfdom@test.com.
+
+1. In A's **Stash**, open "List on the Exchange" under an item, type a price: it shows "You get N (5% fee)". List it: it leaves the stash. Do the same with a potion from the **Potion rack**.
+2. In A's **Exchange → My listings**: both listings, with Take back; the count reads 2/10. Take the potion back: it returns to the rack.
+3. In B's **Exchange → Browse**: A's item is there with its price and Buy. Try the filters (Weapons, Artifacts, Shiny, a tier range, the class box, a name search, sorting). Buy is greyed out without enough gold.
+4. B buys it: it lands in B's stash and B's gold drops by the price. A (still logged in) sees "Your … sold for … (you got … after the fee)" and A's gold rises by the price less 5%. Both show it under Latest sales.
+5. A tries to buy A's own listing: there is no Buy ("Your listing"). A listing an 11th item: refused with a message.
+6. Consoles: no red errors.
+
+Report: pass or fail per step, with the exact text for any failure.
+
 #### Phase 16 checklist: Artifacts and Shiny items (D-152, D-153)
 
 Restart `npm run dev` (migration 013 runs on start) and hard-refresh. Artifacts are 1 in 500 per endgame chest, so for testing ask Claude to put a set of Artifacts (and a Shiny item) into your stash with a temporary script.

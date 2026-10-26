@@ -842,3 +842,10 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 
 - The user ran the Phase 16 and upgrade checks with the serfdom1@test.com set-up: pass. `phase-16` merged into `main` and pushed.
 - Next step: Phase 17 (economy and account systems): the marketplace; upgrades are already done (D-154).
+
+### Phase 17: the Grand Serf Exchange — 2026-10-26
+
+- The user approved the draft ("do all of these now", D-155). Built: shared `exchange.ts`; migration 016; the storage's list, cancel, buy (one transaction, locks in a fixed order), all listings, and sales, with every older stash, rack, sell, and equip query now skipping listed things; the service's rules and messages; `GameServer.onExchange` and seller notices; protocol v54; the Exchange tab (Browse with filters, sorting, and pages; My listings with Take back and the latest 20 sales) and "List on the Exchange" under stash items and rack potions, with the fee shown.
+- `npm run check`: 622 shared (the browse rules), 257 server (the Exchange on memory and PostgreSQL; five buyers racing for one listing; a listed item cannot be sold to the vendor or worn; list and buy over the network with the seller's notice), 92 client, build.
+- Live (harness, **test** DB, two headless browsers): A listed a Shiny Doomrend for 5,000 ("You get 4,750 (5% fee)"); B found it under Exchange and bought it; it was in B's stash, B's gold dropped 5,000, A was told and gained 4,750; A's history showed the sale; no console errors.
+- Next step: the user's Phase 17 test; push after the pass.

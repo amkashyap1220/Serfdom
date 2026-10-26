@@ -17,6 +17,7 @@ export type MenuTab =
   | "party"
   | "stash"
   | "rack"
+  | "exchange"
   | "leaderboard"
   | "settings";
 

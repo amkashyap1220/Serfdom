@@ -107,6 +107,52 @@
   color: #c792ff;
 }
 
+/* The Exchange (D-155). */
+.list-control summary {
+  cursor: pointer;
+  color: #9fd8ff;
+  font-size: 11px;
+}
+
+.list-control form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.list-control input {
+  width: 90px;
+  padding: 3px 6px;
+  border: 1px solid #46505f;
+  background: #0e1014;
+  color: #ffffff;
+  font: inherit;
+}
+
+.screen .list-control button {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.exchange-filters {
+  flex-wrap: wrap;
+}
+
+.exchange-filters input[type="text"] {
+  width: 130px;
+  padding: 6px 8px;
+  border: 2px solid #46505f;
+  background: #0e1014;
+  color: #ffffff;
+  font: inherit;
+}
+
+.item-card .price {
+  color: #f0c419;
+  font-weight: bold;
+}
+
 /* Account upgrades (D-154), at the top of the Stash tab. */
 .upgrade-bar {
   display: flex;

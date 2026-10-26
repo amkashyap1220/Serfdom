@@ -21,6 +21,7 @@ import {
   type StatRoll,
   WEAPON_TYPES,
   type WeaponType,
+  ITEM_SLOTS,
 } from "./items.ts";
 import {
   LIFE_STAT_KEYS,
@@ -31,6 +32,14 @@ import {
 import type { Vec2 } from "./geometry.ts";
 import { ARTIFACT_TIER } from "./artifacts.ts";
 import { isUpgradeKind, type UpgradeKind } from "./upgrades.ts";
+import {
+  EXCHANGE,
+  EXCHANGE_SORTS,
+  isValidPrice,
+  type ExchangeQuery,
+  type Listing,
+  type Sale,
+} from "./exchange.ts";
 import {
   RUN_RESULTS,
   RUN_STAT_KEYS,
@@ -71,6 +80,10 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v54 (17): the Grand Serf Exchange (D-155). Client exchangeList
+ *          {itemId | potionId, price}, exchangeCancel / exchangeBuy
+ *          {listingId}, exchangeBrowse {query}, exchangeMine; server
+ *          exchangePage, exchangeMine, exchangeNotice, exchangeError.
  * v53: client buyUpgrade {kind} (D-154); the stash's capacities and the
  *          serf list's slots are now each account's own.
  * v52 (16d): snapshot zones may be a Vanish decoy or a Conduit field
@@ -182,7 +195,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 53;
+export const PROTOCOL_VERSION = 54;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -265,7 +278,18 @@ export type ClientMessage =
   /** The leader removes a member (D-143). */
   | { type: "partyKick"; playerId: number }
   /** Buy the next step of an account upgrade with gold (D-154). */
-  | { type: "buyUpgrade"; kind: UpgradeKind };
+  | { type: "buyUpgrade"; kind: UpgradeKind }
+  /** The Exchange (D-155): list an item or a potion, take it back, buy, browse. */
+  | {
+      type: "exchangeList";
+      itemId: number | null;
+      potionId: number | null;
+      price: number;
+    }
+  | { type: "exchangeCancel"; listingId: number }
+  | { type: "exchangeBuy"; listingId: number }
+  | { type: "exchangeBrowse"; query: ExchangeQuery }
+  | { type: "exchangeMine" };
 
 /** A party member as others see them: their serf (null while choosing one). */
 export interface PartyMember {
@@ -728,6 +752,19 @@ export type ServerMessage =
   | { type: "rooms"; seen: string[]; cleared: string[] }
   /** You are not queued (any more); `reason` (safe to show) when it was not your doing. */
   | { type: "queueLeft"; reason: string | null }
+  /** A page of the Exchange for your query (D-155). */
+  | {
+      type: "exchangePage";
+      query: ExchangeQuery;
+      total: number;
+      listings: Listing[];
+    }
+  /** Your listings, and your latest sales and purchases. */
+  | { type: "exchangeMine"; listings: Listing[]; sales: Sale[] }
+  /** Something of yours sold, or similar; `text` is safe to show. */
+  | { type: "exchangeNotice"; text: string }
+  /** An Exchange request was refused; `reason` is safe to show. */
+  | { type: "exchangeError"; reason: string }
   /** Someone invites you; it lapses after `expiresIn` seconds. */
   | {
       type: "partyInvited";
@@ -993,6 +1030,55 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
           accept: obj.accept,
         },
       };
+    case "exchangeList": {
+      if (!hasExactKeys(obj, ["type", "itemId", "potionId", "price"])) {
+        return fail("exchangeList: unexpected fields");
+      }
+      const item = obj.itemId === null ? null : obj.itemId;
+      const potion = obj.potionId === null ? null : obj.potionId;
+      if ((item === null) === (potion === null)) {
+        return fail("exchangeList: an item or a potion");
+      }
+      if (
+        (item !== null && !isPlayerId(item)) ||
+        (potion !== null && !isPlayerId(potion))
+      ) {
+        return fail("exchangeList: bad id");
+      }
+      if (!isValidPrice(obj.price)) return fail("exchangeList: bad price");
+      return {
+        ok: true,
+        message: {
+          type: "exchangeList",
+          itemId: item as number | null,
+          potionId: potion as number | null,
+          price: obj.price,
+        },
+      };
+    }
+    case "exchangeCancel":
+    case "exchangeBuy":
+      if (!hasExactKeys(obj, ["type", "listingId"])) {
+        return fail(`${obj.type}: unexpected fields`);
+      }
+      if (!isPlayerId(obj.listingId)) return fail(`${obj.type}: bad listingId`);
+      return {
+        ok: true,
+        message: { type: obj.type, listingId: obj.listingId },
+      };
+    case "exchangeBrowse": {
+      if (!hasExactKeys(obj, ["type", "query"])) {
+        return fail("exchangeBrowse: unexpected fields");
+      }
+      const query = parseExchangeQuery(obj.query);
+      if (!query) return fail("exchangeBrowse: bad query");
+      return { ok: true, message: { type: "exchangeBrowse", query } };
+    }
+    case "exchangeMine":
+      if (!hasExactKeys(obj, ["type"])) {
+        return fail("exchangeMine: unexpected fields");
+      }
+      return { ok: true, message: { type: "exchangeMine" } };
     case "buyUpgrade":
       if (!hasExactKeys(obj, ["type", "kind"])) {
         return fail("buyUpgrade: unexpected fields");
@@ -1295,6 +1381,45 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       if (!seen || !cleared) return fail("rooms: bad room ids");
       return { ok: true, message: { type: "rooms", seen, cleared } };
     }
+    case "exchangePage": {
+      if (!hasExactKeys(obj, ["type", "query", "total", "listings"])) {
+        return fail("exchangePage: unexpected fields");
+      }
+      const query = parseExchangeQuery(obj.query);
+      const listings = parseList(obj.listings, parseListing);
+      if (!query || !listings || !isNonNegativeInt(obj.total)) {
+        return fail("exchangePage: bad page");
+      }
+      return {
+        ok: true,
+        message: { type: "exchangePage", query, total: obj.total, listings },
+      };
+    }
+    case "exchangeMine": {
+      if (!hasExactKeys(obj, ["type", "listings", "sales"])) {
+        return fail("exchangeMine: unexpected fields");
+      }
+      const listings = parseList(obj.listings, parseListing);
+      const sales = parseList(obj.sales, parseSale);
+      if (!listings || !sales) return fail("exchangeMine: bad lists");
+      return { ok: true, message: { type: "exchangeMine", listings, sales } };
+    }
+    case "exchangeNotice":
+    case "exchangeError": {
+      const key = obj.type === "exchangeNotice" ? "text" : "reason";
+      if (!hasExactKeys(obj, ["type", key]) || typeof obj[key] !== "string") {
+        return fail(`${obj.type}: bad text`);
+      }
+      return obj.type === "exchangeNotice"
+        ? {
+            ok: true,
+            message: { type: "exchangeNotice", text: obj.text as string },
+          }
+        : {
+            ok: true,
+            message: { type: "exchangeError", reason: obj.reason as string },
+          };
+    }
     case "queueLeft":
       if (!hasExactKeys(obj, ["type", "reason"])) {
         return fail("queueLeft: unexpected fields");
@@ -1580,6 +1705,93 @@ function parseFire(v: unknown): FireInput | string {
 }
 
 /** undefined means malformed. */
+/** An Exchange query (D-155): known slots, tiers 0-12, a short search. */
+function parseExchangeQuery(v: unknown): ExchangeQuery | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, [
+      "slot",
+      "minTier",
+      "maxTier",
+      "artifacts",
+      "shiny",
+      "usableBy",
+      "search",
+      "sort",
+      "page",
+    ]) ||
+    !(
+      v.slot === null ||
+      v.slot === "potion" ||
+      (ITEM_SLOTS as readonly unknown[]).includes(v.slot)
+    ) ||
+    !isNonNegativeInt(v.minTier) ||
+    !isNonNegativeInt(v.maxTier) ||
+    (v.maxTier as number) > ARTIFACT_TIER ||
+    typeof v.artifacts !== "boolean" ||
+    typeof v.shiny !== "boolean" ||
+    (v.usableBy !== null && !isClassId(v.usableBy)) ||
+    typeof v.search !== "string" ||
+    v.search.length > EXCHANGE.maxSearch ||
+    !(EXCHANGE_SORTS as readonly unknown[]).includes(v.sort) ||
+    !isNonNegativeInt(v.page) ||
+    (v.page as number) > 10_000
+  ) {
+    return null;
+  }
+  return {
+    slot: v.slot as ExchangeQuery["slot"],
+    minTier: v.minTier as number,
+    maxTier: v.maxTier as number,
+    artifacts: v.artifacts,
+    shiny: v.shiny,
+    usableBy: v.usableBy,
+    search: v.search,
+    sort: v.sort as ExchangeQuery["sort"],
+    page: v.page as number,
+  };
+}
+
+function parseListing(v: unknown): Listing | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["id", "price", "listedAt", "item", "potion", "mine"]) ||
+    !isPlayerId(v.id) ||
+    !isValidPrice(v.price) ||
+    !isNonNegative(v.listedAt) ||
+    typeof v.mine !== "boolean"
+  ) {
+    return null;
+  }
+  const item = v.item === null ? null : parseItem(v.item);
+  const potion = v.potion === null ? null : parsePotion(v.potion);
+  if ((v.item !== null && !item) || (v.potion !== null && !potion)) return null;
+  if ((item === null) === (potion === null)) return null;
+  return {
+    id: v.id,
+    price: v.price,
+    listedAt: v.listedAt,
+    item,
+    potion,
+    mine: v.mine,
+  };
+}
+
+function parseSale(v: unknown): Sale | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["what", "price", "fee", "at", "role"]) ||
+    typeof v.what !== "string" ||
+    !isValidPrice(v.price) ||
+    !isNonNegativeInt(v.fee) ||
+    !isNonNegative(v.at) ||
+    (v.role !== "sold" && v.role !== "bought")
+  ) {
+    return null;
+  }
+  return { what: v.what, price: v.price, fee: v.fee, at: v.at, role: v.role };
+}
+
 function parsePartyMember(v: unknown): PartyMember | undefined {
   if (
     !isPlainObject(v) ||

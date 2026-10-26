@@ -21,6 +21,7 @@ import {
   layoutFor,
   rollArtifact,
   type DungeonId,
+  ANY_LISTING,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
@@ -2337,5 +2338,87 @@ describe("account upgrades (D-154)", () => {
     expect((await nextOfType(client, "error")).reason).toBe(
       "buyUpgrade: unknown upgrade",
     );
+  });
+});
+
+describe("the Grand Serf Exchange over the network (D-155)", () => {
+  it("one player lists, another buys; the seller hears of it and gets the gold", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      allowTestDungeons: true,
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const a = (await joined()).client;
+    const b = (await joined()).client;
+    const [serfA] = await repo.list(1);
+    const [drop] = (await repo.addLoot(
+      1,
+      serfA!.id,
+      [rollArtifact("doomrend", () => 0.5)],
+      STASH_SIZE,
+    ))!;
+    // A tampered price is a malformed message; a fair one lists.
+    a.send(
+      JSON.stringify({
+        type: "exchangeList",
+        itemId: drop!.item.id,
+        potionId: null,
+        price: 0,
+      }),
+    );
+    expect((await nextOfType(a, "error")).reason).toBe(
+      "exchangeList: bad price",
+    );
+    a.send(
+      encodeMessage({
+        type: "exchangeList",
+        itemId: drop!.item.id,
+        potionId: null,
+        price: 5000,
+      }),
+    );
+    const mine = await nextOfType(a, "exchangeMine");
+    expect(mine.listings).toHaveLength(1);
+    // B browses for Artifacts and finds it, not marked as theirs.
+    b.send(
+      encodeMessage({
+        type: "exchangeBrowse",
+        query: { ...ANY_LISTING, artifacts: true },
+      }),
+    );
+    const page = await nextOfType(b, "exchangePage");
+    expect(page.total).toBe(1);
+    expect(page.listings[0]).toMatchObject({
+      price: 5000,
+      mine: false,
+      item: { artifact: "doomrend" },
+    });
+    // Too poor, then not.
+    b.send(
+      encodeMessage({ type: "exchangeBuy", listingId: page.listings[0]!.id }),
+    );
+    expect((await nextOfType(b, "exchangeError")).reason).toBe(
+      "Not enough gold.",
+    );
+    await repo.addGold(2, 6000);
+    b.send(
+      encodeMessage({ type: "exchangeBuy", listingId: page.listings[0]!.id }),
+    );
+    let stash = await nextOfType(b, "stash");
+    while (stash.items.length === 0) stash = await nextOfType(b, "stash");
+    expect(stash.items[0]).toMatchObject({ artifact: "doomrend" });
+    expect(stash.gold).toBe(1000);
+    expect((await nextOfType(a, "exchangeNotice")).text).toContain(
+      "sold for 5,000 gold",
+    );
+    let sellerStash = await nextOfType(a, "stash");
+    while (sellerStash.gold === 0) sellerStash = await nextOfType(a, "stash");
+    expect(sellerStash.gold).toBe(4750);
   });
 });

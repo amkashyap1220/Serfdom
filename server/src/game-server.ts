@@ -509,6 +509,13 @@ export class GameServer {
       case "partyKick":
         this.onParty(socket, session, message);
         return;
+      case "exchangeList":
+      case "exchangeCancel":
+      case "exchangeBuy":
+      case "exchangeBrowse":
+      case "exchangeMine":
+        this.onExchange(socket, session, message);
+        return;
       case "getLeaderboard": {
         if (session.accountId === null) {
           this.reject(socket, session, "log in first");
@@ -1227,6 +1234,120 @@ export class GameServer {
           this.onLeaderboard(socket, session, next);
         }
       });
+  }
+
+  /**
+   * The Grand Serf Exchange (D-155). Listing, cancelling, and buying take
+   * the connection's one-at-a-time slot (like stash actions); the storage
+   * does each in one transaction. After a sale the seller, if online,
+   * hears of it and sees the gold. Refusals are exchangeError replies.
+   */
+  private onExchange(
+    socket: WebSocket,
+    session: Session,
+    message: Extract<
+      ClientMessage,
+      {
+        type:
+          | "exchangeList"
+          | "exchangeCancel"
+          | "exchangeBuy"
+          | "exchangeBrowse"
+          | "exchangeMine";
+      }
+    >,
+  ): void {
+    const accountId = session.accountId;
+    if (accountId === null) {
+      this.reject(socket, session, "log in first");
+      return;
+    }
+    const failed = (err: unknown) => {
+      this.log.warn(`${label(session)} ${message.type} error: ${String(err)}`);
+      this.send(socket, {
+        type: "exchangeError",
+        reason: "Server error. Please try again.",
+      });
+    };
+    if (message.type === "exchangeBrowse") {
+      this.serfs
+        .browse(accountId, message.query)
+        .then((page) => {
+          if (session.accountId !== accountId) return;
+          this.send(socket, {
+            type: "exchangePage",
+            query: message.query,
+            ...page,
+          });
+        })
+        .catch(failed);
+      return;
+    }
+    if (message.type === "exchangeMine") {
+      this.sendExchangeMine(socket, accountId);
+      return;
+    }
+    if (session.serfBusy) {
+      this.reject(socket, session, "busy");
+      return;
+    }
+    session.serfBusy = true;
+    type Sold = { sellerId: number; what: string; price: number; fee: number };
+    const attempt: Promise<
+      { ok: true; sold?: Sold } | { ok: false; reason: string }
+    > =
+      message.type === "exchangeList"
+        ? this.serfs.listOnExchange(
+            accountId,
+            message.itemId !== null
+              ? { itemId: message.itemId }
+              : { potionId: message.potionId ?? 0 },
+            message.price,
+          )
+        : message.type === "exchangeCancel"
+          ? this.serfs.cancelListing(accountId, message.listingId)
+          : this.serfs
+              .buyListing(accountId, message.listingId)
+              .then((r) => (r.ok ? { ok: true as const, sold: r } : r));
+    attempt
+      .then((done) => {
+        if (session.accountId !== accountId) return;
+        if (!done.ok) {
+          this.send(socket, { type: "exchangeError", reason: done.reason });
+          return;
+        }
+        this.log.info(`${label(session)} ${message.type} ok`);
+        this.sendStash(socket);
+        this.sendExchangeMine(socket, accountId);
+        const sold = done.sold;
+        if (sold) {
+          // Gold and news for the seller, if they are online (D-155).
+          const seller = this.accountSocket.get(sold.sellerId);
+          if (seller) {
+            this.send(seller, {
+              type: "exchangeNotice",
+              text: `Your ${sold.what} sold for ${sold.price.toLocaleString("en")} gold (you got ${(sold.price - sold.fee).toLocaleString("en")} after the fee).`,
+            });
+            this.sendStash(seller);
+            this.sendExchangeMine(seller, sold.sellerId);
+          }
+        }
+      })
+      .catch(failed)
+      .finally(() => {
+        session.serfBusy = false;
+      });
+  }
+
+  private sendExchangeMine(socket: WebSocket, accountId: number): void {
+    this.serfs
+      .myExchange(accountId)
+      .then((mine) => this.send(socket, { type: "exchangeMine", ...mine }))
+      .catch((err: unknown) =>
+        this.log.warn(
+          `exchange list for account #${accountId} failed: ${String(err)}`,
+        ),
+      );
   }
 
   /** Records the played serf's name and class, and shows the change to its party. */

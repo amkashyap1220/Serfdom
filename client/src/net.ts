@@ -8,6 +8,7 @@ import {
   type EquipSlot,
   type LeaderboardQuery,
   type UpgradeKind,
+  type ExchangeQuery,
   type PlayerInput,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -40,6 +41,10 @@ export type LobbyMessage = Extract<
       | "queueStatus"
       | "queueLeft"
       | "rooms"
+      | "exchangePage"
+      | "exchangeMine"
+      | "exchangeNotice"
+      | "exchangeError"
       | "runStarted"
       | "runEnded"
       | "authOk"
@@ -190,6 +195,35 @@ export class Connection {
     this.send({ type: "selectSerf", serfId });
   }
 
+  /** The Exchange (D-155). */
+  sendExchangeList(
+    what: { itemId: number } | { potionId: number },
+    price: number,
+  ): void {
+    this.send({
+      type: "exchangeList",
+      itemId: "itemId" in what ? what.itemId : null,
+      potionId: "potionId" in what ? what.potionId : null,
+      price,
+    });
+  }
+
+  sendExchangeCancel(listingId: number): void {
+    this.send({ type: "exchangeCancel", listingId });
+  }
+
+  sendExchangeBuy(listingId: number): void {
+    this.send({ type: "exchangeBuy", listingId });
+  }
+
+  sendExchangeBrowse(query: ExchangeQuery): void {
+    this.send({ type: "exchangeBrowse", query });
+  }
+
+  sendExchangeMine(): void {
+    this.send({ type: "exchangeMine" });
+  }
+
   /** Buy the next step of an account upgrade (D-154). */
   sendBuyUpgrade(kind: UpgradeKind): void {
     this.send({ type: "buyUpgrade", kind });
@@ -292,6 +326,10 @@ export class Connection {
       case "queueStatus":
       case "queueLeft":
       case "rooms":
+      case "exchangePage":
+      case "exchangeMine":
+      case "exchangeNotice":
+      case "exchangeError":
       case "runStarted":
       case "runEnded":
       case "authOk":
