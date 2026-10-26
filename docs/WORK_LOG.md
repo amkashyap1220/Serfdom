@@ -753,3 +753,4 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - `npm run check`: 583 shared, 227 server (13 party rules, 7 server party tests), 76 client, build.
 - Live (harness, **test** DB, three headless browsers in separate contexts): A invited B by a lowercase name; B saw the strip and accepted; both showed Party (2) with A leading; an unknown name was refused with the message; B (not the leader) invited C, who joined A's party; A removed B, who was told; no console errors. The tabs still fit the box.
 - Next step: the user's 14a test, then 14b (queueing as a party).
+- User ran the 14a party checklist: pass (2026-10-25). Pushed.
