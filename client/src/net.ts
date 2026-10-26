@@ -9,6 +9,8 @@ import {
   type LeaderboardQuery,
   type UpgradeKind,
   type ExchangeQuery,
+  type MarketKey,
+  type RollWish,
   type PlayerInput,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -43,6 +45,7 @@ export type LobbyMessage = Extract<
       | "rooms"
       | "exchangePage"
       | "exchangeMine"
+      | "exchangeMarket"
       | "exchangeNotice"
       | "exchangeError"
       | "runStarted"
@@ -224,6 +227,35 @@ export class Connection {
     this.send({ type: "exchangeMine" });
   }
 
+  /** Buy orders, price history, the collection box (D-156). */
+  sendExchangeMarket(key: MarketKey): void {
+    this.send({ type: "exchangeMarket", key });
+  }
+
+  sendExchangeOrder(key: MarketKey, rolls: RollWish[], price: number): void {
+    this.send({ type: "exchangeOrder", key, rolls, price });
+  }
+
+  sendExchangeCancelOrder(orderId: number): void {
+    this.send({ type: "exchangeCancelOrder", orderId });
+  }
+
+  sendExchangeSellToOrder(
+    orderId: number,
+    what: { itemId: number } | { potionId: number },
+  ): void {
+    this.send({
+      type: "exchangeSellToOrder",
+      orderId,
+      itemId: "itemId" in what ? what.itemId : null,
+      potionId: "potionId" in what ? what.potionId : null,
+    });
+  }
+
+  sendExchangeCollect(): void {
+    this.send({ type: "exchangeCollect" });
+  }
+
   /** Buy the next step of an account upgrade (D-154). */
   sendBuyUpgrade(kind: UpgradeKind): void {
     this.send({ type: "buyUpgrade", kind });
@@ -328,6 +360,7 @@ export class Connection {
       case "rooms":
       case "exchangePage":
       case "exchangeMine":
+      case "exchangeMarket":
       case "exchangeNotice":
       case "exchangeError":
       case "runStarted":

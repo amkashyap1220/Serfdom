@@ -125,7 +125,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
       if (tab === "exchange") {
         net.connection.sendGetStash();
         net.connection.sendExchangeMine();
-        net.connection.sendExchangeBrowse(view.exchangeQuery);
+        net.connection.sendExchangeBrowse(view.exchange.query);
       }
       dispatch({ type: "openTab", tab });
     },
@@ -163,6 +163,12 @@ game.events.once(Phaser.Core.Events.READY, () => {
     cancelListing: (id) => net.connection.sendExchangeCancel(id),
     buyListing: (id) => net.connection.sendExchangeBuy(id),
     browseExchange: (query) => net.connection.sendExchangeBrowse(query),
+    exchangeMarket: (key) => net.connection.sendExchangeMarket(key),
+    placeOrder: (key, rolls, price) =>
+      net.connection.sendExchangeOrder(key, rolls, price),
+    cancelOrder: (id) => net.connection.sendExchangeCancelOrder(id),
+    sellToOrder: (id, what) => net.connection.sendExchangeSellToOrder(id, what),
+    collectExchange: () => net.connection.sendExchangeCollect(),
   });
   const setDebug = (on: boolean) => {
     debugHud = on;
@@ -222,11 +228,13 @@ game.events.once(Phaser.Core.Events.READY, () => {
     } else if (message.type === "serfError") {
       view.setSerfError(message.reason);
     } else if (message.type === "exchangePage") {
-      view.setExchangePage(message);
+      view.exchange.setPage(message);
+    } else if (message.type === "exchangeMarket") {
+      view.exchange.setMarket(message);
     } else if (message.type === "exchangeMine") {
-      view.setExchangeMine(message);
+      view.exchange.setMine(message);
       // Something changed hands: the page being browsed is stale.
-      net.connection.sendExchangeBrowse(view.exchangeQuery);
+      net.connection.sendExchangeBrowse(view.exchange.query);
     } else if (message.type === "exchangeNotice") {
       view.setPartyNotice(message.text, false);
     } else if (message.type === "exchangeError") {

@@ -31,7 +31,8 @@ import {
 import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { AccountService, AuthResult } from "./auth/account-service.ts";
-import type { SerfService } from "./serfs/serf-service.ts";
+import type { ExchangeDeal } from "./serfs/serf-repo.ts";
+import type { ExchangeOutcome, SerfService } from "./serfs/serf-service.ts";
 import { DungeonInstance, type RunEnd } from "./dungeon-instance.ts";
 import { consoleLogger, type Logger } from "./log.ts";
 import { Matchmaker } from "./matchmaking.ts";
@@ -514,6 +515,11 @@ export class GameServer {
       case "exchangeBuy":
       case "exchangeBrowse":
       case "exchangeMine":
+      case "exchangeMarket":
+      case "exchangeOrder":
+      case "exchangeCancelOrder":
+      case "exchangeSellToOrder":
+      case "exchangeCollect":
         this.onExchange(socket, session, message);
         return;
       case "getLeaderboard": {
@@ -1237,10 +1243,11 @@ export class GameServer {
   }
 
   /**
-   * The Grand Serf Exchange (D-155). Listing, cancelling, and buying take
-   * the connection's one-at-a-time slot (like stash actions); the storage
-   * does each in one transaction. After a sale the seller, if online,
-   * hears of it and sees the gold. Refusals are exchangeError replies.
+   * The Grand Serf Exchange (D-155, D-156). Changes take the connection's
+   * one-at-a-time slot (like stash actions); the storage does each in one
+   * transaction under the one Exchange lock. When a trade happens, both
+   * sides (if online) hear of it and see their gold and lists. Refusals
+   * are exchangeError replies.
    */
   private onExchange(
     socket: WebSocket,
@@ -1253,7 +1260,12 @@ export class GameServer {
           | "exchangeCancel"
           | "exchangeBuy"
           | "exchangeBrowse"
-          | "exchangeMine";
+          | "exchangeMine"
+          | "exchangeMarket"
+          | "exchangeOrder"
+          | "exchangeCancelOrder"
+          | "exchangeSellToOrder"
+          | "exchangeCollect";
       }
     >,
   ): void {
@@ -1287,28 +1299,62 @@ export class GameServer {
       this.sendExchangeMine(socket, accountId);
       return;
     }
+    if (message.type === "exchangeMarket") {
+      this.serfs
+        .market(accountId, message.key)
+        .then((market) => {
+          if (session.accountId !== accountId) return;
+          this.send(socket, {
+            type: "exchangeMarket",
+            key: message.key,
+            ...market,
+          });
+        })
+        .catch(failed);
+      return;
+    }
     if (session.serfBusy) {
       this.reject(socket, session, "busy");
       return;
     }
     session.serfBusy = true;
-    type Sold = { sellerId: number; what: string; price: number; fee: number };
-    const attempt: Promise<
-      { ok: true; sold?: Sold } | { ok: false; reason: string }
-    > =
+    const thing = (m: { itemId: number | null; potionId: number | null }) =>
+      m.itemId !== null ? { itemId: m.itemId } : { potionId: m.potionId ?? 0 };
+    const attempt: Promise<ExchangeOutcome | { ok: true; text?: string }> =
       message.type === "exchangeList"
-        ? this.serfs.listOnExchange(
-            accountId,
-            message.itemId !== null
-              ? { itemId: message.itemId }
-              : { potionId: message.potionId ?? 0 },
-            message.price,
-          )
+        ? this.serfs.listOnExchange(accountId, thing(message), message.price)
         : message.type === "exchangeCancel"
           ? this.serfs.cancelListing(accountId, message.listingId)
-          : this.serfs
-              .buyListing(accountId, message.listingId)
-              .then((r) => (r.ok ? { ok: true as const, sold: r } : r));
+          : message.type === "exchangeBuy"
+            ? this.serfs.buyListing(accountId, message.listingId)
+            : message.type === "exchangeOrder"
+              ? this.serfs.placeOrder(
+                  accountId,
+                  message.key,
+                  message.rolls,
+                  message.price,
+                )
+              : message.type === "exchangeCancelOrder"
+                ? this.serfs
+                    .cancelOrder(accountId, message.orderId)
+                    .then((ok) =>
+                      ok
+                        ? { ok: true as const }
+                        : { ok: false as const, reason: "That order is gone." },
+                    )
+                : message.type === "exchangeSellToOrder"
+                  ? this.serfs.sellToOrder(
+                      accountId,
+                      message.orderId,
+                      thing(message),
+                    )
+                  : this.serfs.collect(accountId).then((left) => ({
+                      ok: true as const,
+                      text:
+                        left > 0
+                          ? `${left} still wait${left === 1 ? "s" : ""} in your collection box: make room in your stash or rack.`
+                          : undefined,
+                    }));
     attempt
       .then((done) => {
         if (session.accountId !== accountId) return;
@@ -1319,24 +1365,37 @@ export class GameServer {
         this.log.info(`${label(session)} ${message.type} ok`);
         this.sendStash(socket);
         this.sendExchangeMine(socket, accountId);
-        const sold = done.sold;
-        if (sold) {
-          // Gold and news for the seller, if they are online (D-155).
-          const seller = this.accountSocket.get(sold.sellerId);
-          if (seller) {
-            this.send(seller, {
-              type: "exchangeNotice",
-              text: `Your ${sold.what} sold for ${sold.price.toLocaleString("en")} gold (you got ${(sold.price - sold.fee).toLocaleString("en")} after the fee).`,
-            });
-            this.sendStash(seller);
-            this.sendExchangeMine(seller, sold.sellerId);
-          }
+        if ("text" in done && done.text) {
+          this.send(socket, { type: "exchangeNotice", text: done.text });
         }
+        if ("deal" in done && done.deal) this.tellTrade(done.deal);
       })
       .catch(failed)
       .finally(() => {
         session.serfBusy = false;
       });
+  }
+
+  /** Tells both sides of a trade, if online, and refreshes their lists (D-156). */
+  private tellTrade(deal: ExchangeDeal): void {
+    const gold = (n: number) => n.toLocaleString("en");
+    const sides = [
+      {
+        accountId: deal.sellerId,
+        text: `Sold: ${deal.what} for ${gold(deal.price)} gold (you got ${gold(deal.price - deal.fee)} after the fee).`,
+      },
+      {
+        accountId: deal.buyerId,
+        text: `Bought: ${deal.what} for ${gold(deal.price)} gold. It waits in your collection box (My trades).`,
+      },
+    ];
+    for (const side of sides) {
+      const socket = this.accountSocket.get(side.accountId);
+      if (!socket) continue;
+      this.send(socket, { type: "exchangeNotice", text: side.text });
+      this.sendStash(socket);
+      this.sendExchangeMine(socket, side.accountId);
+    }
   }
 
   private sendExchangeMine(socket: WebSocket, accountId: number): void {

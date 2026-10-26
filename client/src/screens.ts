@@ -43,11 +43,6 @@ import {
   type PartyInviter,
   MAX_LEVEL,
   boughtFor,
-  ANY_LISTING,
-  EXCHANGE,
-  exchangeFee,
-  isValidPrice,
-  type ExchangeQuery,
   nextPrice,
   UPGRADE_KINDS,
   UPGRADES,
@@ -56,16 +51,10 @@ import {
   MAX_PARTY_SIZE,
   sellPrice,
   type Item,
-  itemBonus,
-  armorTypeName,
   itemName,
-  itemKindName,
-  ARTIFACTS,
   weaponDamage,
   type ItemSpec,
   type DungeonId,
-  potionAmount,
-  potionName,
   potionProblem,
   type Potion,
 } from "@serfdom/shared";
@@ -75,9 +64,11 @@ import {
   type MenuTab,
   type Screen,
 } from "./app-state";
+import { ExchangeScreen, type ExchangeActions } from "./exchange-screen";
 import { ENEMY_NAMES } from "./names";
+import { button, el, hideTip, itemCard, potionCard, select } from "./ui-parts";
 
-export interface ScreenActions {
+export interface ScreenActions extends ExchangeActions {
   queue(dungeon: DungeonId): void;
   leaveQueue(): void;
   dismissResults(): void;
@@ -108,14 +99,6 @@ export interface ScreenActions {
   getLeaderboard(query: LeaderboardQuery): void;
   /** Buy the next step of an account upgrade with gold (D-154). */
   buyUpgrade(kind: UpgradeKind): void;
-  /** The Exchange (D-155). */
-  listOnExchange(
-    what: { itemId: number } | { potionId: number },
-    price: number,
-  ): void;
-  cancelListing(listingId: number): void;
-  buyListing(listingId: number): void;
-  browseExchange(query: ExchangeQuery): void;
 }
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
@@ -198,6 +181,7 @@ export class ScreenView {
   constructor(root: HTMLElement, actions: ScreenActions) {
     this.root = root;
     this.actions = actions;
+    this.exchange = new ExchangeScreen(actions, () => this.redraw());
     window.addEventListener("keydown", (e) => this.onKey(e));
   }
 
@@ -377,6 +361,7 @@ export class ScreenView {
   }
 
   private rebuild(screen: Screen): void {
+    hideTip();
     this.root.replaceChildren();
     this.lootRefresh = null;
     this.countdown = null;
@@ -772,253 +757,17 @@ export class ScreenView {
     return bar;
   }
 
-  /** The Exchange's view and query (D-155); a reply for an older query is ignored. */
-  exchangeQuery: ExchangeQuery = { ...ANY_LISTING };
-  private exchangeView: "browse" | "mine" = "browse";
-  private exchangePage: Extract<
-    ServerMessage,
-    { type: "exchangePage" }
-  > | null = null;
-  private exchangeMine: Extract<
-    ServerMessage,
-    { type: "exchangeMine" }
-  > | null = null;
-
-  setExchangePage(
-    page: Extract<ServerMessage, { type: "exchangePage" }>,
-  ): void {
-    if (JSON.stringify(page.query) !== JSON.stringify(this.exchangeQuery))
-      return;
-    this.exchangePage = page;
-    this.redraw();
-  }
-
-  setExchangeMine(
-    mine: Extract<ServerMessage, { type: "exchangeMine" }>,
-  ): void {
-    this.exchangeMine = mine;
-    this.redraw();
-  }
-
-  private queryExchange(change: Partial<ExchangeQuery>): void {
-    // Any filter change starts from the first page.
-    this.exchangeQuery = { ...this.exchangeQuery, page: 0, ...change };
-    this.exchangePage = null;
-    this.shown = null;
-    this.actions.browseExchange(this.exchangeQuery);
-  }
+  /** The Exchange tab (D-155, D-156). */
+  readonly exchange: ExchangeScreen;
 
   /**
-   * The Grand Serf Exchange (D-155): Browse (filters, cards with a price
-   * and Buy, pages) and My listings (Cancel, and the latest sales).
+   * The Grand Serf Exchange (D-155, D-156): Browse, Sell, and My trades.
+   * Selling starts only here.
    */
   private buildExchange(body: HTMLElement): void {
     body.append(el("h2", "", "The Grand Serf Exchange"));
     if (this.stashError) body.append(el("p", "error", this.stashError));
-    const views = el("div", "lb-boards");
-    for (const [v, label] of [
-      ["browse", "Browse"],
-      ["mine", "My listings"],
-    ] as const) {
-      const b = button(label, () => {
-        this.exchangeView = v;
-        this.shown = null;
-      });
-      if (v === this.exchangeView) b.classList.add("active");
-      views.append(b);
-    }
-    body.append(views);
-    const gold = this.stash?.gold ?? 0;
-    if (this.exchangeView === "mine") {
-      this.buildMyListings(body);
-      return;
-    }
-    const q = this.exchangeQuery;
-    const filters = el("div", "lb-filters exchange-filters");
-    filters.append(
-      select(
-        [
-          ["", "Everything"],
-          ["weapon", "Weapons"],
-          ["ability", "Ability items"],
-          ["head", "Head"],
-          ["chest", "Chest"],
-          ["legs", "Legs"],
-          ["gloves", "Gloves"],
-          ["ring", "Rings"],
-          ["necklace", "Necklaces"],
-          ["cape", "Capes"],
-          ["potion", "Potions"],
-        ],
-        q.slot ?? "",
-        (v) =>
-          this.queryExchange({
-            slot: v === "" ? null : (v as ExchangeQuery["slot"]),
-          }),
-      ),
-      select(
-        Array.from(
-          { length: 11 },
-          (_, t) => [String(t), `From T${t}`] as const,
-        ),
-        String(Math.min(q.minTier, 10)),
-        (v) => this.queryExchange({ minTier: Number(v) }),
-      ),
-      select(
-        [
-          ...Array.from(
-            { length: 11 },
-            (_, t) => [String(t), `To T${t}`] as const,
-          ),
-          ["12", "To Artifacts"],
-        ],
-        String(q.maxTier),
-        (v) => this.queryExchange({ maxTier: Number(v) }),
-      ),
-    );
-    for (const [key, label] of [
-      ["artifacts", "Artifacts"],
-      ["shiny", "Shiny"],
-    ] as const) {
-      const l = document.createElement("label");
-      l.className = "setting";
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = q[key];
-      box.addEventListener("change", () =>
-        this.queryExchange({ [key]: box.checked }),
-      );
-      l.append(box, ` ${label}`);
-      filters.append(l);
-    }
-    const playing = this.playing;
-    if (playing?.classId) {
-      const l = document.createElement("label");
-      l.className = "setting";
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = q.usableBy !== null;
-      box.addEventListener("change", () =>
-        this.queryExchange({ usableBy: box.checked ? playing.classId : null }),
-      );
-      l.append(box, ` ${className(playing.classId)} can use`);
-      filters.append(l);
-    }
-    const search = document.createElement("form");
-    const text = document.createElement("input");
-    text.type = "text";
-    text.placeholder = "Search names";
-    text.maxLength = EXCHANGE.maxSearch;
-    text.value = q.search;
-    text.setAttribute("aria-label", "Search names");
-    search.append(text);
-    search.addEventListener("submit", (e) => {
-      e.preventDefault();
-      this.queryExchange({ search: text.value });
-    });
-    filters.append(
-      search,
-      select(
-        [
-          ["newest", "Newest"],
-          ["cheapest", "Cheapest"],
-          ["dearest", "Dearest"],
-        ],
-        q.sort,
-        (v) => this.queryExchange({ sort: v as ExchangeQuery["sort"] }),
-      ),
-    );
-    body.append(filters);
-    const page = this.exchangePage;
-    if (!page) {
-      body.append(el("p", "hint", "Loading…"));
-      return;
-    }
-    if (page.listings.length === 0) {
-      body.append(el("p", "hint", "Nothing listed matches."));
-      return;
-    }
-    const grid = el("div", "item-grid");
-    for (const l of page.listings) {
-      const card = l.item ? itemCard(l.item) : potionCard(l.potion!.stat, 1);
-      card.append(el("span", "price", `${l.price.toLocaleString("en")} gold`));
-      if (l.mine) {
-        card.append(el("span", "hint", "Your listing"));
-      } else {
-        const buy = button("Buy", () => this.actions.buyListing(l.id));
-        buy.disabled = gold < l.price;
-        card.append(buy);
-      }
-      grid.append(card);
-    }
-    body.append(grid);
-    const pages = Math.max(1, Math.ceil(page.total / EXCHANGE.pageSize));
-    const pager = el("div", "lb-filters");
-    const prev = button("Previous", () =>
-      this.queryExchange({ page: q.page - 1 }),
-    );
-    prev.disabled = q.page <= 0;
-    const next = button("Next", () => this.queryExchange({ page: q.page + 1 }));
-    next.disabled = q.page + 1 >= pages;
-    pager.append(
-      prev,
-      el(
-        "span",
-        "hint",
-        `Page ${q.page + 1} of ${pages} · ${page.total} listed`,
-      ),
-      next,
-    );
-    body.append(pager);
-  }
-
-  private buildMyListings(body: HTMLElement): void {
-    const mine = this.exchangeMine;
-    if (!mine) {
-      body.append(el("p", "hint", "Loading…"));
-      return;
-    }
-    body.append(
-      el(
-        "p",
-        "hint",
-        `${mine.listings.length}/${EXCHANGE.maxListings} listings. List items from your Stash or Potion rack tab.`,
-      ),
-    );
-    if (mine.listings.length > 0) {
-      const grid = el("div", "item-grid short");
-      for (const l of mine.listings) {
-        const card = l.item ? itemCard(l.item) : potionCard(l.potion!.stat, 1);
-        card.append(
-          el("span", "price", `${l.price.toLocaleString("en")} gold`),
-          button("Take back", () => this.actions.cancelListing(l.id)),
-        );
-        grid.append(card);
-      }
-      body.append(grid);
-    }
-    body.append(el("h3", "dungeon-group", "Latest sales"));
-    if (mine.sales.length === 0) {
-      body.append(el("p", "hint", "Nothing sold or bought yet."));
-      return;
-    }
-    const list = el("div", "leaderboard");
-    for (const s of mine.sales) {
-      const row = el("div", "lb-row");
-      row.append(
-        el("span", "lb-name", s.what),
-        el(
-          "span",
-          "lb-exp",
-          s.role === "sold"
-            ? `Sold for ${s.price.toLocaleString("en")} (−${s.fee} fee)`
-            : `Bought for ${s.price.toLocaleString("en")}`,
-        ),
-        el("span", "hint", new Date(s.at).toLocaleString()),
-      );
-      list.append(row);
-    }
-    body.append(list);
+    this.exchange.build(body, this.stash, this.playing);
   }
 
   /** Settings (D-145): only the debug readout for now; key binds and more are Phase 18. */
@@ -1413,13 +1162,6 @@ export class ScreenView {
       );
       pour.classList.add("sell");
       card.append(pour);
-      if (className === "item-grid") {
-        card.append(
-          this.listControl((price) =>
-            this.actions.listOnExchange({ potionId: first.id }, price),
-          ),
-        );
-      }
       grid.append(card);
     }
     return grid;
@@ -1445,61 +1187,15 @@ export class ScreenView {
     const grid = el("div", className);
     const playing = this.playing;
     for (const item of items) {
-      const card = itemCard(item);
+      const card = itemCard(
+        item,
+        playing ? () => this.equipCompares(item, playing) : undefined,
+      );
       if (playing) card.append(this.equipControls(item, playing));
       card.append(sellButton(item, () => this.actions.sellItem(item.id)));
-      // Pending rewards cannot be listed until they are in the stash.
-      if (!className.includes("pending")) {
-        card.append(
-          this.listControl((price) =>
-            this.actions.listOnExchange({ itemId: item.id }, price),
-          ),
-        );
-      }
       grid.append(card);
     }
     return grid;
-  }
-
-  /**
-   * "List on the Exchange" (D-155): a price, what the seller gets after
-   * the fee, and List. The server checks the price again.
-   */
-  private listControl(onList: (price: number) => void): HTMLElement {
-    const box = document.createElement("details");
-    box.className = "list-control";
-    const summary = document.createElement("summary");
-    summary.textContent = "List on the Exchange";
-    const form = document.createElement("form");
-    const price = document.createElement("input");
-    price.type = "number";
-    price.min = String(EXCHANGE.minPrice);
-    price.max = String(EXCHANGE.maxPrice);
-    price.step = "1";
-    price.placeholder = "Price";
-    price.setAttribute("aria-label", "Price in gold");
-    const net = el("span", "hint", "");
-    price.addEventListener("input", () => {
-      const p = Number(price.value);
-      net.textContent = isValidPrice(p)
-        ? `You get ${(p - exchangeFee(p)).toLocaleString("en")} (5% fee)`
-        : "";
-    });
-    const go = document.createElement("button");
-    go.type = "submit";
-    go.textContent = "List";
-    form.append(price, go, net);
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const p = Number(price.value);
-      if (!isValidPrice(p)) {
-        net.textContent = `A whole number from 1 to ${EXCHANGE.maxPrice.toLocaleString("en")}`;
-        return;
-      }
-      onList(p);
-    });
-    box.append(summary, form);
-    return box;
   }
 
   /** The serf's 10 slots (D-082), each with what it wears and Unequip. */
@@ -1554,10 +1250,17 @@ export class ScreenView {
           : `Equip on ${serf.name}`;
       box.append(
         button(label, () => this.actions.equip(item.id, serf.id, slot)),
-        compareBox(item, current),
       );
     }
     return box;
+  }
+
+  /** What equipping would change, for the item's tooltip (D-086, D-156). */
+  private equipCompares(item: ItemSpec, serf: SerfSummary): HTMLElement[] {
+    if (!canEquip(item, serf.classId)) return [];
+    return equipTargets(item, serf).map(({ current }) =>
+      compareBox(item, current),
+    );
   }
 
   /**
@@ -1955,30 +1658,6 @@ export function boardValue(
   }
 }
 
-function select(
-  options: readonly (readonly [string, string])[],
-  value: string,
-  onChange: (value: string) => void,
-): HTMLSelectElement {
-  const s = document.createElement("select");
-  for (const [v, label] of options) {
-    const o = document.createElement("option");
-    o.value = v;
-    o.textContent = label;
-    s.append(o);
-  }
-  s.value = value;
-  s.addEventListener("change", () => onChange(s.value));
-  return s;
-}
-
-function el(tag: string, className: string, text?: string): HTMLElement {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-}
-
 function input(
   type: "email" | "password",
   placeholder: string,
@@ -1992,14 +1671,6 @@ function input(
   i.maxLength = type === "email" ? EMAIL_MAX : PASSWORD_MAX;
   i.setAttribute("aria-label", placeholder);
   return i;
-}
-
-function button(label: string, onClick: () => void): HTMLButtonElement {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.textContent = label;
-  b.addEventListener("click", onClick);
-  return b;
 }
 
 /**
@@ -2036,68 +1707,6 @@ function countingStatList(
   };
   requestAnimationFrame(frame);
   return dl;
-}
-
-/** An item's name (coloured by tier), what it gives, and its rolls. */
-export function itemCard(item: ItemSpec): HTMLElement {
-  // An Artifact has its own look, not a tier colour; Shiny shimmers (D-152).
-  const look = item.artifact ? "artifact" : `tier-${Math.min(item.tier, 3)}`;
-  const card = el("div", `item-card ${look}${item.shiny ? " shiny" : ""}`);
-  card.append(el("span", "item-name", itemName(item)));
-  if (item.artifact) {
-    card.append(el("span", "item-kind", `Artifact ${itemKindName(item)}`));
-  }
-  // Armor also names its material, which decides who can wear it (D-081).
-  const material = armorTypeName(item);
-  const base =
-    item.slot === "weapon"
-      ? `${weaponDamage(item.tier)} damage`
-      : [material, bonusText(itemBonus({ ...item, rolls: [] }))]
-          .filter((part) => part)
-          .join(" · ");
-  if (base) card.append(el("span", "item-base", base));
-  if (item.rolls.length > 0) {
-    const rolls = el("span", "item-rolls");
-    for (const r of item.rolls) {
-      rolls.append(
-        el(
-          "span",
-          r.amount < 0 ? "roll-bad" : "roll-good",
-          `${r.amount < 0 ? "−" : "+"}${Math.abs(r.amount)} ${STAT_LABELS[r.stat]}`,
-        ),
-      );
-    }
-    card.append(rolls);
-  }
-  if (item.luck > 0) card.append(el("span", "item-luck", "+1 LUCK"));
-  if (item.artifact) {
-    card.append(el("span", "item-effect", ARTIFACTS[item.artifact].effect));
-  }
-  return card;
-}
-
-/** A stat potion (D-118): its name, what it adds, and how many when grouped. */
-function potionCard(stat: StatKey, count: number): HTMLElement {
-  const card = el("div", "item-card potion-card");
-  card.append(
-    el(
-      "span",
-      "item-name",
-      count > 1 ? `${potionName(stat)} ×${count}` : potionName(stat),
-    ),
-    el(
-      "span",
-      "item-base",
-      `+${potionAmount(stat)} ${STAT_LABELS[stat]}, up to the class max`,
-    ),
-  );
-  return card;
-}
-
-function bonusText(stats: Stats): string {
-  return STAT_KEYS.filter((k) => stats[k] !== 0)
-    .map((k) => `+${stats[k]} ${STAT_LABELS[k]}`)
-    .join(" ");
 }
 
 /**

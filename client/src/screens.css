@@ -107,32 +107,175 @@
   color: #c792ff;
 }
 
-/* The Exchange (D-155). */
-.list-control summary {
-  cursor: pointer;
-  color: #9fd8ff;
+/* The Exchange (D-155, D-156). Placeholder colours, not the verified palette. */
+.roll-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.screen .roll-chips button.chip {
+  padding: 2px 8px;
   font-size: 11px;
 }
 
-.list-control form {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
+.screen .roll-chips button.chip.active {
+  border-color: #7ed957;
+  background: #1d2a17;
+  color: #b8f59a;
 }
 
-.list-control input {
-  width: 90px;
-  padding: 3px 6px;
-  border: 1px solid #46505f;
+.exchange-grid .item-card button {
+  margin-top: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.exchange-sell {
+  display: flex;
+  gap: 12px;
+  width: 900px;
+  text-align: left;
+}
+
+.exchange-sell-list {
+  flex: 1;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.exchange-sell-list .item-grid {
+  width: auto;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.exchange-sell-list .item-card {
+  cursor: pointer;
+}
+
+.item-card.selected {
+  outline: 2px solid #f0c419;
+  background: #1c1a10;
+}
+
+.trade-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 900px;
+  max-height: 220px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.trade-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 8px;
+  background: #0e1014;
+  text-align: left;
+}
+
+.trade-name {
+  flex: 1;
+}
+
+.trade-price {
+  color: #f0c419;
+}
+
+.screen .trade-row button {
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+.exchange-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 380px;
+  padding: 8px 10px;
+  border: 1px solid #2c3340;
+  background: #0b0d11;
+  text-align: left;
+}
+
+.exchange-panel.order-form {
+  width: 900px;
+  margin: 8px 0;
+}
+
+.exchange-panel h3,
+.exchange-panel h4,
+.market-panel h4 {
+  margin: 0;
+}
+
+.market-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.market-windows {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 12px;
+}
+
+.market-orders {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.market-order {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.market-order .price {
+  color: #f0c419;
+  min-width: 80px;
+}
+
+.screen .market-order button {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+.exchange-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.exchange-form input {
+  width: 140px;
+  padding: 4px 6px;
+  border: 2px solid #46505f;
   background: #0e1014;
   color: #ffffff;
   font: inherit;
 }
 
-.screen .list-control button {
-  padding: 2px 8px;
-  font-size: 11px;
+.item-tip .tip-price {
+  color: #f0c419;
+  margin-top: 4px;
+}
+
+.item-tip .tip-market {
+  color: #9fd8ff;
 }
 
 .exchange-filters {
@@ -1012,21 +1155,6 @@
   color: #8d96a3;
 }
 
-.item-card.tier-0 {
-  border-color: #6b7380;
-}
-
-/* Artifacts (D-153): their own colour, and the effect spelled out.
-   Placeholder colours, not the verified palette. */
-.item-card.artifact {
-  border-color: #ff8c2e;
-  max-width: 260px;
-}
-
-.artifact .item-name {
-  color: #ffb066;
-}
-
 .item-kind {
   color: #c98a4e;
   font-size: 11px;
@@ -1053,27 +1181,6 @@
   50% {
     box-shadow: 0 0 12px #ffe58acc;
   }
-}
-.item-card.tier-1 {
-  border-color: #7ed957;
-}
-.item-card.tier-2 {
-  border-color: #5bc0de;
-}
-.item-card.tier-3 {
-  border-color: #c77dff;
-}
-.tier-0 .item-name {
-  color: #c3cad5;
-}
-.tier-1 .item-name {
-  color: #7ed957;
-}
-.tier-2 .item-name {
-  color: #5bc0de;
-}
-.tier-3 .item-name {
-  color: #c77dff;
 }
 
 .item-name {
@@ -1175,25 +1282,79 @@ button.sell {
   font-size: 11px;
 }
 
-/* The comparison appears while the item is hovered (D-086). */
+/* The equip comparison, inside an item's tooltip (D-086, D-156). */
 .compare {
-  display: none;
+  display: flex;
   flex-direction: column;
-  position: absolute;
-  left: 100%;
-  top: 0;
-  z-index: 5;
-  min-width: 170px;
-  margin-left: 6px;
-  padding: 6px 8px;
-  border: 1px solid #46505f;
-  background: #171a21;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #2c3340;
   text-align: left;
 }
 
-.item-card:hover .compare,
-.item-card:focus-within .compare {
+/* The one floating tooltip (D-156). */
+.item-tip {
+  position: fixed;
+  z-index: 50;
   display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 260px;
+  padding: 8px 10px;
+  border: 1px solid #46505f;
+  background: #12151b;
+  box-shadow: 0 4px 16px #000000aa;
+  color: #c9d1dc;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  text-align: left;
+  pointer-events: none;
+}
+
+.item-tip[hidden] {
+  display: none;
+}
+
+/* Rarity colours (D-156). Placeholder colours, not the verified palette. */
+.item-card.rarity-common,
+.item-tip .rarity-common {
+  border-color: #6b7380;
+}
+.rarity-common .item-name,
+.item-tip .item-name.rarity-common {
+  color: #c3cad5;
+}
+.item-card.rarity-uncommon {
+  border-color: #7ed957;
+}
+.rarity-uncommon .item-name,
+.item-tip .item-name.rarity-uncommon {
+  color: #7ed957;
+}
+.item-card.rarity-rare {
+  border-color: #5bc0de;
+}
+.rarity-rare .item-name,
+.item-tip .item-name.rarity-rare {
+  color: #5bc0de;
+}
+.item-card.rarity-epic {
+  border-color: #c77dff;
+}
+.rarity-epic .item-name,
+.item-tip .item-name.rarity-epic {
+  color: #c77dff;
+}
+.item-card.rarity-artifact {
+  border-color: #ff8c2e;
+}
+.rarity-artifact .item-name,
+.item-tip .item-name.rarity-artifact {
+  color: #ffb066;
+}
+
+.item-card:focus-visible {
+  outline: 2px solid #f0c419;
 }
 
 .compare-line {

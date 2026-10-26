@@ -42,8 +42,21 @@ import {
   type ExchangeQuery,
   type Listing,
   type Sale,
+  parseMarketKey,
+  type BuyOrder,
+  type Item,
+  type MarketKey,
+  type Potion,
+  type PriceWindow,
+  type RollWish,
 } from "@serfdom/shared";
-import type { Death, SerfRepo, Stash } from "./serf-repo.ts";
+import type {
+  Death,
+  ExchangeDeal,
+  ExchangeRefusal,
+  SerfRepo,
+  Stash,
+} from "./serf-repo.ts";
 
 /** PROVISIONAL: how many serfs the leaderboard shows. */
 export const LEADERBOARD_SIZE = 20;
@@ -507,40 +520,31 @@ export class SerfService {
     });
   }
 
-  /** Lists a stash item or rack potion on the Exchange (D-155). */
+  /**
+   * Lists a stash item or rack potion on the Exchange (D-155), or sells it
+   * at once to the best fitting buy order at the order's price (D-156).
+   */
   async listOnExchange(
     accountId: number,
     what: { itemId: number } | { potionId: number },
     price: number,
-  ): Promise<{ ok: true } | { ok: false; reason: string }> {
-    if (!isValidPrice(price)) {
-      return {
-        ok: false,
-        reason: `A price is a whole number from ${EXCHANGE.minPrice} to ${EXCHANGE.maxPrice.toLocaleString("en")} gold.`,
-      };
-    }
+  ): Promise<ExchangeOutcome> {
+    if (!isValidPrice(price)) return refused(BAD_PRICE);
     const r = await this.repo.listOnExchange(
       accountId,
       what,
       price,
       EXCHANGE.maxListings,
     );
-    if (r === "tooMany") {
-      return {
-        ok: false,
-        reason: `You already have ${EXCHANGE.maxListings} listings.`,
-      };
-    }
-    if (r === "notYours") {
-      return {
-        ok: false,
-        reason:
-          "itemId" in what
-            ? "Only an item in your stash can be listed (not one a serf wears)."
-            : "Only a potion in your rack can be listed.",
-      };
-    }
-    return { ok: true };
+    if (r.kind === "listed") return { ok: true, deal: null };
+    if (r.kind === "deal") return { ok: true, deal: r };
+    return refused(
+      r.reason === "tooMany"
+        ? `You already have ${EXCHANGE.maxListings} listings.`
+        : "itemId" in what
+          ? "Only an item in your stash can be listed (not one a serf wears)."
+          : "Only a potion in your rack can be listed.",
+    );
   }
 
   async cancelListing(
@@ -557,26 +561,67 @@ export class SerfService {
     return { ok: true };
   }
 
+  /** Buys a listing; it waits in the collection box (D-156). */
   async buyListing(
     accountId: number,
     listingId: number,
-  ): Promise<
-    | { ok: true; sellerId: number; what: string; price: number; fee: number }
-    | { ok: false; reason: string }
-  > {
-    const r = await this.repo.buyListing(
+  ): Promise<ExchangeOutcome> {
+    const r = await this.repo.buyListing(accountId, listingId);
+    if (r.kind === "deal") return { ok: true, deal: r };
+    return refused(DEAL_REFUSALS[r.reason]);
+  }
+
+  /**
+   * Places a buy order (D-156), or buys the cheapest fitting listing at
+   * once at its own price. A waiting order sets its gold aside.
+   */
+  async placeOrder(
+    accountId: number,
+    key: MarketKey,
+    rolls: RollWish[],
+    price: number,
+  ): Promise<ExchangeOutcome> {
+    const parsed = parseMarketKey(key);
+    if (!parsed) return refused("No such item.");
+    if (!isValidPrice(price)) return refused(BAD_PRICE);
+    if (parsed.kind === "potion" && rolls.length > 0) {
+      return refused("Potions have no rolls.");
+    }
+    const r = await this.repo.placeOrder(
       accountId,
-      listingId,
-      await this.room(accountId),
+      key,
+      [...new Set(rolls)],
+      price,
+      EXCHANGE.maxOrders,
     );
-    if (r.ok) return r;
-    const reasons = {
-      gone: "That has already sold, or was taken back.",
-      own: "That is your own listing.",
-      gold: "Not enough gold.",
-      room: "Make room for it first (stash or rack).",
-    };
-    return { ok: false, reason: reasons[r.reason] };
+    if (r.kind === "placed") return { ok: true, deal: null };
+    if (r.kind === "deal") return { ok: true, deal: r };
+    return refused(
+      r.reason === "tooMany"
+        ? `You already have ${EXCHANGE.maxOrders} buy orders.`
+        : DEAL_REFUSALS[r.reason],
+    );
+  }
+
+  /** Cancels a buy order; its gold comes back. */
+  async cancelOrder(accountId: number, orderId: number): Promise<boolean> {
+    return this.repo.cancelOrder(accountId, orderId);
+  }
+
+  /** Sells a stash item or rack potion to one buy order, at its price. */
+  async sellToOrder(
+    accountId: number,
+    orderId: number,
+    what: { itemId: number } | { potionId: number },
+  ): Promise<ExchangeOutcome> {
+    const r = await this.repo.sellToOrder(accountId, orderId, what);
+    if (r.kind === "deal") return { ok: true, deal: r };
+    return refused(DEAL_REFUSALS[r.reason]);
+  }
+
+  /** Moves the collection box into the stash and rack; how many stay. */
+  async collect(accountId: number): Promise<number> {
+    return this.repo.collect(accountId, await this.room(accountId));
   }
 
   /** A page of the Exchange for this account (its own listings marked). */
@@ -588,22 +633,35 @@ export class SerfService {
     return filterListings(all, query);
   }
 
-  /** This account's listings and its latest sales and purchases. */
-  async myExchange(
+  /** One item's price history and its best buy orders (D-156). */
+  async market(
     accountId: number,
-  ): Promise<{ listings: Listing[]; sales: Sale[] }> {
+    key: MarketKey,
+  ): Promise<{ windows: PriceWindow[]; orders: BuyOrder[] }> {
+    const orders = (await this.repo.allOrders())
+      .filter((o) => o.key === key)
+      .slice(0, EXCHANGE.topOrders)
+      .map(({ buyerId, ...o }) => ({ ...o, mine: buyerId === accountId }));
+    return { windows: await this.repo.priceWindows(key), orders };
+  }
+
+  /** This account's listings, orders, collection box, and latest trades. */
+  async myExchange(accountId: number): Promise<{
+    listings: Listing[];
+    orders: BuyOrder[];
+    collection: { items: Item[]; potions: Potion[] };
+    sales: Sale[];
+  }> {
     const listings = (await this.repo.allListings())
       .filter((l) => l.sellerId === accountId)
-      .map((l) => ({
-        id: l.id,
-        price: l.price,
-        listedAt: l.listedAt,
-        item: l.item,
-        potion: l.potion,
-        mine: true,
-      }));
+      .map(({ sellerId, ...l }) => ({ ...l, mine: sellerId === accountId }));
+    const orders = (await this.repo.allOrders())
+      .filter((o) => o.buyerId === accountId)
+      .map(({ buyerId, ...o }) => ({ ...o, mine: buyerId === accountId }));
     return {
       listings,
+      orders,
+      collection: await this.repo.collection(accountId),
       sales: await this.repo.sales(accountId, EXCHANGE.history),
     };
   }
@@ -635,3 +693,22 @@ export class SerfService {
     );
   }
 }
+
+/** What an Exchange action did (D-156): a trade happened, or it waits on the board. */
+export type ExchangeOutcome =
+  { ok: true; deal: ExchangeDeal | null } | { ok: false; reason: string };
+
+function refused(reason: string): ExchangeOutcome {
+  return { ok: false, reason };
+}
+
+const BAD_PRICE = `A price is a whole number from ${EXCHANGE.minPrice} to ${EXCHANGE.maxPrice.toLocaleString("en")} gold.`;
+
+const DEAL_REFUSALS: Record<ExchangeRefusal["reason"], string> = {
+  gone: "That has already gone.",
+  own: "That is your own.",
+  gold: "Not enough gold.",
+  notYours: "Only an item in your stash or a potion in your rack can be sold.",
+  noFit: "That is not what the order asks for.",
+  tooMany: "Too many.",
+};

@@ -169,6 +169,7 @@ describe("migrations", () => {
       "clears",
       "items",
       "listings",
+      "orders",
       "potions",
       "sales",
       "schema_migrations",
@@ -293,6 +294,9 @@ const RING = {
   ],
   luck: 1,
 };
+
+/** A ring no other test trades, for clean price history. */
+const WISDOM_RING = { ...RING, type: "wisdom" as const };
 
 const EXP_BOARD = {
   board: "exp",
@@ -625,7 +629,7 @@ function serfContract(
       expect(await repo.addLoot(b, serf.id, [RING], 16)).toBeNull();
     });
 
-    it("the Exchange: list, buy, take back; gold and items move once, less the fee (D-155)", async () => {
+    it("the Exchange: list, buy, take back; gold moves once, less the fee; bought things wait to be collected (D-155, D-156)", async () => {
       const { repo, account } = await make();
       const seller = await account();
       const buyer = await account();
@@ -637,13 +641,16 @@ function serfContract(
       const itemId = drop!.item.id;
       const room = { stash: 20, rack: 20 };
       // Only the owner's stash item can be listed; a buyer cannot take it back.
-      expect(await repo.listOnExchange(buyer, { itemId }, 100, 10)).toBe(
-        "notYours",
-      );
-      expect(await repo.listOnExchange(seller, { itemId }, 100, 10)).toBe("ok");
-      expect(await repo.listOnExchange(seller, { itemId }, 100, 10)).toBe(
-        "notYours",
-      );
+      expect(await repo.listOnExchange(buyer, { itemId }, 100, 10)).toEqual({
+        kind: "refused",
+        reason: "notYours",
+      });
+      expect(await repo.listOnExchange(seller, { itemId }, 100, 10)).toEqual({
+        kind: "listed",
+      });
+      expect(
+        (await repo.listOnExchange(seller, { itemId }, 100, 10)).kind,
+      ).toBe("refused");
       expect((await repo.stash(seller)).items).toEqual([]);
       const [listing] = await repo.allListings();
       expect(listing).toMatchObject({
@@ -655,26 +662,30 @@ function serfContract(
         "notYours",
       );
       // Buying: own refused, no gold refused, then it goes.
-      expect(await repo.buyListing(seller, listing!.id, room)).toEqual({
-        ok: false,
+      expect(await repo.buyListing(seller, listing!.id)).toEqual({
+        kind: "refused",
         reason: "own",
       });
-      expect(await repo.buyListing(buyer, listing!.id, room)).toEqual({
-        ok: false,
+      expect(await repo.buyListing(buyer, listing!.id)).toEqual({
+        kind: "refused",
         reason: "gold",
       });
       await repo.addGold(buyer, 150);
-      expect(await repo.buyListing(buyer, listing!.id, room)).toMatchObject({
-        ok: true,
+      expect(await repo.buyListing(buyer, listing!.id)).toEqual({
+        kind: "deal",
         sellerId: seller,
+        buyerId: buyer,
+        what: "T4 Ring of Defense",
         price: 100,
         fee: 5,
       });
-      expect(await repo.buyListing(buyer, listing!.id, room)).toEqual({
-        ok: false,
+      expect(await repo.buyListing(buyer, listing!.id)).toEqual({
+        kind: "refused",
         reason: "gone",
       });
-      expect((await repo.stash(buyer)).items.map((i) => i.id)).toEqual([
+      // It waits in the collection box, not the stash, until collected.
+      expect((await repo.stash(buyer)).items).toEqual([]);
+      expect((await repo.collection(buyer)).items.map((i) => i.id)).toEqual([
         itemId,
       ]);
       expect((await repo.stash(buyer)).gold).toBe(50);
@@ -682,6 +693,7 @@ function serfContract(
       expect(await repo.allListings()).toEqual([]);
       expect((await repo.sales(seller, 20))[0]).toMatchObject({
         role: "sold",
+        key: "t:4:ring:defense",
         price: 100,
         fee: 5,
       });
@@ -690,10 +702,19 @@ function serfContract(
         price: 100,
         fee: 0,
       });
-      // A potion goes rack to rack; taking one back needs room.
+      // Collecting needs room: none, then some.
+      expect(await repo.collect(buyer, { stash: 0, rack: 20 })).toBe(1);
+      expect(await repo.collect(buyer, room)).toBe(0);
+      expect((await repo.stash(buyer)).items.map((i) => i.id)).toEqual([
+        itemId,
+      ]);
+      expect((await repo.collection(buyer)).items).toEqual([]);
+      // A potion goes from the rack; taking one back needs room.
       const [potion] = (await repo.addPotions(buyer, b.id, ["hp"], 20))!;
       const potionId = potion!.potion.id;
-      expect(await repo.listOnExchange(buyer, { potionId }, 30, 10)).toBe("ok");
+      expect(await repo.listOnExchange(buyer, { potionId }, 30, 10)).toEqual({
+        kind: "listed",
+      });
       expect((await repo.stash(buyer)).rack).toEqual([]);
       const [pl] = await repo.allListings();
       expect(
@@ -704,9 +725,121 @@ function serfContract(
         potionId,
       ]);
       // At most `max` listings at once.
-      expect(await repo.listOnExchange(buyer, { potionId }, 30, 0)).toBe(
-        "tooMany",
+      expect(await repo.listOnExchange(buyer, { potionId }, 30, 0)).toEqual({
+        kind: "refused",
+        reason: "tooMany",
+      });
+    });
+
+    it("buy orders set gold aside, fill at the first one's price, want their rolls, and refund on cancel (D-156)", async () => {
+      const { repo, account } = await make();
+      const seller = await account();
+      const early = await account();
+      const late = await account();
+      const s = await repo.create(seller, `${name}Maker`, 2);
+      if (typeof s === "string") throw new Error(s);
+      const key = "t:4:ring:wisdom";
+      await repo.addGold(early, 500);
+      await repo.addGold(late, 500);
+      // Gold is set aside; not more than the buyer has, nor too many orders.
+      expect(await repo.placeOrder(early, key, [], 900, 10)).toEqual({
+        kind: "refused",
+        reason: "gold",
+      });
+      expect(await repo.placeOrder(early, key, [], 200, 10)).toEqual({
+        kind: "placed",
+      });
+      expect(await repo.placeOrder(late, key, [], 200, 10)).toEqual({
+        kind: "placed",
+      });
+      expect(await repo.placeOrder(late, key, ["dexterity"], 300, 10)).toEqual({
+        kind: "placed",
+      });
+      expect(await repo.placeOrder(late, key, [], 1, 2)).toEqual({
+        kind: "refused",
+        reason: "tooMany",
+      });
+      expect((await repo.stash(early)).gold).toBe(300);
+      expect((await repo.stash(late)).gold).toBe(0);
+      const orders = await repo.allOrders();
+      expect(orders.map((o) => [o.buyerId, o.price, o.rolls])).toEqual([
+        [late, 300, ["dexterity"]],
+        [early, 200, []],
+        [late, 200, []],
+      ]);
+      // Listing at 150 sells at once, at the order's 200, to the earlier of
+      // the two 200s: the 300 order wants a DEX roll this ring lacks.
+      const [r1, r2] = (await repo.addLoot(
+        seller,
+        s.id,
+        [WISDOM_RING, WISDOM_RING],
+        20,
+      ))!;
+      expect(
+        await repo.listOnExchange(seller, { itemId: r1!.item.id }, 150, 10),
+      ).toMatchObject({ kind: "deal", buyerId: early, price: 200, fee: 10 });
+      expect((await repo.stash(seller)).gold).toBe(190);
+      expect((await repo.collection(early)).items.map((i) => i.id)).toEqual([
+        r1!.item.id,
+      ]);
+      expect((await repo.stash(early)).gold).toBe(300);
+      // Asking more than any order pays: it is listed instead.
+      expect(
+        await repo.listOnExchange(seller, { itemId: r2!.item.id }, 250, 10),
+      ).toEqual({ kind: "listed" });
+      // Selling straight to an order: the one that fits, not your own.
+      const [dexOrder, plainOrder] = (await repo.allOrders()).filter(
+        (o) => o.buyerId === late,
       );
+      const [r3] = (await repo.addLoot(seller, s.id, [WISDOM_RING], 20))!;
+      expect(
+        await repo.sellToOrder(seller, dexOrder!.id, { itemId: r3!.item.id }),
+      ).toEqual({ kind: "refused", reason: "noFit" });
+      expect(
+        await repo.sellToOrder(late, plainOrder!.id, { itemId: r3!.item.id }),
+      ).toMatchObject({ kind: "refused" });
+      expect(
+        await repo.sellToOrder(seller, plainOrder!.id, {
+          itemId: r3!.item.id,
+        }),
+      ).toMatchObject({ kind: "deal", buyerId: late, price: 200 });
+      // Cancelling gives the set-aside gold back, once.
+      expect(await repo.cancelOrder(early, dexOrder!.id)).toBe(false);
+      expect(await repo.cancelOrder(late, dexOrder!.id)).toBe(true);
+      expect(await repo.cancelOrder(late, dexOrder!.id)).toBe(false);
+      expect((await repo.stash(late)).gold).toBe(300);
+      // Ordering into a listing buys the cheapest fitting one at its price.
+      const listed = (await repo.allListings()).find(
+        (l) => l.sellerId === seller,
+      )!;
+      expect(await repo.placeOrder(early, key, ["luck"], 260, 10)).toEqual({
+        kind: "deal",
+        sellerId: seller,
+        buyerId: early,
+        what: "T4 Ring of Wisdom",
+        price: 250,
+        fee: 12,
+      });
+      expect((await repo.stash(early)).gold).toBe(50);
+      expect(
+        (await repo.collection(early)).items.map((i) => i.id).sort(),
+      ).toEqual([r1!.item.id, listed.item!.id].sort());
+      // Leave the board empty for the other tests.
+      for (const o of await repo.allOrders()) {
+        expect(await repo.cancelOrder(o.buyerId, o.id)).toBe(true);
+      }
+      expect(await repo.allListings()).toEqual([]);
+      // Price history: three sales of this kind, averaging 217.
+      const windows = await repo.priceWindows(key);
+      expect(windows.map((w) => w.window)).toEqual(["24h", "7d", "30d", "all"]);
+      for (const w of windows) {
+        expect(w).toMatchObject({ sales: 3, average: 217 });
+      }
+      expect(await repo.priceWindows("p:hp")).toContainEqual({
+        window: "all",
+        sales: 0,
+        average: null,
+      });
     });
 
     it("a listed item cannot be sold to the vendor or worn (D-155)", async () => {
@@ -717,11 +850,16 @@ function serfContract(
       const [drop] = (await repo.addLoot(a, serf.id, [RING], 20))!;
       expect(
         await repo.listOnExchange(a, { itemId: drop!.item.id }, 10, 10),
-      ).toBe("ok");
+      ).toEqual({ kind: "listed" });
       expect(await repo.sell(a, drop!.item.id, 20)).toBeNull();
       expect(
         await repo.equip(a, serf.id, drop!.item.id, "ring1", 20),
       ).toBeNull();
+      // Leave the board empty for the other tests.
+      const [l] = (await repo.allListings()).filter((x) => x.sellerId === a);
+      expect(await repo.cancelListing(a, l!.id, { stash: 20, rack: 20 })).toBe(
+        "ok",
+      );
     });
 
     it("buys upgrades with gold, once per price, never past the max or the balance (D-154)", async () => {
@@ -1048,15 +1186,18 @@ serfContract("Pg", async () => {
   };
 });
 
-describe("the Exchange in PostgreSQL (D-155)", () => {
+describe("the Exchange in PostgreSQL (D-155, D-156)", () => {
+  const make = async (who: string) => {
+    const acc = await new PgAccountRepo(pool).createAccount(
+      `${who}@race.co`,
+      "h",
+    );
+    if (acc === "taken") throw new Error("taken");
+    return acc.id;
+  };
+
   it("five buyers racing for one listing: exactly one gets it, and no gold is made or lost", async () => {
-    const accounts = new PgAccountRepo(pool);
     const repo = new PgSerfRepo(pool);
-    const make = async (who: string) => {
-      const acc = await accounts.createAccount(`${who}@race.co`, "h");
-      if (acc === "taken") throw new Error("taken");
-      return acc.id;
-    };
     const seller = await make("seller");
     const s = await repo.create(seller, "RaceSeller", 2);
     if (typeof s === "string") throw new Error(s);
@@ -1068,21 +1209,56 @@ describe("the Exchange in PostgreSQL (D-155)", () => {
     const buyers = await Promise.all(["b1", "b2", "b3", "b4", "b5"].map(make));
     for (const b of buyers) await repo.addGold(b, 1000);
     const results = await Promise.all(
-      buyers.map((b) =>
-        repo.buyListing(b, listing!.id, { stash: 20, rack: 20 }),
-      ),
+      buyers.map((b) => repo.buyListing(b, listing!.id)),
     );
-    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => r.kind === "deal")).toHaveLength(1);
     expect(
-      results.filter((r) => !r.ok).every((r) => !r.ok && r.reason === "gone"),
+      results
+        .filter((r) => r.kind !== "deal")
+        .every((r) => r.kind === "refused" && r.reason === "gone"),
     ).toBe(true);
-    // The item is in exactly one stash; gold in = gold out + the fee.
+    // The item is in exactly one collection box; gold in = gold out + the fee.
+    const boxes = await Promise.all(buyers.map((b) => repo.collection(b)));
+    expect(boxes.filter((c) => c.items.length === 1)).toHaveLength(1);
     const stashes = await Promise.all(buyers.map((b) => repo.stash(b)));
-    expect(stashes.filter((st) => st.items.length === 1)).toHaveLength(1);
     const gold =
       stashes.reduce((sum, st) => sum + st.gold, 0) +
       (await repo.stash(seller)).gold;
     expect(gold).toBe(5 * 1000 - 50);
+  });
+
+  it("five sellers racing to fill one order: it fills once, and the others stay listed", async () => {
+    const repo = new PgSerfRepo(pool);
+    const buyer = await make("orderer");
+    await repo.addGold(buyer, 400);
+    expect(
+      await repo.placeOrder(buyer, "t:4:ring:defense", [], 400, 10),
+    ).toEqual({ kind: "placed" });
+    const sellers = await Promise.all(["s1", "s2", "s3", "s4", "s5"].map(make));
+    const rings: number[] = [];
+    for (const [i, seller] of sellers.entries()) {
+      const s = await repo.create(seller, `OrderSeller${i}`, 2);
+      if (typeof s === "string") throw new Error(s);
+      rings.push((await repo.addLoot(seller, s.id, [RING], 20))![0]!.item.id);
+    }
+    const results = await Promise.all(
+      sellers.map((seller, i) =>
+        repo.listOnExchange(seller, { itemId: rings[i]! }, 100, 10),
+      ),
+    );
+    expect(results.filter((r) => r.kind === "deal")).toHaveLength(1);
+    expect(results.filter((r) => r.kind === "listed")).toHaveLength(4);
+    expect(await repo.allOrders()).toEqual([]);
+    expect((await repo.collection(buyer)).items).toHaveLength(1);
+    expect((await repo.stash(buyer)).gold).toBe(0);
+    const paid = await Promise.all(sellers.map((x) => repo.stash(x)));
+    expect(paid.reduce((sum, st) => sum + st.gold, 0)).toBe(400 - 20);
+    // Clear the board for the other tests.
+    for (const l of await repo.allListings()) {
+      expect(
+        await repo.cancelListing(l.sellerId, l.id, { stash: 20, rack: 20 }),
+      ).toBe("ok");
+    }
   });
 });
 

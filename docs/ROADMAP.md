@@ -442,7 +442,7 @@ Acceptance:
 
 ## Phase 17 — Economy and account systems
 
-Status: built (2026-10-26), awaiting the user's test on branch `phase-17`: account upgrades (D-154, earlier) and the Grand Serf Exchange (D-155): listing, buying, taking back, the Exchange tab, sale notices, and the history. Acceptance as measured: a trade cannot duplicate an item or gold (five buyers racing on PostgreSQL: one gets it, the gold sums exactly); a refused purchase changes nothing on either side (contract tests); storage is shared by every serf on an account; an upgrade is paid once and is account-wide (D-154 tests); the same server and storage serve every client, so the browser and the future desktop build see one economy.
+Status: built (2026-10-26), awaiting the user's test on branch `phase-17`: account upgrades (D-154, earlier) and the Grand Serf Exchange (D-155), redesigned after the user's first look (D-156): selling only from the Exchange tab, compact cards with details on hover, rarity/class/type/roll filters, price history, buy orders with Grand-Exchange-style matching, and the collection box. Acceptance as measured: a trade cannot duplicate an item or gold (five buyers racing on PostgreSQL: one gets it, the gold sums exactly); a refused purchase changes nothing on either side (contract tests); storage is shared by every serf on an account; an upgrade is paid once and is account-wide (D-154 tests); the same server and storage serve every client, so the browser and the future desktop build see one economy.
 
 **Goal:** The player-driven economy, working before the alpha (the user: "a huge part of this game", D-124). The shared stash, gold, and selling to the vendor arrived in Phase 9 (D-085–D-087); this phase adds the marketplace, buying, and upgrades.
 

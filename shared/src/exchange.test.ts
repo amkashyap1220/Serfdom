@@ -43,10 +43,24 @@ describe("the Exchange's rules (D-155)", () => {
     }
   });
 
-  it("filters by slot, tier, Artifact, Shiny, class, and name", () => {
-    const sword = listing({ item: item({ tier: 3 }) });
+  it("filters by slot, type, rarity, Shiny, class, rolls, and name (D-156)", () => {
+    const sword = listing({
+      item: item({ tier: 3, rolls: [] }),
+    });
     const ring = listing({
-      item: item({ slot: "ring", type: "attack", tier: 9, shiny: true }),
+      item: item({
+        slot: "ring",
+        type: "attack",
+        tier: 9,
+        shiny: true,
+        rolls: [
+          { stat: "dexterity", amount: 2 },
+          { stat: "hp", amount: -3 },
+          { stat: "speed", amount: 1 },
+          { stat: "vitality", amount: 1 },
+        ],
+        luck: 1,
+      }),
     });
     const axe = listing({
       item: { ...rollArtifact("doomrend", () => 0.5), id: 3, equipped: null },
@@ -56,16 +70,19 @@ describe("the Exchange's rules (D-155)", () => {
     const ids = (q: Partial<typeof ANY_LISTING>) =>
       filterListings(all, { ...ANY_LISTING, ...q }).listings.map((l) => l.id);
     expect(ids({ slot: "weapon" }).sort()).toEqual([sword.id, axe.id].sort());
+    expect(ids({ slot: "weapon", type: "axe" })).toEqual([axe.id]);
     expect(ids({ slot: "potion" })).toEqual([potion.id]);
-    expect(ids({ minTier: 5, maxTier: 10 })).toEqual(
-      expect.arrayContaining([ring.id, potion.id]),
-    );
-    expect(ids({ artifacts: true })).toEqual([axe.id]);
+    expect(ids({ rarity: "common" })).toEqual([sword.id]);
+    expect(ids({ rarity: "rare" })).toEqual([ring.id]);
+    expect(ids({ rarity: "artifact" })).toEqual([axe.id]);
     expect(ids({ shiny: true })).toEqual([ring.id]);
     // A Wizard cannot wear a sword or an axe.
-    expect(ids({ usableBy: "wizard" }).sort()).toEqual(
+    expect(ids({ classId: "wizard" }).sort()).toEqual(
       [ring.id, potion.id].sort(),
     );
+    // Rolls: all of them, positive only; a -3 HP roll does not count.
+    expect(ids({ rolls: ["dexterity", "luck"] })).toEqual([ring.id]);
+    expect(ids({ rolls: ["hp"] }).includes(ring.id)).toBe(false);
     expect(ids({ search: "DOOMREND" })).toEqual([axe.id]);
     expect(ids({ search: "potion of health" })).toEqual([potion.id]);
   });

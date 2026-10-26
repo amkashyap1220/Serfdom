@@ -603,6 +603,9 @@ export {
   EXCHANGE_SORTS,
   exchangeFee,
   filterListings,
+  fitsOrder,
+  type BuyOrder,
+  type PriceWindow,
   isValidPrice,
   listingName,
   type ExchangeQuery,
@@ -610,3 +613,17 @@ export {
   type Listing,
   type Sale,
 } from "./exchange.ts";
+export {
+  hasRolls,
+  isRollWish,
+  marketKeyName,
+  marketKeyOf,
+  parseMarketKey,
+  RARITIES,
+  RARITY_NAMES,
+  rarityOf,
+  ROLL_WISHES,
+  type MarketKey,
+  type Rarity,
+  type RollWish,
+} from "./market.ts";

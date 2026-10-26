@@ -36,10 +36,20 @@ import {
   EXCHANGE,
   EXCHANGE_SORTS,
   isValidPrice,
+  type BuyOrder,
   type ExchangeQuery,
   type Listing,
+  type PriceWindow,
   type Sale,
 } from "./exchange.ts";
+import {
+  isRollWish,
+  parseMarketKey,
+  RARITIES,
+  ROLL_WISHES,
+  type MarketKey,
+  type RollWish,
+} from "./market.ts";
 import {
   RUN_RESULTS,
   RUN_STAT_KEYS,
@@ -80,6 +90,11 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v55 (17e-h): the Exchange redesigned (D-156): browse by type, rarity,
+ *          class, and rolls; exchangeMarket {key} → price history and
+ *          the best orders; exchangeOrder / exchangeCancelOrder /
+ *          exchangeSellToOrder / exchangeCollect; exchangeMine lists
+ *          orders and the collection box; sales carry their key.
  * v54 (17): the Grand Serf Exchange (D-155). Client exchangeList
  *          {itemId | potionId, price}, exchangeCancel / exchangeBuy
  *          {listingId}, exchangeBrowse {query}, exchangeMine; server
@@ -195,7 +210,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 54;
+export const PROTOCOL_VERSION = 55;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -289,7 +304,18 @@ export type ClientMessage =
   | { type: "exchangeCancel"; listingId: number }
   | { type: "exchangeBuy"; listingId: number }
   | { type: "exchangeBrowse"; query: ExchangeQuery }
-  | { type: "exchangeMine" };
+  | { type: "exchangeMine" }
+  /** Price history and the best buy orders for one kind of item (D-156). */
+  | { type: "exchangeMarket"; key: MarketKey }
+  | { type: "exchangeOrder"; key: MarketKey; rolls: RollWish[]; price: number }
+  | { type: "exchangeCancelOrder"; orderId: number }
+  | {
+      type: "exchangeSellToOrder";
+      orderId: number;
+      itemId: number | null;
+      potionId: number | null;
+    }
+  | { type: "exchangeCollect" };
 
 /** A party member as others see them: their serf (null while choosing one). */
 export interface PartyMember {
@@ -759,8 +785,21 @@ export type ServerMessage =
       total: number;
       listings: Listing[];
     }
-  /** Your listings, and your latest sales and purchases. */
-  | { type: "exchangeMine"; listings: Listing[]; sales: Sale[] }
+  /** Your listings, buy orders, collection box, and latest sales and purchases. */
+  | {
+      type: "exchangeMine";
+      listings: Listing[];
+      orders: BuyOrder[];
+      collection: { items: Item[]; potions: Potion[] };
+      sales: Sale[];
+    }
+  /** One kind of item's price history and its best buy orders (D-156). */
+  | {
+      type: "exchangeMarket";
+      key: MarketKey;
+      windows: PriceWindow[];
+      orders: BuyOrder[];
+    }
   /** Something of yours sold, or similar; `text` is safe to show. */
   | { type: "exchangeNotice"; text: string }
   /** An Exchange request was refused; `reason` is safe to show. */
@@ -1075,10 +1114,75 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       return { ok: true, message: { type: "exchangeBrowse", query } };
     }
     case "exchangeMine":
+    case "exchangeCollect":
       if (!hasExactKeys(obj, ["type"])) {
-        return fail("exchangeMine: unexpected fields");
+        return fail(`${obj.type}: unexpected fields`);
       }
-      return { ok: true, message: { type: "exchangeMine" } };
+      return { ok: true, message: { type: obj.type } };
+    case "exchangeMarket":
+      if (!hasExactKeys(obj, ["type", "key"]) || !parseMarketKey(obj.key)) {
+        return fail("exchangeMarket: bad key");
+      }
+      return {
+        ok: true,
+        message: { type: "exchangeMarket", key: obj.key as string },
+      };
+    case "exchangeOrder":
+      if (
+        !hasExactKeys(obj, ["type", "key", "rolls", "price"]) ||
+        !parseMarketKey(obj.key) ||
+        !Array.isArray(obj.rolls) ||
+        obj.rolls.length > ROLL_WISHES.length ||
+        !obj.rolls.every(isRollWish)
+      ) {
+        return fail("exchangeOrder: bad order");
+      }
+      if (!isValidPrice(obj.price)) return fail("exchangeOrder: bad price");
+      return {
+        ok: true,
+        message: {
+          type: "exchangeOrder",
+          key: obj.key as string,
+          rolls: [...new Set(obj.rolls as RollWish[])],
+          price: obj.price,
+        },
+      };
+    case "exchangeCancelOrder":
+      if (!hasExactKeys(obj, ["type", "orderId"]) || !isPlayerId(obj.orderId)) {
+        return fail("exchangeCancelOrder: bad orderId");
+      }
+      return {
+        ok: true,
+        message: { type: "exchangeCancelOrder", orderId: obj.orderId },
+      };
+    case "exchangeSellToOrder": {
+      if (
+        !hasExactKeys(obj, ["type", "orderId", "itemId", "potionId"]) ||
+        !isPlayerId(obj.orderId)
+      ) {
+        return fail("exchangeSellToOrder: unexpected fields");
+      }
+      const item = obj.itemId;
+      const potion = obj.potionId;
+      if ((item === null) === (potion === null)) {
+        return fail("exchangeSellToOrder: an item or a potion");
+      }
+      if (
+        (item !== null && !isPlayerId(item)) ||
+        (potion !== null && !isPlayerId(potion))
+      ) {
+        return fail("exchangeSellToOrder: bad id");
+      }
+      return {
+        ok: true,
+        message: {
+          type: "exchangeSellToOrder",
+          orderId: obj.orderId,
+          itemId: item as number | null,
+          potionId: potion as number | null,
+        },
+      };
+    }
     case "buyUpgrade":
       if (!hasExactKeys(obj, ["type", "kind"])) {
         return fail("buyUpgrade: unexpected fields");
@@ -1396,13 +1500,59 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       };
     }
     case "exchangeMine": {
-      if (!hasExactKeys(obj, ["type", "listings", "sales"])) {
+      if (
+        !hasExactKeys(obj, [
+          "type",
+          "listings",
+          "orders",
+          "collection",
+          "sales",
+        ])
+      ) {
         return fail("exchangeMine: unexpected fields");
       }
       const listings = parseList(obj.listings, parseListing);
+      const orders = parseList(obj.orders, parseBuyOrder);
       const sales = parseList(obj.sales, parseSale);
-      if (!listings || !sales) return fail("exchangeMine: bad lists");
-      return { ok: true, message: { type: "exchangeMine", listings, sales } };
+      const c = obj.collection;
+      if (!isPlainObject(c) || !hasExactKeys(c, ["items", "potions"])) {
+        return fail("exchangeMine: bad collection");
+      }
+      const items = parseList(c.items, parseUnworn);
+      const potions = parseList(c.potions, parsePotion);
+      if (!listings || !orders || !sales || !items || !potions) {
+        return fail("exchangeMine: bad lists");
+      }
+      return {
+        ok: true,
+        message: {
+          type: "exchangeMine",
+          listings,
+          orders,
+          collection: { items, potions },
+          sales,
+        },
+      };
+    }
+    case "exchangeMarket": {
+      if (
+        !hasExactKeys(obj, ["type", "key", "windows", "orders"]) ||
+        !parseMarketKey(obj.key)
+      ) {
+        return fail("exchangeMarket: bad key");
+      }
+      const windows = parseList(obj.windows, parsePriceWindow);
+      const orders = parseList(obj.orders, parseBuyOrder);
+      if (!windows || !orders) return fail("exchangeMarket: bad lists");
+      return {
+        ok: true,
+        message: {
+          type: "exchangeMarket",
+          key: obj.key as string,
+          windows,
+          orders,
+        },
+      };
     }
     case "exchangeNotice":
     case "exchangeError": {
@@ -1706,16 +1856,17 @@ function parseFire(v: unknown): FireInput | string {
 
 /** undefined means malformed. */
 /** An Exchange query (D-155): known slots, tiers 0-12, a short search. */
+/** An Exchange query (D-156): known slots, types, rarities, classes, rolls; a short search. */
 function parseExchangeQuery(v: unknown): ExchangeQuery | null {
   if (
     !isPlainObject(v) ||
     !hasExactKeys(v, [
       "slot",
-      "minTier",
-      "maxTier",
-      "artifacts",
+      "type",
+      "rarity",
       "shiny",
-      "usableBy",
+      "classId",
+      "rolls",
       "search",
       "sort",
       "page",
@@ -1725,12 +1876,18 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
       v.slot === "potion" ||
       (ITEM_SLOTS as readonly unknown[]).includes(v.slot)
     ) ||
-    !isNonNegativeInt(v.minTier) ||
-    !isNonNegativeInt(v.maxTier) ||
-    (v.maxTier as number) > ARTIFACT_TIER ||
-    typeof v.artifacts !== "boolean" ||
+    !(
+      v.type === null ||
+      (typeof v.type === "string" && /^[a-z]{1,16}$/i.test(v.type))
+    ) ||
+    !(
+      v.rarity === null || (RARITIES as readonly unknown[]).includes(v.rarity)
+    ) ||
     typeof v.shiny !== "boolean" ||
-    (v.usableBy !== null && !isClassId(v.usableBy)) ||
+    (v.classId !== null && !isClassId(v.classId)) ||
+    !Array.isArray(v.rolls) ||
+    v.rolls.length > ROLL_WISHES.length ||
+    !v.rolls.every(isRollWish) ||
     typeof v.search !== "string" ||
     v.search.length > EXCHANGE.maxSearch ||
     !(EXCHANGE_SORTS as readonly unknown[]).includes(v.sort) ||
@@ -1741,14 +1898,56 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
   }
   return {
     slot: v.slot as ExchangeQuery["slot"],
-    minTier: v.minTier as number,
-    maxTier: v.maxTier as number,
-    artifacts: v.artifacts,
+    type: v.type as string | null,
+    rarity: v.rarity as ExchangeQuery["rarity"],
     shiny: v.shiny,
-    usableBy: v.usableBy,
+    classId: v.classId,
+    rolls: [...new Set(v.rolls as RollWish[])],
     search: v.search,
     sort: v.sort as ExchangeQuery["sort"],
     page: v.page as number,
+  };
+}
+
+/** A buy order (D-156). */
+function parseBuyOrder(v: unknown): BuyOrder | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["id", "key", "rolls", "price", "placedAt", "mine"]) ||
+    !isPlayerId(v.id) ||
+    !parseMarketKey(v.key) ||
+    !Array.isArray(v.rolls) ||
+    !v.rolls.every(isRollWish) ||
+    !isValidPrice(v.price) ||
+    !isNonNegative(v.placedAt) ||
+    typeof v.mine !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    id: v.id,
+    key: v.key as string,
+    rolls: v.rolls as RollWish[],
+    price: v.price,
+    placedAt: v.placedAt,
+    mine: v.mine,
+  };
+}
+
+function parsePriceWindow(v: unknown): PriceWindow | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["window", "average", "sales"]) ||
+    !["24h", "7d", "30d", "all"].includes(v.window as string) ||
+    !(v.average === null || isNonNegative(v.average)) ||
+    !isNonNegativeInt(v.sales)
+  ) {
+    return null;
+  }
+  return {
+    window: v.window as PriceWindow["window"],
+    average: v.average as number | null,
+    sales: v.sales,
   };
 }
 
@@ -1780,8 +1979,9 @@ function parseListing(v: unknown): Listing | null {
 function parseSale(v: unknown): Sale | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["what", "price", "fee", "at", "role"]) ||
+    !hasExactKeys(v, ["what", "key", "price", "fee", "at", "role"]) ||
     typeof v.what !== "string" ||
+    !(v.key === null || parseMarketKey(v.key)) ||
     !isValidPrice(v.price) ||
     !isNonNegativeInt(v.fee) ||
     !isNonNegative(v.at) ||
@@ -1789,7 +1989,14 @@ function parseSale(v: unknown): Sale | null {
   ) {
     return null;
   }
-  return { what: v.what, price: v.price, fee: v.fee, at: v.at, role: v.role };
+  return {
+    what: v.what,
+    key: v.key as string | null,
+    price: v.price,
+    fee: v.fee,
+    at: v.at,
+    role: v.role,
+  };
 }
 
 function parsePartyMember(v: unknown): PartyMember | undefined {

@@ -2341,8 +2341,8 @@ describe("account upgrades (D-154)", () => {
   });
 });
 
-describe("the Grand Serf Exchange over the network (D-155)", () => {
-  it("one player lists, another buys; the seller hears of it and gets the gold", async () => {
+describe("the Grand Serf Exchange over the network (D-155, D-156)", () => {
+  it("one player lists, another buys and collects; a buy order fills from a listing; both hear of each trade", async () => {
     await server.close();
     const repo = new MemorySerfRepo();
     server = await GameServer.start({
@@ -2389,7 +2389,7 @@ describe("the Grand Serf Exchange over the network (D-155)", () => {
     b.send(
       encodeMessage({
         type: "exchangeBrowse",
-        query: { ...ANY_LISTING, artifacts: true },
+        query: { ...ANY_LISTING, rarity: "artifact" },
       }),
     );
     const page = await nextOfType(b, "exchangePage");
@@ -2410,15 +2410,72 @@ describe("the Grand Serf Exchange over the network (D-155)", () => {
     b.send(
       encodeMessage({ type: "exchangeBuy", listingId: page.listings[0]!.id }),
     );
+    expect((await nextOfType(b, "exchangeNotice")).text).toContain(
+      "Bought: Doomrend",
+    );
+    let box = await nextOfType(b, "exchangeMine");
+    expect(box.collection.items[0]).toMatchObject({ artifact: "doomrend" });
+    expect((await nextOfType(a, "exchangeNotice")).text).toContain(
+      "for 5,000 gold (you got 4,750",
+    );
+    // Collecting moves it into B's stash.
+    b.send(encodeMessage({ type: "exchangeCollect" }));
     let stash = await nextOfType(b, "stash");
     while (stash.items.length === 0) stash = await nextOfType(b, "stash");
     expect(stash.items[0]).toMatchObject({ artifact: "doomrend" });
     expect(stash.gold).toBe(1000);
+    // Its price history now shows the sale.
+    b.send(encodeMessage({ type: "exchangeMarket", key: "a:doomrend" }));
+    const market = await nextOfType(b, "exchangeMarket");
+    expect(market.windows.find((w) => w.window === "24h")).toEqual({
+      window: "24h",
+      average: 5000,
+      sales: 1,
+    });
+    // B orders a health potion at up to 50; a roll wish on a potion is refused.
+    b.send(
+      encodeMessage({
+        type: "exchangeOrder",
+        key: "p:hp",
+        rolls: ["attack"],
+        price: 50,
+      }),
+    );
+    expect((await nextOfType(b, "exchangeError")).reason).toBe(
+      "Potions have no rolls.",
+    );
+    b.send(
+      encodeMessage({
+        type: "exchangeOrder",
+        key: "p:hp",
+        rolls: [],
+        price: 50,
+      }),
+    );
+    box = await nextOfType(b, "exchangeMine");
+    expect(box.orders).toMatchObject([{ key: "p:hp", price: 50, mine: true }]);
+    // A lists one for 10: it sells at once at the order's 50.
+    const [potion] = (await repo.addPotions(1, serfA!.id, ["hp"], 20))!;
+    a.send(
+      encodeMessage({
+        type: "exchangeList",
+        itemId: null,
+        potionId: potion!.potion.id,
+        price: 10,
+      }),
+    );
     expect((await nextOfType(a, "exchangeNotice")).text).toContain(
-      "sold for 5,000 gold",
+      "Sold: Potion of Health for 50 gold",
+    );
+    expect((await nextOfType(b, "exchangeNotice")).text).toContain(
+      "Bought: Potion of Health for 50 gold",
     );
     let sellerStash = await nextOfType(a, "stash");
-    while (sellerStash.gold === 0) sellerStash = await nextOfType(a, "stash");
-    expect(sellerStash.gold).toBe(4750);
+    while (sellerStash.gold !== 4750 + 50 - 2) {
+      sellerStash = await nextOfType(a, "stash");
+    }
+    expect((await repo.stash(2)).gold).toBe(950);
+    expect((await repo.collection(2)).potions).toHaveLength(1);
+    expect(await repo.allOrders()).toEqual([]);
   });
 });
