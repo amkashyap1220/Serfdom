@@ -159,6 +159,18 @@ describe("weapon Artifacts (16b, D-153)", () => {
     expect(d[2]! / d[0]!).toBeCloseTo(1.5, 6);
   });
 
+  it("Artemis: the growth stops at +100% (the cap)", () => {
+    const line = Array.from(
+      { length: 7 },
+      (_, i) => [40 + i * 40, 0] as [number, number],
+    );
+    const { sim, events } = attack(world("bow", ["artemis"], line), 1.5);
+    const d = line.map((_, n) => hitOn(sim, events, n)[0]?.damage ?? 0);
+    expect(d[4]! / d[0]!).toBeCloseTo(2, 6);
+    expect(d[5]! / d[0]!).toBeCloseTo(1 + WEAPON_ARTIFACT.artemis.max, 6);
+    expect(d[6]! / d[0]!).toBeCloseTo(2, 6);
+  });
+
   it("Aetherion: the orb pulls enemies within 120 px in, then bursts 60 px wide", () => {
     // It hits the first; the second is 100 px from there, out of a 60 px burst.
     const { sim, events } = attack(

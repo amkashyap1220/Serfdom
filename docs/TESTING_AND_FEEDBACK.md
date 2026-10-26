@@ -214,6 +214,19 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+#### Phase 16 checklist: Artifacts and Shiny items (D-152, D-153)
+
+Restart `npm run dev` (migration 013 runs on start) and hard-refresh. Artifacts are 1 in 500 per endgame chest, so for testing ask Claude to put a set of Artifacts (and a Shiny item) into your stash with a temporary script.
+
+1. **Stash:** an Artifact card has an orange border, its own name (e.g. "Doomrend, the World-Ender"), "Artifact Axe", T12 numbers (75 damage for a weapon), six rolls (some can be negative), and its effect in italics. A Shiny item shimmers gold and its name starts with "Shiny". Selling an Artifact pays the T12 price.
+2. **Equip** one on a serf of the right class (Doomrend: Fighter or Barbarian): the left panel's Gear column grows.
+3. **Weapons** (in a run, against a group): Doomrend throws faint lightning-like lines to extra enemies; Excalibur's every 5th slash fires a fast beam; Whisper's stab after a kill reaches further; Artemis's arrow hits harder the more it passes through; Aetherion's orb drags enemies in before bursting; Eternity's 4th bolt splits into 3; Golgorr's 3rd smash sends a gold ring out.
+4. **Gear:** the Mantle blocks the next 2 shots after you cast (sparks); the Hide makes you briefly faster when a shot just misses you; the Aegis of the Eternal King shields you once below 25% HP (a pale ring round you); the Ouroboros heals a little per kill; the Veil makes you untouchable for a moment after a hit (a violet ring); the **Resurrection Necklace** saves you once from a death at 50% HP, then it is gone from your serf (check the Stash tab afterwards).
+5. **Abilities** (each class's own): Guard's Last Stand shockwave when it ends; Battle Cry heals per kill; Vanish leaves a pulsing outline that bursts; a Volley arrow on a boss sends one more; Arcane Blast pulls enemies in; Healing also shields; Inspiration clears nearby enemy shots; cursed deaths give MP; every 3rd Nature's Reach roots; Chain Lightning leaves a blue field.
+6. Throughout: your own character must not stutter or snap back (the debug readout's correction stays near 0), and the consoles show no red errors.
+
+Report: pass or fail per step and per Artifact you tried, with what you saw.
+
 #### Phase 15 checklist: home screen, HUD, minimap, leaderboards (D-145 to D-150)
 
 Run `npm run dev` (it applies migration 011 to the dev database on start), then hard-refresh (Ctrl+Shift+R).

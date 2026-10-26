@@ -292,6 +292,14 @@ Melee weapons swing rather than shoot, slowly and heavily: a new character's swo
 
 ## 9. Tiers, modifiers, Artifacts, and Shiny items
 
+### Confirmed (Phase 16, D-152, D-153)
+
+- **Tiered items** (T0–T10) are the dependable way to get stronger.
+- **Artifacts** are a separate, rarer kind of item: **always stronger than any tiered item**. Each has T12 power (two tiers past T10) and **6 random rolls** (T10 has 5) of the usual sizes and rates, works like a normal item of its type, and adds a **special effect**. Its own name, no T number. Only the **five endgame dungeons** drop them: a reward chest there holds one **1 time in 500**, one of that dungeon's own (Frost Hollow, the Clockwork Vault, and Dragon's Roost have 5 each; the Abyssal Gauntlet and Stormspire 4 each). All **23** concepts below exist, adjusted to the weapon attacks of D-141; the exact effects are in D-153 and on each item. The same Artifact never stacks with itself.
+- **Shiny** is purely visual: any item, Artifacts included, is Shiny **1 time in 2,000**; its name starts with "Shiny" and it shimmers gold.
+
+The list below was the earlier draft (kept for history):
+
 Prior draft:
 
 - Ordinary gear tiers T0–T10.
