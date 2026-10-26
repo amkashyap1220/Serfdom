@@ -43,7 +43,7 @@ describe("the Exchange's rules (D-155)", () => {
     }
   });
 
-  it("filters by slot, type, rarity, Shiny, class, rolls, and name (D-156)", () => {
+  it("filters by slot, type, tier, Shiny, class, rolls, and name (D-156)", () => {
     const sword = listing({
       item: item({ tier: 3, rolls: [] }),
     });
@@ -72,9 +72,11 @@ describe("the Exchange's rules (D-155)", () => {
     expect(ids({ slot: "weapon" }).sort()).toEqual([sword.id, axe.id].sort());
     expect(ids({ slot: "weapon", type: "axe" })).toEqual([axe.id]);
     expect(ids({ slot: "potion" })).toEqual([potion.id]);
-    expect(ids({ rarity: "common" })).toEqual([sword.id]);
-    expect(ids({ rarity: "rare" })).toEqual([ring.id]);
-    expect(ids({ rarity: "artifact" })).toEqual([axe.id]);
+    expect(ids({ tier: 3 })).toEqual([sword.id]);
+    expect(ids({ tier: 9 })).toEqual([ring.id]);
+    expect(ids({ tier: 4 })).toEqual([]);
+    // Artifacts are their own choice, not a tier (they are T12 inside).
+    expect(ids({ tier: "artifact" })).toEqual([axe.id]);
     expect(ids({ shiny: true })).toEqual([ring.id]);
     // A Wizard cannot wear a sword or an axe.
     expect(ids({ classId: "wizard" }).sort()).toEqual(
@@ -102,7 +104,9 @@ describe("the Exchange's rules (D-155)", () => {
     });
     expect(last.listings).toHaveLength(5);
     expect(last.listings.at(-1)!.price).toBe(956);
-    const newest = filterListings(many, ANY_LISTING).listings[0]!;
+    expect(ANY_LISTING.sort).toBe("cheapest");
+    const newest = filterListings(many, { ...ANY_LISTING, sort: "newest" })
+      .listings[0]!;
     expect(newest.listedAt).toBe(Math.max(...many.map((l) => l.listedAt)));
   });
 });

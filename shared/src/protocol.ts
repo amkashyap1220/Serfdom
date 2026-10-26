@@ -35,6 +35,7 @@ import { isUpgradeKind, type UpgradeKind } from "./upgrades.ts";
 import {
   EXCHANGE,
   EXCHANGE_SORTS,
+  isTierFilter,
   isValidPrice,
   type BuyOrder,
   type ExchangeQuery,
@@ -45,7 +46,6 @@ import {
 import {
   isRollWish,
   parseMarketKey,
-  RARITIES,
   ROLL_WISHES,
   type MarketKey,
   type RollWish,
@@ -90,7 +90,7 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
- * v55 (17e-h): the Exchange redesigned (D-156): browse by type, rarity,
+ * v55 (17e-h): the Exchange redesigned (D-156): browse by type, tier,
  *          class, and rolls; exchangeMarket {key} → price history and
  *          the best orders; exchangeOrder / exchangeCancelOrder /
  *          exchangeSellToOrder / exchangeCollect; exchangeMine lists
@@ -1863,7 +1863,7 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
     !hasExactKeys(v, [
       "slot",
       "type",
-      "rarity",
+      "tier",
       "shiny",
       "classId",
       "rolls",
@@ -1880,9 +1880,7 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
       v.type === null ||
       (typeof v.type === "string" && /^[a-z]{1,16}$/i.test(v.type))
     ) ||
-    !(
-      v.rarity === null || (RARITIES as readonly unknown[]).includes(v.rarity)
-    ) ||
+    !(v.tier === null || isTierFilter(v.tier)) ||
     typeof v.shiny !== "boolean" ||
     (v.classId !== null && !isClassId(v.classId)) ||
     !Array.isArray(v.rolls) ||
@@ -1899,7 +1897,7 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
   return {
     slot: v.slot as ExchangeQuery["slot"],
     type: v.type as string | null,
-    rarity: v.rarity as ExchangeQuery["rarity"],
+    tier: v.tier as ExchangeQuery["tier"],
     shiny: v.shiny,
     classId: v.classId,
     rolls: [...new Set(v.rolls as RollWish[])],

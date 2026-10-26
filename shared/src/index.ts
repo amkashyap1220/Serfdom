@@ -604,6 +604,8 @@ export {
   exchangeFee,
   filterListings,
   fitsOrder,
+  isTierFilter,
+  type TierFilter,
   type BuyOrder,
   type PriceWindow,
   isValidPrice,

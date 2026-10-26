@@ -1,12 +1,16 @@
 import { ARTIFACTS } from "./artifacts.ts";
 import type { ClassId } from "./classes.ts";
-import { canEquip, itemName, type Item, type ItemSlot } from "./items.ts";
+import {
+  canEquip,
+  itemName,
+  MAX_TIER,
+  type Item,
+  type ItemSlot,
+} from "./items.ts";
 import {
   hasRolls,
   marketKeyOf,
-  rarityOf,
   type MarketKey,
-  type Rarity,
   type RollWish,
 } from "./market.ts";
 import { potionName, type Potion } from "./potions.ts";
@@ -85,7 +89,8 @@ export interface ExchangeQuery {
   slot: ItemSlot | "potion" | null;
   /** Within a slot: a weapon, armor, or ability item type, an accessory's base stat, or a potion's stat. */
   type: string | null;
-  rarity: Rarity | null;
+  /** One tier (T0-T10) or Artifacts (the user, 2026-10-26: not rarity bands). */
+  tier: TierFilter | null;
   /** Only Shiny ones. */
   shiny: boolean;
   /** Only what this class can wear (potions always pass). */
@@ -99,15 +104,26 @@ export interface ExchangeQuery {
   page: number;
 }
 
+/** A tier filter: one tier of tiered items, or the Artifacts. */
+export type TierFilter = number | "artifact";
+
+export function isTierFilter(v: unknown): v is TierFilter {
+  return (
+    v === "artifact" ||
+    (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= MAX_TIER)
+  );
+}
+
 export const ANY_LISTING: ExchangeQuery = {
   slot: null,
   type: null,
-  rarity: null,
+  tier: null,
   shiny: false,
   classId: null,
   rolls: [],
   search: "",
-  sort: "newest",
+  // The user: cheapest first by default (2026-10-26).
+  sort: "cheapest",
   page: 0,
 };
 
@@ -175,9 +191,17 @@ export function filterListings(
       const type = item ? item.type : (l.potion?.stat ?? null);
       if (type !== q.type) return false;
     }
-    // Potions have no rarity, Shine, or rolls: those filters pass items only.
-    if (q.rarity !== null && (!item || rarityOf(item) !== q.rarity))
-      return false;
+    // Potions have no tier, Shine, or rolls: those filters pass items only.
+    if (q.tier !== null) {
+      if (!item) return false;
+      if (
+        q.tier === "artifact"
+          ? !item.artifact
+          : item.artifact || item.tier !== q.tier
+      ) {
+        return false;
+      }
+    }
     if (q.shiny && !item?.shiny) return false;
     if (q.classId && item && !canEquip(item, q.classId)) return false;
     if (q.rolls.length > 0 && (!item || !hasRolls(item, q.rolls))) return false;

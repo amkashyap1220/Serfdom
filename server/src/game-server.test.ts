@@ -2389,7 +2389,7 @@ describe("the Grand Serf Exchange over the network (D-155, D-156)", () => {
     b.send(
       encodeMessage({
         type: "exchangeBrowse",
-        query: { ...ANY_LISTING, rarity: "artifact" },
+        query: { ...ANY_LISTING, tier: "artifact" },
       }),
     );
     const page = await nextOfType(b, "exchangePage");

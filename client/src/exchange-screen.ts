@@ -3,6 +3,7 @@ import {
   ANY_LISTING,
   ARMOR_TYPES,
   ARTIFACT_IDS,
+  ARTIFACT_TIER,
   ARTIFACTS,
   type ArtifactId,
   type BuyOrder,
@@ -23,11 +24,12 @@ import {
   type MarketKey,
   marketKeyName,
   marketKeyOf,
+  MAX_TIER,
   type Potion,
   potionName,
   type PriceWindow,
-  RARITIES,
-  RARITY_NAMES,
+  rollsFor,
+  type TierFilter,
   ROLL_WISHES,
   type RollWish,
   type ServerMessage,
@@ -100,13 +102,13 @@ const SLOT_OPTIONS: readonly (readonly [ItemSlot, string])[] = [
 
 /** An order being written: which kind of item, its rolls, the most to pay. */
 interface OrderDraft {
-  kind: "tiered" | "artifact" | "potion";
-  slot: ItemSlot;
+  slot: ItemSlot | "potion";
+  /** The item type, an accessory's base stat, or a potion's stat. */
   type: string;
-  tier: number;
-  artifact: ArtifactId;
+  tier: TierFilter;
+  /** With tier Artifact: the one of this slot and type; null if there is none. */
+  artifact: ArtifactId | null;
   shiny: boolean;
-  stat: StatKey;
   rolls: RollWish[];
   price: string;
 }
@@ -126,13 +128,11 @@ export class ExchangeScreen {
   private pick: { itemId: number } | { stat: StatKey } | null = null;
   private sellPrice = "";
   private draft: OrderDraft = {
-    kind: "tiered",
     slot: "weapon",
     type: "sword",
     tier: 4,
-    artifact: ARTIFACT_IDS[0]!,
+    artifact: null,
     shiny: false,
-    stat: "hp",
     rolls: [],
     price: "",
   };
@@ -203,14 +203,7 @@ export class ExchangeScreen {
       if (v === this.view) b.classList.add("active");
       views.append(b);
     }
-    body.append(
-      views,
-      el(
-        "p",
-        "hint",
-        `You have ${(stash?.gold ?? 0).toLocaleString("en")} gold.`,
-      ),
-    );
+    body.append(views);
     if (this.view === "sell") this.buildSell(body, stash);
     else if (this.view === "trades") this.buildTrades(body);
     else this.buildBrowse(body, stash);
@@ -238,18 +231,12 @@ export class ExchangeScreen {
     );
     type.disabled = q.slot === null;
     type.setAttribute("aria-label", "Item type");
-    const rarity = select(
-      [
-        ["", "Any rarity"],
-        ...RARITIES.map((r) => [r, rarityLabel(r)] as const),
-      ],
-      q.rarity ?? "",
-      (v) =>
-        this.browse({
-          rarity: v === "" ? null : (v as ExchangeQuery["rarity"]),
-        }),
+    const tier = select(
+      [["", "Any tier"], ...TIER_OPTIONS],
+      q.tier === null ? "" : String(q.tier),
+      (v) => this.browse({ tier: v === "" ? null : tierOf(v) }),
     );
-    rarity.setAttribute("aria-label", "Rarity");
+    tier.setAttribute("aria-label", "Tier");
     const classes = select(
       [
         ["", "Any class"],
@@ -265,31 +252,18 @@ export class ExchangeScreen {
     const shiny = checkbox("Shiny only", q.shiny, (on) =>
       this.browse({ shiny: on }),
     );
-    filters.append(slot, type, rarity, classes, shiny);
-    const search = document.createElement("form");
-    const text = document.createElement("input");
-    text.type = "text";
-    text.placeholder = "Search names";
-    text.maxLength = EXCHANGE.maxSearch;
-    text.value = q.search;
-    text.setAttribute("aria-label", "Search names");
-    search.append(text);
-    search.addEventListener("submit", (e) => {
-      e.preventDefault();
-      this.browse({ search: text.value });
-    });
-    filters.append(
-      search,
-      select(
-        [
-          ["newest", "Newest"],
-          ["cheapest", "Cheapest"],
-          ["dearest", "Dearest"],
-        ],
-        q.sort,
-        (v) => this.browse({ sort: v as ExchangeQuery["sort"] }),
-      ),
+    filters.append(slot, type, tier, classes, shiny);
+    const sort = select(
+      [
+        ["newest", "Newest"],
+        ["cheapest", "Cheapest"],
+        ["dearest", "Most expensive"],
+      ],
+      q.sort,
+      (v) => this.browse({ sort: v as ExchangeQuery["sort"] }),
     );
+    sort.setAttribute("aria-label", "Sort");
+    filters.append(sort);
     body.append(
       filters,
       rollChips(
@@ -379,27 +353,22 @@ export class ExchangeScreen {
   /** Starts an order for the same kind of item as a listing. */
   private orderFor(l: Pick<Listing, "item" | "potion">, rolls: RollWish[]) {
     const d = this.draft;
-    if (l.potion) {
-      this.draft = { ...d, kind: "potion", stat: l.potion.stat, rolls: [] };
-    } else if (l.item?.artifact) {
-      this.draft = {
-        ...d,
-        kind: "artifact",
-        artifact: l.item.artifact,
-        shiny: l.item.shiny === true,
-        rolls: [...rolls],
-      };
-    } else if (l.item) {
-      this.draft = {
-        ...d,
-        kind: "tiered",
-        slot: l.item.slot,
-        type: l.item.type ?? "",
-        tier: l.item.tier,
-        shiny: l.item.shiny === true,
-        rolls: [...rolls],
-      };
-    }
+    const item = l.item;
+    this.draft = settleDraft(
+      l.potion
+        ? { ...d, slot: "potion", type: l.potion.stat }
+        : item
+          ? {
+              ...d,
+              slot: item.slot,
+              type: item.type ?? "",
+              tier: item.artifact ? "artifact" : item.tier,
+              artifact: item.artifact ?? null,
+              shiny: item.shiny === true,
+              rolls: [...rolls],
+            }
+          : d,
+    );
   }
 
   // ---- Sell ----
@@ -703,65 +672,53 @@ export class ExchangeScreen {
     body.append(list);
   }
 
-  /** Place a buy order: which item, which rolls, the most you pay (D-156). */
+  /**
+   * Place a buy order (D-156), with the same dropdowns as Browse: slot,
+   * type, tier (T0-T10 or Artifact; for Artifact, then the Artifact of that
+   * slot and type); Shiny; the rolls it must have.
+   */
   private orderForm(): HTMLElement {
     const d = this.draft;
     const set = (change: Partial<OrderDraft>) => {
-      this.draft = { ...this.draft, ...change };
+      this.draft = settleDraft({ ...this.draft, ...change });
       this.redraw();
     };
     const wrap = el("div", "exchange-panel order-form");
     wrap.append(el("h4", "", "Place a buy order"));
-    const row = el("div", "lb-filters");
-    row.append(
-      select(
-        [
-          ["tiered", "Tiered item"],
-          ["artifact", "Artifact"],
-          ["potion", "Potion"],
-        ],
-        d.kind,
-        (v) => set({ kind: v as OrderDraft["kind"], rolls: [] }),
-      ),
+    const row = el("div", "lb-filters exchange-filters");
+    const slot = select([...SLOT_OPTIONS, ["potion", "Potions"]], d.slot, (v) =>
+      set({ slot: v as OrderDraft["slot"] }),
     );
-    if (d.kind === "tiered") {
-      row.append(
-        select(SLOT_OPTIONS, d.slot, (v) => {
-          const slot = v as ItemSlot;
-          set({ slot, type: typeOptions(slot)[0]![0] });
-        }),
-        select(typeOptions(d.slot), d.type, (v) => set({ type: v })),
-        select(
-          Array.from({ length: 11 }, (_, t) => [String(t), `T${t}`] as const),
-          String(d.tier),
-          (v) => set({ tier: Number(v) }),
-        ),
+    slot.setAttribute("aria-label", "Item slot");
+    const type = select(typeOptions(d.slot), d.type, (v) => set({ type: v }));
+    type.setAttribute("aria-label", "Item type");
+    row.append(slot, type);
+    if (d.slot !== "potion") {
+      const tier = select(TIER_OPTIONS, String(d.tier), (v) =>
+        set({ tier: tierOf(v) }),
       );
-    } else if (d.kind === "artifact") {
-      row.append(
-        select(
-          ARTIFACT_IDS.map((id) => [id, ARTIFACTS[id].name] as const),
-          d.artifact,
+      tier.setAttribute("aria-label", "Tier");
+      row.append(tier);
+      if (d.tier === "artifact") {
+        const ids = artifactsOf(d.slot, d.type);
+        const which = select(
+          ids.length > 0
+            ? ids.map((id) => [id, ARTIFACTS[id].name] as const)
+            : [["", "No Artifact of this kind"]],
+          d.artifact ?? "",
           (v) => set({ artifact: v as ArtifactId }),
-        ),
-      );
-    } else {
-      row.append(
-        select(
-          STAT_KEYS.map((s) => [s, potionName(s)] as const),
-          d.stat,
-          (v) => set({ stat: v as StatKey }),
-        ),
-      );
-    }
-    if (d.kind !== "potion") {
+        );
+        which.disabled = ids.length <= 1;
+        which.setAttribute("aria-label", "Artifact");
+        row.append(which);
+      }
       row.append(checkbox("Shiny", d.shiny, (on) => set({ shiny: on })));
     }
     wrap.append(row);
-    if (d.kind === "potion") {
+    if (d.slot === "potion") {
       // Potions have no rolls.
-    } else if (d.kind === "tiered" && d.tier < 4) {
-      wrap.append(el("p", "hint", "T0–T3 items have no extra rolls."));
+    } else if (!hasExtraRolls(d.slot, d.tier)) {
+      wrap.append(el("p", "hint", `T${d.tier} items have no extra rolls.`));
     } else {
       wrap.append(
         rollChips(
@@ -773,7 +730,11 @@ export class ExchangeScreen {
       );
     }
     const key = draftKey(d);
-    wrap.append(this.marketPanel(key));
+    wrap.append(
+      key
+        ? this.marketPanel(key)
+        : el("p", "hint", "There is no Artifact of this slot and type."),
+    );
     const form = document.createElement("form");
     form.className = "exchange-form";
     const price = priceInput(d.price, "Most you pay");
@@ -783,6 +744,7 @@ export class ExchangeScreen {
     const go = document.createElement("button");
     go.type = "submit";
     go.textContent = "Place order";
+    go.disabled = key === null;
     const note = el(
       "span",
       "hint",
@@ -796,9 +758,9 @@ export class ExchangeScreen {
         note.textContent = `A whole number from 1 to ${EXCHANGE.maxPrice.toLocaleString("en")}.`;
         return;
       }
+      if (!key) return;
       this.draft = { ...this.draft, price: "" };
-      const rolls = d.kind === "tiered" && d.tier < 4 ? [] : d.rolls;
-      this.actions.placeOrder(key, d.kind === "potion" ? [] : rolls, p);
+      this.actions.placeOrder(key, d.rolls, p);
     });
     wrap.append(form);
     return wrap;
@@ -811,15 +773,19 @@ function keyOf(thing: Pick<Listing, "item" | "potion">): MarketKey {
     : marketKeyOf({ potion: thing.potion! });
 }
 
-function draftKey(d: OrderDraft): MarketKey {
-  if (d.kind === "potion") return marketKeyOf({ potion: { stat: d.stat } });
-  if (d.kind === "artifact") {
+/** The market key an order draft names; null if it names nothing that exists. */
+function draftKey(d: OrderDraft): MarketKey | null {
+  if (d.slot === "potion") {
+    return marketKeyOf({ potion: { stat: d.type as StatKey } });
+  }
+  if (d.tier === "artifact") {
+    if (!d.artifact) return null;
     const def = ARTIFACTS[d.artifact];
     return marketKeyOf({
       item: {
         slot: def.slot,
         type: def.type,
-        tier: 0,
+        tier: ARTIFACT_TIER,
         artifact: d.artifact,
         shiny: d.shiny,
       },
@@ -833,6 +799,50 @@ function draftKey(d: OrderDraft): MarketKey {
       shiny: d.shiny,
     },
   });
+}
+
+/** Whether items of this tier roll extra stats (D-106: from T4). */
+function hasExtraRolls(slot: ItemSlot, tier: TierFilter): boolean {
+  return tier === "artifact" || rollsFor(slot, tier) > 0;
+}
+
+/** T0 to T10, then Artifact: the tier dropdown on Browse and orders. */
+const TIER_OPTIONS: readonly (readonly [string, string])[] = [
+  ...Array.from(
+    { length: MAX_TIER + 1 },
+    (_, t) => [String(t), `T${t}`] as const,
+  ),
+  ["artifact", "Artifact"],
+];
+
+function tierOf(v: string): TierFilter {
+  return v === "artifact" ? "artifact" : Number(v);
+}
+
+/**
+ * A draft made whole after a change: a type that fits the slot, the
+ * Artifact of this slot and type, and no rolls where there are none
+ * (potions; T0-T3).
+ */
+function settleDraft(d: OrderDraft): OrderDraft {
+  const types = typeOptions(d.slot).map(([t]) => t);
+  const type = types.includes(d.type) ? d.type : types[0]!;
+  if (d.slot === "potion") return { ...d, type, shiny: false, rolls: [] };
+  const ids = artifactsOf(d.slot, type);
+  return {
+    ...d,
+    type,
+    artifact:
+      d.artifact && ids.includes(d.artifact) ? d.artifact : (ids[0] ?? null),
+    rolls: hasExtraRolls(d.slot, d.tier) ? d.rolls : [],
+  };
+}
+
+/** The Artifacts of one slot and type (D-153: one of each, for now). */
+function artifactsOf(slot: ItemSlot, type: string): ArtifactId[] {
+  return ARTIFACT_IDS.filter(
+    (id) => ARTIFACTS[id].slot === slot && ARTIFACTS[id].type === type,
+  );
 }
 
 /** The types a slot's items come in, for the type filter and the order form. */
@@ -867,17 +877,6 @@ function typeOptions(slot: ItemSlot | "potion"): (readonly [string, string])[] {
     return STAT_KEYS.map((s) => [s, kind(slot, s)] as const);
   }
   return [];
-}
-
-function rarityLabel(r: (typeof RARITIES)[number]): string {
-  const tiers: Record<(typeof RARITIES)[number], string> = {
-    common: " (T0–T3)",
-    uncommon: " (T4–T6)",
-    rare: " (T7–T9)",
-    epic: " (T10)",
-    artifact: "",
-  };
-  return `${RARITY_NAMES[r]}${tiers[r]}`;
 }
 
 function rollLabel(w: RollWish): string {

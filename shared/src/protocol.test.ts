@@ -1,3 +1,4 @@
+import { ANY_LISTING } from "./exchange.ts";
 import { rollArtifact } from "./items.ts";
 import { describe, expect, it } from "vitest";
 import { CLASS_IDS } from "./classes.ts";
@@ -105,6 +106,31 @@ describe("parseClientMessage", () => {
     ]) {
       expect(parseClientMessage(raw).ok, raw).toBe(false);
     }
+  });
+
+  it("accepts an Exchange browse by tier T0-T10 or Artifact, nothing else (D-156)", () => {
+    for (const tier of [null, 0, 10, "artifact"] as const) {
+      const m = {
+        type: "exchangeBrowse",
+        query: { ...ANY_LISTING, tier },
+      } as const;
+      expect(parseClientMessage(encodeMessage(m))).toEqual({
+        ok: true,
+        message: m,
+      });
+    }
+    for (const tier of [11, -1, 2.5, "epic", "10"]) {
+      const raw = JSON.stringify({
+        type: "exchangeBrowse",
+        query: { ...ANY_LISTING, tier },
+      });
+      expect(parseClientMessage(raw).ok, raw).toBe(false);
+    }
+    const old = JSON.stringify({
+      type: "exchangeBrowse",
+      query: { ...ANY_LISTING, tier: undefined, rarity: "rare" },
+    });
+    expect(parseClientMessage(old).ok).toBe(false);
   });
 
   it("rejects messages over the size limit before parsing", () => {
