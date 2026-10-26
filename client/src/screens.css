@@ -459,6 +459,11 @@
   padding: 12px 16px;
   box-sizing: border-box;
   min-width: 0;
+  /* Exactly the box's height: whatever sits above the tab (a notice, a
+     first-run card, larger text) shortens the tab, which scrolls, so
+     nothing is ever pushed out of the 800 px box. */
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* In the home header the account line is a row of its own, above the tabs. */
@@ -478,7 +483,9 @@
 }
 
 .home-main .tab-body {
-  max-height: 690px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   align-self: stretch;
 }
 
