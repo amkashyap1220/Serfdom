@@ -1,5 +1,9 @@
 import {
   ARTIFACTS,
+  coinCounts,
+  coinsOf,
+  COINS,
+  moneyFrom,
   armorTypeName,
   canEquip,
   CLASS_IDS,
@@ -246,4 +250,66 @@ export function bonusText(stats: Stats): string {
   return STAT_KEYS.filter((k) => stats[k] !== 0)
     .map((k) => `+${stats[k]} ${STAT_LABELS[k]}`)
     .join(" ");
+}
+
+/** Money as coins (D-157), each in its own colour: "2 Silver 535 Bronze". */
+export function moneyEl(money: number, className = ""): HTMLElement {
+  const out = el("span", `money ${className}`.trim());
+  for (const p of coinsOf(money)) {
+    out.append(
+      el(
+        "span",
+        `coin coin-${p.coin}`,
+        `${p.count.toLocaleString("en")} ${p.name}`,
+      ),
+    );
+  }
+  return out;
+}
+
+/**
+ * A price typed as coins (D-157): four boxes, Platinum down to Bronze.
+ * `value()` is the total in Bronze, or null if a box is not a whole
+ * number of 0 or more (empty boxes count as 0).
+ */
+export function moneyInput(
+  initial: number | null,
+  label: string,
+): {
+  el: HTMLElement;
+  value: () => number | null;
+  onInput: (f: () => void) => void;
+} {
+  const wrap = el("span", "money-input");
+  wrap.setAttribute("role", "group");
+  wrap.setAttribute("aria-label", label);
+  const counts = initial === null ? null : coinCounts(initial);
+  const boxes = COINS.map((c) => {
+    const box = document.createElement("input");
+    box.type = "number";
+    box.min = "0";
+    box.step = "1";
+    box.placeholder = "0";
+    box.value = counts && counts[c.id] > 0 ? String(counts[c.id]) : "";
+    box.setAttribute("aria-label", `${label}: ${c.name}`);
+    const part = el("label", `coin-box coin-${c.id}`);
+    part.append(box, el("span", "", c.name));
+    wrap.append(part);
+    return [c.id, box] as const;
+  });
+  return {
+    el: wrap,
+    value: () => {
+      const parts: Record<string, number> = {};
+      for (const [id, box] of boxes) {
+        const n = box.value.trim() === "" ? 0 : Number(box.value);
+        if (!Number.isSafeInteger(n) || n < 0) return null;
+        parts[id] = n;
+      }
+      return moneyFrom(parts);
+    },
+    onInput: (f) => {
+      for (const [, box] of boxes) box.addEventListener("input", f);
+    },
+  };
 }

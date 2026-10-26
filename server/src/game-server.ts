@@ -27,6 +27,7 @@ import {
   type ClassId,
   type PartyMember,
   type SerfSummary,
+  formatMoney,
 } from "@serfdom/shared";
 import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
@@ -1055,9 +1056,9 @@ export class GameServer {
         }
         this.log.info(
           message.type === "buyUpgrade"
-            ? `${label(session)} bought ${message.kind} for ${done.price ?? 0} gold`
+            ? `${label(session)} bought ${message.kind} for ${formatMoney(done.price ?? 0)}`
             : message.type === "sellItem"
-              ? `${label(session)} sold item #${message.itemId} for ${done.price ?? 0} gold`
+              ? `${label(session)} sold item #${message.itemId} for ${formatMoney(done.price ?? 0)}`
               : message.type === "drinkPotion"
                 ? `${label(session)} serf #${message.serfId} drank potion #${message.potionId}`
                 : message.type === "pourPotion"
@@ -1378,15 +1379,14 @@ export class GameServer {
 
   /** Tells both sides of a trade, if online, and refreshes their lists (D-156). */
   private tellTrade(deal: ExchangeDeal): void {
-    const gold = (n: number) => n.toLocaleString("en");
     const sides = [
       {
         accountId: deal.sellerId,
-        text: `Sold: ${deal.what} for ${gold(deal.price)} gold (you got ${gold(deal.price - deal.fee)} after the fee).`,
+        text: `Sold: ${deal.what} for ${formatMoney(deal.price)} (you got ${formatMoney(deal.price - deal.fee)} after the fee).`,
       },
       {
         accountId: deal.buyerId,
-        text: `Bought: ${deal.what} for ${gold(deal.price)} gold. It waits in your collection box (My trades).`,
+        text: `Bought: ${deal.what} for ${formatMoney(deal.price)}. It waits in your collection box (My trades).`,
       },
     ];
     for (const side of sides) {

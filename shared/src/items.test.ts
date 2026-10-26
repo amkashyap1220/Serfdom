@@ -18,7 +18,6 @@ import {
   rollFromPool,
   rollItem,
   rollsFor,
-  itemValue,
   sellPrice,
   weaponDamage,
   type ItemSpec,
@@ -27,7 +26,9 @@ import {
   slotsFor,
   type EquipSlot,
   type Item,
+  rollArtifact,
 } from "./items.ts";
+import { UPGRADES } from "./upgrades.ts";
 import { combatFor, SERF_BASE, zeroStats } from "./stats.ts";
 
 /** A seeded generator, so a failure can be reproduced. */
@@ -381,16 +382,16 @@ describe("item values (D-087, D-090)", () => {
     })),
     luck,
   });
-  it("sells for half of 5 × (tier + 1)², more with Luck, never under 1", () => {
-    expect([0, 1, 2, 5, 10].map((t) => sellPrice(at(t)))).toEqual([
-      2, 10, 22, 90, 302,
+  it("the Lord pays 10 × (tier + 1)² Bronze; Luck changes nothing; Tier 0 nothing (D-157)", () => {
+    expect([0, 1, 2, 5, 9, 10].map((t) => sellPrice(at(t)))).toEqual([
+      0, 40, 90, 360, 1000, 1210,
     ]);
-    expect([0, 1, 2, 5, 10].map((t) => sellPrice(at(t, 1)))).toEqual([
-      3, 15, 33, 135, 453,
-    ]);
-    expect(itemValue(at(1))).toBe(20);
-    for (let tier = 0; tier <= 10; tier++)
-      expect(sellPrice(at(tier))).toBeGreaterThanOrEqual(1);
+    expect(sellPrice(at(10, 1))).toBe(sellPrice(at(10)));
+    // An Artifact at its tier 12: 100 of them pay for the first stash space.
+    const axe = rollArtifact("doomrend", () => 0.5);
+    expect(sellPrice(axe)).toBe(1690);
+    expect(sellPrice({ ...axe, shiny: true, luck: 1 })).toBe(1690);
+    expect(100 * sellPrice(axe)).toBeLessThanOrEqual(UPGRADES.stash.price);
   });
 });
 

@@ -382,7 +382,6 @@ export {
   type LootPool,
   sellPrice,
   STASH_SIZE,
-  itemValue,
   ROLLS_PER_TIER,
   rollsFor,
   WEAPON_TYPES,
@@ -627,3 +626,14 @@ export {
   type MarketKey,
   type RollWish,
 } from "./market.ts";
+export {
+  COINS,
+  coinCounts,
+  coinsOf,
+  formatMoney,
+  GOLD,
+  moneyFrom,
+  PLATINUM,
+  SILVER,
+  type CoinId,
+} from "./money.ts";

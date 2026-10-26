@@ -50,6 +50,7 @@ import {
   BASE_LUCK,
   MAX_PARTY_SIZE,
   sellPrice,
+  formatMoney,
   type Item,
   itemFullName,
   weaponDamage,
@@ -72,6 +73,7 @@ import {
   gridBox,
   hideTip,
   itemCard,
+  moneyEl,
   potionCard,
   select,
 } from "./ui-parts";
@@ -626,7 +628,7 @@ export class ScreenView {
     // your party, invites), the tabs on the right.
     const account = el("div", "account-bar");
     account.append(
-      el("span", "gold", this.stash ? `Gold ${this.stash.gold}` : ""),
+      this.stash ? moneyEl(this.stash.gold, "gold") : el("span", "gold"),
       el("span", "", this.email ? `Logged in as ${this.email}` : ""),
       button("Log out", () => this.actions.logout()),
     );
@@ -753,9 +755,8 @@ export class ScreenView {
       if (price === null) {
         row.append(el("span", "hint", "All bought"));
       } else {
-        const buy = button(
-          `+${u.step} · ${price.toLocaleString("en")} gold`,
-          () => this.actions.buyUpgrade(kind),
+        const buy = button(`+${u.step} · ${formatMoney(price)}`, () =>
+          this.actions.buyUpgrade(kind),
         );
         buy.disabled = stash.gold < price;
         row.append(buy);
@@ -1095,7 +1096,7 @@ export class ScreenView {
       el(
         "h2",
         "",
-        `Stash ${stash.items.length}/${stash.capacity} · Gold ${stash.gold}`,
+        `Stash ${stash.items.length}/${stash.capacity} · ${formatMoney(stash.gold)}`,
       ),
     );
     if (stash.items.length === 0) {
@@ -1790,9 +1791,13 @@ function expGain(
   return box;
 }
 
-/** "Sell · +10 gold" (D-087, D-090: the server pays the same). */
+/** "Sell to Lord · +250 Bronze"; Tier 0 is worth nothing: "Discard" (D-157; the server pays the same). */
 function sellButton(item: ItemSpec, onSell: () => void): HTMLButtonElement {
-  const b = button(`Sell · +${sellPrice(item)} gold`, onSell);
+  const price = sellPrice(item);
+  const b = button(
+    price > 0 ? `Sell to Lord · +${formatMoney(price)}` : "Discard",
+    onSell,
+  );
   b.classList.add("sell");
   return b;
 }

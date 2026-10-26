@@ -13,6 +13,7 @@ import {
   exchangeFee,
   type ExchangeQuery,
   fitsOrder,
+  formatMoney,
   isAccessorySlot,
   isArmorSlot,
   isValidPrice,
@@ -42,6 +43,8 @@ import {
   button,
   el,
   itemCard,
+  moneyEl,
+  moneyInput,
   potionCard,
   refreshTip,
   select,
@@ -109,7 +112,8 @@ interface OrderDraft {
   artifact: ArtifactId | null;
   shiny: boolean;
   rolls: RollWish[];
-  price: string;
+  /** The most to pay, in Bronze; null until typed. */
+  price: number | null;
 }
 
 export class ExchangeScreen {
@@ -125,7 +129,7 @@ export class ExchangeScreen {
   private panels: { key: MarketKey; fill: () => void }[] = [];
   /** The Sell view's pick: a stash item by id, or a rack potion by stat. */
   private pick: { itemId: number } | { stat: StatKey } | null = null;
-  private sellPrice = "";
+  private sellPrice: number | null = null;
   private draft: OrderDraft = {
     slot: "weapon",
     type: "sword",
@@ -133,7 +137,7 @@ export class ExchangeScreen {
     artifact: null,
     shiny: false,
     rolls: [],
-    price: "",
+    price: null,
   };
 
   constructor(
@@ -286,13 +290,13 @@ export class ExchangeScreen {
     for (const l of page.listings) {
       const key = keyOf(l);
       const more = () => [
-        el("span", "tip-price", `Listed for ${gold$(l.price)}`),
+        el("span", "tip-price", `Listed for ${money$(l.price)}`),
         ...this.marketLines(key),
       ];
       const card = l.item
         ? itemCard(l.item, more)
         : potionCard(l.potion!.stat, 1, more);
-      card.append(el("span", "price", gold$(l.price)));
+      card.append(moneyEl(l.price, "price"));
       if (l.mine) {
         card.append(el("span", "hint", "Your listing"));
       } else {
@@ -333,10 +337,7 @@ export class ExchangeScreen {
     const m = this.market(key);
     if (!m) return [el("span", "hint", "Loading price history…")];
     const avg = m.windows
-      .map(
-        (w) =>
-          `${w.window} ${w.average === null ? "—" : w.average.toLocaleString("en")}`,
-      )
+      .map((w) => `${w.window} ${w.average === null ? "—" : money$(w.average)}`)
       .join(" · ");
     const best = m.orders[0];
     return [
@@ -344,7 +345,7 @@ export class ExchangeScreen {
       el(
         "span",
         "tip-market",
-        best ? `Best buy order: ${gold$(best.price)}` : "No buy orders",
+        best ? `Best buy order: ${money$(best.price)}` : "No buy orders",
       ),
     ];
   }
@@ -421,7 +422,7 @@ export class ExchangeScreen {
 
   private choose(pick: { itemId: number } | { stat: StatKey }): void {
     this.pick = pick;
-    this.sellPrice = "";
+    this.sellPrice = null;
     this.redraw();
   }
 
@@ -471,34 +472,34 @@ export class ExchangeScreen {
     );
     const form = document.createElement("form");
     form.className = "exchange-form";
-    const price = priceInput(this.sellPrice, "Your price");
+    const price = moneyInput(this.sellPrice, "Your price");
     const note = el("span", "hint", "");
     const update = () => {
-      this.sellPrice = price.value;
-      const p = Number(price.value);
+      const p = price.value();
+      this.sellPrice = p;
       const best = this.markets
         .get(key)
         ?.orders.find((o) => !o.mine && fitsOrder(thing, o));
       note.textContent = !isValidPrice(p)
         ? ""
         : best && best.price >= p
-          ? `A buy order pays ${gold$(best.price)}: it sells at once for that (you get ${gold$(best.price - exchangeFee(best.price))}).`
-          : `You get ${gold$(p - exchangeFee(p))} after the 5% fee.`;
+          ? `A buy order pays ${money$(best.price)}: it sells at once for that (you get ${money$(best.price - exchangeFee(best.price))}).`
+          : `You get ${money$(p - exchangeFee(p))} after the 5% fee.`;
     };
-    price.addEventListener("input", update);
+    price.onInput(update);
     update();
     const go = document.createElement("button");
     go.type = "submit";
     go.textContent = "List";
-    form.append(price, go, note);
+    form.append(price.el, go, note);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const p = Number(price.value);
+      const p = price.value();
       if (!isValidPrice(p)) {
-        note.textContent = `A whole number from 1 to ${EXCHANGE.maxPrice.toLocaleString("en")}.`;
+        note.textContent = BAD_PRICE;
         return;
       }
-      this.sellPrice = "";
+      this.sellPrice = null;
       this.actions.listOnExchange(what, p);
     });
     panel.append(form);
@@ -531,7 +532,7 @@ export class ExchangeScreen {
             "",
             w.average === null
               ? "No sales"
-              : `${gold$(w.average)} average · ${w.sales} sold`,
+              : `${money$(w.average)} average · ${w.sales} sold`,
           ),
         );
       }
@@ -544,7 +545,7 @@ export class ExchangeScreen {
       for (const o of m.orders) {
         const row = el("div", "market-order");
         row.append(
-          el("span", "price", gold$(o.price)),
+          moneyEl(o.price, "price"),
           el(
             "span",
             "hint",
@@ -559,7 +560,7 @@ export class ExchangeScreen {
           ),
         );
         const sell = opts.sellNow?.(o);
-        if (sell) row.append(button(`Sell now for ${gold$(o.price)}`, sell));
+        if (sell) row.append(button(`Sell now for ${money$(o.price)}`, sell));
         list.append(row);
       }
       box.append(list);
@@ -618,7 +619,7 @@ export class ExchangeScreen {
               ? `with ${o.rolls.map(rollLabel).join(", ")}`
               : "",
           ),
-          el("span", "trade-price", `up to ${gold$(o.price)}`),
+          el("span", "trade-price", `up to ${money$(o.price)}`),
           button("Cancel", () => this.actions.cancelOrder(o.id)),
         );
         list.append(row);
@@ -640,7 +641,7 @@ export class ExchangeScreen {
       for (const l of mine.listings) {
         const card = l.item ? itemCard(l.item) : potionCard(l.potion!.stat, 1);
         card.append(
-          el("span", "price", gold$(l.price)),
+          moneyEl(l.price, "price"),
           button("Take back", () => this.actions.cancelListing(l.id)),
         );
         grid.append(card);
@@ -661,8 +662,8 @@ export class ExchangeScreen {
           "span",
           "lb-exp",
           s.role === "sold"
-            ? `Sold for ${gold$(s.price)} (−${s.fee} fee)`
-            : `Bought for ${gold$(s.price)}`,
+            ? `Sold for ${money$(s.price)} (−${money$(s.fee)} fee)`
+            : `Bought for ${money$(s.price)}`,
         ),
         el("span", "hint", new Date(s.at).toLocaleString()),
       );
@@ -736,9 +737,9 @@ export class ExchangeScreen {
     );
     const form = document.createElement("form");
     form.className = "exchange-form";
-    const price = priceInput(d.price, "Most you pay");
-    price.addEventListener("input", () => {
-      this.draft = { ...this.draft, price: price.value };
+    const price = moneyInput(d.price, "Most you pay");
+    price.onInput(() => {
+      this.draft = { ...this.draft, price: price.value() };
     });
     const go = document.createElement("button");
     go.type = "submit";
@@ -747,18 +748,18 @@ export class ExchangeScreen {
     const note = el(
       "span",
       "hint",
-      "The gold is set aside now (Cancel gives it back). A listing at or under your price is bought at once, at its price.",
+      "The money is set aside now (Cancel gives it back). A listing at or under your price is bought at once, at its price.",
     );
-    form.append(price, go, note);
+    form.append(price.el, go, note);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      const p = Number(price.value);
+      const p = price.value();
       if (!isValidPrice(p)) {
-        note.textContent = `A whole number from 1 to ${EXCHANGE.maxPrice.toLocaleString("en")}.`;
+        note.textContent = BAD_PRICE;
         return;
       }
       if (!key) return;
-      this.draft = { ...this.draft, price: "" };
+      this.draft = { ...this.draft, price: null };
       this.actions.placeOrder(key, d.rolls, p);
     });
     wrap.append(form);
@@ -920,18 +921,8 @@ function checkbox(
   return l;
 }
 
-function priceInput(value: string, placeholder: string): HTMLInputElement {
-  const price = document.createElement("input");
-  price.type = "number";
-  price.min = String(EXCHANGE.minPrice);
-  price.max = String(EXCHANGE.maxPrice);
-  price.step = "1";
-  price.placeholder = placeholder;
-  price.value = value;
-  price.setAttribute("aria-label", `${placeholder} in gold`);
-  return price;
-}
+const BAD_PRICE = `A price is from ${formatMoney(EXCHANGE.minPrice)} to ${formatMoney(EXCHANGE.maxPrice)}.`;
 
-function gold$(n: number): string {
-  return `${n.toLocaleString("en")} gold`;
+function money$(n: number): string {
+  return formatMoney(n);
 }

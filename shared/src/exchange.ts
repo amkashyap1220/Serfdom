@@ -26,7 +26,8 @@ export const EXCHANGE = {
   /** The seller's fee, a share of the price, rounded down. */
   feeShare: 0.05,
   minPrice: 1,
-  maxPrice: 1_000_000,
+  /** In Bronze (D-157): 1 Bronze to 1 Platinum. */
+  maxPrice: 1_000_000_000,
   /** Listings an account may have at once. */
   maxListings: 10,
   /** Buy orders an account may have at once (D-156). */

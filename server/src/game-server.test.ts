@@ -2307,9 +2307,9 @@ describe("account upgrades (D-154)", () => {
       client.send(JSON.stringify({ type: "buyUpgrade", kind }));
     buy("serfSlots");
     expect((await nextOfType(client, "stashError")).reason).toBe(
-      "Not enough gold: it costs 2000.",
+      "Not enough money: it costs 680 Silver.",
     );
-    await repo.addGold(1, 2500);
+    await repo.addGold(1, 850_000);
     buy("serfSlots");
     for (let i = 0; i < 10; i++) {
       const list = await nextOfType(client, "serfList");
@@ -2328,7 +2328,7 @@ describe("account upgrades (D-154)", () => {
     expect((await nextOfType(client, "serfError")).reason).toBe(
       "You already have 3 living serfs.",
     );
-    // 500 gold left: one step of stash space.
+    // 170 Silver left: one step of stash space.
     buy("stash");
     let stash = await nextOfType(client, "stash");
     while (stash.capacity !== 30) stash = await nextOfType(client, "stash");
@@ -2404,7 +2404,7 @@ describe("the Grand Serf Exchange over the network (D-155, D-156)", () => {
       encodeMessage({ type: "exchangeBuy", listingId: page.listings[0]!.id }),
     );
     expect((await nextOfType(b, "exchangeError")).reason).toBe(
-      "Not enough gold.",
+      "Not enough money.",
     );
     await repo.addGold(2, 6000);
     b.send(
@@ -2416,7 +2416,7 @@ describe("the Grand Serf Exchange over the network (D-155, D-156)", () => {
     let box = await nextOfType(b, "exchangeMine");
     expect(box.collection.items[0]).toMatchObject({ artifact: "doomrend" });
     expect((await nextOfType(a, "exchangeNotice")).text).toContain(
-      "for 5,000 gold (you got 4,750",
+      "for 5 Silver (you got 4 Silver 750 Bronze",
     );
     // Collecting moves it into B's stash.
     b.send(encodeMessage({ type: "exchangeCollect" }));
@@ -2465,10 +2465,10 @@ describe("the Grand Serf Exchange over the network (D-155, D-156)", () => {
       }),
     );
     expect((await nextOfType(a, "exchangeNotice")).text).toContain(
-      "Sold: Potion of Health for 50 gold",
+      "Sold: Potion of Health for 50 Bronze",
     );
     expect((await nextOfType(b, "exchangeNotice")).text).toContain(
-      "Bought: Potion of Health for 50 gold",
+      "Bought: Potion of Health for 50 Bronze",
     );
     let sellerStash = await nextOfType(a, "stash");
     while (sellerStash.gold !== 4750 + 50 - 2) {

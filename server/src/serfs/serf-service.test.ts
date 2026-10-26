@@ -327,12 +327,12 @@ describe("reward chests (D-065, D-068, D-080, D-086)", () => {
     const stash = await serfs.stash(1);
     expect(stash.items).toHaveLength(STASH_SIZE);
     expect(stash.pending).toHaveLength(1);
-    // Sell a stash cape (T0, no Luck: 2 gold): the reward moves in.
+    // Sell a stash cape (Tier 0: worth nothing, D-157): the reward moves in.
     const sold = await serfs.sell(1, stash.items[0]!.id);
-    expect(sold).toEqual({ ok: true, price: 2 });
+    expect(sold).toEqual({ ok: true, price: 0 });
     expect(await serfs.hasPending(1, made.serf.id)).toBe(false);
     const after = await serfs.stash(1);
-    expect(after.gold).toBe(2);
+    expect(after.gold).toBe(0);
     expect(after.items.map((i) => i.id)).toContain(r!.loot[0]!.item.id);
     expect(await serfs.sell(1, 999)).toEqual({
       ok: false,

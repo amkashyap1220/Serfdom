@@ -1439,3 +1439,43 @@ button.sell {
   gap: 2px;
   margin-top: 4px;
 }
+
+/* Coins (D-157). Placeholder colours, not the verified palette. */
+.money .coin + .coin {
+  margin-left: 0.35em;
+}
+.coin-bronze {
+  color: #d08a4f;
+}
+.coin-silver {
+  color: #c8ced6;
+}
+.coin-gold {
+  color: #f0c419;
+}
+.coin-platinum {
+  color: #9fe3e8;
+}
+
+.money-input {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.coin-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.screen .coin-box input {
+  width: 58px;
+  padding: 3px 5px;
+  border: 2px solid #46505f;
+  background: #0e1014;
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+}

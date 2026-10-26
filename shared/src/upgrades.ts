@@ -1,17 +1,23 @@
 /*
- * Account upgrades bought with gold (D-154, approved by the user
- * 2026-10-26; numbers tunable). They belong to the account, so a serf's
+ * Account upgrades bought with money (D-154; prices in Bronze from D-157:
+ * the first stash space is about 100 Artifacts sold to the Lord). They belong to the account, so a serf's
  * death never loses them. Each purchase adds `step` to its capacity and
  * costs `price` × the purchase's number (the 1st, the 2nd, …), up to `max`.
  */
 
 export const UPGRADES = {
   /** Living serfs at once: 2 free, up to 10 (one per class). */
-  serfSlots: { name: "Serf slot", base: 2, step: 1, max: 10, price: 2000 },
+  serfSlots: { name: "Serf slot", base: 2, step: 1, max: 10, price: 680_000 },
   /** The shared stash: 20 free, up to 100. */
-  stash: { name: "Stash space", base: 20, step: 10, max: 100, price: 500 },
+  stash: { name: "Stash space", base: 20, step: 10, max: 100, price: 170_000 },
   /** The potion rack: 20 free, up to 60. */
-  rack: { name: "Potion rack space", base: 20, step: 10, max: 60, price: 1000 },
+  rack: {
+    name: "Potion rack space",
+    base: 20,
+    step: 10,
+    max: 60,
+    price: 340_000,
+  },
 } as const;
 
 export type UpgradeKind = keyof typeof UPGRADES;

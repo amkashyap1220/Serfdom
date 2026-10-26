@@ -151,15 +151,13 @@ export interface Item extends ItemSpec {
   equipped: EquipSlot | null;
 }
 
-/** Reference value in gold (D-090): 5 × (tier + 1)², ×1.5 with +1 Luck. */
-export function itemValue(item: ItemSpec): number {
-  const base = 5 * (item.tier + 1) ** 2;
-  return item.luck > 0 ? base * 1.5 : base;
-}
-
-/** What the vendor pays (D-087, D-090): half the value, rounded down, at least 1. */
+/**
+ * What the Lord pays (Sell to Lord, D-157): 10 × (tier + 1)² Bronze, an
+ * Artifact at its tier 12 (1,690); Luck, rolls, and Shine change nothing.
+ * Tier 0 is worth nothing.
+ */
 export function sellPrice(item: ItemSpec): number {
-  return Math.max(1, Math.floor(itemValue(item) / 2));
+  return item.tier === 0 ? 0 : 10 * (item.tier + 1) ** 2;
 }
 
 /** Who may use which weapons and armor (D-081, D-083). */

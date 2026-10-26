@@ -904,7 +904,7 @@ function serfContract(
       });
     });
 
-    it("sells once for the vendor price, and room made takes in a pending reward (D-087)", async () => {
+    it("sells once to the Lord, and room made takes in a pending reward (D-087, D-157)", async () => {
       const { repo, account } = await make();
       const a = await account();
       const serf = await repo.create(a, `${name}Sell`, 2);
@@ -912,11 +912,11 @@ function serfContract(
       const drops = (await repo.addLoot(a, serf.id, [RING, RING], 1)) ?? [];
       const kept = drops[0]!.item;
       const waiting = drops[1]!.item;
-      // T4 ring with +1 Luck: value 5 × 25 × 1.5 = 187.5, sells for 93.
-      expect(await repo.sell(a, kept.id, 1)).toEqual({ price: 93 });
+      // A Tier 4 ring pays 10 × 25 = 250 Bronze; its +1 Luck adds nothing (D-157).
+      expect(await repo.sell(a, kept.id, 1)).toEqual({ price: 250 });
       expect(await repo.sell(a, kept.id, 1)).toBeNull(); // only once
       const after = await repo.stash(a);
-      expect(after.gold).toBe(93);
+      expect(after.gold).toBe(250);
       expect(after.items.map((i) => i.id)).toEqual([waiting.id]);
       expect(after.pending).toEqual([]);
       expect(await repo.hasPending(a, serf.id)).toBe(false);
@@ -927,8 +927,8 @@ function serfContract(
       // A pending reward itself can be sold too.
       const more = (await repo.addLoot(a, serf.id, [RING], 1)) ?? [];
       expect(more[0]?.pending).toBe(true);
-      expect(await repo.sell(a, more[0]!.item.id, 1)).toEqual({ price: 93 });
-      expect((await repo.stash(a)).gold).toBe(186);
+      expect(await repo.sell(a, more[0]!.item.id, 1)).toEqual({ price: 250 });
+      expect((await repo.stash(a)).gold).toBe(500);
     });
 
     it("a death keeps the stash, gold, and pending rewards (D-079, D-085)", async () => {

@@ -17,18 +17,19 @@ describe("account upgrades (D-154)", () => {
   });
 
   it("each purchase costs its price times its number; none past the max", () => {
-    expect(nextPrice("serfSlots", 0)).toBe(2000);
-    expect(nextPrice("serfSlots", 1)).toBe(4000);
-    expect(nextPrice("stash", 2)).toBe(1500);
+    // In Bronze (D-157): 680, 1,360 Silver; the third stash step 510 Silver.
+    expect(nextPrice("serfSlots", 0)).toBe(680_000);
+    expect(nextPrice("serfSlots", 1)).toBe(1_360_000);
+    expect(nextPrice("stash", 2)).toBe(510_000);
     expect(nextPrice("rack", maxBought("rack"))).toBeNull();
-    // Everything: 72,000 + 18,000 + 10,000 gold, as drafted.
+    // Everything: 24.48 + 6.12 + 3.4 Gold.
     const total = (kind: (typeof UPGRADE_KINDS)[number]) =>
       Array.from({ length: maxBought(kind) }, (_, n) =>
         nextPrice(kind, n)!,
       ).reduce((a, b) => a + b, 0);
-    expect(total("serfSlots")).toBe(72000);
-    expect(total("stash")).toBe(18000);
-    expect(total("rack")).toBe(10000);
+    expect(total("serfSlots")).toBe(24_480_000);
+    expect(total("stash")).toBe(6_120_000);
+    expect(total("rack")).toBe(3_400_000);
   });
 
   it("the client reads purchases back from capacities", () => {

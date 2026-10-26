@@ -43,6 +43,7 @@ import {
   type Listing,
   type Sale,
   parseMarketKey,
+  formatMoney,
   type BuyOrder,
   type Item,
   type MarketKey,
@@ -119,7 +120,10 @@ export class SerfService {
     }
     const done = await this.repo.buyUpgrade(accountId, kind, bought, price);
     if (!done)
-      return { ok: false, reason: `Not enough gold: it costs ${price}.` };
+      return {
+        ok: false,
+        reason: `Not enough money: it costs ${formatMoney(price)}.`,
+      };
     return { ok: true, price };
   }
 
@@ -705,12 +709,12 @@ function refused(reason: string): ExchangeOutcome {
   return { ok: false, reason };
 }
 
-const BAD_PRICE = `A price is a whole number from ${EXCHANGE.minPrice} to ${EXCHANGE.maxPrice.toLocaleString("en")} gold.`;
+const BAD_PRICE = `A price is from ${formatMoney(EXCHANGE.minPrice)} to ${formatMoney(EXCHANGE.maxPrice)}.`;
 
 const DEAL_REFUSALS: Record<ExchangeRefusal["reason"], string> = {
   gone: "That has already gone.",
   own: "That is your own.",
-  gold: "Not enough gold.",
+  gold: "Not enough money.",
   notYours: "Only an item in your stash or a potion in your rack can be sold.",
   noFit: "That is not what the order asks for.",
   tooMany: "Too many.",
