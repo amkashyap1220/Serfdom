@@ -11,6 +11,8 @@ Serfdom is one online game with two planned clients:
 
 Both clients connect to the same authoritative multiplayer service and persistent data store. Do not build a separate game backend or progression database for Steam.
 
+Scaling direction (D-158): **one world, regional dungeon servers.** One shared PostgreSQL database holds everything that is shared (accounts, stashes, money, the Exchange, leaderboards, parties); dungeon runs are independent, so they can be hosted on several game servers in a few regions, each run on the region nearest its party. Keep it that way: no player progress may live only in one game server's memory. Today there is one game server process; it is not split until load testing (Phase 21) shows it is needed (section 8).
+
 ## 2. Stack
 
 - Client: Phaser 4 + TypeScript (T-001).

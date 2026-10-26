@@ -493,6 +493,7 @@ Tasks:
 - Server logs, uptime and error monitoring without private data (crash reporting or analytics only if open question 23 approves them).
 - A protocol and client update policy: what a player with an old client sees after a deploy, and how a deploy treats runs in progress.
 - Secrets only in the host's environment; `.env.example` stays placeholders.
+- Prepare for D-158 (one world, regional dungeon servers): snapshots send only what changed (the 13e known issue, about 640 KB/s per player in a crowded room), a tick watchdog that logs any tick over its 16.7 ms budget, and a game server that can run beside others on one shared database; pick the first region(s) with the user (open question 27).
 
 Acceptance:
 
@@ -530,7 +531,7 @@ Tasks:
 
 - Closed playtest first: invite a small group, give them a simple way to report bugs and feedback.
 - Measure clear times, deaths, and EXP pace in every dungeon against their targets (D-047, D-071, D-108, D-120), and tune party scaling (D-045, PROVISIONAL).
-- Load and soak testing: the most players and runs one server must hold, snapshot bandwidth (T-027), and a long run without leaks.
+- Load and soak testing: the most players and runs one server must hold, snapshot bandwidth (T-027), and a long run without leaks; with those numbers, agree the per-server player cap and the login queue (D-158, open question 27).
 - Fix what the playtest finds, decide with the user what blocks opening, then open the alpha to the public.
 - The alpha's ground rules, decided with the user: whether progress may be wiped before Steam, and how that is announced (open question 26).
 
