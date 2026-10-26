@@ -60,6 +60,20 @@ import {
   type Potion,
   classSet,
   itemName,
+  actionOnKey,
+  DEFAULT_BINDS,
+  DEFAULT_SETTINGS,
+  FIRE_MODE_LABELS,
+  FIRE_MODES,
+  GAME_ACTIONS,
+  isBindableKey,
+  keyName,
+  rebind,
+  RESERVED_KEYS,
+  type ActionId,
+  type FireMode,
+  type KeyBinds,
+  type Settings,
 } from "@serfdom/shared";
 import {
   accuracy,
@@ -108,6 +122,8 @@ export interface ScreenActions extends ExchangeActions {
   removeMember(playerId: number): void;
   /** The HUD's debug readout (D-146). */
   setDebugHud(on: boolean): void;
+  /** Store new settings for the account (D-159). */
+  saveSettings(settings: Settings): void;
   /** Another leaderboard or filter (D-148). */
   getLeaderboard(query: LeaderboardQuery): void;
   /** Buy the next step of an account upgrade with gold (D-154). */
@@ -184,6 +200,59 @@ export class ScreenView {
   private partyMessageTimer: ReturnType<typeof setTimeout> | undefined;
   private typedInviteName = "";
   private debugHud = false;
+  /** The account's settings (D-159); the defaults until they arrive. */
+  private settings: Settings = DEFAULT_SETTINGS;
+  /** In Settings: the action waiting for its new key, a swap waiting for a yes, and the last note. */
+  private rebinding: ActionId | null = null;
+  private pendingSwap: {
+    action: ActionId;
+    code: string;
+    other: ActionId;
+  } | null = null;
+  private keyNote: string | null = null;
+
+  setSettings(next: Settings): void {
+    this.settings = next;
+    // Only the Settings tab shows them; other screens keep what is typed.
+    if (this.shown?.kind === "menu" && this.shown.tab === "settings") {
+      this.shown = null;
+    }
+  }
+
+  /**
+   * While Settings waits for a key, the next key press is the new key: it
+   * goes to nothing else (capture phase, before the menus' own keys).
+   */
+  private onRebindKey(e: KeyboardEvent): void {
+    const action = this.rebinding;
+    if (!action) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.code === "Escape") {
+      this.rebinding = null;
+      this.keyNote = null;
+    } else if (RESERVED_KEYS.includes(e.code)) {
+      this.keyNote = "Enter and Escape are kept for the menus.";
+    } else if (!isBindableKey(e.code)) {
+      this.keyNote = `${keyName(e.code)} cannot be used: it is kept for the browser or the system.`;
+    } else {
+      const other = actionOnKey(this.settings.binds, e.code);
+      this.rebinding = null;
+      this.keyNote = null;
+      if (other && other !== action) {
+        this.pendingSwap = { action, code: e.code, other };
+      } else {
+        this.saveBinds(rebind(this.settings.binds, action, e.code));
+      }
+    }
+    this.shown = null;
+  }
+
+  private saveBinds(binds: KeyBinds): void {
+    this.pendingSwap = null;
+    this.settings = { ...this.settings, binds };
+    this.actions.saveSettings(this.settings);
+  }
 
   /** The debug switch changed (Settings or the ` key). */
   setDebugHud(on: boolean): void {
@@ -196,6 +265,9 @@ export class ScreenView {
     this.actions = actions;
     this.exchange = new ExchangeScreen(actions, () => this.redraw());
     window.addEventListener("keydown", (e) => this.onKey(e));
+    window.addEventListener("keydown", (e) => this.onRebindKey(e), {
+      capture: true,
+    });
   }
 
   setAccount(email: string | null): void {
@@ -784,20 +856,90 @@ export class ScreenView {
     this.exchange.build(body, this.stash);
   }
 
-  /** Settings (D-145): only the debug readout for now; key binds and more are Phase 18. */
+  /**
+   * Settings (D-145, D-159): the fire mode, the keys (click one, press the
+   * new key; a key already in use offers a swap), and the debug readout.
+   */
   private buildSettings(body: HTMLElement): void {
+    const set = this.settings;
+    const binds = set.binds;
     body.append(el("h2", "", "Settings"));
+    // The fire mode, kept between runs (the fire mode key cycles it).
+    const fire = el("div", "setting-row");
+    const mode = select(
+      FIRE_MODES.map((m) => [m, FIRE_MODE_LABELS[m]] as const),
+      set.fireMode,
+      (v) => this.actions.saveSettings({ ...set, fireMode: v as FireMode }),
+    );
+    mode.setAttribute("aria-label", "Fire mode");
+    fire.append(
+      el("span", "setting-name", "Fire mode"),
+      mode,
+      el("span", "hint", fireModeHint(set.fireMode, keyName(binds.ability))),
+    );
+    body.append(fire);
+    // The keys.
+    body.append(el("h3", "dungeon-group", "Keys"));
+    const table = el("div", "key-binds");
+    for (const a of GAME_ACTIONS) {
+      const waiting = this.rebinding === a.id;
+      const key = button(
+        waiting ? "Press a key… (Escape: cancel)" : keyName(binds[a.id]),
+        () => {
+          this.rebinding = a.id;
+          this.pendingSwap = null;
+          this.keyNote = null;
+          this.shown = null;
+        },
+      );
+      key.className = waiting ? "key-bind active" : "key-bind";
+      key.setAttribute("aria-label", `${a.label}: ${keyName(binds[a.id])}`);
+      table.append(el("span", "setting-name", a.label), key);
+    }
+    body.append(table);
+    const swap = this.pendingSwap;
+    if (swap) {
+      const label = (id: ActionId) =>
+        GAME_ACTIONS.find((x) => x.id === id)?.label ?? id;
+      const row = el("div", "setting-row");
+      row.append(
+        el(
+          "span",
+          "",
+          `${keyName(swap.code)} is already ${label(swap.other)}. Swap, so ${label(swap.other)} takes ${keyName(binds[swap.action])}?`,
+        ),
+        button("Swap", () =>
+          this.saveBinds(rebind(binds, swap.action, swap.code)),
+        ),
+        button("Cancel", () => {
+          this.pendingSwap = null;
+          this.shown = null;
+        }),
+      );
+      body.append(row);
+    }
+    if (this.keyNote) body.append(el("p", "error", this.keyNote));
+    body.append(
+      button("Reset keys to defaults", () =>
+        this.saveBinds({ ...DEFAULT_BINDS }),
+      ),
+      el(
+        "p",
+        "hint",
+        "Left click fires (Manual mode). The menus use Enter and Escape. Settings follow your account.",
+      ),
+    );
     const label = document.createElement("label");
     label.className = "setting";
     const box = document.createElement("input");
     box.type = "checkbox";
     box.checked = this.debugHud;
     box.addEventListener("change", () => this.actions.setDebugHud(box.checked));
-    label.append(box, " Show the debug readout in the HUD (` key)");
-    body.append(label);
-    body.append(
-      el("p", "hint", "Key binds, sound, and more settings come in Phase 18."),
+    label.append(
+      box,
+      ` Show the debug readout in the HUD (the ${keyName(binds.debug)} key; this device only)`,
     );
+    body.append(label);
   }
 
   /**
@@ -2008,4 +2150,18 @@ function statList(rows: [string, string][]): HTMLElement {
   const dl = el("dl", "stats");
   for (const [k, v] of rows) dl.append(el("dt", "", k), el("dd", "", v));
   return dl;
+}
+
+/** What a fire mode does, in a line (D-099, D-159). */
+function fireModeHint(mode: FireMode, abilityKey: string): string {
+  switch (mode) {
+    case "fullAuto":
+      return "Aims, fires, and uses your ability by itself.";
+    case "autoAim":
+      return `Aims and fires by itself; press ${abilityKey} for your ability.`;
+    case "autoFire":
+      return `Fires toward the mouse all the time; press ${abilityKey} for your ability.`;
+    case "manual":
+      return `Hold left click to fire at the mouse; press ${abilityKey} for your ability.`;
+  }
 }

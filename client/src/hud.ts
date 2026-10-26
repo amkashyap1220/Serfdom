@@ -12,6 +12,8 @@ import {
   type PartyMember,
   type SerfSummary,
   type SnapshotPlayer,
+  keyName,
+  type KeyBinds,
 } from "@serfdom/shared";
 import { formatDuration } from "./app-state";
 
@@ -26,6 +28,8 @@ export interface HudInput {
   /** Seconds until the ability can be cast again, from the server. */
   abilityCooldown: number;
   fireMode: FireMode;
+  /** The account's keys, for the labels (D-159). */
+  binds: KeyBinds;
   dungeon: DungeonId | null;
   /** The run's clock (seconds since it started), from the server. */
   clock: number | null;
@@ -41,10 +45,12 @@ export function abilityLine(
   ability: AbilityLoadout | null,
   cooldown: number,
   mp: number,
+  /** The ability key's name (D-159). */
+  key = "Space",
 ): string {
-  if (!ability) return "Space: no ability";
+  if (!ability) return `${key}: no ability`;
   const { mpCost } = ABILITIES[ability.kind];
-  const head = `Space: ${ABILITY_NAMES[ability.kind]} (Tier ${ability.tier}) · ${mpCost} MP`;
+  const head = `${key}: ${ABILITY_NAMES[ability.kind]} (Tier ${ability.tier}) · ${mpCost} MP`;
   if (cooldown > 0.05) return `${head} · ${cooldown.toFixed(1)} s`;
   if (mp < mpCost) return `${head} · need MP`;
   return `${head} · ready`;
@@ -129,8 +135,9 @@ export class Hud {
       input.ability,
       input.abilityCooldown,
       input.mp,
+      keyName(input.binds.ability),
     );
-    els.fire.textContent = `Fire (T): ${FIRE_MODE_LABELS[input.fireMode]}`;
+    els.fire.textContent = `Fire (${keyName(input.binds.fireMode)}): ${FIRE_MODE_LABELS[input.fireMode]}`;
     els.run.textContent =
       input.dungeon && input.clock !== null
         ? `${dungeonInfo(input.dungeon).name} · ${formatDuration(input.clock)}`

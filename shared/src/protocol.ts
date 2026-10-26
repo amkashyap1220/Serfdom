@@ -33,6 +33,7 @@ import {
 import type { Vec2 } from "./geometry.ts";
 import { ARTIFACT_TIER } from "./artifacts.ts";
 import { freeTier0 } from "./starter-gear.ts";
+import { parseSettings, type Settings } from "./settings.ts";
 import { isUpgradeKind, type UpgradeKind } from "./upgrades.ts";
 import {
   EXCHANGE_SORTS,
@@ -91,6 +92,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v56 (18a): settings per account (D-159): server settings {settings}
+ *          after login and after each save; client saveSettings {settings}.
+ *          Exchange queries lost their name search.
  * v55 (17e-h): the Exchange redesigned (D-156): browse by type, tier,
  *          class, and rolls; exchangeMarket {key} → price history and
  *          the best orders; exchangeOrder / exchangeCancelOrder /
@@ -211,7 +215,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 55;
+export const PROTOCOL_VERSION = 56;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -320,7 +324,9 @@ export type ClientMessage =
       itemId: number | null;
       potionId: number | null;
     }
-  | { type: "exchangeCollect" };
+  | { type: "exchangeCollect" }
+  /** Store this account's settings (D-159); checked strictly. */
+  | { type: "saveSettings"; settings: Settings };
 
 /** A party member as others see them: their serf (null while choosing one). */
 export interface PartyMember {
@@ -807,6 +813,8 @@ export type ServerMessage =
     }
   /** Something of yours sold, or similar; `text` is safe to show. */
   | { type: "exchangeNotice"; text: string }
+  /** This account's settings (D-159), after login and after each save. */
+  | { type: "settings"; settings: Settings }
   /** An Exchange request was refused; `reason` is safe to show. */
   | { type: "exchangeError"; reason: string }
   /** Someone invites you; it lapses after `expiresIn` seconds. */
@@ -1147,6 +1155,14 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       const query = parseExchangeQuery(obj.query);
       if (!query) return fail("exchangeBrowse: bad query");
       return { ok: true, message: { type: "exchangeBrowse", query } };
+    }
+    case "saveSettings": {
+      if (!hasExactKeys(obj, ["type", "settings"])) {
+        return fail("saveSettings: unexpected fields");
+      }
+      const settings = parseSettings(obj.settings);
+      if (!settings) return fail("saveSettings: bad settings");
+      return { ok: true, message: { type: "saveSettings", settings } };
     }
     case "exchangeMine":
     case "exchangeCollect":
@@ -1588,6 +1604,14 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
           orders,
         },
       };
+    }
+    case "settings": {
+      if (!hasExactKeys(obj, ["type", "settings"])) {
+        return fail("settings: unexpected fields");
+      }
+      const settings = parseSettings(obj.settings);
+      if (!settings) return fail("settings: bad settings");
+      return { ok: true, message: { type: "settings", settings } };
     }
     case "exchangeNotice":
     case "exchangeError": {

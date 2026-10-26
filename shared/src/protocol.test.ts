@@ -1,4 +1,5 @@
 import { ANY_LISTING } from "./exchange.ts";
+import { DEFAULT_BINDS, DEFAULT_SETTINGS } from "./settings.ts";
 import { rollArtifact } from "./items.ts";
 import { describe, expect, it } from "vitest";
 import { CLASS_IDS } from "./classes.ts";
@@ -131,6 +132,23 @@ describe("parseClientMessage", () => {
       query: { ...ANY_LISTING, tier: undefined, rarity: "rare" },
     });
     expect(parseClientMessage(old).ok).toBe(false);
+  });
+
+  it("takes settings only when every key is bindable and used once (D-159)", () => {
+    const ok = { type: "saveSettings", settings: DEFAULT_SETTINGS } as const;
+    expect(parseClientMessage(encodeMessage(ok))).toEqual({
+      ok: true,
+      message: ok,
+    });
+    for (const settings of [
+      { ...DEFAULT_SETTINGS, binds: { ...DEFAULT_BINDS, left: "KeyW" } },
+      { ...DEFAULT_SETTINGS, binds: { ...DEFAULT_BINDS, up: "Enter" } },
+      { ...DEFAULT_SETTINGS, fireMode: "turbo" },
+      { binds: DEFAULT_BINDS },
+    ]) {
+      const raw = JSON.stringify({ type: "saveSettings", settings });
+      expect(parseClientMessage(raw).ok, raw).toBe(false);
+    }
   });
 
   it("rejects messages over the size limit before parsing", () => {

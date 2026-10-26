@@ -10,6 +10,9 @@ import {
   rotateVec,
   STAT_KEYS,
   STAT_LABELS,
+  DEFAULT_SETTINGS,
+  keyName,
+  type Settings,
 } from "@serfdom/shared";
 import "./style.css";
 import "./screens.css";
@@ -78,6 +81,8 @@ const minimap = new MinimapView(
 const debugPanel = requireElement("hud-debug");
 /** The debug readout (D-146): hidden unless switched on (` or Settings). */
 let debugHud = loadDebugHud();
+/** The account's settings (D-159); the defaults while logged out. */
+let settings: Settings = DEFAULT_SETTINGS;
 debugPanel.hidden = !debugHud;
 
 const game = new Phaser.Game({
@@ -159,6 +164,10 @@ game.events.once(Phaser.Core.Events.READY, () => {
     leaveParty: () => net.connection.sendPartyLeave(),
     removeMember: (playerId) => net.connection.sendPartyKick(playerId),
     setDebugHud: (on) => setDebug(on),
+    saveSettings: (next) => {
+      applySettings(next);
+      net.connection.sendSaveSettings(next);
+    },
     getLeaderboard: (query) => net.connection.sendGetLeaderboard(query),
     buyUpgrade: (kind) => net.connection.sendBuyUpgrade(kind),
     listOnExchange: (what, price) =>
@@ -180,9 +189,22 @@ game.events.once(Phaser.Core.Events.READY, () => {
     view.setDebugHud(on);
   };
   view.setDebugHud(debugHud);
-  // ` shows or hides the debug readout anywhere but while typing.
+  /** New settings: the keys and fire mode for the game, and the Settings tab. */
+  const applySettings = (next: Settings) => {
+    settings = next;
+    worldScene(game).applySettings(next.binds, next.fireMode);
+    view.setSettings(next);
+  };
+  // The fire mode key changed the mode in a run: keep it for the account.
+  worldScene(game).onFireModeChange = (fireMode) => {
+    const next = { ...settings, fireMode };
+    settings = next;
+    view.setSettings(next);
+    net.connection.sendSaveSettings(next);
+  };
+  // The debug key (` by default) shows or hides the readout anywhere but while typing.
   window.addEventListener("keydown", (e) => {
-    if (e.code !== "Backquote" || e.repeat) return;
+    if (e.code !== settings.binds.debug || e.repeat) return;
     if (e.target instanceof HTMLInputElement) return;
     setDebug(!debugHud);
   });
@@ -203,11 +225,14 @@ game.events.once(Phaser.Core.Events.READY, () => {
     if (message.type === "authOk") {
       saveToken(message.token);
       view.setAccount(message.email);
+    } else if (message.type === "settings") {
+      applySettings(message.settings);
     } else if (message.type === "loggedOut") {
       // Also when logged in elsewhere: forget the token here, so the two
       // browsers do not keep logging each other out.
       clearToken();
       view.setAccount(null);
+      applySettings(DEFAULT_SETTINGS);
     } else if (message.type === "authError" && screen.kind === "resuming") {
       clearToken();
     } else if (message.type === "serfList") {
@@ -360,6 +385,7 @@ function renderHud(scene: WorldScene): void {
     ability: net.online ? net.myAbility : null,
     abilityCooldown: net.selfState?.abilityCooldown ?? 0,
     fireMode,
+    binds: settings.binds,
     dungeon: net.dungeon,
     clock: net.clock,
     party: currentParty,
@@ -435,18 +461,21 @@ function reportLive(game: Phaser.Game): void {
   const onScreenX = camera.width / 2 + fromMid.x * camera.zoom;
   const onScreenY = camera.height / 2 + fromMid.y * camera.zoom;
   const { move, rotate } = keys;
+  const b = settings.binds;
   const held =
     [
-      move.up ? "W" : "",
-      move.left ? "A" : "",
-      move.down ? "S" : "",
-      move.right ? "D" : "",
-      rotate.left ? "Q" : "",
-      rotate.right ? "E" : "",
-      rotate.reset ? "Z" : "",
-      keys.ability ? " Space" : "",
-      pointer.leftDown ? " LMB" : "",
-    ].join("") || "—";
+      move.up ? keyName(b.up) : "",
+      move.left ? keyName(b.left) : "",
+      move.down ? keyName(b.down) : "",
+      move.right ? keyName(b.right) : "",
+      rotate.left ? keyName(b.turnLeft) : "",
+      rotate.right ? keyName(b.turnRight) : "",
+      rotate.reset ? keyName(b.resetView) : "",
+      keys.ability ? keyName(b.ability) : "",
+      pointer.leftDown ? "LMB" : "",
+    ]
+      .filter(Boolean)
+      .join(" ") || "—";
   const alive = view.enemies.filter((e) => e.hp > 0);
   const byKind = new Map<string, number>();
   for (const e of alive) byKind.set(e.kind, (byKind.get(e.kind) ?? 0) + 1);
@@ -494,8 +523,11 @@ function reportLive(game: Phaser.Game): void {
         ? `${round1(pointerWorld.x)}, ${round1(pointerWorld.y)}`
         : "—",
     ],
-    ["Fire mode (T)", FIRE_MODE_LABELS[fireMode]],
-    ["Ability (Space)", abilityText(playedSerf)],
+    [
+      `Fire mode (${keyName(settings.binds.fireMode)})`,
+      FIRE_MODE_LABELS[fireMode],
+    ],
+    [`Ability (${keyName(settings.binds.ability)})`, abilityText(playedSerf)],
     ["Player HP", local.hp > 0 ? `${local.hp.toFixed(1)}/${local.maxHp}` : "—"],
     [
       "Player MP",

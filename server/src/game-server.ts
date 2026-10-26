@@ -28,6 +28,7 @@ import {
   type PartyMember,
   type SerfSummary,
   formatMoney,
+  type Settings,
 } from "@serfdom/shared";
 import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
@@ -525,6 +526,9 @@ export class GameServer {
       case "exchangeCollect":
         this.onExchange(socket, session, message);
         return;
+      case "saveSettings":
+        this.onSaveSettings(socket, session, message.settings);
+        return;
       case "getLeaderboard": {
         if (session.accountId === null) {
           this.reject(socket, session, "log in first");
@@ -623,6 +627,7 @@ export class GameServer {
         session.serfId = null;
         this.sendSerfList(socket);
         this.sendStash(socket);
+        this.sendSettings(socket, result.accountId);
         this.send(socket, {
           type: "authOk",
           email: result.email,
@@ -1414,6 +1419,42 @@ export class GameServer {
       this.sendStash(socket);
       this.sendExchangeMine(socket, side.accountId);
     }
+  }
+
+  /** Sends the account's settings (D-159). */
+  private sendSettings(socket: WebSocket, accountId: number): void {
+    this.accounts
+      .settings(accountId)
+      .then((settings) => this.send(socket, { type: "settings", settings }))
+      .catch((err: unknown) =>
+        this.log.warn(
+          `settings for account #${accountId} failed: ${String(err)}`,
+        ),
+      );
+  }
+
+  /** Stores settings the parser checked strictly, and echoes them back. */
+  private onSaveSettings(
+    socket: WebSocket,
+    session: Session,
+    settings: Settings,
+  ): void {
+    const accountId = session.accountId;
+    if (accountId === null) {
+      this.reject(socket, session, "log in first");
+      return;
+    }
+    this.accounts
+      .saveSettings(accountId, settings)
+      .then(() => {
+        if (session.accountId === accountId) {
+          this.send(socket, { type: "settings", settings });
+        }
+      })
+      .catch((err: unknown) => {
+        this.log.warn(`${label(session)} saveSettings error: ${String(err)}`);
+        this.sendSettings(socket, accountId);
+      });
   }
 
   private sendExchangeMine(socket: WebSocket, accountId: number): void {

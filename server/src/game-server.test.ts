@@ -24,6 +24,9 @@ import {
   ANY_LISTING,
   type Wear,
   artifactsOf,
+  DEFAULT_BINDS,
+  DEFAULT_SETTINGS,
+  rebind,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
@@ -2363,6 +2366,48 @@ describe("account upgrades (D-154)", () => {
     expect((await nextOfType(client, "error")).reason).toBe(
       "buyUpgrade: unknown upgrade",
     );
+  });
+});
+
+describe("settings over the network (D-159)", () => {
+  it("sends the defaults on login, keeps a save, and sends it on the next login", async () => {
+    const client = await connect(server.port);
+    clients.push(client);
+    client.send(hello);
+    await client.next();
+    const email = `settings${++emailSeq}@test.example`;
+    client.send(encodeMessage({ type: "register", email, password: PASSWORD }));
+    await nextOfType(client, "authOk");
+    expect((await nextOfType(client, "settings")).settings).toEqual(
+      DEFAULT_SETTINGS,
+    );
+    // A save must be whole and valid; one key on two actions is malformed.
+    client.send(
+      JSON.stringify({
+        type: "saveSettings",
+        settings: {
+          ...DEFAULT_SETTINGS,
+          binds: { ...DEFAULT_BINDS, left: "KeyW" },
+        },
+      }),
+    );
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "saveSettings: bad settings",
+    );
+    const mine = {
+      binds: rebind(DEFAULT_BINDS, "ability", "KeyF"),
+      fireMode: "autoAim" as const,
+    };
+    client.send(encodeMessage({ type: "saveSettings", settings: mine }));
+    expect((await nextOfType(client, "settings")).settings).toEqual(mine);
+    // A new connection logging in gets them back.
+    const again = await connect(server.port);
+    clients.push(again);
+    again.send(hello);
+    await again.next();
+    again.send(encodeMessage({ type: "login", email, password: PASSWORD }));
+    await nextOfType(again, "authOk");
+    expect((await nextOfType(again, "settings")).settings).toEqual(mine);
   });
 });
 

@@ -15,6 +15,8 @@ import {
   type DungeonLayout,
   type FireMode,
   type Vec2,
+  DEFAULT_BINDS,
+  type KeyBinds,
 } from "@serfdom/shared";
 import {
   MIN_VISIBLE_WORLD_PX,
@@ -123,7 +125,11 @@ export class WorldScene extends Phaser.Scene {
   private combat!: CombatView;
   private remotes!: RemotePlayersView;
   readonly net = new NetSync();
-  private readKeys: () => KeyState = () => NO_KEYS;
+  /** The game keys, by the account's binds (D-159). */
+  private keys: ReturnType<typeof createKeyReader> | null = null;
+  private binds: KeyBinds = DEFAULT_BINDS;
+  /** Told when the fire mode key changes the mode, so it can be saved. */
+  onFireModeChange: (mode: FireMode) => void = () => {};
   private readPointer: () => PointerInput = () => ({
     screen: null,
     leftDown: false,
@@ -134,8 +140,6 @@ export class WorldScene extends Phaser.Scene {
   private viewRotation = 0;
   private fireMode: FireMode = DEFAULT_FIRE_MODE;
   private carriedSeconds = 0;
-  /** Whether Phaser reads (and captures) the game keys; null until first set. */
-  private gameKeysActive: boolean | null = null;
   private readonly totals: Totals = { shots: 0, playerHits: 0 };
   private playerFlashUntil = 0;
   private lastLocalHp = 0;
@@ -196,7 +200,10 @@ export class WorldScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
-    this.readKeys = createKeyReader(this);
+    // The game reads keys itself (input.ts), by the account's binds;
+    // Phaser's keyboard stays off so it never captures keys from the menus.
+    if (this.input.keyboard) this.input.keyboard.enabled = false;
+    this.keys = createKeyReader(() => this.binds);
     // Menus come first, and they need every key for typing.
     this.setGameKeysActive(false);
     this.readPointer = createPointerReader(this);
@@ -224,10 +231,11 @@ export class WorldScene extends Phaser.Scene {
     this.carriedSeconds = remainder;
 
     // Input is sampled once per rendered frame and held for its steps.
-    this.lastKeys = this.readKeys();
+    this.lastKeys = this.keys?.read() ?? NO_KEYS;
     this.lastPointer = this.readPointer();
     if (this.lastKeys.toggleFireMode) {
       this.fireMode = nextFireMode(this.fireMode);
+      this.onFireModeChange(this.fireMode);
     }
     // The mouse is converted with the view as it is on screen right now
     // (before this frame's movement), which is what the player is aiming at.
@@ -275,18 +283,15 @@ export class WorldScene extends Phaser.Scene {
     this.remotes.setLabelsVisible(on);
   }
 
+  /** Game keys only while playing; switching forgets every held key. */
   setGameKeysActive(active: boolean): void {
-    const keyboard = this.input.keyboard;
-    if (!keyboard || this.gameKeysActive === active) return;
-    this.gameKeysActive = active;
-    keyboard.enabled = active;
-    if (active) {
-      keyboard.enableGlobalCapture();
-    } else {
-      keyboard.disableGlobalCapture();
-      // Forget keys held while leaving a run, so none stays stuck down.
-      keyboard.resetKeys();
-    }
+    this.keys?.setActive(active);
+  }
+
+  /** The account's settings arrived or changed (D-159). */
+  applySettings(binds: KeyBinds, fireMode: FireMode): void {
+    this.binds = binds;
+    this.fireMode = fireMode;
   }
 
   getDebugState(): WorldDebugState {

@@ -1,17 +1,8 @@
 import * as Phaser from "phaser";
-import type { MoveInput } from "@serfdom/shared";
-import type { RotateInput } from "./camera-math";
+import type { KeyBinds } from "@serfdom/shared";
+import { KeyTracker, type KeyState } from "./key-tracker";
 
-export interface KeyState {
-  move: MoveInput;
-  rotate: RotateInput;
-  /** T was pressed this frame (cycle fire mode, D-034; key PROVISIONAL). */
-  toggleFireMode: boolean;
-  /** Space held (ability, D-035; no effect yet). */
-  ability: boolean;
-  /** R pressed this frame (leave the dungeon at once, D-036). */
-  exitDungeon: boolean;
-}
+export type { KeyState };
 
 export interface PointerInput {
   /** Mouse position on the canvas in CSS pixels, or null before it has moved over the game. */
@@ -21,48 +12,36 @@ export interface PointerInput {
 }
 
 /**
- * Binds W/A/S/D for movement (D-031; arrow keys intentionally unbound),
- * Q/E/Z for view rotation (D-040; Z reset is PROVISIONAL), T for fire mode,
- * Space for the ability, and R to exit the dungeon. Menus are DOM screens
- * with their own keys (screens.ts). Returns a function that reads the keys now.
- * Phaser releases all keys when the window loses focus, so nothing can get
- * stuck after alt-tab.
+ * The game keys, read from the browser by the account's binds (D-159).
+ * While inactive (menus, typing) it ignores every key, so forms type
+ * normally; while active it keeps bound keys from scrolling the page or
+ * reaching anything else. Keys are forgotten when the window loses focus,
+ * so nothing stays stuck after alt-tab.
  */
-export function createKeyReader(scene: Phaser.Scene): () => KeyState {
-  const keyboard = scene.input.keyboard;
-  if (!keyboard) {
-    throw new Error("Keyboard input is not available in this scene");
-  }
-  const { W, A, S, D, Q, E, Z, T, R, SPACE } = Phaser.Input.Keyboard.KeyCodes;
-  const key = (code: number) => keyboard.addKey(code);
-  const up = key(W);
-  const left = key(A);
-  const down = key(S);
-  const right = key(D);
-  const turnLeft = key(Q);
-  const turnRight = key(E);
-  const resetView = key(Z);
-  const fireMode = key(T);
-  const ability = key(SPACE);
-  const exit = key(R);
-
-  return () => ({
-    move: {
-      up: up.isDown,
-      down: down.isDown,
-      left: left.isDown,
-      right: right.isDown,
-    },
-    rotate: {
-      left: turnLeft.isDown,
-      right: turnRight.isDown,
-      reset: resetView.isDown,
-    },
-    // JustDown is true once per press, so holding T does not cycle repeatedly.
-    toggleFireMode: Phaser.Input.Keyboard.JustDown(fireMode),
-    ability: ability.isDown,
-    exitDungeon: Phaser.Input.Keyboard.JustDown(exit),
+export function createKeyReader(binds: () => KeyBinds): {
+  read: () => KeyState;
+  setActive: (active: boolean) => void;
+} {
+  const keys = new KeyTracker(binds);
+  let active = false;
+  window.addEventListener("keydown", (e) => {
+    if (!active || !keys.isBound(e.code)) return;
+    e.preventDefault();
+    keys.press(e.code);
   });
+  window.addEventListener("keyup", (e) => {
+    if (!active) return;
+    keys.release(e.code);
+  });
+  window.addEventListener("blur", () => keys.clear());
+  return {
+    read: () => keys.read(),
+    setActive: (on) => {
+      if (on === active) return;
+      active = on;
+      keys.clear();
+    },
+  };
 }
 
 /** Tracks the mouse over the game canvas. */

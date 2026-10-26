@@ -646,3 +646,19 @@ export {
   STARTER_GEAR,
   type Wear,
 } from "./starter-gear.ts";
+export {
+  actionOnKey,
+  DEFAULT_BINDS,
+  DEFAULT_SETTINGS,
+  GAME_ACTIONS,
+  isBindableKey,
+  isValidBinds,
+  keyName,
+  parseSettings,
+  rebind,
+  RESERVED_KEYS,
+  settingsOrDefaults,
+  type ActionId,
+  type KeyBinds,
+  type Settings,
+} from "./settings.ts";

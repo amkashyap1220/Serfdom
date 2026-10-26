@@ -1,4 +1,5 @@
 import type pg from "pg";
+import type { Settings } from "@serfdom/shared";
 
 export interface AccountRecord {
   id: number;
@@ -29,6 +30,9 @@ export interface AccountRepo {
     now: Date,
   ): Promise<{ accountId: number; email: string } | null>;
   deleteSession(tokenHash: Buffer): Promise<void>;
+  /** The account's stored settings as saved (D-159), or null for none. */
+  loadSettings(accountId: number): Promise<unknown>;
+  saveSettings(accountId: number, settings: Settings): Promise<void>;
 }
 
 /** Postgres's code for a unique-constraint violation. */
@@ -98,6 +102,21 @@ export class PgAccountRepo implements AccountRepo {
       tokenHash,
     ]);
   }
+
+  async loadSettings(accountId: number): Promise<unknown> {
+    const r = await this.pool.query<{ settings: unknown }>(
+      "select settings from accounts where id = $1",
+      [accountId],
+    );
+    return r.rows[0]?.settings ?? null;
+  }
+
+  async saveSettings(accountId: number, settings: Settings): Promise<void> {
+    await this.pool.query("update accounts set settings = $2 where id = $1", [
+      accountId,
+      JSON.stringify(settings),
+    ]);
+  }
 }
 
 function isPgError(err: unknown): err is { code: string } {
@@ -146,5 +165,16 @@ export class MemoryAccountRepo implements AccountRepo {
 
   async deleteSession(tokenHash: Buffer): Promise<void> {
     this.sessions.delete(tokenHash.toString("hex"));
+  }
+
+  private readonly settings = new Map<number, Settings>();
+
+  async loadSettings(accountId: number): Promise<unknown> {
+    const saved = this.settings.get(accountId);
+    return saved ? structuredClone(saved) : null;
+  }
+
+  async saveSettings(accountId: number, settings: Settings): Promise<void> {
+    this.settings.set(accountId, structuredClone(settings));
   }
 }

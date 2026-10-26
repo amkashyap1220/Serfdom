@@ -14,6 +14,7 @@ import {
   type PlayerInput,
   type ServerMessage,
   type ItemSlot,
+  type Settings,
 } from "@serfdom/shared";
 
 /** Default dev server; override with VITE_SERVER_URL (see .env.example). */
@@ -48,6 +49,7 @@ export type LobbyMessage = Extract<
       | "exchangeMine"
       | "exchangeMarket"
       | "exchangeNotice"
+      | "settings"
       | "exchangeError"
       | "runStarted"
       | "runEnded"
@@ -272,6 +274,11 @@ export class Connection {
     this.send({ type: "buyUpgrade", kind });
   }
 
+  /** Store this account's settings (D-159). */
+  sendSaveSettings(settings: Settings): void {
+    this.send({ type: "saveSettings", settings });
+  }
+
   /** Invite whoever plays this serf to your party (D-142). */
   sendPartyInvite(name: string): void {
     this.send({ type: "partyInvite", name });
@@ -373,6 +380,7 @@ export class Connection {
       case "exchangeMine":
       case "exchangeMarket":
       case "exchangeNotice":
+      case "settings":
       case "exchangeError":
       case "runStarted":
       case "runEnded":

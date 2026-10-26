@@ -25,8 +25,9 @@ export const DEFAULT_FIRE_MODE: FireMode = "fullAuto";
 
 export const FIRE_MODE_LABELS: Readonly<Record<FireMode, string>> = {
   fullAuto: "Full auto",
-  autoAim: "Auto aim + Space",
-  autoFire: "Auto fire + Space",
+  // Names from D-159 (they replace D-099's provisional ones).
+  autoAim: "Auto aim",
+  autoFire: "Mouse aim",
   manual: "Manual",
 };
 

@@ -873,3 +873,9 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 
 - The user ran the Phase 17 checklist (the Exchange, coins, Sell to Lord, Tier 0 starter gear, on the dev database seeded with 10,549 listings and 1,000 buy orders): all pass. `phase-17` merged into `main` and pushed.
 - Next step: Phase 18 (onboarding and settings).
+
+### Phase 18: onboarding and settings — 2026-10-26
+
+- The user approved the plan (D-159; open questions 11–13 and 15 answered). Branch `phase-18`.
+- 18a built: shared `settings.ts` (the 11 rebindable actions and their default keys, bindable keys and their names, `rebind` with swap, strict `parseSettings` for clients and `settingsOrDefaults` for stored data); fire mode names Full auto, Auto aim, Mouse aim, Manual; migration 021 (`accounts.settings` jsonb); protocol v56 (server `settings` after login and after each save; client `saveSettings`); the game reads keys itself by the binds (`key-tracker.ts`, `createKeyReader`; Phaser's keyboard off), and the fire mode key saves the new mode to the account; HUD and debug labels name the bound keys; the Settings tab (fire mode with a one-line description, the key table with press-a-key, swap offer, refused keys, Reset keys to defaults; the debug readout stays per device).
+- Checks: `npm run check` (635 shared, 273 server, 95 client). Live (headless, test DB): Move up → Up arrow; Ability → T offered a swap with the fire mode key and swapped; Enter refused; Escape cancelled; Mouse aim chosen; all kept after a reload (from the account); in a run W no longer moved, Up arrow moved 90 px up, Space cycled the fire mode to Manual and it was saved; Reset keys to defaults; no console errors.

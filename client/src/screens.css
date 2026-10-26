@@ -1467,3 +1467,35 @@ button.sell {
   font: inherit;
   font-size: 12px;
 }
+
+/* Settings (D-159). */
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 900px;
+}
+
+.setting-name {
+  color: #c9d1dc;
+  text-align: left;
+}
+
+.key-binds {
+  display: grid;
+  grid-template-columns: 180px 220px;
+  gap: 4px 12px;
+  align-items: center;
+}
+
+.screen button.key-bind {
+  padding: 3px 10px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.screen button.key-bind.active {
+  border-color: #f0c419;
+  color: #f0c419;
+}

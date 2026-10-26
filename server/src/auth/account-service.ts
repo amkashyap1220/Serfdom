@@ -1,5 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
-import { emailProblem, normalizeEmail, passwordProblem } from "@serfdom/shared";
+import {
+  emailProblem,
+  normalizeEmail,
+  passwordProblem,
+  settingsOrDefaults,
+  type Settings,
+} from "@serfdom/shared";
 import type { AccountRepo } from "./account-repo.ts";
 import { LoginThrottle } from "./login-throttle.ts";
 import {
@@ -115,6 +121,16 @@ export class AccountService {
       new Date(this.now().getTime() + this.sessionMs),
     );
     return { ok: true, accountId, email, token };
+  }
+
+  /** The account's settings (D-159), its defaults filling anything missing. */
+  async settings(accountId: number): Promise<Settings> {
+    return settingsOrDefaults(await this.repo.loadSettings(accountId));
+  }
+
+  /** Stores settings the protocol has already checked strictly. */
+  async saveSettings(accountId: number, settings: Settings): Promise<void> {
+    await this.repo.saveSettings(accountId, settings);
   }
 }
 

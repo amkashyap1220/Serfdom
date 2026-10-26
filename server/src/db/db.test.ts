@@ -16,6 +16,9 @@ import {
   zeroStats,
   rollArtifact,
   STARTER_GEAR,
+  DEFAULT_BINDS,
+  DEFAULT_SETTINGS,
+  rebind,
   ANY_LISTING,
   filterListings,
   rollItem,
@@ -189,6 +192,22 @@ describe("migrations", () => {
 function repoContract(name: string, makeRepo: () => AccountRepo) {
   describe(`${name} account storage`, () => {
     const token = (n: number) => Buffer.alloc(32, n);
+
+    it("keeps each account's settings; none until saved (D-159)", async () => {
+      const repo = makeRepo();
+      const a = await repo.createAccount(`${name}-set@b.co`, "h");
+      const b = await repo.createAccount(`${name}-set2@b.co`, "h");
+      if (a === "taken" || b === "taken") throw new Error("taken");
+      expect(await repo.loadSettings(a.id)).toBeNull();
+      const mine = {
+        ...DEFAULT_SETTINGS,
+        fireMode: "manual" as const,
+        binds: rebind(DEFAULT_BINDS, "up", "ArrowUp"),
+      };
+      await repo.saveSettings(a.id, mine);
+      expect(await repo.loadSettings(a.id)).toEqual(mine);
+      expect(await repo.loadSettings(b.id)).toBeNull();
+    });
 
     it("creates accounts, refuses a taken email, finds by email", async () => {
       const repo = makeRepo();
