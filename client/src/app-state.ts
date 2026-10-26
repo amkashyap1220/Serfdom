@@ -12,7 +12,13 @@ import {
 } from "@serfdom/shared";
 
 export type MenuTab =
-  "dungeons" | "serfs" | "party" | "stash" | "rack" | "leaderboard";
+  | "dungeons"
+  | "serfs"
+  | "party"
+  | "stash"
+  | "rack"
+  | "leaderboard"
+  | "settings";
 
 /**
  * Which screen the player sees (D-048, D-050). The server decides every

@@ -39,6 +39,7 @@ import {
   type SerfSummary,
   type ServerMessage,
   type PartyInviter,
+  MAX_LEVEL,
   MAX_PARTY_SIZE,
   sellPrice,
   type Item,
@@ -108,12 +109,13 @@ const CONFETTI_COLORS = ["#f0c419", "#5bc0de", "#ff6b6b", "#7ed957", "#ffffff"];
 const PARTY_MESSAGE_MS = 8000;
 
 const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
-  { tab: "dungeons", label: "Dungeons", comingIn: null },
+  { tab: "dungeons", label: "Play", comingIn: null },
   { tab: "serfs", label: "Serfs", comingIn: null },
   { tab: "party", label: "Party", comingIn: null },
   { tab: "stash", label: "Stash", comingIn: null },
   { tab: "rack", label: "Potion rack", comingIn: null },
-  { tab: "leaderboard", label: "Leaderboard", comingIn: null },
+  { tab: "leaderboard", label: "Leaderboards", comingIn: null },
+  { tab: "settings", label: "Settings", comingIn: null },
 ];
 
 /**
@@ -464,17 +466,16 @@ export class ScreenView {
       this.buildSerfs(body);
     } else if (tab === "party") {
       this.buildParty(body);
+    } else if (tab === "settings") {
+      this.buildSettings(body);
     } else {
       const playing = this.playing;
-      body.append(
-        playing
-          ? el(
-              "p",
-              "",
-              `Playing as ${playing.name} · ${className(playing.classId)} · Level ${playing.level} · ${playing.exp} EXP`,
-            )
-          : el("p", "notice", "Choose or create a serf first (Serfs tab)."),
-      );
+      // The played serf is in the home panel (D-145).
+      if (!playing) {
+        body.append(
+          el("p", "notice", "Choose or create a serf first (Serfs tab)."),
+        );
+      }
       const waiting = playing ? this.waitingFor(playing.id) : 0;
       if (playing && waiting > 0) {
         body.append(
@@ -562,17 +563,116 @@ export class ScreenView {
     body: HTMLElement,
     notice: string | null,
   ): void {
+    // The home screen (D-145): a standing panel on the left (your serf,
+    // your party, invites), the tabs on the right.
     const account = el("div", "account-bar");
     account.append(
       el("span", "gold", this.stash ? `Gold ${this.stash.gold}` : ""),
       el("span", "", this.email ? `Logged in as ${this.email}` : ""),
       button("Log out", () => this.actions.logout()),
     );
-    this.root.append(account, el("h1", "title", "SERFDOM"), nav);
-    if (notice) this.root.append(el("p", "notice", notice));
+    const main = el("div", "home-main");
+    main.append(account, nav);
+    if (notice) main.append(el("p", "notice", notice));
+    main.append(body);
+    const home = el("div", "home");
+    home.append(this.homeSide(), main);
+    this.root.append(home);
+  }
+
+  /** The left panel at the menu (D-145): the played serf, then the party. */
+  private homeSide(): HTMLElement {
+    const side = el("aside", "home-side");
+    side.append(el("h1", "title", "SERFDOM"));
+    const serf = this.playing;
+    const card = el("div", "side-card");
+    if (serf) {
+      const p = levelProgress(serf.exp);
+      const max = p.level >= MAX_LEVEL;
+      const bar = el("div", "side-exp");
+      const fill = el("span", "");
+      fill.style.width = `${max ? 100 : (100 * p.into) / Math.max(1, p.needed)}%`;
+      bar.append(fill);
+      card.append(
+        el("p", "side-name", serf.name),
+        el("p", "hint", `${className(serf.classId)} · Level ${p.level}`),
+        bar,
+        el(
+          "p",
+          "hint",
+          max
+            ? `Max level · ${serf.exp} EXP`
+            : `${p.into} / ${p.needed} EXP to level ${p.level + 1}`,
+        ),
+      );
+      const stats = el("dl", "side-stats");
+      for (const key of STAT_KEYS) {
+        stats.append(
+          el("dt", "", STAT_LABELS[key]),
+          el("dd", "", statText(serf, key)),
+        );
+      }
+      stats.append(
+        el("dt", "", "LUCK"),
+        el(
+          "dd",
+          "",
+          String(luckOf(serf.items.filter((i) => i.equipped !== null))),
+        ),
+      );
+      card.append(stats);
+      const worn = serf.items.filter((i) => i.equipped !== null);
+      card.append(
+        el(
+          "p",
+          "side-gear",
+          worn.length > 0
+            ? worn.map((i) => itemName(i)).join(" · ")
+            : "Nothing worn",
+        ),
+      );
+    } else {
+      card.append(
+        el("p", "hint", "No serf chosen."),
+        button("Serfs", () => this.actions.openTab("serfs")),
+      );
+    }
+    side.append(card);
+    // The party, always in view (D-145); the Party tab has the full controls.
+    const party = this.party?.party ?? null;
+    const box = el("div", "side-party");
+    box.append(
+      el("h2", "", party ? `Party (${party.members.length})` : "Party"),
+    );
+    if (party) {
+      for (const m of party.members) {
+        box.append(
+          el(
+            "p",
+            m.playerId === this.myPlayerId ? "side-member you" : "side-member",
+            `${m.playerId === party.leaderId ? "★ " : ""}${m.name ?? "Choosing a serf"}${m.name ? ` · ${className(m.classId)} ${m.level}` : ""}`,
+          ),
+        );
+      }
+    } else {
+      box.append(el("p", "hint", "Not in a party."));
+    }
+    const buttons = el("div", "side-buttons");
+    buttons.append(button("Invite", () => this.actions.openTab("party")));
+    if (party) buttons.append(button("Leave", () => this.actions.leaveParty()));
+    box.append(buttons);
+    side.append(box);
     const invites = this.inviteStrip();
-    if (invites) this.root.append(invites);
-    this.root.append(body);
+    if (invites) side.append(invites);
+    return side;
+  }
+
+  /** Settings (D-145): only the debug readout for now; key binds and more are Phase 18. */
+  private buildSettings(body: HTMLElement): void {
+    body.append(el("h2", "", "Settings"));
+    body.append(
+      el("p", "hint", "Key binds, sound, and more settings come in Phase 18."),
+    );
   }
 
   /** Invites to you, and the latest party news, above every menu tab (D-143). */
@@ -667,7 +767,7 @@ export class ScreenView {
       el(
         "p",
         "hint",
-        `Up to ${MAX_PARTY_SIZE} in a party. You stay together between runs; queueing as a party comes next.`,
+        `Up to ${MAX_PARTY_SIZE} in a party. You stay together between runs; the leader queues the party.`,
       ),
     );
   }
