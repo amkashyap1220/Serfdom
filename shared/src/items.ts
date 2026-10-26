@@ -612,6 +612,8 @@ export interface Loadout {
   weaponType: WeaponType | null;
   /** What Space casts, from the worn ability item (D-092); null = nothing. */
   ability: AbilityLoadout | null;
+  /** The worn Artifacts, each once (D-153); absent: none. */
+  artifacts?: ArtifactId[];
 }
 
 /**
@@ -641,7 +643,16 @@ export function loadoutOf(serf: {
     ability: book
       ? abilityForItem(book.type as AbilityItemType, book.tier)
       : null,
+    ...artifactsWorn(worn),
   };
+}
+
+/** The worn Artifacts (D-153), each once; nothing when there are none. */
+function artifactsWorn(worn: readonly Item[]): { artifacts?: ArtifactId[] } {
+  const ids = [
+    ...new Set(worn.flatMap((i) => (i.artifact ? [i.artifact] : []))),
+  ];
+  return ids.length > 0 ? { artifacts: ids } : {};
 }
 
 /** The worn slots an item can go in: a ring either ring slot, the rest their own. */

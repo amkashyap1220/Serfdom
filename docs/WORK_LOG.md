@@ -806,3 +806,9 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Caught by the PostgreSQL test: the items table's tier check (0–10) would have refused every Artifact; migration 013 now replaces it.
 - `npm run check`: 591 shared, 247 server, 91 client, build. The drop-rate test rolls 400,000 chests per dungeon: an endgame one gives Artifacts at 1 in 500 and each of its Artifacts alike, Shiny at 1 in 2,000; a ladder one never gives an Artifact.
 - Live (harness, **test** DB, headless): a Shiny Doomrend (75 damage, 6 rolls, +1 Luck, its effect) and a Shiny T0 Cape of HP in the stash; no console errors.
+
+### Phase 16b: the seven weapon Artifacts — 2026-10-26
+
+- Built (D-153): worn Artifacts reach the simulation (`Loadout.artifacts`, `PlayerState.artifacts`, each once); players with one count their attacks and run Whisper's clock on their own timeline. `shared/src/artifact-effects.ts` holds every number. Doomrend's spectral axes (a `chain` path), Excalibur's beam every 5th slash and Eternity's split bolts (server-drawn projectiles, like Volley's), Whisper's empowered stab, Artemis's growing arrow, Aetherion's pull (wall-blocked) and 60 px burst, Golgorr's shockwave every 3rd smash (a new gold `artifact` blast). Your own prediction is untouched: every extra comes from the server.
+- Found by its test: Eternity's split bolts started on the edge of the enemy just hit and hit it again at once; they now skip it.
+- `npm run check`: 599 shared (8 weapon Artifact tests), 247 server, 91 client, build.

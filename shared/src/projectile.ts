@@ -25,6 +25,12 @@ export interface Projectile {
   pierced?: readonly number[];
   /** Bursts where it stops, hitting every enemy this close (the staff's orb, D-141). */
   burst?: number;
+  /** Aetherion (D-153): pulls enemies this close together before it bursts. */
+  pull?: number;
+  /** Artemis (D-153): extra damage share per enemy already pierced. */
+  growth?: number;
+  /** Eternity (D-153): on a hit, splits into this many seeking bolts. */
+  split?: number;
 }
 
 /** Something a projectile can hit: an id and its hit box. */

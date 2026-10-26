@@ -128,6 +128,8 @@ const COLORS = {
   chanted: 0xff4a3d,
   vent: 0xff8c1a,
   explosion: 0xff6a00,
+  // An Artifact's ring (D-153): Golgorr's shockwave.
+  artifact: 0xffb066,
   stoke: 0xff9a3c,
   chant: 0xe6cf7a,
   boulder: 0x8c7f6e,
@@ -683,24 +685,27 @@ export class CombatView {
           ? COLORS.chant
           : b.kind === "explosion"
             ? COLORS.explosion
-            : b.kind === "stoke"
-              ? COLORS.stoke
-              : b.kind === "raise"
-                ? COLORS.raise
-                : b.kind === "rune"
-                  ? COLORS.hazard
-                  : b.kind === "inspiration"
-                    ? COLORS.inspire
-                    : b.kind === "curse"
-                      ? COLORS.curse
-                      : b.kind === "heal" || b.kind === "healed"
-                        ? COLORS.heal
-                        : COLORS.blast;
+            : b.kind === "artifact"
+              ? COLORS.artifact
+              : b.kind === "stoke"
+                ? COLORS.stoke
+                : b.kind === "raise"
+                  ? COLORS.raise
+                  : b.kind === "rune"
+                    ? COLORS.hazard
+                    : b.kind === "inspiration"
+                      ? COLORS.inspire
+                      : b.kind === "curse"
+                        ? COLORS.curse
+                        : b.kind === "heal" || b.kind === "healed"
+                          ? COLORS.heal
+                          : COLORS.blast;
       const ring =
         b.kind === "inspiration" ||
         b.kind === "heal" ||
         b.kind === "chant" ||
         b.kind === "stoke" ||
+        b.kind === "artifact" ||
         b.kind === "raise";
       if (!ring) {
         bl.fillStyle(color, 0.5 * (1 - b.fade));

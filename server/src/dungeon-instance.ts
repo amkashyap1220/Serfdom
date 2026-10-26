@@ -202,6 +202,7 @@ export class DungeonInstance {
       loadout.weaponTier,
       loadout.ability,
       loadout.weaponType,
+      loadout.artifacts ?? [],
     );
     this.members.set(playerId, {
       inputs: newInputQueue(),

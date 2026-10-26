@@ -547,6 +547,8 @@ export const BLAST_KINDS = [
   "rune",
   /** The staff's orb bursting (D-141). */
   "burst",
+  /** An Artifact's ring: Golgorr's shockwave (D-153). */
+  "artifact",
   /** A fire elemental exploding (D-132). */
   "explosion",
   /** A bellows-keeper's heal pulse (D-132). */

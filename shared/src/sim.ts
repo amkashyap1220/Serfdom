@@ -1,3 +1,5 @@
+import type { ArtifactId } from "./artifacts.ts";
+import { WEAPON_ARTIFACT, wears } from "./artifact-effects.ts";
 import {
   BOSS_KINDS,
   EELPRIEST,
@@ -139,6 +141,12 @@ export interface PlayerState {
   pull?: Pull & { by: number };
   /** Run clock until which blade arms cannot hurt them again (D-137). */
   bladeSafeUntil?: number;
+  /** The Artifacts they wear, each once (D-153); absent: none. */
+  artifacts?: readonly ArtifactId[];
+  /** Attacks made this run, for the every-Nth Artifact effects (D-153). */
+  attacks?: number;
+  /** Seconds left of Whisper's empowered stab (D-153). */
+  whisper?: number;
 }
 
 /** A timed bonus: `bonus` is a share (0.3 = +30%), `remaining` seconds. */
@@ -830,6 +838,7 @@ export function newPlayer(
   weaponTier: number | null = null,
   ability: AbilityLoadout | null = null,
   weaponType: WeaponType | null = null,
+  artifacts: readonly ArtifactId[] = [],
 ): PlayerState {
   const combat = combatFor(stats, weaponDamage(weaponTier), weaponType);
   return {
@@ -844,6 +853,8 @@ export function newPlayer(
     abilityCooldown: 0,
     buffs: {},
     velocity: { x: 0, y: 0 },
+    // The same Artifact twice counts once (D-153).
+    ...(artifacts.length > 0 ? { artifacts: [...new Set(artifacts)] } : {}),
   };
 }
 
@@ -856,13 +867,14 @@ export function addPlayer(
   weaponTier: number | null = null,
   ability: AbilityLoadout | null = null,
   weaponType: WeaponType | null = null,
+  artifacts: readonly ArtifactId[] = [],
 ): SimState {
   const others = state.players.filter((p) => p.id !== id);
   return {
     ...state,
     players: [
       ...others,
-      newPlayer(id, spawn, stats, weaponTier, ability, weaponType),
+      newPlayer(id, spawn, stats, weaponTier, ability, weaponType, artifacts),
     ],
   };
 }
@@ -1003,6 +1015,14 @@ export function applyPlayerInput(
     fireCooldown: cooldown.remaining,
     mp,
     abilityCooldown,
+    // Artifacts count attacks and run Whisper's clock on the player's own
+    // timeline (D-153); a player without one carries neither.
+    ...(player.artifacts
+      ? {
+          attacks: (player.attacks ?? 0) + (cooldown.fired && aim ? 1 : 0),
+          whisper: Math.max(0, (player.whisper ?? 0) - dtSeconds),
+        }
+      : {}),
     // The pull counts down only while it pulls; spent, it is gone (D-135).
     ...(player.pull && pullLeft > 1e-9
       ? { pull: { ...player.pull, left: pullLeft } }
@@ -1071,25 +1091,35 @@ export function applyPlayerInput(
             size: attack.size,
             ...(attack.pierce ? { pierce: true, pierced: [] } : {}),
             ...(attack.burst ? { burst: attack.burst } : {}),
+            ...artifactShot(updated),
           },
         ],
         nextProjectileId: id + 1,
       };
       events.push({ type: "shot", playerId, projectileId: id });
     } else {
+      // Whisper's empowered stab (D-153): double damage, half again the reach.
+      const empowered =
+        wears(player, "whisper") && (updated.whisper ?? 0) > 1e-9;
+      const swing = empowered
+        ? { ...attack, reach: attack.reach * WEAPON_ARTIFACT.whisper.reach }
+        : attack;
+      const cut = empowered ? damage * WEAPON_ARTIFACT.whisper.damage : damage;
       events.push({
         type: "swing",
         playerId,
         at: { ...position },
         angle: Math.atan2(aim.y, aim.x),
-        arcDegrees: attack.arcDegrees,
-        reach: attack.reach,
+        arcDegrees: swing.arcDegrees,
+        reach: swing.reach,
       });
       let first = true;
+      let killed = false;
+      const struck: number[] = [];
       const enemies = [...next.enemies];
       enemies.forEach((target, i) => {
         if (!isHittable(target)) return;
-        if (!swingCatches(attack, position, aim, target.position, target.size))
+        if (!swingCatches(swing, position, aim, target.position, target.size))
           return;
         // A shield stops a swing from the front, as it stops a shot (D-122).
         const dx = target.position.x - position.x;
@@ -1105,8 +1135,9 @@ export function applyPlayerInput(
           });
           return;
         }
-        const result = damageEnemy(target, damage);
+        const result = damageEnemy(target, cut);
         enemies[i] = result.enemy;
+        struck.push(target.id);
         events.push({
           type: "hit",
           enemyId: target.id,
@@ -1118,13 +1149,171 @@ export function applyPlayerInput(
         });
         first = false;
         if (result.defeated) {
+          killed = true;
           events.push({ type: "defeated", enemyId: target.id, playerId });
         }
       });
       next = { ...next, enemies };
+      next = swingArtifacts(next, updated, position, aim, cut, struck, events);
+      // Whisper: the empowered stab is spent; a kill empowers the next.
+      if (wears(player, "whisper") && (empowered || killed)) {
+        next = {
+          ...next,
+          players: next.players.map((p) =>
+            p.id === playerId
+              ? { ...p, whisper: killed ? WEAPON_ARTIFACT.whisper.seconds : 0 }
+              : p,
+          ),
+        };
+      }
     }
   }
   return { state: next, events };
+}
+
+/** What a weapon Artifact adds to a shot (D-153), by the attack count. */
+function artifactShot(player: PlayerState): Partial<Projectile> {
+  const n = player.attacks ?? 0;
+  if (wears(player, "artemis")) {
+    return { growth: WEAPON_ARTIFACT.artemis.perPierce };
+  }
+  if (wears(player, "aetherion")) {
+    return {
+      burst: WEAPON_ARTIFACT.aetherion.burst,
+      pull: WEAPON_ARTIFACT.aetherion.pull,
+    };
+  }
+  if (wears(player, "eternity") && n % WEAPON_ARTIFACT.eternity.every === 0) {
+    return { split: WEAPON_ARTIFACT.eternity.bolts };
+  }
+  return {};
+}
+
+/**
+ * What a weapon Artifact adds to a swing that cut `struck` (D-153):
+ * Doomrend's spectral axes, Excalibur's beam, Golgorr's shockwave.
+ */
+function swingArtifacts(
+  state: SimState,
+  player: PlayerState,
+  at: Vec2,
+  aim: Vec2,
+  damage: number,
+  struck: readonly number[],
+  events: SimEvent[],
+): SimState {
+  const n = player.attacks ?? 0;
+  let next = state;
+  const hitWith = (
+    enemies: EnemyState[],
+    i: number,
+    amount: number,
+  ): EnemyState[] => {
+    const target = enemies[i];
+    if (!target) return enemies;
+    const result = damageEnemy(target, amount);
+    enemies[i] = result.enemy;
+    events.push({
+      type: "hit",
+      enemyId: target.id,
+      playerId: player.id,
+      damage: result.damage,
+      position: { ...target.position },
+      extra: true,
+    });
+    if (result.defeated) {
+      events.push({
+        type: "defeated",
+        enemyId: target.id,
+        playerId: player.id,
+      });
+    }
+    return enemies;
+  };
+  if (
+    wears(player, "doomrend") &&
+    struck.length >= WEAPON_ARTIFACT.doomrend.minHits
+  ) {
+    // From each enemy cut, an axe to the nearest other one in range.
+    let enemies = [...next.enemies];
+    const taken = new Set(struck);
+    for (const id of struck) {
+      const from = enemies.find((e) => e.id === id);
+      if (!from) continue;
+      let best = -1;
+      let bestD: number = WEAPON_ARTIFACT.doomrend.range;
+      enemies.forEach((e, i) => {
+        if (taken.has(e.id) || !isHittable(e)) return;
+        const d = Math.hypot(
+          e.position.x - from.position.x,
+          e.position.y - from.position.y,
+        );
+        if (d <= bestD) {
+          best = i;
+          bestD = d;
+        }
+      });
+      const to = enemies[best];
+      if (!to) continue;
+      taken.add(to.id);
+      events.push({
+        type: "chain",
+        playerId: player.id,
+        points: [{ ...from.position }, { ...to.position }],
+      });
+      enemies = hitWith(
+        enemies,
+        best,
+        damage * WEAPON_ARTIFACT.doomrend.damage,
+      );
+    }
+    next = { ...next, enemies };
+  }
+  if (wears(player, "excalibur") && n % WEAPON_ARTIFACT.excalibur.every === 0) {
+    const id = next.nextProjectileId;
+    const beam = WEAPON_ARTIFACT.excalibur;
+    next = {
+      ...next,
+      projectiles: [
+        ...next.projectiles,
+        {
+          id,
+          owner: "player",
+          ownerId: player.id,
+          position: { ...at },
+          direction: aim,
+          speed: beam.speed,
+          remaining: beam.range,
+          damage: damage * beam.damage,
+          size: beam.size,
+          pierce: true,
+          pierced: [],
+          // Drawn from the server, like Volley's arrows.
+          fromAbility: true,
+        },
+      ],
+      nextProjectileId: id + 1,
+    };
+  }
+  if (wears(player, "golgorr") && n % WEAPON_ARTIFACT.golgorr.every === 0) {
+    const wave = WEAPON_ARTIFACT.golgorr;
+    events.push({
+      type: "blast",
+      kind: "artifact",
+      playerId: player.id,
+      at: { ...at },
+      radius: wave.radius,
+    });
+    let enemies = [...next.enemies];
+    enemies.forEach((e, i) => {
+      if (!isHittable(e) || struck.includes(e.id)) return;
+      const d = Math.hypot(e.position.x - at.x, e.position.y - at.y);
+      if (d > wave.radius + e.size / 2) return;
+      enemies = hitWith(enemies, i, damage * wave.damage);
+    });
+    next = { ...next, enemies };
+  }
+  return next;
 }
 
 /**
@@ -1881,6 +2070,26 @@ export function stepWorld(
   /** The staff's orb bursting where it stopped (D-141): every hittable enemy in reach, once. */
   const burstAt = (p: Projectile, at: Vec2) => {
     const radius = p.burst ?? 0;
+    // Aetherion pulls enemies together first (D-153), never through walls.
+    if (p.pull) {
+      const reach = p.pull;
+      enemies = enemies.map((e) => {
+        if (!isHittable(e)) return e;
+        const dx = at.x - e.position.x;
+        const dy = at.y - e.position.y;
+        const d = Math.hypot(dx, dy);
+        if (d > reach || d < 1e-6) return e;
+        const position = stepMovement(
+          e.position,
+          { x: dx / d, y: dy / d },
+          { width: e.size, height: e.size },
+          walls,
+          1,
+          Math.max(0, d - e.size / 2),
+        );
+        return { ...e, position };
+      });
+    }
     events.push({
       type: "blast",
       kind: "burst",
@@ -1969,7 +2178,14 @@ export function stepWorld(
         burstAt(p, outcome.position);
         continue;
       }
-      const result = damageEnemy(target, p.damage);
+      // Artemis: each enemy already pierced adds damage, up to a cap (D-153).
+      const grown = p.growth
+        ? Math.min(
+            1 + WEAPON_ARTIFACT.artemis.max,
+            1 + p.growth * (p.pierced ?? []).length,
+          )
+        : 1;
+      const result = damageEnemy(target, p.damage * grown);
       enemies[i] = result.enemy;
       events.push({
         type: "hit",
@@ -1980,6 +2196,42 @@ export function stepWorld(
         // An arrow's second and later victims are not further accurate shots.
         ...((p.pierced ?? []).length > 0 ? { extra: true } : {}),
       });
+      // Eternity: a charged bolt splits into seeking bolts at the nearest
+      // other enemies (D-153), drawn from the server.
+      if (p.split) {
+        const bolt = WEAPON_ARTIFACT.eternity;
+        const near = enemies
+          .filter((e) => e.id !== target.id && isHittable(e))
+          .map((e) => ({
+            e,
+            d: Math.hypot(
+              e.position.x - outcome.position.x,
+              e.position.y - outcome.position.y,
+            ),
+          }))
+          .filter((x) => x.d <= bolt.range && x.d > 1e-6)
+          .sort((a, b) => a.d - b.d)
+          .slice(0, p.split);
+        for (const { e, d } of near) {
+          surviving.push({
+            id: nextId++,
+            owner: "player",
+            ownerId: p.ownerId,
+            position: { ...outcome.position },
+            direction: {
+              x: (e.position.x - outcome.position.x) / d,
+              y: (e.position.y - outcome.position.y) / d,
+            },
+            speed: bolt.speed,
+            remaining: bolt.range,
+            damage: p.damage * bolt.damage,
+            size: bolt.size,
+            fromAbility: true,
+            // Born at the edge of the enemy just hit: never that one again.
+            pierced: [target.id],
+          });
+        }
+      }
       // A piercing arrow flies on from where it hit, never hitting that
       // enemy again (D-141).
       if (p.pierce) {
