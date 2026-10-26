@@ -2097,6 +2097,35 @@ describe("parties (14a, D-142, D-143)", () => {
       expect(server.instanceOf(e.id)).toBe(strangers);
     });
 
+    it("logging out drops you from the party (14c acceptance)", async () => {
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      await team(a, b);
+      await nextOfType(a.client, "partyNotice"); // "… joined the party."
+      b.client.send(encodeMessage({ type: "logout" }));
+      expect(await nextOfType(a.client, "partyNotice")).toMatchObject({
+        text: `${b.name} left the party. The party broke up.`,
+      });
+      await until(() => server.partyMembers(a.id).length === 0);
+    });
+
+    it("a member disconnecting while queued takes the party out of the queue (14c acceptance)", async () => {
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      const c = await partyPlayer();
+      await team(a, b);
+      await team(a, c);
+      a.client.send(go());
+      await nextOfType(c.client, "queueStatus");
+      b.client.socket.close();
+      expect(await nextOfType(a.client, "queueLeft")).toMatchObject({
+        reason: `${b.name} left the game.`,
+      });
+      await until(() => !server.isQueued(c.id));
+      // A and C are still a party, and can queue again.
+      expect(server.partyMembers(a.id)).toEqual([a.id, c.id]);
+    });
+
     it("refuses while a member is still in a dungeon", async () => {
       const a = await partyPlayer();
       const b = await partyPlayer();

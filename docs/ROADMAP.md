@@ -383,7 +383,7 @@ Acceptance:
 
 ## Phase 14 — Partying up
 
-Status: 14a done (forming a party: invites by serf name, accept or decline, leave, remove, the party panel; D-142, D-143; the user's test passed 2026-10-25). 14b built (queueing as a party: the leader queues, every member checked, the party always shares a run, a changed party leaves the queue; D-144), awaiting the user's test. Acceptance as measured: a party always lands in the same run (server tests, live with two browsers); invites to a stranger, a full party, and a party queue for a dungeon locked for any member are refused by the server; leaving, removal, disconnect, and logout follow D-143 and D-144 (server tests). Friends list and chat: not in Phase 14 (D-143).
+Status: 14a done (forming a party: invites by serf name, accept or decline, leave, remove, the party panel; D-142, D-143; the user's test passed 2026-10-25). 14b built (queueing as a party: the leader queues, every member checked, the party always shares a run, a changed party leaves the queue; D-144). 14c acceptance review done (2026-10-25), awaiting the user's combined Phase 14–15 test. Acceptance as measured: a party always lands in the same run (server tests, live with two browsers); invites to a stranger, a full party, and a party queue for a dungeon locked for any member are refused by the server; leaving, removal, disconnect, and logout follow D-143 and D-144 (server tests). Friends list and chat: not in Phase 14 (D-143).
 
 **Goal:** Friends can play together on purpose, not only through the open queue (the user, D-124).
 

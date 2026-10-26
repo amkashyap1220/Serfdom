@@ -761,3 +761,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - `npm run check`: 583 shared, 239 server (5 queue rules, 7 party-queue server tests), 78 client, build.
 - Live (harness, **test** DB, two headless browsers): B saw "The leader picks" and Enter did nothing; A queued with Enter; B's screen switched to "Your party is waiting for Goblin Warrens"; both started in the same run and saw each other; after R in both, A queued and B pressed Esc: A was taken out with "… left the queue."; no console errors.
 - Next step: the user's 14b test; then the Phase 14 acceptance review.
+
+### Phase 14c: acceptance review — 2026-10-25
+
+- The user approved the Phase 14–15 plan (D-144 confirmed; D-145 to D-148 for Phase 15) and asked for Full auto as the default fire mode (D-149). Built together, tested once at the end, pushed after the pass.
+- **Two players who invite each other always land in the same run:** pass. The Matchmaker never splits a party (5 queue tests); server tests: the leader queues and both share a run; an open run takes a party only if all of it fits; live with two browsers.
+- **A tampered invite is refused by the server:** pass. Hand-made messages: inviting a name nobody plays, someone in a run, yourself, a repeat, a full party of 10; answering someone else's invite or a lapsed one; a member's own queue request; a party queue for a dungeon locked for one member (named). An invite to an online stranger is allowed by design: they can decline (D-143).
+- **Disconnect or leave follows the rules:** pass. Leaving, removal, the leader disconnecting (hand-over), a party of one breaking up, logout (new test), and a member disconnecting while queued (new test: the party leaves the queue and stays a party).
+- Next step: 15a, the home screen.
