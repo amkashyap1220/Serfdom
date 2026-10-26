@@ -769,3 +769,14 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - **A tampered invite is refused by the server:** pass. Hand-made messages: inviting a name nobody plays, someone in a run, yourself, a repeat, a full party of 10; answering someone else's invite or a lapsed one; a member's own queue request; a party queue for a dungeon locked for one member (named). An invite to an online stranger is allowed by design: they can decline (D-143).
 - **Disconnect or leave follows the rules:** pass. Leaving, removal, the leader disconnecting (hand-over), a party of one breaking up, logout (new test), and a member disconnecting while queued (new test: the party leaves the queue and stays a party).
 - Next step: 15a, the home screen.
+
+### Phase 15: home screen, HUD, minimap, leaderboards — 2026-10-25
+
+- 15a home screen (D-145): a standing left panel (serf, party, invites) and seven tabs on the right; the dungeon grid narrowed to fit.
+- 15b player HUD (D-146): bars with numbers, the ability's ready state (snapshots carry `abilityCooldown`, v46), the fire mode, the run clock, party HP; the debug readout and the world's debug marks behind ` or Settings. Full auto is the default fire mode (D-149).
+- 15c minimap (D-147): the server sends woken and cleared rooms when they change and to late joiners (v47); the client draws them turned with the view.
+- 15d leaderboards (D-148): lifetime EXP by class, most clears, enemies slain, fastest clear per dungeon with party size and Solo only; a `clears` table (migration 011) records completed runs of listed dungeons in the run's own transaction (v48).
+- Found and fixed while checking live: the account line overlapped the tabs; the minimap canvas overflowed the panel by 2 px; HUD rows squashed when the debug readout was open; the stash and leaderboard caps were sized for the old menu; the scratch harness's item fill used a pre-D-106 item.
+- `npm run check`: 584 shared, 245 server, 87 client, build. The board storage test ran on memory and on PostgreSQL.
+- Live (harness, **test** DB, headless): every tab screenshotted; a party of two in the Warrens with the HUD, the minimap (entrance cleared and dimmer, the tunnel woken, the partner as a blue dot), the ` toggle and the Settings switch; a fast-forwarded Warrens clear on every board, the class filter, Solo only, an empty Stronghold board; no console errors.
+- Next step: the user's combined Phase 14–15 test; push after the pass; then Phase 16 (rare loot).

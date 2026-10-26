@@ -214,6 +214,20 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+#### Phase 15 checklist: home screen, HUD, minimap, leaderboards (D-145 to D-149)
+
+Run `npm run dev` (it applies migration 011 to the dev database on start), then hard-refresh (Ctrl+Shift+R).
+
+1. **Home screen:** the left panel shows your serf (name, class, level, EXP bar, stats, worn gear) and your party with Invite (and Leave when in one). The tabs read Play, Serfs, Party, Stash, Potion rack, Leaderboards, Settings, with gold and Log out above them. Open every tab: nothing overlaps or spills out of the box; a full stash scrolls inside its grid.
+2. **Invites** appear in the left panel (Accept, Decline) whatever tab is open.
+3. **HUD in a run:** name, class, level; HP and MP bars with numbers; the EXP bar; "Space: … · ready" (it shows the seconds while cooling down, or "need MP"); "Fire (T): Full auto" at the start; the dungeon and a running clock; party members with HP bars. Nothing covers the 960×800 gameplay area.
+4. Press **T** once: "Auto aim + Space". Press **`** (left of 1): the debug readout appears below (the panel scrolls) and the world shows the green box, room coordinates, and "#id" tags; press it again to hide them. Settings has the same switch, and a reload keeps your choice.
+5. **Minimap:** at the start only the rooms you have woken show (the entrance, dimmer once cleared); walk on and new rooms appear as you enter them. You are yellow, others blue, closed doors red, and the portal purple once it opens. Q/E turn it with the view.
+6. **Leaderboards:** Lifetime EXP (try a class in the box), Most clears, Enemies slain, Fastest clear (pick a dungeon; try Solo only). After clearing a dungeon your time appears there with "solo" or "party of N". Clears from before today are not on the fastest boards (they start now).
+7. Consoles: no red errors.
+
+Report: pass or fail per step, with a screenshot of anything misplaced.
+
 #### Party queue checklist (Phase 14b, D-143, D-144)
 
 Same set-up as the party checklist below: two different browsers, A (serfdom@test.com) and B (serfdom1@test.com), in one party with A leading.

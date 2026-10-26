@@ -787,8 +787,8 @@
   flex-direction: column;
   gap: 2px;
   width: 460px;
-  /* The top 20 scroll here, so the heading and note stay in view. */
-  max-height: 420px;
+  /* The top 20 scroll here, so the boards and note stay in view (690 px tab, D-145). */
+  max-height: 520px;
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -986,7 +986,7 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   width: 900px;
-  max-height: 330px;
+  max-height: 470px;
   overflow-y: auto;
 }
 
@@ -1007,8 +1007,9 @@ button.sell {
   max-height: none;
 }
 
+/* Under the worn gear: what is left of the 690 px tab (D-145). */
 .item-grid.short {
-  max-height: 200px;
+  max-height: 400px;
 }
 
 /* Stat potions (D-118). Placeholder colors, not the verified palette. */

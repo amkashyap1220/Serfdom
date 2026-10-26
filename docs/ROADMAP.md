@@ -403,6 +403,8 @@ Acceptance:
 
 ## Phase 15 — Home screen, HUD, minimap, and leaderboards
 
+Status: built (2026-10-25), awaiting the user's combined Phase 14–15 test on branch `phase-14`: 15a the home screen (D-145), 15b the player HUD and Full auto by default (D-146, D-149), 15c the minimap (D-147), 15d four leaderboards (D-148), 15e the acceptance checks. Acceptance as measured: every home tab opens and fits the box (live, headless, a full stash included); the HUD panel is 240×800 beside an untouched 960×800 gameplay viewport (measured); the minimap draws only server room states, server door states, the server's portal flag, and snapshot positions (tests and live); every board is computed by the server from its own records, and a client can only choose which board to read (tests on memory and PostgreSQL storage).
+
 **Goal:** The screens a player lives in are final, not placeholders (the user, D-124).
 
 Tasks:

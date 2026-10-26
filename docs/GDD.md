@@ -52,7 +52,7 @@ Design pillars:
 - Keep source pixels, world pixels, CSS pixels, and device pixels distinct.
 - Configure Phaser zoom/scale to preserve approved world-space visibility.
 - Disable pixel-art smoothing; prefer integer scaling where practical.
-- HUD stays fixed as the world scrolls and can house player stats, equipment, inventory, and other approved UI elements. Internal HUD arrangement remains OPEN.
+- HUD stays fixed as the world scrolls. In a run it shows (D-146): the serf's name, class, and level; HP, MP, and EXP bars with numbers; the ability and whether it is ready; the fire mode (Full auto by default, D-149); the minimap (D-147: the rooms your run has woken, closed doors, the open portal, you and the other players, turning with the view); the dungeon and run time; each party member's HP; and the keys. The debug readout hides behind the ` key or the Settings switch.
 - Wider windows may display additional world space; multiplayer visibility fairness needs evaluation.
 - Minimum supported window size, compact layout, and mobile treatment remain OPEN.
 
@@ -412,7 +412,7 @@ Rooms must not all be beatable by running in a circle, and difficulty should not
 ## 11. Multiplayer and reward rules
 
 - Maximum party size: ten players (D-012; was four).
-- Players enter dungeons from a main menu (stash, serfs, leaderboard, dungeon select) and can quickly requeue for the same dungeon after a run (D-048).
+- Players enter dungeons from the home screen (D-048, D-145): a standing left panel with the played serf (EXP bar, stats, gear) and the party (members, Invite, Leave, incoming invites), and the tabs Play, Serfs, Party, Stash, Potion rack, Leaderboards, and Settings. After a run they can quickly requeue for the same dungeon.
 - Parties form through an open queue that fills a run with up to 10 queued players (D-051, D-012); a run accepts joiners for its first 15 seconds, then is locked (D-052). Friends party up by invite (Phase 14, D-142, D-143): invite an online player by their serf's name; they accept or decline (an invite lapses after 60 s). The first inviter leads; any member can invite; the leader can remove members; parties of up to 10 last across runs; a player who leaves or disconnects drops out, and the longest-standing member leads if the leader goes. Only the leader queues the party: everyone must be able to enter the dungeon (a refusal names who), and the party always shares a run (a new one, or an open one with room for all); players from the open queue may fill its empty places. If anyone leaves the queue or the party changes while waiting, the whole party leaves the queue (D-144, PROVISIONAL). No friends list or chat yet.
 - Completion should feel rewarding: strong celebratory effects and a slot-machine-like reward chest (D-049). Death is abrupt and tragic: a stats screen about the serf's life, then return to choose a serf and dungeon (D-050).
 - Browser and Steam desktop clients share the same game servers and can play together.
@@ -443,7 +443,7 @@ Confirmed leaderboard direction:
 - Living characters display current accumulated lifetime EXP.
 - Dead characters retain final EXP score.
 
-The user wants a **more expansive leaderboard** before the alpha (Phase 15, D-124). Which boards (for example per class, dungeon clears, bosses, fastest clears, survival time) is drafted for approval in that phase.
+Since Phase 15 there are **four leaderboards** (D-148), each the top 20, living and dead, worked out on the server from recorded data: **lifetime EXP** (all classes or one), **most clears**, **most enemies slain**, and **fastest clear** of each dungeon (each serf's best time, with its party size; a Solo only filter). Clear times count from Phase 15 on.
 
 ## 13. Technical requirements implied by the design
 
