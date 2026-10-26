@@ -110,3 +110,14 @@ describe("first-run hints in settings (D-159)", () => {
     });
   });
 });
+
+describe("text size in settings (D-159)", () => {
+  it("is normal by default; only normal or large", () => {
+    expect(DEFAULT_SETTINGS.textSize).toBe("normal");
+    expect(
+      parseSettings({ ...DEFAULT_SETTINGS, textSize: "large" })?.textSize,
+    ).toBe("large");
+    expect(parseSettings({ ...DEFAULT_SETTINGS, textSize: "huge" })).toBeNull();
+    expect(settingsOrDefaults({}).textSize).toBe("normal");
+  });
+});

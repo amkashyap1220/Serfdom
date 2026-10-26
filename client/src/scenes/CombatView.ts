@@ -877,13 +877,14 @@ export class CombatView {
         g.fillRect(Math.round(p.x - 2), Math.round(p.y - 2), 4, 4);
         continue;
       }
-      g.fillStyle(
-        p.owner === "enemy"
-          ? COLORS.enemyBullet
-          : p.ability
-            ? COLORS.arrow
-            : COLORS.playerShot,
-      );
+      // Enemy bullets are round and yours square (D-159), so shape alone
+      // tells them apart, whatever colours a player can see.
+      if (p.owner === "enemy") {
+        g.fillStyle(COLORS.enemyBullet);
+        g.fillCircle(p.x, p.y, p.size / 2 + 0.5);
+        continue;
+      }
+      g.fillStyle(p.ability ? COLORS.arrow : COLORS.playerShot);
       g.fillRect(
         Math.round(p.x - p.size / 2),
         Math.round(p.y - p.size / 2),

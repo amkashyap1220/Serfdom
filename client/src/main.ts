@@ -201,6 +201,10 @@ game.events.once(Phaser.Core.Events.READY, () => {
   /** New settings: the keys and fire mode for the game, and the Settings tab. */
   const applySettings = (next: Settings) => {
     settings = next;
+    document.documentElement.classList.toggle(
+      "text-large",
+      next.textSize === "large",
+    );
     worldScene(game).applySettings(next.binds, next.fireMode);
     view.setSettings(next);
   };

@@ -1522,3 +1522,153 @@ button.sell {
 .first-run p {
   margin: 0 0 6px;
 }
+
+/* Large text (D-159): every size of 14 px and under, 2 px bigger (made
+   from the rules above; add a line here with any new small text). */
+html.text-large .screen {
+  font-size: 18px;
+}
+html.text-large #window-notice {
+  font-size: 15px;
+}
+html.text-large #hud {
+  font-size: 14px;
+}
+html.text-large #hud h2 {
+  font-size: 14px;
+}
+html.text-large .debug-list {
+  font-size: 13px;
+}
+html.text-large #hud .hud-name {
+  font-size: 15px;
+}
+html.text-large .hud-bar b {
+  font-size: 13px;
+}
+html.text-large .hud-bar.exp b {
+  font-size: 11px;
+}
+html.text-large #hud-keys {
+  font-size: 12px;
+}
+html.text-large .screen .hint {
+  font-size: 14px;
+}
+html.text-large .screen .roll-chips button.chip {
+  font-size: 13px;
+}
+html.text-large .exchange-grid .item-card button {
+  font-size: 13px;
+}
+html.text-large .screen .trade-row button {
+  font-size: 13px;
+}
+html.text-large .market-panel {
+  font-size: 14px;
+}
+html.text-large .screen .market-order button {
+  font-size: 13px;
+}
+html.text-large .upgrade {
+  font-size: 14px;
+}
+html.text-large .screen .upgrade button {
+  font-size: 14px;
+}
+html.text-large .side-stats {
+  font-size: 13px;
+}
+html.text-large .side-stats .st-head {
+  font-size: 12px;
+}
+html.text-large .screen .side-gear {
+  font-size: 13px;
+}
+html.text-large .home-side h2 {
+  font-size: 16px;
+}
+html.text-large .screen .side-member {
+  font-size: 14px;
+}
+html.text-large .screen .side-buttons button {
+  font-size: 14px;
+}
+html.text-large .home-side .party-invite {
+  font-size: 14px;
+}
+html.text-large .home-side .party-news {
+  font-size: 14px;
+}
+html.text-large .screen .home-side .party-invite button {
+  font-size: 14px;
+}
+html.text-large .screen h3.dungeon-group {
+  font-size: 15px;
+}
+html.text-large .dungeon-grid .dungeon-card .notice {
+  font-size: 13px;
+}
+html.text-large .stats {
+  font-size: 16px;
+}
+html.text-large .screen .error {
+  font-size: 14px;
+}
+html.text-large .account-bar {
+  font-size: 14px;
+}
+html.text-large .screen .fallen {
+  font-size: 14px;
+}
+html.text-large .class-item {
+  font-size: 13px;
+}
+html.text-large .class-concept {
+  font-size: 13px;
+}
+html.text-large .stat-gains {
+  font-size: 16px;
+}
+html.text-large .serf-stats {
+  font-size: 13px;
+}
+html.text-large .item-card {
+  font-size: 14px;
+}
+html.text-large .item-kind {
+  font-size: 13px;
+}
+html.text-large .item-effect {
+  font-size: 13px;
+}
+html.text-large .item-name {
+  font-size: 16px;
+}
+html.text-large button.sell {
+  font-size: 13px;
+}
+html.text-large .sell-control {
+  font-size: 13px;
+}
+html.text-large .equip button {
+  font-size: 13px;
+}
+html.text-large .item-tip {
+  font-size: 14px;
+}
+html.text-large .item-tier {
+  font-size: 13px;
+}
+html.text-large .gear-slot {
+  font-size: 13px;
+}
+html.text-large .coin-box {
+  font-size: 13px;
+}
+html.text-large .screen .coin-box input {
+  font-size: 14px;
+}
+html.text-large .screen button.key-bind {
+  font-size: 14px;
+}

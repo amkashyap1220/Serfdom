@@ -660,6 +660,8 @@ export {
   settingsOrDefaults,
   HINTS,
   isHintId,
+  TEXT_SIZES,
+  type TextSize,
   type HintId,
   type ActionId,
   type KeyBinds,

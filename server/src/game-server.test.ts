@@ -2397,6 +2397,9 @@ describe("settings over the network (D-159)", () => {
     const mine = {
       binds: rebind(DEFAULT_BINDS, "ability", "KeyF"),
       fireMode: "autoAim" as const,
+      hints: false,
+      seenHints: ["welcome" as const],
+      textSize: "large" as const,
     };
     client.send(encodeMessage({ type: "saveSettings", settings: mine }));
     expect((await nextOfType(client, "settings")).settings).toEqual(mine);

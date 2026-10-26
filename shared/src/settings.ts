@@ -59,13 +59,19 @@ export interface Settings {
   hints: boolean;
   /** The hints already shown. */
   seenHints: HintId[];
+  /** Menu and HUD text: normal, or 2 px bigger (D-159). */
+  textSize: TextSize;
 }
+
+export const TEXT_SIZES = ["normal", "large"] as const;
+export type TextSize = (typeof TEXT_SIZES)[number];
 
 export const DEFAULT_SETTINGS: Settings = {
   binds: DEFAULT_BINDS,
   fireMode: DEFAULT_FIRE_MODE,
   hints: true,
   seenHints: [],
+  textSize: "normal",
 };
 
 /** Keys the menus keep for themselves: never bindable. */
@@ -150,15 +156,17 @@ export function isValidBinds(v: unknown): v is KeyBinds {
 export function parseSettings(v: unknown): Settings | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
-  if (Object.keys(o).length !== 4) return null;
+  if (Object.keys(o).length !== 5) return null;
   if (!isValidBinds(o.binds)) return null;
   if (!(FIRE_MODES as readonly unknown[]).includes(o.fireMode)) return null;
   if (typeof o.hints !== "boolean" || !isValidSeen(o.seenHints)) return null;
+  if (!(TEXT_SIZES as readonly unknown[]).includes(o.textSize)) return null;
   return {
     binds: { ...(o.binds as KeyBinds) },
     fireMode: o.fireMode as FireMode,
     hints: o.hints,
     seenHints: [...o.seenHints],
+    textSize: o.textSize as TextSize,
   };
 }
 
@@ -188,5 +196,8 @@ export function settingsOrDefaults(v: unknown): Settings {
       : DEFAULT_FIRE_MODE,
     hints: typeof o.hints === "boolean" ? o.hints : true,
     seenHints: isValidSeen(o.seenHints) ? [...o.seenHints] : [],
+    textSize: (TEXT_SIZES as readonly unknown[]).includes(o.textSize)
+      ? (o.textSize as TextSize)
+      : "normal",
   };
 }

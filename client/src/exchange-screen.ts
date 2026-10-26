@@ -960,7 +960,8 @@ function rollChips(
   row.append(el("span", "hint", `${label}:`));
   for (const w of ROLL_WISHES) {
     const on = picked.includes(w);
-    const chip = button(rollLabel(w), () =>
+    // A ✓ as well as the colour, so a picked chip never relies on colour alone.
+    const chip = button(on ? `✓ ${rollLabel(w)}` : rollLabel(w), () =>
       // Kept in the standard order, so the same filter is the same query.
       onChange(ROLL_WISHES.filter((x) => (x === w ? !on : picked.includes(x)))),
     );

@@ -75,6 +75,7 @@ import {
   type KeyBinds,
   type Settings,
   type HintId,
+  type TextSize,
 } from "@serfdom/shared";
 import {
   accuracy,
@@ -982,6 +983,19 @@ export class ScreenView {
       ` Show the debug readout in the HUD (the ${keyName(binds.debug)} key; this device only)`,
     );
     body.append(label);
+    // Text size (D-159).
+    const size = el("div", "setting-row");
+    const sizes = select(
+      [
+        ["normal", "Normal"],
+        ["large", "Large"],
+      ],
+      set.textSize,
+      (v) => this.actions.saveSettings({ ...set, textSize: v as TextSize }),
+    );
+    sizes.setAttribute("aria-label", "Text size");
+    size.append(el("span", "setting-name", "Text size"), sizes);
+    body.append(size);
     // First-run hints (D-159).
     const hints = document.createElement("label");
     hints.className = "setting";
