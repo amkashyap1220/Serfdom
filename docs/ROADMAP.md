@@ -6,36 +6,36 @@ The roadmap is deliberately incremental. Each phase should leave the repository 
 
 **Current phase: 13, built, awaiting the user's combined test: all ten dungeons exist (13a–13c done and tested; 13d the Forgemaster, 13e the Sunken Temple, 13f–13j the endgame dungeons, and 13k the acceptance checks built and committed locally on `phase-13-rest`).** Updated 2026-10-24. The roadmap runs to 27 phases (D-124): systems and the first 10 dungeons through Phase 20, the website alpha at 21, growth to 40 dungeons during the alpha, then Steam; each phase below has its goal, tasks, acceptance criteria, and status.
 
-| Phase | Name                                               | Status                                                    |
-| ----- | -------------------------------------------------- | --------------------------------------------------------- |
-| 0     | Repository orientation and development environment | Complete                                                  |
-| 1     | Playable local client skeleton                     | Complete                                                  |
-| 2     | Movement, collision, and camera following          | Complete                                                  |
-| 3     | Combat prototype                                   | Complete                                                  |
-| 4     | Authoritative multiplayer foundation               | Complete                                                  |
-| 5     | Shared combat and enemies                          | Complete                                                  |
-| 6     | Dungeon vertical slice                             | Complete                                                  |
-| 7     | Account and persistent data                        | Complete                                                  |
-| 8     | Progression and permadeath                         | Complete                                                  |
-| 9     | Equipment and rewards                              | Complete                                                  |
-| 10    | Classes and class abilities                        | Complete                                                  |
-| 11    | Dungeon variety and procedural assembly            | Complete                                                  |
-| 12    | Dungeon tiers and the endgame loop                 | Complete                                                  |
-| 13    | Ten dungeons: tiers 4 and 5 and more               | **Built:** 13a–13c done; 13d–13k awaiting the user's test |
-| 14    | Partying up                                        | Not started                                               |
-| 15    | Home screen, HUD, minimap, and leaderboards        | Not started                                               |
-| 16    | Rare loot                                          | Not started                                               |
-| 17    | Economy and account systems                        | Not started                                               |
-| 18    | Onboarding and settings                            | Not started                                               |
-| 19    | Production hosting                                 | Not started                                               |
-| 20    | Accounts, sessions, and player safety              | Not started                                               |
-| 21    | **Website alpha**                                  | Not started                                               |
-| 22    | Alpha content: toward 40 dungeons                  | Not started                                               |
-| 23    | Presentation: art and sound                        | Not started                                               |
-| 24    | Beta polish                                        | Not started                                               |
-| 25    | Desktop wrapper and cross-play proof               | Not started                                               |
-| 26    | Steam integration                                  | Not started                                               |
-| 27    | Steam launch                                       | Not started                                               |
+| Phase | Name                                               | Status      |
+| ----- | -------------------------------------------------- | ----------- |
+| 0     | Repository orientation and development environment | Complete    |
+| 1     | Playable local client skeleton                     | Complete    |
+| 2     | Movement, collision, and camera following          | Complete    |
+| 3     | Combat prototype                                   | Complete    |
+| 4     | Authoritative multiplayer foundation               | Complete    |
+| 5     | Shared combat and enemies                          | Complete    |
+| 6     | Dungeon vertical slice                             | Complete    |
+| 7     | Account and persistent data                        | Complete    |
+| 8     | Progression and permadeath                         | Complete    |
+| 9     | Equipment and rewards                              | Complete    |
+| 10    | Classes and class abilities                        | Complete    |
+| 11    | Dungeon variety and procedural assembly            | Complete    |
+| 12    | Dungeon tiers and the endgame loop                 | Complete    |
+| 13    | Ten dungeons: tiers 4 and 5 and more               | Complete    |
+| 14    | Partying up                                        | Complete    |
+| 15    | Home screen, HUD, minimap, and leaderboards        | Complete    |
+| 16    | Rare loot                                          | Not started |
+| 17    | Economy and account systems                        | Not started |
+| 18    | Onboarding and settings                            | Not started |
+| 19    | Production hosting                                 | Not started |
+| 20    | Accounts, sessions, and player safety              | Not started |
+| 21    | **Website alpha**                                  | Not started |
+| 22    | Alpha content: toward 40 dungeons                  | Not started |
+| 23    | Presentation: art and sound                        | Not started |
+| 24    | Beta polish                                        | Not started |
+| 25    | Desktop wrapper and cross-play proof               | Not started |
+| 26    | Steam integration                                  | Not started |
+| 27    | Steam launch                                       | Not started |
 
 When a slice or phase finishes, update this table, the phase's Status line, `docs/WORK_LOG.md`, and the README status in the same commit.
 
@@ -383,7 +383,7 @@ Acceptance:
 
 ## Phase 14 — Partying up
 
-Status: 14a done (forming a party: invites by serf name, accept or decline, leave, remove, the party panel; D-142, D-143; the user's test passed 2026-10-25). 14b built (queueing as a party: the leader queues, every member checked, the party always shares a run, a changed party leaves the queue; D-144). 14c acceptance review done (2026-10-25), awaiting the user's combined Phase 14–15 test. Acceptance as measured: a party always lands in the same run (server tests, live with two browsers); invites to a stranger, a full party, and a party queue for a dungeon locked for any member are refused by the server; leaving, removal, disconnect, and logout follow D-143 and D-144 (server tests). Friends list and chat: not in Phase 14 (D-143).
+Status: 14a done (forming a party: invites by serf name, accept or decline, leave, remove, the party panel; D-142, D-143; the user's test passed 2026-10-25). 14b built (queueing as a party: the leader queues, every member checked, the party always shares a run, a changed party leaves the queue; D-144). 14c acceptance review done (2026-10-25). **Complete** (2026-10-26): the user's combined Phase 14–15 test passed. Acceptance as measured: a party always lands in the same run (server tests, live with two browsers); invites to a stranger, a full party, and a party queue for a dungeon locked for any member are refused by the server; leaving, removal, disconnect, and logout follow D-143 and D-144 (server tests). Friends list and chat: not in Phase 14 (D-143).
 
 **Goal:** Friends can play together on purpose, not only through the open queue (the user, D-124).
 
@@ -403,7 +403,7 @@ Acceptance:
 
 ## Phase 15 — Home screen, HUD, minimap, and leaderboards
 
-Status: built (2026-10-25), awaiting the user's combined Phase 14–15 test on branch `phase-14`: 15a the home screen (D-145), 15b the player HUD and Full auto by default (D-146, D-149), 15c the minimap (D-147), 15d four leaderboards (D-148), 15e the acceptance checks. Acceptance as measured: every home tab opens and fits the box (live, headless, a full stash included); the HUD panel is 240×800 beside an untouched 960×800 gameplay viewport (measured); the minimap draws only server room states, server door states, the server's portal flag, and snapshot positions (tests and live); every board is computed by the server from its own records, and a client can only choose which board to read (tests on memory and PostgreSQL storage).
+Status: **complete** (2026-10-26; the user's combined Phase 14–15 test passed, with the stat display follow-ups D-150 and D-151): 15a the home screen (D-145), 15b the player HUD and Full auto by default (D-146, D-149), 15c the minimap (D-147), 15d four leaderboards (D-148), 15e the acceptance checks. Acceptance as measured: every home tab opens and fits the box (live, headless, a full stash included); the HUD panel is 240×800 beside an untouched 960×800 gameplay viewport (measured); the minimap draws only server room states, server door states, the server's portal flag, and snapshot positions (tests and live); every board is computed by the server from its own records, and a client can only choose which board to read (tests on memory and PostgreSQL storage).
 
 **Goal:** The screens a player lives in are final, not placeholders (the user, D-124).
 

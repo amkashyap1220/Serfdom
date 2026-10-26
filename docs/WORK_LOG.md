@@ -21,9 +21,9 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - [x] Phase 10 — Classes and class abilities
 - [x] Phase 11 — Dungeon variety and procedural assembly
 - [x] Phase 12 — Dungeon tiers and the endgame loop
-- [ ] Phase 13 — Ten dungeons: tiers 4 and 5 and more
-- [ ] Phase 14 — Partying up
-- [ ] Phase 15 — Home screen, HUD, minimap, and leaderboards
+- [x] Phase 13 — Ten dungeons: tiers 4 and 5 and more
+- [x] Phase 14 — Partying up
+- [x] Phase 15 — Home screen, HUD, minimap, and leaderboards
 - [ ] Phase 16 — Rare loot
 - [ ] Phase 17 — Economy and account systems
 - [ ] Phase 18 — Onboarding and settings
@@ -793,3 +793,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Live (harness, **test** DB, headless): an MP potion showed "MP 15 (+0)(+5)"; a T0 Cape of HP showed "HP 23 (+3)(+0)"; no console errors.
 - Follow-up (the user): no "(+0)": a source adding nothing is hidden, and the two brackets are coloured apart (gear blue, potions purple) with a matching key line; Luck now shows its gear bonus. Checked against the dev database (read-only): Wynne's DEX should read 36 (+8); Bran's DEX gear nets to 0 (+1 +1 +1 against the T7 Helm's −3), so it shows no bracket. `npm run check`: 584 shared, 245 server, 91 client, build. Live: "HP 23 (+3)" in blue, "MP 15 (+5)" in purple.
 - Follow-up (the user): the home panel's stats are now a table: label, Total, Gear, Potions, numbers right-aligned in their columns, the headings replacing the key line. Live: every total ends on one edge. `npm run check` passes.
+
+### Phases 14 and 15 complete — 2026-10-26
+
+- The user ran the combined Phase 14–15 checklists (party, party queue, home screen, HUD, minimap, leaderboards, and the stat display changes D-150 and D-151): all pass. `phase-14` merged into `main` and pushed.
+- Next step: Phase 16 (rare loot): draft for approval.
