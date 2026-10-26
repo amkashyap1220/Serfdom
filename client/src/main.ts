@@ -7,7 +7,6 @@ import {
   FIRE_MODE_LABELS,
   itemName,
   loadoutOf,
-  luckOf,
   rotateVec,
   STAT_KEYS,
   STAT_LABELS,
@@ -267,12 +266,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
         (key) => [STAT_LABELS[key], serf ? statText(serf, key) : "—"] as const,
       ),
       // Reward chests per clear: 1 + each worn Luck item (D-068).
-      [
-        "LUCK",
-        serf
-          ? String(luckOf(serf.items.filter((i) => i.equipped !== null)))
-          : "—",
-      ],
+      ["LUCK", serf ? statText(serf, "luck") : "—"],
     ]);
   };
 

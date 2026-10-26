@@ -42,6 +42,7 @@ import {
   type ServerMessage,
   type PartyInviter,
   MAX_LEVEL,
+  BASE_LUCK,
   MAX_PARTY_SIZE,
   sellPrice,
   type Item,
@@ -646,21 +647,15 @@ export class ScreenView {
         ),
       );
       const stats = el("dl", "side-stats");
-      for (const key of STAT_KEYS) {
+      for (const key of [...STAT_KEYS, "luck" as const]) {
+        const value = el("dd", "");
+        value.append(statNode(serf, key));
         stats.append(
-          el("dt", "", STAT_LABELS[key]),
-          el("dd", "", statText(serf, key)),
+          el("dt", "", key === "luck" ? "LUCK" : STAT_LABELS[key]),
+          value,
         );
       }
-      stats.append(
-        el("dt", "", "LUCK"),
-        el(
-          "dd",
-          "",
-          String(luckOf(serf.items.filter((i) => i.equipped !== null))),
-        ),
-      );
-      card.append(stats, el("p", "side-gear", STAT_KEY_HINT));
+      card.append(stats, statKey());
       const worn = serf.items.filter((i) => i.equipped !== null);
       card.append(
         el(
@@ -967,7 +962,7 @@ export class ScreenView {
         chosen
           ? el("span", "serf-chosen", "Playing")
           : button("Play as", () => this.actions.selectSerf(s.id)),
-        el("span", "serf-stats", statLine(s)),
+        statLineNode(s),
       );
       body.append(row);
     }
@@ -1805,27 +1800,84 @@ function sellButton(item: ItemSpec, onSell: () => void): HTMLButtonElement {
 export function statLine(serf: SerfSummary): string {
   return [
     ...STAT_KEYS.map((key) => `${STAT_LABELS[key]} ${statText(serf, key)}`),
-    // Luck counts equipped items only (D-068).
-    `LUCK ${luckOf(serf.items.filter((i) => i.equipped !== null))}`,
+    `LUCK ${statText(serf, "luck")}`,
   ].join(" · ");
 }
 
-/**
- * One stat as "25 (+3)(+1)" (D-151, the user): the total, then what worn
- * gear adds, then what potions added; the base is the rest (here 21). With
- * neither, just the total. The caps are never shown (D-150).
- */
-export function statText(serf: SerfSummary, key: StatKey): string {
-  const value = loadoutOf(serf).stats[key];
-  const gear = value - serf.stats[key];
-  const potions = serf.potionStats[key];
-  if (gear === 0 && potions === 0) return String(value);
-  const signed = (n: number) => `(${n < 0 ? "−" : "+"}${Math.abs(n)})`;
-  return `${value} ${signed(gear)}${signed(potions)}`;
+/** statLine with coloured brackets, for the Serfs tab (D-151). */
+export function statLineNode(serf: SerfSummary): HTMLElement {
+  const out = el("span", "serf-stats");
+  [...STAT_KEYS, "luck" as const].forEach((key, i) => {
+    if (i > 0) out.append(" · ");
+    out.append(
+      key === "luck" ? "LUCK " : `${STAT_LABELS[key]} `,
+      statNode(serf, key),
+    );
+  });
+  return out;
 }
 
-/** The key to statText's brackets, shown under stat lists (D-151). */
-export const STAT_KEY_HINT = "Total (+gear)(+potions)";
+/**
+ * A stat's sources (D-151): the total, what worn gear adds, and what
+ * potions added; the base (levels, the class bonus) is the rest. Luck is
+ * 1 plus worn Luck items, and no potion raises it (D-066, D-068).
+ */
+export function statParts(
+  serf: SerfSummary,
+  key: StatKey | "luck",
+): { total: number; gear: number; potions: number } {
+  if (key === "luck") {
+    const total = luckOf(serf.items.filter((i) => i.equipped !== null));
+    return { total, gear: total - BASE_LUCK, potions: 0 };
+  }
+  const total = loadoutOf(serf).stats[key];
+  return {
+    total,
+    gear: total - serf.stats[key],
+    potions: serf.potionStats[key],
+  };
+}
+
+const signed = (n: number) => `(${n < 0 ? "−" : "+"}${Math.abs(n)})`;
+
+/**
+ * One stat as text, "25 (+3)(+1)" (D-151, the user): the total, then gear,
+ * then potions; a source adding nothing is left out. The caps are never
+ * shown (D-150).
+ */
+export function statText(serf: SerfSummary, key: StatKey | "luck"): string {
+  const { total, gear, potions } = statParts(serf, key);
+  return [
+    String(total),
+    gear !== 0 ? signed(gear) : "",
+    potions !== 0 ? signed(potions) : "",
+  ]
+    .filter((s) => s !== "")
+    .join(" ");
+}
+
+/** The same, with gear and potion brackets coloured apart (one may show alone). */
+export function statNode(
+  serf: SerfSummary,
+  key: StatKey | "luck",
+): HTMLElement {
+  const { total, gear, potions } = statParts(serf, key);
+  const out = el("span", "", String(total));
+  if (gear !== 0) out.append(" ", el("span", "src-gear", signed(gear)));
+  if (potions !== 0) out.append(" ", el("span", "src-potion", signed(potions)));
+  return out;
+}
+
+/** The key to the brackets' colours, under stat lists (D-151). */
+export function statKey(): HTMLElement {
+  const p = el("p", "side-gear", "Total ");
+  p.append(
+    el("span", "src-gear", "(+gear)"),
+    " ",
+    el("span", "src-potion", "(+potions)"),
+  );
+  return p;
+}
 
 /** Display names of the 10 worn slots (D-082). */
 const SLOT_LABELS: Record<EquipSlot, string> = {

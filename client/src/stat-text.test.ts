@@ -1,6 +1,6 @@
 import { SERF_BASE, zeroStats, type SerfSummary } from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
-import { statText } from "./screens";
+import { statParts, statText } from "./screens";
 
 /** A serf with these stats, potion tally, and worn items. */
 const serf = (
@@ -15,31 +15,34 @@ const serf = (
     classId: "fighter",
   }) as SerfSummary;
 
-const ring = {
-  id: 1,
-  slot: "ring",
-  type: "attack",
-  tier: 3,
-  rolls: [],
-  luck: 0,
-  equipped: "ring1",
-} as SerfSummary["items"][number];
+const ring = (luck: 0 | 1) =>
+  ({
+    id: 1,
+    slot: "ring",
+    type: "attack",
+    tier: 3,
+    rolls: [],
+    luck,
+    equipped: "ring1",
+  }) as SerfSummary["items"][number];
 
-describe("stat lines (D-151): total (+gear)(+potions)", () => {
+describe("stat lines (D-151): total (+gear)(+potions), zero sources hidden", () => {
   it("shows just the total with neither", () => {
     expect(statText(serf({ attack: 21 }, {}), "attack")).toBe("21");
   });
   it("splits gear and potions; the base is the rest", () => {
-    const s = serf({ attack: 22 }, { attack: 1 }, [ring]);
-    const text = statText(s, "attack");
-    const m = text.match(/^(\d+) \(\+(\d+)\)\(\+1\)$/);
-    expect(m, text).not.toBeNull();
-    // Total minus gear minus potions is the base: 21.
-    expect(Number(m![1]) - Number(m![2]) - 1).toBe(21);
+    const s = serf({ attack: 22 }, { attack: 1 }, [ring(0)]);
+    const { total, gear, potions } = statParts(s, "attack");
+    expect(statText(s, "attack")).toBe(`${total} (+${gear}) (+1)`);
+    expect(total - gear - potions).toBe(21);
   });
-  it("keeps both brackets when only one is non-zero, so their places never move", () => {
+  it("leaves out a source that adds nothing", () => {
     expect(statText(serf({ attack: 22 }, { attack: 1 }), "attack")).toBe(
-      "22 (+0)(+1)",
+      "22 (+1)",
     );
+  });
+  it("shows Luck's gear: 1 plus worn Luck items, never potions", () => {
+    expect(statText(serf({}, {}), "luck")).toBe("1");
+    expect(statText(serf({}, {}, [ring(1)]), "luck")).toBe("2 (+1)");
   });
 });
