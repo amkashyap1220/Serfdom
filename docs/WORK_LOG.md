@@ -887,3 +887,9 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Checks: `npm run check` (637 shared, 273 server, 104 client). Live (headless, test DB): Large made hints 12 → 14 px and the HUD 12 → 14 px; no tab overflowed sideways (Play, Serfs, Stash, Exchange, Leaderboards, Settings); the picked chip read "✓ ATK"; a level-20 Fighter entered the Sunken Temple's Great cistern (18 enemies, ~5.3 KB snapshots) for the readability screenshots; no console errors (an earlier run warned "saveSettings: bad settings" only because the test server was started before `textSize` existed).
 - Readability findings for the user: enemy HP numbers overlap when enemies bunch up (always shown, not a debug overlay); the hint banner sits over the top of the view in first runs (it lets the mouse through). Not changed: a design choice for the user.
 - The user's bug (2026-10-26): with the welcome card up, the home screen grew past the 800 px box and the bottom was cut off. Cause: the tab body kept its fixed 690 px maximum, so anything above it (the card, a notice, Large text) pushed it out. Fix: the home column is exactly the box's height and the tab body takes what is left and scrolls. Live (headless, test DB, a new account with the card up, every tab at Normal and Large text): every tab now ends inside the box and scrolls to its last element; on the old CSS the Stash and Settings tabs ran 149 px (Large: 189 px) past the bottom.
+
+### Phase 18 complete — 2026-10-26
+
+- The user ran the Phase 18 checklist: all pass. `phase-18` merged into `main` and pushed.
+- Open for later: open question 28 (enemy HP numbers overlapping in crowds; whether the game grows past 1200×800).
+- Next step: Phase 19 (production hosting).

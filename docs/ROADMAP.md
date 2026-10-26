@@ -464,7 +464,7 @@ Acceptance:
 
 ## Phase 18 — Onboarding and settings
 
-Status: built (2026-10-26), awaiting the user's test on branch `phase-18` (D-159): 18a settings per account and rebindable keys, 18b window fitting and full screen, 18c first-run hints, 18d text size and colour-safe shapes. Acceptance as measured: every rebound key worked in menus and runs and no key could hold two actions (unit tests and a live run); the layout, HUD, and ±480 × ±400 view held at six window sizes from 800×560 to 1920×1080; the first-time-tester criterion needs a real new player.
+Status: **complete** (2026-10-26; the user's Phase 18 checklist passed) (D-159): 18a settings per account and rebindable keys, 18b window fitting and full screen, 18c first-run hints, 18d text size and colour-safe shapes. Acceptance as measured: every rebound key worked in menus and runs and no key could hold two actions (unit tests and a live run); the layout, HUD, and ±480 × ±400 view held at six window sizes from 800×560 to 1920×1080; the first-time-tester criterion needs a real new player.
 
 **Goal:** A new player can learn the game without help, and every player can adjust it to their setup (D-124).
 

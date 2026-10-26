@@ -263,6 +263,7 @@ Ask these when needed by the current implementation phase, not all at once.
 25. **Art for the alpha (raised 2026-10-24, D-124):** Does the alpha open with placeholder shapes, or does some real art (Phase 23) have to come first? Needed by Phase 21.
 26. **Alpha ground rules (raised 2026-10-24, D-124):** May alpha progress (serfs, items, gold) be wiped before the Steam release? Needed by Phase 21.
 27. **Scaling details for D-158 (raised 2026-10-26):** Which regions first (and whether the alpha starts with one); how a mixed-region party's run picks its region (the party leader's, the lowest worst ping, or the players' choice); the per-server player cap and the login queue's behavior; and the numbers one server can hold, from the Phase 21 load test. Needed by Phases 19 and 21.
+28. **Enemy HP numbers in crowds (raised 2026-10-26, the Phase 18 readability pass):** every enemy always shows its HP as a number, and in crowded rooms the numbers overlap. Small health bars instead, a number only on an enemy that has been hit, or keep them? Also asked: whether the game should grow past 1200×800 on big screens (D-159 says it scales up; the user has not asked to change it).
 
 ## How to add a decision
 
