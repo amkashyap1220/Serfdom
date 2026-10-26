@@ -227,6 +227,16 @@ export class NetSync {
     return this.inRun ? this.currentSeed : null;
   }
 
+  /** Everyone in the run, from the latest snapshot (the HUD's party HP). */
+  get players(): readonly SnapshotPlayer[] {
+    return this.latest?.snapshot.players ?? [];
+  }
+
+  /** The run's clock in seconds, from the latest snapshot; null outside a run. */
+  get clock(): number | null {
+    return this.inRun ? (this.latest?.snapshot.clock ?? null) : null;
+  }
+
   get closedDoors(): readonly string[] {
     return this.latest?.snapshot.closedDoors ?? [];
   }

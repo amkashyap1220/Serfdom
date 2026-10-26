@@ -20,6 +20,9 @@ export const FIRE_MODES: readonly FireMode[] = [
   "manual",
 ];
 
+/** The mode a new session starts in (D-149, the user: Full auto). */
+export const DEFAULT_FIRE_MODE: FireMode = "fullAuto";
+
 export const FIRE_MODE_LABELS: Readonly<Record<FireMode, string>> = {
   fullAuto: "Full auto",
   autoAim: "Auto aim + Space",

@@ -25,7 +25,14 @@ body {
   height: 800px;
   box-sizing: border-box;
   padding: 12px;
-  overflow: hidden;
+  /* The debug readout (` key) can be taller than the panel: it scrolls. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #46505f #0e1014;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   background: #171a21;
   border-right: 1px solid #2c3340;
   font-size: 12px;
@@ -79,7 +86,101 @@ body {
   image-rendering: pixelated;
 }
 
-/* HP and MP bars in the HUD (Phase 10a). Placeholder colours. */
+/* The player HUD (D-146). Placeholder colours. */
+/* Taller-than-the-panel content scrolls; nothing squashes. */
+#hud > * {
+  flex-shrink: 0;
+}
+
+#hud .hud-name {
+  margin: 0;
+  color: #ffffff;
+  font-size: 13px;
+}
+
+#hud .hud-line {
+  margin: 0;
+  color: #c9d1dc;
+}
+
+.hud-bar {
+  position: relative;
+  height: 16px;
+  border: 1px solid #46505f;
+  background: #0e1014;
+}
+
+.hud-bar span {
+  display: block;
+  height: 100%;
+  width: 0;
+}
+
+.hud-bar b {
+  position: absolute;
+  inset: 0;
+  padding-left: 6px;
+  font-weight: normal;
+  font-size: 11px;
+  line-height: 16px;
+  color: #ffffff;
+  text-shadow: 0 0 2px #000000;
+}
+
+.hud-bar.hp span {
+  background: #c0392b;
+}
+
+.hud-bar.mp span {
+  background: #2e86de;
+}
+
+.hud-bar.exp {
+  height: 10px;
+}
+
+.hud-bar.exp b {
+  line-height: 10px;
+  font-size: 9px;
+}
+
+.hud-bar.exp span {
+  background: #f0c419;
+}
+
+#hud-minimap {
+  display: block;
+  box-sizing: border-box;
+  width: 216px;
+  height: 216px;
+  border: 1px solid #2c3340;
+  background: #0b0d11;
+  image-rendering: pixelated;
+}
+
+#hud-party h2 {
+  margin: 4px 0 2px;
+}
+
+.hud-member {
+  display: grid;
+  grid-template-columns: 1fr 90px;
+  align-items: center;
+  gap: 6px;
+  color: #c9d1dc;
+}
+
+#hud .hud-keys {
+  margin: auto 0 0;
+  font-size: 10px;
+  color: #6f7888;
+}
+
+#hud-debug[hidden] {
+  display: none;
+}
+
+/* HP and MP bars (Phase 10a); now the party rows' HP. Placeholder colours. */
 .bars {
   display: flex;
   flex-direction: column;

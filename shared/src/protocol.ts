@@ -70,6 +70,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v46 (15b): snapshot players carry `abilityCooldown` (seconds), for
+ *          the HUD's ready line (D-146).
  * v45 (14b): queueing as a party (D-143): server queueLeft {reason}:
  *          you are not (or no longer) queued; `reason` says why when
  *          someone else or a refusal caused it. queueStatus may now arrive
@@ -161,7 +163,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 45;
+export const PROTOCOL_VERSION = 46;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -308,6 +310,8 @@ export interface SnapshotPlayer {
   buffs: BuffKind[];
   /** Seconds until this player may fire again (needed to predict own shots exactly). */
   cooldown: number;
+  /** Seconds until their ability may be cast again (the HUD, D-146). */
+  abilityCooldown: number;
   /** An eel-priest's pull (D-135): towards (x, y) from run clock `from`, `left` seconds of it to go; else null. */
   pull: {
     x: number;
@@ -1741,6 +1745,7 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
       "maxMp",
       "buffs",
       "cooldown",
+      "abilityCooldown",
       "pull",
     ])
   ) {
@@ -1763,7 +1768,8 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
     !isNonNegative(v.maxHp) ||
     !isNonNegative(v.mp) ||
     !isNonNegative(v.maxMp) ||
-    !isNonNegative(v.cooldown)
+    !isNonNegative(v.cooldown) ||
+    !isNonNegative(v.abilityCooldown)
   ) {
     return null;
   }
@@ -1785,6 +1791,7 @@ function parseSnapshotPlayer(v: unknown): SnapshotPlayer | null {
     maxMp: v.maxMp,
     buffs: v.buffs as BuffKind[],
     cooldown: v.cooldown,
+    abilityCooldown: v.abilityCooldown,
     pull,
   };
 }

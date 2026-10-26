@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aimDirection,
   closestTargetInRange,
+  DEFAULT_FIRE_MODE,
   nextFireMode,
   resolveFireIntent,
   stepFireCooldown,
@@ -13,6 +14,7 @@ const NO_POINTER: PointerState = { world: null, down: false };
 
 describe("nextFireMode", () => {
   it("cycles full auto → auto aim → auto fire → manual → full auto (D-099)", () => {
+    expect(DEFAULT_FIRE_MODE).toBe("fullAuto");
     expect(nextFireMode("fullAuto")).toBe("autoAim");
     expect(nextFireMode("autoAim")).toBe("autoFire");
     expect(nextFireMode("autoFire")).toBe("manual");

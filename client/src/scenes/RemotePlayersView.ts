@@ -19,6 +19,8 @@ export const VANISHED_ALPHA = 0.3;
 
 export class RemotePlayersView {
   private readonly sprites = new Map<number, RemoteSprite>();
+  /** The "#id" tags are debug marks (D-146). */
+  private labelsShown = false;
   private readonly scene: Phaser.Scene;
   private readonly layer: Phaser.GameObjects.Layer;
 
@@ -30,6 +32,11 @@ export class RemotePlayersView {
     this.scene = scene;
     this.layer = layer;
     makeSquareTexture(scene, REMOTE_TEXTURE, size, COLORS.body, COLORS.mark);
+  }
+
+  setLabelsVisible(on: boolean): void {
+    this.labelsShown = on;
+    for (const s of this.sprites.values()) s.label.setVisible(on);
   }
 
   get count(): number {
@@ -74,7 +81,8 @@ export class RemotePlayersView {
       })
       .setOrigin(0.5, 1)
       // Reads at 10 CSS px whatever the camera zoom (D-127).
-      .setScale(1 / CAMERA_ZOOM);
+      .setScale(1 / CAMERA_ZOOM)
+      .setVisible(this.labelsShown);
     this.layer.add([image, label]);
     const sprite = { image, label };
     this.sprites.set(id, sprite);

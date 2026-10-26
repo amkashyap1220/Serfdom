@@ -615,6 +615,7 @@ describe("snapshot messages", () => {
     maxMp: 16,
     buffs: [] as ("battleCry" | "inspiration")[],
     cooldown: 0,
+    abilityCooldown: 0,
     pull: null,
   };
   const enemy = {

@@ -30,6 +30,25 @@ export function clearToken(): void {
   }
 }
 
+const DEBUG_HUD = "serfdom.debugHud";
+
+/** Whether the HUD's debug readout is shown on this browser (D-146). */
+export function loadDebugHud(): boolean {
+  try {
+    return window.localStorage.getItem(DEBUG_HUD) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveDebugHud(on: boolean): void {
+  try {
+    window.localStorage.setItem(DEBUG_HUD, on ? "1" : "0");
+  } catch {
+    // Storage blocked: the switch lasts until the page is closed.
+  }
+}
+
 const LAST_SERF = "serfdom.lastSerf";
 
 /** The serf last played on this browser (a convenience, not a secret). */

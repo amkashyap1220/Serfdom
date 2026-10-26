@@ -87,6 +87,8 @@ export interface ScreenActions {
   answerInvite(inviteId: number, accept: boolean): void;
   leaveParty(): void;
   removeMember(playerId: number): void;
+  /** The HUD's debug readout (D-146). */
+  setDebugHud(on: boolean): void;
 }
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
@@ -157,6 +159,13 @@ export class ScreenView {
   private partyMessage: { text: string; error: boolean } | null = null;
   private partyMessageTimer: ReturnType<typeof setTimeout> | undefined;
   private typedInviteName = "";
+  private debugHud = false;
+
+  /** The debug switch changed (Settings or the ` key). */
+  setDebugHud(on: boolean): void {
+    this.debugHud = on;
+    this.redraw();
+  }
 
   constructor(root: HTMLElement, actions: ScreenActions) {
     this.root = root;
@@ -670,6 +679,14 @@ export class ScreenView {
   /** Settings (D-145): only the debug readout for now; key binds and more are Phase 18. */
   private buildSettings(body: HTMLElement): void {
     body.append(el("h2", "", "Settings"));
+    const label = document.createElement("label");
+    label.className = "setting";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = this.debugHud;
+    box.addEventListener("change", () => this.actions.setDebugHud(box.checked));
+    label.append(box, " Show the debug readout in the HUD (` key)");
+    body.append(label);
     body.append(
       el("p", "hint", "Key binds, sound, and more settings come in Phase 18."),
     );

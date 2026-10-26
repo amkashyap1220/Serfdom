@@ -77,6 +77,13 @@
   border-color: #f0c419;
 }
 
+.setting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
 /* The home screen (D-145): a 240 px panel and the 960 px tabs. */
 .screen.screen-menu {
   padding: 0;

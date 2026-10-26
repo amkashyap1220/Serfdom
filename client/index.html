@@ -11,21 +11,33 @@
   <body>
     <div id="game-container">
       <aside id="hud">
-        <h1>Serfdom</h1>
-        <p>
-          HUD placeholder — debug readout. Move: W A S D. Rotate: Q / E (Z
-          resets). Fire mode: T. Manual fire: left click. Exit dungeon: R.
-        </p>
-        <div class="bars" aria-label="HP and MP">
-          <div class="bar hp"><span id="hp-fill"></span></div>
-          <div class="bar mp"><span id="mp-fill"></span></div>
+        <p id="hud-name" class="hud-name"></p>
+        <div class="hud-bar hp">
+          <span id="hp-fill"></span><b id="hp-text"></b>
         </div>
-        <h2>Serf</h2>
-        <dl id="hud-serf" class="debug-list"></dl>
-        <h2>Live</h2>
-        <dl id="hud-live" class="debug-list"></dl>
-        <h2>Layout</h2>
-        <dl id="hud-layout" class="debug-list"></dl>
+        <div class="hud-bar mp">
+          <span id="mp-fill"></span><b id="mp-text"></b>
+        </div>
+        <div class="hud-bar exp">
+          <span id="exp-fill"></span><b id="exp-text"></b>
+        </div>
+        <p id="hud-ability" class="hud-line"></p>
+        <p id="hud-fire" class="hud-line"></p>
+        <canvas id="hud-minimap" width="216" height="216"></canvas>
+        <p id="hud-run" class="hud-line"></p>
+        <div id="hud-party"></div>
+        <p class="hud-keys">
+          WASD move · Q/E turn (Z resets) · T fire mode · Space ability · click
+          to fire (Manual) · R leave · ` debug
+        </p>
+        <div id="hud-debug" hidden>
+          <h2>Serf</h2>
+          <dl id="hud-serf" class="debug-list"></dl>
+          <h2>Live</h2>
+          <dl id="hud-live" class="debug-list"></dl>
+          <h2>Layout</h2>
+          <dl id="hud-layout" class="debug-list"></dl>
+        </div>
       </aside>
       <main id="gameplay"></main>
       <!-- Menu, queue, death and completion screens (screens.ts). -->

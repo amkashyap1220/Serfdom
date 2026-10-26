@@ -22,11 +22,14 @@ import {
 } from "./app-state";
 import {
   clearToken,
+  loadDebugHud,
   loadLastSerf,
   loadToken,
+  saveDebugHud,
   saveLastSerf,
   saveToken,
 } from "./auth-store";
+import { Hud, type HudInput } from "./hud";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
@@ -54,14 +57,25 @@ function abilityText(serf: SerfSummary | null): string {
     ? "none (wear your class ability item)"
     : "none before a class";
 }
-const hpFill = requireElement("hp-fill");
-const mpFill = requireElement("mp-fill");
-
-/** The HUD's HP and MP bars (D-096): empty outside a run. */
-function setBars(hp: number, maxHp: number, mp: number, maxMp: number): void {
-  hpFill.style.width = `${maxHp > 0 ? (100 * hp) / maxHp : 0}%`;
-  mpFill.style.width = `${maxMp > 0 ? (100 * mp) / maxMp : 0}%`;
-}
+const hud = new Hud({
+  name: requireElement("hud-name"),
+  hpFill: requireElement("hp-fill"),
+  hpText: requireElement("hp-text"),
+  mpFill: requireElement("mp-fill"),
+  mpText: requireElement("mp-text"),
+  expFill: requireElement("exp-fill"),
+  expText: requireElement("exp-text"),
+  ability: requireElement("hud-ability"),
+  fire: requireElement("hud-fire"),
+  run: requireElement("hud-run"),
+  party: requireElement("hud-party"),
+});
+/** Your party as the server last sent it, for the HUD (D-146). */
+let currentParty: HudInput["party"] = null;
+const debugPanel = requireElement("hud-debug");
+/** The debug readout (D-146): hidden unless switched on (` or Settings). */
+let debugHud = loadDebugHud();
+debugPanel.hidden = !debugHud;
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -131,6 +145,20 @@ game.events.once(Phaser.Core.Events.READY, () => {
       net.connection.sendPartyAnswer(inviteId, accept),
     leaveParty: () => net.connection.sendPartyLeave(),
     removeMember: (playerId) => net.connection.sendPartyKick(playerId),
+    setDebugHud: (on) => setDebug(on),
+  });
+  const setDebug = (on: boolean) => {
+    debugHud = on;
+    debugPanel.hidden = !on;
+    saveDebugHud(on);
+    view.setDebugHud(on);
+  };
+  view.setDebugHud(debugHud);
+  // ` shows or hides the debug readout anywhere but while typing.
+  window.addEventListener("keydown", (e) => {
+    if (e.code !== "Backquote" || e.repeat) return;
+    if (e.target instanceof HTMLInputElement) return;
+    setDebug(!debugHud);
   });
   // On every (re)connect: log back in with the saved token if there is one.
   const onConnected = () => {
@@ -140,6 +168,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
   };
   net.onConnected = onConnected;
   net.onDisconnect = (reason) => {
+    currentParty = null;
     // The server drops a disconnected player from their party (D-143).
     view.clearParty();
     dispatch({ type: "disconnected", reason });
@@ -176,6 +205,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
     } else if (message.type === "serfError") {
       view.setSerfError(message.reason);
     } else if (message.type === "party") {
+      currentParty = message.party;
       const status = net.connection.snapshot.status;
       view.setParty(
         message,
@@ -258,12 +288,36 @@ game.events.once(Phaser.Core.Events.READY, () => {
       const scene = worldScene(game);
       if (!scene.ready) return;
       scene.setGameKeysActive(screen.kind === "inRun");
-      reportLive(game);
+      scene.setDebugVisible(debugHud);
+      renderHud(scene);
+      // The debug readout costs work every frame; only while shown.
+      if (debugHud) reportLive(game);
     });
   });
   // Re-measure on resize so the readout reflects what the window does now.
   window.addEventListener("resize", () => reportLayout(game, false));
 });
+
+/** The player HUD (D-146), every frame. */
+function renderHud(scene: WorldScene): void {
+  const { local, net, fireMode } = scene.getDebugState();
+  const status = net.connection.snapshot.status;
+  hud.render({
+    serf: playedSerf,
+    hp: local.hp,
+    maxHp: local.maxHp,
+    mp: local.mp,
+    maxMp: local.maxMp,
+    ability: net.online ? net.myAbility : null,
+    abilityCooldown: net.selfState?.abilityCooldown ?? 0,
+    fireMode,
+    dungeon: net.dungeon,
+    clock: net.clock,
+    party: currentParty,
+    myId: status.kind === "connected" ? status.playerId : null,
+    players: net.players,
+  });
+}
 
 function worldScene(game: Phaser.Game): WorldScene {
   return game.scene.getScene("world") as WorldScene;
@@ -351,7 +405,6 @@ function reportLive(game: Phaser.Game): void {
     [...byKind].map(([kind, n]) => `${n} ${kind}`).join(", ") || "none";
 
   const conn = net.connection.snapshot;
-  setBars(local.hp, local.maxHp, local.mp, local.maxMp);
   liveList.set([
     ["Server", describeStatus(conn.status)],
     [

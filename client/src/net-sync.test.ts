@@ -42,6 +42,7 @@ function server(
     maxMp: 10,
     buffs: [],
     cooldown: 0,
+    abilityCooldown: 0,
     pull: null,
     ...extra,
   };

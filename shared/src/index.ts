@@ -33,6 +33,7 @@ export {
   aimDirection,
   closestTargetInRange,
   FIRE_MODE_LABELS,
+  DEFAULT_FIRE_MODE,
   FIRE_MODES,
   NO_FIRE,
   nextFireMode,

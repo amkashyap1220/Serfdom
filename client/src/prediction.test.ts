@@ -56,6 +56,7 @@ describe("prediction uses your stats (8c-2)", () => {
       maxMp: me.combat.maxMp,
       buffs: [],
       cooldown: me.fireCooldown,
+      abilityCooldown: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBe(0);
@@ -100,6 +101,7 @@ describe("prediction wades through sludge like the server (D-113)", () => {
       maxMp: me.combat.maxMp,
       buffs: [],
       cooldown: me.fireCooldown,
+      abilityCooldown: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBe(0);
@@ -152,6 +154,7 @@ describe("prediction follows the Sunken Temple's water (D-135)", () => {
         maxMp: me.combat.maxMp,
         buffs: [],
         cooldown: me.fireCooldown,
+        abilityCooldown: 0,
         pull: me.pull
           ? {
               x: me.pull.to.x,
@@ -228,6 +231,7 @@ describe("prediction follows Frost Hollow's frost (D-136)", () => {
       maxMp: me.combat.maxMp,
       buffs: [],
       cooldown: me.fireCooldown,
+      abilityCooldown: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBeCloseTo(0, 9);
@@ -280,6 +284,7 @@ describe("prediction follows Stormspire's wind (D-139)", () => {
       maxMp: server.players[0]!.combat.maxMp,
       buffs: [],
       cooldown: 0,
+      abilityCooldown: 0,
       pull: null,
     });
     const states: SimState[] = [];
@@ -303,6 +308,7 @@ describe("prediction follows Stormspire's wind (D-139)", () => {
       maxMp: me.combat.maxMp,
       buffs: [],
       cooldown: me.fireCooldown,
+      abilityCooldown: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBeCloseTo(0, 9);
@@ -364,6 +370,7 @@ describe("prediction follows the Elder Dragon's wing gust (D-140)", () => {
       maxMp: me.combat.maxMp,
       buffs: [],
       cooldown: me.fireCooldown,
+      abilityCooldown: 0,
       pull: null,
     });
     expect(predictor.lastCorrection).toBeCloseTo(0, 9);

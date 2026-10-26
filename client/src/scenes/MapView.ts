@@ -158,6 +158,13 @@ export class MapView {
   private readonly scene: Phaser.Scene;
   private readonly layer: Phaser.GameObjects.Layer;
   private objects: Phaser.GameObjects.GameObject[] = [];
+  /** Room labels: the name, plus its coordinates while debugging (D-146). */
+  private labels: {
+    text: Phaser.GameObjects.Text;
+    name: string;
+    at: string;
+  }[] = [];
+  private debug = false;
   private readonly doors: Phaser.GameObjects.Graphics;
   private readonly portal: Phaser.GameObjects.Graphics;
   private layout: DungeonLayout | null = null;
@@ -178,6 +185,7 @@ export class MapView {
     this.colors = { ...COLORS, ...(dungeon ? PALETTES[dungeon] : {}) };
     for (const o of this.objects) o.destroy();
     this.objects = [];
+    this.labels = [];
     this.doorKey = "";
 
     const g = this.scene.add.graphics();
@@ -304,15 +312,24 @@ export class MapView {
       );
       g.lineBetween(b.x, y, b.x + b.width, y);
     }
+    const at = `  (${b.x},${b.y})`;
     const label = this.scene.add.text(
       b.x + 4,
       b.y + 4,
-      `${name}  (${b.x},${b.y})`,
+      this.debug ? name + at : name,
       { fontFamily: "monospace", fontSize: "10px", color: this.colors.label },
     );
+    this.labels.push({ text: label, name, at });
     // Reads at 10 CSS px whatever the camera zoom (D-127).
     label.setScale(1 / CAMERA_ZOOM);
     this.objects.push(label);
     this.layer.add(label);
+  }
+
+  /** Room coordinates are a debug mark (D-146). */
+  setDebug(on: boolean): void {
+    if (on === this.debug) return;
+    this.debug = on;
+    for (const l of this.labels) l.text.setText(on ? l.name + l.at : l.name);
   }
 }

@@ -452,6 +452,7 @@ export class DungeonInstance {
         maxMp: p.combat.maxMp,
         buffs: BUFF_KINDS.filter((b) => p.buffs[b] !== undefined),
         cooldown: p.fireCooldown,
+        abilityCooldown: roundCoord(p.abilityCooldown),
         // Exact, like the position: prediction must pull the same way.
         pull: p.pull
           ? {

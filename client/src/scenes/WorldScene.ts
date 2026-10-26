@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import {
   consumeFixedSteps,
+  DEFAULT_FIRE_MODE,
   PLAYER_WEAPON,
   dungeonInfo,
   MAX_FRAME_SECONDS,
@@ -117,6 +118,8 @@ export class WorldScene extends Phaser.Scene {
   private mapLayer!: Phaser.GameObjects.Layer;
   private world!: Phaser.GameObjects.Layer;
   private map!: MapView;
+  private screenOverlay: Phaser.GameObjects.Graphics | null = null;
+  private debugShown = false;
   private combat!: CombatView;
   private remotes!: RemotePlayersView;
   readonly net = new NetSync();
@@ -129,7 +132,7 @@ export class WorldScene extends Phaser.Scene {
   private lastPointer: PointerInput = { screen: null, leftDown: false };
   private lastPointerWorld: Vec2 | null = null;
   private viewRotation = 0;
-  private fireMode: FireMode = "autoAim";
+  private fireMode: FireMode = DEFAULT_FIRE_MODE;
   private carriedSeconds = 0;
   /** Whether Phaser reads (and captures) the game keys; null until first set. */
   private gameKeysActive: boolean | null = null;
@@ -182,7 +185,8 @@ export class WorldScene extends Phaser.Scene {
       PLAYER_TEXTURE,
     );
     this.world.add(this.player);
-    const overlay = this.drawScreenOverlay();
+    const overlay = this.drawScreenOverlay().setVisible(this.debugShown);
+    this.screenOverlay = overlay;
     this.bossBar = this.add.graphics().setScrollFactor(0);
     this.bossLabel = this.add
       .text(this.scale.width / 2, BOSS_BAR.y - 14, "", {
@@ -259,6 +263,18 @@ export class WorldScene extends Phaser.Scene {
    * whole page, which stops them from typing into the login form. So outside
    * a run capture is off and the keys are ignored by the game.
    */
+  /**
+   * The debug marks in the world (D-146): the visibility box and centre
+   * ticks, room coordinates, other players' "#id" tags.
+   */
+  setDebugVisible(on: boolean): void {
+    if (on === this.debugShown) return;
+    this.debugShown = on;
+    this.screenOverlay?.setVisible(on);
+    this.map.setDebug(on);
+    this.remotes.setLabelsVisible(on);
+  }
+
   setGameKeysActive(active: boolean): void {
     const keyboard = this.input.keyboard;
     if (!keyboard || this.gameKeysActive === active) return;
