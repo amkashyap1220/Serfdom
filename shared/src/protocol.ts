@@ -70,6 +70,10 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v44 (14a): parties (D-142, D-143). Client partyInvite {name},
+ *          partyAnswer {inviteId, accept}, partyLeave, partyKick
+ *          {playerId}; server party (your party and the invites you sent),
+ *          partyInvited, partyInviteGone, partyNotice, partyError.
  * v43: weapon attacks (D-141): runStarted carries your `weaponType`;
  *          snapshots list melee `swings`; blasts may be a staff's `burst`.
  * v42 (13j): Dragon's Roost (D-140): its kinds; a whirlpool carries its
@@ -153,7 +157,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 43;
+export const PROTOCOL_VERSION = 44;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -225,7 +229,28 @@ export type ClientMessage =
   /** Drink a rack or waiting potion on one of your serfs (D-118). */
   | { type: "drinkPotion"; potionId: number; serfId: number }
   /** Pour out a rack or waiting potion (it is gone, D-118). */
-  | { type: "pourPotion"; potionId: number };
+  | { type: "pourPotion"; potionId: number }
+  /** Invite the player playing this serf to your party (D-142). */
+  | { type: "partyInvite"; name: string }
+  | { type: "partyAnswer"; inviteId: number; accept: boolean }
+  | { type: "partyLeave" }
+  /** The leader removes a member (D-143). */
+  | { type: "partyKick"; playerId: number };
+
+/** A party member as others see them: their serf (null while choosing one). */
+export interface PartyMember {
+  playerId: number;
+  name: string | null;
+  classId: ClassId | null;
+  level: number;
+}
+
+/** Who sent an invite: their serf. */
+export interface PartyInviter {
+  name: string;
+  classId: ClassId | null;
+  level: number;
+}
 
 /** One reward chest's item and whether it fit in the bag. */
 export interface LootDrop {
@@ -611,6 +636,25 @@ export type ServerMessage =
     }
   /** getStash/sellItem refused; `reason` is safe to show. */
   | { type: "stashError"; reason: string }
+  /** Your party (null: none) and the invites you sent that are still open (D-143). */
+  | {
+      type: "party";
+      party: { leaderId: number; members: PartyMember[] } | null;
+      invited: { inviteId: number; name: string }[];
+    }
+  /** Someone invites you; it lapses after `expiresIn` seconds. */
+  | {
+      type: "partyInvited";
+      inviteId: number;
+      from: PartyInviter;
+      expiresIn: number;
+    }
+  /** That invite to you is no longer open (answered, lapsed, withdrawn). */
+  | { type: "partyInviteGone"; inviteId: number }
+  /** Something happened to your party; `text` is safe to show. */
+  | { type: "partyNotice"; text: string }
+  /** A party request was refused; `reason` is safe to show. */
+  | { type: "partyError"; reason: string }
   | {
       type: "snapshot";
       tick: number;
@@ -827,6 +871,45 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
       return {
         ok: true,
         message: { type: "selectSerf", serfId: obj.serfId },
+      };
+    case "partyInvite":
+      if (!hasExactKeys(obj, ["type", "name"])) {
+        return fail("partyInvite: unexpected fields");
+      }
+      // Shape and size only; the server looks the name up.
+      if (typeof obj.name !== "string" || obj.name.length > SERF_NAME_MAX * 4) {
+        return fail("partyInvite: name must be a string");
+      }
+      return { ok: true, message: { type: "partyInvite", name: obj.name } };
+    case "partyAnswer":
+      if (!hasExactKeys(obj, ["type", "inviteId", "accept"])) {
+        return fail("partyAnswer: unexpected fields");
+      }
+      if (!isPlayerId(obj.inviteId)) return fail("partyAnswer: bad inviteId");
+      if (typeof obj.accept !== "boolean") {
+        return fail("partyAnswer: accept must be a boolean");
+      }
+      return {
+        ok: true,
+        message: {
+          type: "partyAnswer",
+          inviteId: obj.inviteId,
+          accept: obj.accept,
+        },
+      };
+    case "partyLeave":
+      if (!hasExactKeys(obj, ["type"])) {
+        return fail("partyLeave: unexpected fields");
+      }
+      return { ok: true, message: { type: "partyLeave" } };
+    case "partyKick":
+      if (!hasExactKeys(obj, ["type", "playerId"])) {
+        return fail("partyKick: unexpected fields");
+      }
+      if (!isPlayerId(obj.playerId)) return fail("partyKick: bad playerId");
+      return {
+        ok: true,
+        message: { type: "partyKick", playerId: obj.playerId },
       };
     case "resume":
       if (!hasExactKeys(obj, ["type", "token"])) {
@@ -1093,6 +1176,91 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         return fail("stashError: reason must be a string");
       }
       return { ok: true, message: { type: "stashError", reason: obj.reason } };
+    case "partyNotice":
+      if (!hasExactKeys(obj, ["type", "text"])) {
+        return fail("partyNotice: unexpected fields");
+      }
+      if (typeof obj.text !== "string") {
+        return fail("partyNotice: text must be a string");
+      }
+      return { ok: true, message: { type: "partyNotice", text: obj.text } };
+    case "partyError":
+      if (!hasExactKeys(obj, ["type", "reason"])) {
+        return fail("partyError: unexpected fields");
+      }
+      if (typeof obj.reason !== "string") {
+        return fail("partyError: reason must be a string");
+      }
+      return { ok: true, message: { type: "partyError", reason: obj.reason } };
+    case "partyInviteGone":
+      if (!hasExactKeys(obj, ["type", "inviteId"])) {
+        return fail("partyInviteGone: unexpected fields");
+      }
+      if (!isPlayerId(obj.inviteId)) {
+        return fail("partyInviteGone: bad inviteId");
+      }
+      return {
+        ok: true,
+        message: { type: "partyInviteGone", inviteId: obj.inviteId },
+      };
+    case "partyInvited": {
+      if (!hasExactKeys(obj, ["type", "inviteId", "from", "expiresIn"])) {
+        return fail("partyInvited: unexpected fields");
+      }
+      if (!isPlayerId(obj.inviteId)) return fail("partyInvited: bad inviteId");
+      if (!isNonNegative(obj.expiresIn)) {
+        return fail("partyInvited: bad expiresIn");
+      }
+      const from = parseInviter(obj.from);
+      if (!from) return fail("partyInvited: bad from");
+      return {
+        ok: true,
+        message: {
+          type: "partyInvited",
+          inviteId: obj.inviteId,
+          from,
+          expiresIn: obj.expiresIn,
+        },
+      };
+    }
+    case "party": {
+      if (!hasExactKeys(obj, ["type", "party", "invited"])) {
+        return fail("party: unexpected fields");
+      }
+      let party: { leaderId: number; members: PartyMember[] } | null = null;
+      if (obj.party !== null) {
+        const p = obj.party;
+        if (
+          !isPlainObject(p) ||
+          !hasExactKeys(p, ["leaderId", "members"]) ||
+          !isPlayerId(p.leaderId) ||
+          !Array.isArray(p.members)
+        ) {
+          return fail("party: bad party");
+        }
+        const members: PartyMember[] = [];
+        for (const m of p.members) {
+          const member = parsePartyMember(m);
+          if (!member) return fail("party: bad member");
+          members.push(member);
+        }
+        party = { leaderId: p.leaderId, members };
+      }
+      if (!Array.isArray(obj.invited)) return fail("party: bad invited");
+      const invited: { inviteId: number; name: string }[] = [];
+      for (const i of obj.invited) {
+        if (
+          !isPlainObject(i) ||
+          !hasExactKeys(i, ["inviteId", "name"]) ||
+          !isPlayerId(i.inviteId) ||
+          typeof i.name !== "string"
+        ) {
+          return fail("party: bad invite");
+        }
+        invited.push({ inviteId: i.inviteId, name: i.name });
+      }
+      return { ok: true, message: { type: "party", party, invited } };
+    }
     case "stash": {
       if (
         !hasExactKeys(obj, [
@@ -1285,6 +1453,38 @@ function parseFire(v: unknown): FireInput | string {
 }
 
 /** undefined means malformed. */
+function parsePartyMember(v: unknown): PartyMember | undefined {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["playerId", "name", "classId", "level"]) ||
+    !isPlayerId(v.playerId) ||
+    (v.name !== null && typeof v.name !== "string") ||
+    (v.classId !== null && !isClassId(v.classId)) ||
+    !isNonNegativeInt(v.level)
+  ) {
+    return undefined;
+  }
+  return {
+    playerId: v.playerId,
+    name: v.name,
+    classId: v.classId,
+    level: v.level,
+  };
+}
+
+function parseInviter(v: unknown): PartyInviter | undefined {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["name", "classId", "level"]) ||
+    typeof v.name !== "string" ||
+    (v.classId !== null && !isClassId(v.classId)) ||
+    !isNonNegativeInt(v.level)
+  ) {
+    return undefined;
+  }
+  return { name: v.name, classId: v.classId, level: v.level };
+}
+
 function parseSerfSummary(v: unknown): SerfSummary | undefined {
   if (
     !isPlainObject(v) ||

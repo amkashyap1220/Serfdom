@@ -284,6 +284,8 @@ export {
   roundCoord,
   type FireInput,
   type LeaderboardEntry,
+  type PartyInviter,
+  type PartyMember,
   type LootDrop,
   type PendingReward,
   type PendingPotion,

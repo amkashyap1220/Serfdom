@@ -1821,3 +1821,175 @@ describe("Phase 13 acceptance: entry, and a party clear of every new dungeon (D-
     });
   }
 });
+
+describe("parties (14a, D-142, D-143)", () => {
+  let nameSeq = 0;
+  /** A logged-in player playing a serf with a known name. */
+  async function partyPlayer(): Promise<{
+    client: TestClient;
+    name: string;
+    id: number;
+  }> {
+    const { client, welcome } = await joined({ serf: false });
+    const name = `Pal${++nameSeq}`;
+    client.send(encodeMessage({ type: "createSerf", name }));
+    for (let i = 0; i < 10; i++) {
+      const list = await nextOfType(client, "serfList");
+      if (list.selectedId !== null) break;
+    }
+    if (welcome.type !== "welcome") throw new Error("no welcome");
+    return { client, name, id: welcome.playerId };
+  }
+  const invite = (name: string) => encodeMessage({ type: "partyInvite", name });
+  const answer = (inviteId: number, accept: boolean) =>
+    encodeMessage({ type: "partyAnswer", inviteId, accept });
+
+  /** `a` invites `b` by name and `b` accepts. */
+  async function team(
+    a: { client: TestClient },
+    b: { client: TestClient; name: string },
+  ): Promise<void> {
+    a.client.send(invite(b.name));
+    const got = await nextOfType(b.client, "partyInvited");
+    b.client.send(answer(got.inviteId, true));
+    await nextOfType(b.client, "party");
+  }
+
+  it("two players who invite each other by serf name end up in one party", async () => {
+    const a = await partyPlayer();
+    const b = await partyPlayer();
+    // Any case finds the serf.
+    a.client.send(invite(b.name.toUpperCase()));
+    const got = await nextOfType(b.client, "partyInvited");
+    expect(got.from).toEqual({ name: a.name, classId: null, level: 1 });
+    expect(got.expiresIn).toBe(60);
+    const pending = await nextOfType(a.client, "party");
+    expect(pending).toEqual({
+      type: "party",
+      party: null,
+      invited: [{ inviteId: got.inviteId, name: b.name }],
+    });
+    b.client.send(answer(got.inviteId, true));
+    expect(await nextOfType(b.client, "partyInviteGone")).toMatchObject({
+      inviteId: got.inviteId,
+    });
+    const seen = await nextOfType(b.client, "party");
+    expect(seen.party).toEqual({
+      leaderId: a.id,
+      members: [
+        { playerId: a.id, name: a.name, classId: null, level: 1 },
+        { playerId: b.id, name: b.name, classId: null, level: 1 },
+      ],
+    });
+    expect(await nextOfType(a.client, "partyNotice")).toMatchObject({
+      text: `${b.name} joined the party.`,
+    });
+    expect(server.partyMembers(b.id)).toEqual([a.id, b.id]);
+  });
+
+  it("refusals are explained, never counted as invalid messages", async () => {
+    const a = await partyPlayer();
+    const b = await partyPlayer();
+    // More refusals than the 5 invalid messages that close a connection.
+    for (const name of ["Nobody", "Nobody Else", a.name, "Ghost", "Mist"]) {
+      a.client.send(invite(name));
+      await nextOfType(a.client, "partyError");
+    }
+    a.client.send(answer(999, true));
+    expect(await nextOfType(a.client, "partyError")).toMatchObject({
+      reason: "That invite is no longer open.",
+    });
+    a.client.send(invite(b.name));
+    a.client.send(invite(b.name));
+    expect(await nextOfType(a.client, "partyError")).toMatchObject({
+      reason: `You have already invited ${b.name}.`,
+    });
+    expect(a.client.socket.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it("refuses inviting someone in a run, or someone else's invite", async () => {
+    const a = await partyPlayer();
+    const b = await partyPlayer();
+    const c = await partyPlayer();
+    a.client.send(invite(c.name));
+    const got = await nextOfType(c.client, "partyInvited");
+    // b answers c's invite: not addressed to b.
+    b.client.send(answer(got.inviteId, true));
+    await nextOfType(b.client, "partyError");
+    expect(server.partyMembers(b.id)).toEqual([]);
+    b.client.send(queue);
+    await until(() => server.isQueued(b.id));
+    server.tick();
+    await nextOfType(b.client, "runStarted");
+    a.client.send(invite(b.name));
+    expect(await nextOfType(a.client, "partyError")).toMatchObject({
+      reason: `${b.name} is in a dungeon right now.`,
+    });
+  });
+
+  it("a full party of 10 refuses an eleventh", async () => {
+    const leader = await partyPlayer();
+    const others = [];
+    for (let i = 0; i < 10; i++) others.push(await partyPlayer());
+    for (const o of others.slice(0, 9)) await team(leader, o);
+    expect(server.partyMembers(leader.id)).toHaveLength(MAX_PARTY_SIZE);
+    leader.client.send(invite(others[9]!.name));
+    expect(await nextOfType(leader.client, "partyError")).toMatchObject({
+      reason: "Your party is full.",
+    });
+  });
+
+  it("only the leader removes members; the removed one is told", async () => {
+    const a = await partyPlayer();
+    const b = await partyPlayer();
+    const c = await partyPlayer();
+    await team(a, b);
+    await team(a, c);
+    b.client.send(encodeMessage({ type: "partyKick", playerId: c.id }));
+    expect(await nextOfType(b.client, "partyError")).toMatchObject({
+      reason: "Only the party leader can remove members.",
+    });
+    a.client.send(encodeMessage({ type: "partyKick", playerId: c.id }));
+    expect(await nextOfType(c.client, "partyNotice")).toMatchObject({
+      text: "You were removed from the party.",
+    });
+    await until(() => server.partyMembers(a.id).length === 2);
+    expect(server.partyMembers(c.id)).toEqual([]);
+  });
+
+  it("when the leader disconnects the longest-standing member leads", async () => {
+    const a = await partyPlayer();
+    const b = await partyPlayer();
+    const c = await partyPlayer();
+    await team(a, b);
+    await team(a, c);
+    a.client.socket.close();
+    expect(await nextOfType(c.client, "partyNotice")).toMatchObject({
+      text: `${a.name} left the party. ${b.name} leads the party now.`,
+    });
+    await until(() => server.partyMembers(c.id)[0] === b.id);
+    // Leaving a party of two breaks it up.
+    b.client.send(encodeMessage({ type: "partyLeave" }));
+    expect(await nextOfType(c.client, "partyNotice")).toMatchObject({
+      text: `${b.name} left the party. The party broke up.`,
+    });
+    await until(() => server.partyMembers(c.id).length === 0);
+  });
+
+  it("an unanswered invite lapses after 60 s", async () => {
+    const a = await partyPlayer();
+    const b = await partyPlayer();
+    a.client.send(invite(b.name));
+    const got = await nextOfType(b.client, "partyInvited");
+    for (let t = 0; t <= 60 * 60; t++) server.tick();
+    expect(await nextOfType(b.client, "partyInviteGone")).toMatchObject({
+      inviteId: got.inviteId,
+    });
+    expect(await nextOfType(a.client, "partyNotice")).toMatchObject({
+      text: `Your invite to ${b.name} expired.`,
+    });
+    b.client.send(answer(got.inviteId, true));
+    await nextOfType(b.client, "partyError");
+    expect(server.partyMembers(a.id)).toEqual([]);
+  });
+});

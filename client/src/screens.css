@@ -518,6 +518,41 @@
   color: #f0c419;
 }
 
+.party-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.party-invite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid #f0c419;
+  background: rgba(240, 196, 25, 0.12);
+}
+
+.party-news {
+  color: #9fd8ff;
+  margin: 0;
+}
+
+.party-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.party-member {
+  display: grid;
+  grid-template-columns: 220px 160px 100px;
+  align-items: center;
+  gap: 10px;
+}
+
 .serf-form {
   display: flex;
   gap: 6px;

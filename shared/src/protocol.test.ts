@@ -79,6 +79,33 @@ describe("parseClientMessage", () => {
     expect(parseClientMessage(raw)).toEqual({ ok: false, error });
   });
 
+  it("accepts the party requests (v44, D-143) and refuses odd shapes", () => {
+    const good = [
+      { type: "partyInvite", name: "Wynne Ashby" },
+      { type: "partyAnswer", inviteId: 4, accept: true },
+      { type: "partyAnswer", inviteId: 4, accept: false },
+      { type: "partyLeave" },
+      { type: "partyKick", playerId: 9 },
+    ] as const;
+    for (const m of good) {
+      expect(parseClientMessage(encodeMessage(m))).toEqual({
+        ok: true,
+        message: m,
+      });
+    }
+    for (const raw of [
+      '{"type":"partyInvite","name":7}',
+      `{"type":"partyInvite","name":"${"x".repeat(200)}"}`,
+      '{"type":"partyAnswer","inviteId":4,"accept":"yes"}',
+      '{"type":"partyAnswer","inviteId":0,"accept":true}',
+      '{"type":"partyLeave","party":1}',
+      '{"type":"partyKick","playerId":-2}',
+      '{"type":"partyKick","playerId":2.5}',
+    ]) {
+      expect(parseClientMessage(raw).ok, raw).toBe(false);
+    }
+  });
+
   it("rejects messages over the size limit before parsing", () => {
     const big = `{"type":"hello","protocol":1,"pad":"${"x".repeat(MAX_MESSAGE_BYTES)}"}`;
     expect(parseClientMessage(big)).toEqual({
@@ -376,6 +403,27 @@ describe("menu, queue, and run messages (v4)", () => {
       },
       { type: "serfList", slots: 2, serfs: [], selectedId: null },
       { type: "serfError", reason: "That name is taken." },
+      {
+        type: "party",
+        party: {
+          leaderId: 3,
+          members: [
+            { playerId: 3, name: "Bran", classId: "fighter", level: 20 },
+            { playerId: 7, name: null, classId: null, level: 1 },
+          ],
+        },
+        invited: [{ inviteId: 4, name: "Wynne" }],
+      },
+      { type: "party", party: null, invited: [] },
+      {
+        type: "partyInvited",
+        inviteId: 4,
+        from: { name: "Bran", classId: "fighter", level: 20 },
+        expiresIn: 60,
+      },
+      { type: "partyInviteGone", inviteId: 4 },
+      { type: "partyNotice", text: "Wynne joined the party." },
+      { type: "partyError", reason: "Your party is full." },
     ];
     for (const m of msgs) {
       expect(parseServerMessage(encodeMessage(m))).toEqual({

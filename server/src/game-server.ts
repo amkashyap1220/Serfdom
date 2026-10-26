@@ -19,6 +19,10 @@ import {
   type ServerMessage,
   loadoutOf,
   type Loadout,
+  normalizeSerfName,
+  type ClassId,
+  type PartyMember,
+  type SerfSummary,
 } from "@serfdom/shared";
 import { randomInt } from "node:crypto";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
@@ -28,6 +32,13 @@ import { DungeonInstance, type RunEnd } from "./dungeon-instance.ts";
 import { consoleLogger, type Logger } from "./log.ts";
 import { Matchmaker } from "./matchmaking.ts";
 import { MessageRateLimiter } from "./rate-limit.ts";
+import {
+  Parties,
+  type AnswerRefusal,
+  type Invite,
+  type InviteRefusal,
+  type Leaving,
+} from "./parties.ts";
 
 export interface GameServerOptions {
   /** TCP port; 0 picks a free port (used by tests). */
@@ -99,12 +110,34 @@ interface Session {
   serfLevel: number;
   /** The chosen serf's stats with gear and weapon, kept current at the same moments (D-077, D-083). */
   serfLoadout: Loadout;
+  /** The chosen serf's name and class: how others find and see you (invites by name, D-142). */
+  serfName: string | null;
+  serfClass: ClassId | null;
 }
 
 /** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
 const DEFAULT_QUEUE_WAIT_SECONDS = 5;
 /** D-052 (user, 2026-10-22): runs accept joiners for their first 15 s. */
 const DEFAULT_JOIN_WINDOW_SECONDS = 15;
+/** D-143: an invite lapses after a minute. */
+const INVITE_SECONDS = 60;
+/** PROVISIONAL (D-143 "a rate limit"): at most 10 invites a minute per player. */
+const MAX_INVITES_PER_MINUTE = 10;
+
+const INVITE_REFUSALS: Record<InviteRefusal, (name: string) => string> = {
+  self: () => "You can't invite yourself.",
+  alreadyMember: (name) => `${name} is already in your party.`,
+  inParty: (name) => `${name} is already in a party.`,
+  alreadyInvited: (name) => `You have already invited ${name}.`,
+  full: () => "Your party is full.",
+  tooMany: () => "Too many invites. Wait a minute and try again.",
+};
+
+const ANSWER_REFUSALS: Record<AnswerRefusal, string> = {
+  gone: "That invite is no longer open.",
+  inParty: "Leave your party first.",
+  full: "That party is full.",
+};
 
 /**
  * Authoritative game server.
@@ -138,6 +171,11 @@ export class GameServer {
   private readonly maxMessagesPerSecond: number;
   private readonly joinWindowTicks: number;
   private readonly matchmaker: Matchmaker;
+  private readonly parties = new Parties({
+    inviteTicks: INVITE_SECONDS * TICK_RATE,
+    rateWindowTicks: 60 * TICK_RATE,
+    maxInvites: MAX_INVITES_PER_MINUTE,
+  });
   private readonly instances = new Map<number, DungeonInstance>();
   private readonly runOf = new Map<number, DungeonInstance>();
   private readonly socketOf = new Map<number, WebSocket>();
@@ -220,6 +258,11 @@ export class GameServer {
     return this.instances.size;
   }
 
+  /** The members of a player's party, leader first, or [] (tests and diagnostics). */
+  partyMembers(playerId: number): number[] {
+    return [...(this.parties.partyOf(playerId)?.members ?? [])];
+  }
+
   isQueued(playerId: number): boolean {
     return this.matchmaker.has(playerId);
   }
@@ -234,6 +277,13 @@ export class GameServer {
    * tests): start runs that are ready, tick every run, send snapshots.
    */
   tick(): void {
+    for (const lapsed of this.parties.expire(this.tickCount)) {
+      this.inviteWithdrawn(lapsed);
+      this.partyNotice(
+        [lapsed.from],
+        `Your invite to ${this.nameOf(lapsed.to)} expired.`,
+      );
+    }
     this.joinOpenRuns();
     for (const run of this.matchmaker.takeReady(this.tickCount)) {
       this.startRun(run.dungeon, run.players);
@@ -313,6 +363,8 @@ export class GameServer {
         weaponType: null,
         ability: null,
       },
+      serfName: null,
+      serfClass: null,
     };
     this.sessions.set(socket, session);
 
@@ -428,6 +480,12 @@ export class GameServer {
       case "drinkPotion":
       case "pourPotion":
         this.onStash(socket, session, message);
+        return;
+      case "partyInvite":
+      case "partyAnswer":
+      case "partyLeave":
+      case "partyKick":
+        this.onParty(socket, session, message);
         return;
       case "getLeaderboard":
         if (session.accountId === null) {
@@ -557,8 +615,13 @@ export class GameServer {
     if (!session || session.accountId === null) return;
     // Not notified with runEnded: the client resets on loggedOut, and an
     // async runEnded arriving after it would show a results screen.
-    if (session.id !== null) this.leaveEverything(session.id, false);
+    if (session.id !== null) {
+      this.leaveEverything(session.id, false);
+      this.dropFromParties(session.id, session.serfName);
+    }
     session.serfId = null;
+    session.serfName = null;
+    session.serfClass = null;
     if (this.accountSocket.get(session.accountId) === socket) {
       this.accountSocket.delete(session.accountId);
     }
@@ -706,6 +769,9 @@ export class GameServer {
     const session = socket ? this.sessions.get(socket) : undefined;
     if (died && session && session.serfId === owner?.serfId) {
       session.serfId = null;
+      session.serfName = null;
+      session.serfClass = null;
+      this.partyChanged(id);
     }
     this.log.info(
       `guest #${id} ${end.result} run #${instance.id} after ${end.stats.seconds.toFixed(1)} s`,
@@ -736,6 +802,7 @@ export class GameServer {
           nowSession.serfClears = serf.life.clears;
           nowSession.serfLevel = levelForExp(serf.exp);
           nowSession.serfLoadout = loadoutOf(serf);
+          this.partyChanged(id);
           // A reward that did not fit blocks the next dungeon (D-088, D-118).
           if (
             saved?.loot.some((d) => d.pending) ||
@@ -974,6 +1041,7 @@ export class GameServer {
         session.serfClears = result.serf.life.clears;
         session.serfLevel = levelForExp(result.serf.exp);
         session.serfLoadout = loadoutOf(result.serf);
+        this.setPlayedSerf(session, result.serf);
         this.log.info(
           message.type === "chooseClass"
             ? `${label(session)} serf #${result.serf.id} became a ${message.classId}`
@@ -993,6 +1061,265 @@ export class GameServer {
       .finally(() => {
         session.serfBusy = false;
       });
+  }
+
+  /** Records the played serf's name and class, and shows the change to its party. */
+  private setPlayedSerf(session: Session, serf: SerfSummary): void {
+    session.serfName = serf.name;
+    session.serfClass = serf.classId;
+    if (session.id !== null) this.partyChanged(session.id);
+  }
+
+  /**
+   * Party requests (Phase 14a, D-142, D-143). Refusals a player can cause
+   * by ordinary play (a mistyped name, a lapsed invite, a full party) are
+   * partyError replies, not invalid messages. Invites are sent and accepted
+   * at the menu only; leaving or removing works anywhere.
+   */
+  private onParty(
+    socket: WebSocket,
+    session: Session,
+    message: Extract<
+      ClientMessage,
+      { type: "partyInvite" | "partyAnswer" | "partyLeave" | "partyKick" }
+    >,
+  ): void {
+    const id = session.id;
+    if (id === null || session.accountId === null) {
+      this.reject(socket, session, "log in first");
+      return;
+    }
+    const busy = this.runOf.has(id) || this.matchmaker.has(id);
+    switch (message.type) {
+      case "partyInvite": {
+        if (session.serfName === null) {
+          this.partyError(socket, "Choose a serf first.");
+          return;
+        }
+        if (busy) {
+          this.partyError(
+            socket,
+            "Invite from the menu, not while queued or in a run.",
+          );
+          return;
+        }
+        const name = normalizeSerfName(message.name);
+        const target = this.playerPlaying(name);
+        if (target === null) {
+          // The same answer for unknown, dead, and offline serfs.
+          this.partyError(
+            socket,
+            `No one is playing a serf named ${name} right now.`,
+          );
+          return;
+        }
+        const targetName = this.nameOf(target);
+        if (target !== id && this.runOf.has(target)) {
+          this.partyError(socket, `${targetName} is in a dungeon right now.`);
+          return;
+        }
+        if (target !== id && this.matchmaker.has(target)) {
+          this.partyError(
+            socket,
+            `${targetName} is waiting for a dungeon right now.`,
+          );
+          return;
+        }
+        const sent = this.parties.invite(id, target, this.tickCount);
+        if (!sent.ok) {
+          this.partyError(socket, INVITE_REFUSALS[sent.reason](targetName));
+          return;
+        }
+        this.sendTo(target, {
+          type: "partyInvited",
+          inviteId: sent.invite.id,
+          from: {
+            name: session.serfName,
+            classId: session.serfClass,
+            level: session.serfLevel,
+          },
+          expiresIn: INVITE_SECONDS,
+        });
+        this.sendPartyState(id);
+        this.log.info(`${label(session)} invited guest #${target} to a party`);
+        return;
+      }
+      case "partyAnswer": {
+        if (message.accept && session.serfName === null) {
+          this.partyError(socket, "Choose a serf first.");
+          return;
+        }
+        if (message.accept && busy) {
+          this.partyError(socket, "Leave the queue first.");
+          return;
+        }
+        const answered = this.parties.answer(
+          id,
+          message.inviteId,
+          message.accept,
+        );
+        if (!answered.ok) {
+          this.send(socket, {
+            type: "partyInviteGone",
+            inviteId: message.inviteId,
+          });
+          this.partyError(socket, ANSWER_REFUSALS[answered.reason]);
+          return;
+        }
+        const { invite, party, withdrawn } = answered;
+        this.send(socket, { type: "partyInviteGone", inviteId: invite.id });
+        if (!party) {
+          this.partyNotice(
+            [invite.from],
+            `${this.nameOf(id)} declined your invite.`,
+          );
+          this.sendPartyState(invite.from);
+          return;
+        }
+        for (const w of withdrawn) this.inviteWithdrawn(w);
+        this.partyNotice(
+          party.members.filter((m) => m !== id),
+          `${this.nameOf(id)} joined the party.`,
+        );
+        for (const m of party.members) this.sendPartyState(m);
+        this.log.info(`${label(session)} joined party #${party.id}`);
+        return;
+      }
+      case "partyLeave": {
+        const name = this.nameOf(id);
+        const leaving = this.parties.leave(id);
+        if (!leaving) return;
+        this.sendPartyState(id);
+        this.partyLeft(leaving, `${name} left the party.`);
+        this.log.info(`${label(session)} left their party`);
+        return;
+      }
+      case "partyKick": {
+        const kicked = this.parties.kick(id, message.playerId);
+        if (!kicked.ok) {
+          this.partyError(
+            socket,
+            kicked.reason === "notLeader"
+              ? "Only the party leader can remove members."
+              : "They are not in your party.",
+          );
+          return;
+        }
+        this.partyNotice(
+          [message.playerId],
+          "You were removed from the party.",
+        );
+        this.sendPartyState(message.playerId);
+        this.partyLeft(
+          kicked.leaving,
+          `${this.nameOf(message.playerId)} was removed from the party.`,
+        );
+        this.log.info(
+          `${label(session)} removed guest #${message.playerId} from their party`,
+        );
+        return;
+      }
+    }
+  }
+
+  /** Gone from the game (disconnected or logged out): out of the party, invites withdrawn. */
+  private dropFromParties(id: number, name: string | null): void {
+    const { leaving, withdrawn } = this.parties.drop(id);
+    for (const w of withdrawn) this.inviteWithdrawn(w);
+    if (leaving)
+      this.partyLeft(leaving, `${name ?? "A member"} left the party.`);
+  }
+
+  /** Tells those still in a party that someone left, and who leads now. */
+  private partyLeft(leaving: Leaving, text: string): void {
+    if (leaving.disbanded) {
+      this.partyNotice(leaving.remaining, `${text} The party broke up.`);
+    } else if (leaving.newLeader !== null) {
+      this.partyNotice(
+        leaving.remaining,
+        `${text} ${this.nameOf(leaving.newLeader)} leads the party now.`,
+      );
+    } else {
+      this.partyNotice(leaving.remaining, text);
+    }
+    for (const m of leaving.remaining) this.sendPartyState(m);
+  }
+
+  /** An invite closed without an answer: the invitee's prompt goes, the inviter's list updates. */
+  private inviteWithdrawn(invite: Invite): void {
+    this.sendTo(invite.to, { type: "partyInviteGone", inviteId: invite.id });
+    this.sendPartyState(invite.from);
+  }
+
+  /** A member's serf changed (chosen, levelled, died): their party sees it. */
+  private partyChanged(id: number): void {
+    for (const m of this.parties.partyOf(id)?.members ?? []) {
+      this.sendPartyState(m);
+    }
+  }
+
+  private sendPartyState(id: number): void {
+    const party = this.parties.partyOf(id);
+    this.sendTo(id, {
+      type: "party",
+      party: party
+        ? {
+            leaderId: party.members[0] ?? id,
+            members: party.members.map((m) => this.memberOf(m)),
+          }
+        : null,
+      invited: this.parties.invitesFrom(id).map((i) => ({
+        inviteId: i.id,
+        name: this.nameOf(i.to),
+      })),
+    });
+  }
+
+  private memberOf(id: number): PartyMember {
+    const session = this.sessionOf(id);
+    return {
+      playerId: id,
+      name: session?.serfName ?? null,
+      classId: session?.serfClass ?? null,
+      level: session?.serfLevel ?? 1,
+    };
+  }
+
+  /** The joined player playing the living serf of this name (any case), if any. */
+  private playerPlaying(name: string): number | null {
+    const wanted = name.toLowerCase();
+    for (const s of this.sessions.values()) {
+      if (
+        s.id !== null &&
+        s.accountId !== null &&
+        s.serfName?.toLowerCase() === wanted
+      ) {
+        return s.id;
+      }
+    }
+    return null;
+  }
+
+  private nameOf(id: number): string {
+    return this.sessionOf(id)?.serfName ?? "A player";
+  }
+
+  private sessionOf(id: number): Session | undefined {
+    const socket = this.socketOf.get(id);
+    return socket ? this.sessions.get(socket) : undefined;
+  }
+
+  private partyNotice(ids: Iterable<number>, text: string): void {
+    const encoded = encodeMessage({ type: "partyNotice", text });
+    for (const id of ids) this.sendEncoded(id, encoded);
+  }
+
+  private partyError(socket: WebSocket, reason: string): void {
+    this.send(socket, { type: "partyError", reason });
+  }
+
+  private sendTo(id: number, message: ServerMessage): void {
+    this.sendEncoded(id, encodeMessage(message));
   }
 
   /** Sends this connection its serfs and which one it plays as. */
@@ -1056,6 +1383,7 @@ export class GameServer {
       const id = session.id;
       this.socketOf.delete(id);
       this.leaveEverything(id, false);
+      this.dropFromParties(id, session.serfName);
       this.broadcast({ type: "playerLeft", playerId: session.id });
       this.log.info(`${label(session)} left (${this.playerIds.length} online)`);
     }

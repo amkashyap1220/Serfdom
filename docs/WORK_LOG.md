@@ -745,3 +745,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - User feedback: "the melee stuff is too fast, they should hit harder but slower"; for reference, a level-1 Fighter with a T0 sword should swing once a second. Classes start at level 5, so the anchor is a new character's Dexterity (10): the sword swings 1/s there (a fresh level-5 Fighter, Dex 13–17, about 1.1/s). The axe (0.6/s), dagger (1.6/s), and mace (0.5/s) keep their pace relative to the sword; every melee weapon keeps its damage per second, so each blow hits 4× as hard (D-141 updated).
 - User ran the combined Phase 13 test (13d–13k, the menu fixes, and the D-141 weapon attacks with slower melee): pass (2026-10-25). Phase 13 complete; `phase-13-rest` merged into `main` and pushed.
 - Next step: Phase 14 (partying up): orient and draft the first slice.
+
+### Phase 14a: forming a party — 2026-10-25
+
+- The user chose invites by serf name (D-142) and approved Claude's party rules as drafted (D-143).
+- Built: server `parties.ts` (pure rules) wired into `GameServer` (invites by name in any case, the refusals, 60 s expiry, leaving, removing, leader hand-over, dropping on disconnect or logout); protocol v44; a Party tab, an invite strip with Accept and Decline on every menu tab, and party news.
+- `npm run check`: 583 shared, 227 server (13 party rules, 7 server party tests), 76 client, build.
+- Live (harness, **test** DB, three headless browsers in separate contexts): A invited B by a lowercase name; B saw the strip and accepted; both showed Party (2) with A leading; an unknown name was refused with the message; B (not the leader) invited C, who joined A's party; A removed B, who was told; no console errors. The tabs still fit the box.
+- Next step: the user's 14a test, then 14b (queueing as a party).

@@ -126,6 +126,11 @@ game.events.once(Phaser.Core.Events.READY, () => {
       saveLastSerf(serfId);
       net.connection.sendSelectSerf(serfId);
     },
+    invite: (name) => net.connection.sendPartyInvite(name),
+    answerInvite: (inviteId, accept) =>
+      net.connection.sendPartyAnswer(inviteId, accept),
+    leaveParty: () => net.connection.sendPartyLeave(),
+    removeMember: (playerId) => net.connection.sendPartyKick(playerId),
   });
   // On every (re)connect: log back in with the saved token if there is one.
   const onConnected = () => {
@@ -134,7 +139,11 @@ game.events.once(Phaser.Core.Events.READY, () => {
     dispatch({ type: "connected", hasToken: token !== null });
   };
   net.onConnected = onConnected;
-  net.onDisconnect = (reason) => dispatch({ type: "disconnected", reason });
+  net.onDisconnect = (reason) => {
+    // The server drops a disconnected player from their party (D-143).
+    view.clearParty();
+    dispatch({ type: "disconnected", reason });
+  };
   net.onLobby = (message, nowMs) => {
     if (message.type === "authOk") {
       saveToken(message.token);
@@ -166,6 +175,20 @@ game.events.once(Phaser.Core.Events.READY, () => {
       view.setLeaderboard(message.entries);
     } else if (message.type === "serfError") {
       view.setSerfError(message.reason);
+    } else if (message.type === "party") {
+      const status = net.connection.snapshot.status;
+      view.setParty(
+        message,
+        status.kind === "connected" ? status.playerId : null,
+      );
+    } else if (message.type === "partyInvited") {
+      view.addInvite(message, nowMs);
+    } else if (message.type === "partyInviteGone") {
+      view.removeInvite(message.inviteId);
+    } else if (message.type === "partyNotice") {
+      view.setPartyNotice(message.text, false);
+    } else if (message.type === "partyError") {
+      view.setPartyNotice(message.reason, true);
     }
     dispatch({ type: "server", message, nowMs });
   };

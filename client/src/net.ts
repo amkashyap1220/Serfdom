@@ -45,7 +45,12 @@ export type LobbyMessage = Extract<
       | "serfError"
       | "leaderboard"
       | "stash"
-      | "stashError";
+      | "stashError"
+      | "party"
+      | "partyInvited"
+      | "partyInviteGone"
+      | "partyNotice"
+      | "partyError";
   }
 >;
 
@@ -180,6 +185,23 @@ export class Connection {
     this.send({ type: "selectSerf", serfId });
   }
 
+  /** Invite whoever plays this serf to your party (D-142). */
+  sendPartyInvite(name: string): void {
+    this.send({ type: "partyInvite", name });
+  }
+
+  sendPartyAnswer(inviteId: number, accept: boolean): void {
+    this.send({ type: "partyAnswer", inviteId, accept });
+  }
+
+  sendPartyLeave(): void {
+    this.send({ type: "partyLeave" });
+  }
+
+  sendPartyKick(playerId: number): void {
+    this.send({ type: "partyKick", playerId });
+  }
+
   /** Sends only once joined; before that there is nothing to say but hello. */
   private send(message: ClientMessage): void {
     if (this.state.status.kind !== "connected") return;
@@ -268,6 +290,11 @@ export class Connection {
       case "leaderboard":
       case "stash":
       case "stashError":
+      case "party":
+      case "partyInvited":
+      case "partyInviteGone":
+      case "partyNotice":
+      case "partyError":
         this.handlers.onLobby?.(msg, performance.now());
         break;
     }

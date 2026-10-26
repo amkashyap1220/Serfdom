@@ -383,6 +383,8 @@ Acceptance:
 
 ## Phase 14 — Partying up
 
+Status: 14a built (forming a party: invites by serf name, accept or decline, leave, remove, the party panel; D-142, D-143), awaiting the user's test on branch `phase-14`. Next: 14b, queueing as a party.
+
 **Goal:** Friends can play together on purpose, not only through the open queue (the user, D-124).
 
 Tasks:

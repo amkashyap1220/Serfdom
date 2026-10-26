@@ -38,6 +38,7 @@ import {
   suggestSerfName,
   type SerfSummary,
   type ServerMessage,
+  type PartyInviter,
   MAX_PARTY_SIZE,
   sellPrice,
   type Item,
@@ -80,6 +81,11 @@ export interface ScreenActions {
   pourPotion(potionId: number): void;
   chooseClass(serfId: number, classId: ClassId): void;
   logout(): void;
+  /** Parties (D-142, D-143). */
+  invite(name: string): void;
+  answerInvite(inviteId: number, accept: boolean): void;
+  leaveParty(): void;
+  removeMember(playerId: number): void;
 }
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
@@ -98,9 +104,13 @@ const LOOT_GAP_MS = 700;
 // Placeholder colors only; not the verified palette (see ASSET_MANIFEST.md).
 const CONFETTI_COLORS = ["#f0c419", "#5bc0de", "#ff6b6b", "#7ed957", "#ffffff"];
 
+/** How long party news stays on screen. */
+const PARTY_MESSAGE_MS = 8000;
+
 const TABS: { tab: MenuTab; label: string; comingIn: string | null }[] = [
   { tab: "dungeons", label: "Dungeons", comingIn: null },
   { tab: "serfs", label: "Serfs", comingIn: null },
+  { tab: "party", label: "Party", comingIn: null },
   { tab: "stash", label: "Stash", comingIn: null },
   { tab: "rack", label: "Potion rack", comingIn: null },
   { tab: "leaderboard", label: "Leaderboard", comingIn: null },
@@ -132,6 +142,19 @@ export class ScreenView {
   private typedSerfName = "";
   /** Class highlighted in the picker, waiting for Confirm (the choice is permanent). */
   private pickedClass: ClassId | null = null;
+  /** Your party and the invites you sent, as the server last said (D-143). */
+  private party: Extract<ServerMessage, { type: "party" }> | null = null;
+  private myPlayerId: number | null = null;
+  /** Invites to you, still open, with when they lapse (performance.now() ms). */
+  private invites: {
+    inviteId: number;
+    from: PartyInviter;
+    expiresAtMs: number;
+  }[] = [];
+  /** The latest party news or refusal, shown for a few seconds. */
+  private partyMessage: { text: string; error: boolean } | null = null;
+  private partyMessageTimer: ReturnType<typeof setTimeout> | undefined;
+  private typedInviteName = "";
 
   constructor(root: HTMLElement, actions: ScreenActions) {
     this.root = root;
@@ -141,7 +164,10 @@ export class ScreenView {
 
   setAccount(email: string | null): void {
     this.email = email;
-    if (email === null) this.serfs = null;
+    if (email === null) {
+      this.serfs = null;
+      this.clearParty();
+    }
     this.shown = null; // redraw with the new header
   }
 
@@ -208,6 +234,54 @@ export class ScreenView {
   setSerfError(reason: string): void {
     this.serfError = reason;
     this.shown = null;
+  }
+
+  setParty(
+    party: Extract<ServerMessage, { type: "party" }>,
+    myPlayerId: number | null,
+  ): void {
+    this.party = party;
+    this.myPlayerId = myPlayerId;
+    this.redraw();
+  }
+
+  addInvite(
+    invite: Extract<ServerMessage, { type: "partyInvited" }>,
+    nowMs: number,
+  ): void {
+    this.invites = [
+      ...this.invites.filter((i) => i.inviteId !== invite.inviteId),
+      {
+        inviteId: invite.inviteId,
+        from: invite.from,
+        expiresAtMs: nowMs + invite.expiresIn * 1000,
+      },
+    ];
+    this.redraw();
+  }
+
+  removeInvite(inviteId: number): void {
+    this.invites = this.invites.filter((i) => i.inviteId !== inviteId);
+    this.redraw();
+  }
+
+  /** Party news (or a refusal, `error`), shown on every menu tab for a few seconds. */
+  setPartyNotice(text: string, error: boolean): void {
+    this.partyMessage = { text, error };
+    clearTimeout(this.partyMessageTimer);
+    this.partyMessageTimer = setTimeout(() => {
+      this.partyMessage = null;
+      this.redraw();
+    }, PARTY_MESSAGE_MS);
+    this.redraw();
+  }
+
+  /** Logged out or disconnected: the server has dropped us from any party. */
+  clearParty(): void {
+    this.party = null;
+    this.invites = [];
+    this.partyMessage = null;
+    this.redraw();
   }
 
   /** The serf being played, if any. */
@@ -356,8 +430,11 @@ export class ScreenView {
 
   private buildMenu(tab: MenuTab, notice: string | null): void {
     const nav = el("nav", "tabs");
+    const members = this.party?.party?.members.length ?? 0;
     for (const t of TABS) {
-      const b = button(t.label, () => this.actions.openTab(t.tab));
+      const label =
+        t.tab === "party" && members > 0 ? `Party (${members})` : t.label;
+      const b = button(label, () => this.actions.openTab(t.tab));
       if (t.tab === tab) b.classList.add("active");
       nav.append(b);
     }
@@ -373,6 +450,8 @@ export class ScreenView {
       this.buildRack(body);
     } else if (tab === "serfs") {
       this.buildSerfs(body);
+    } else if (tab === "party") {
+      this.buildParty(body);
     } else {
       const playing = this.playing;
       body.append(
@@ -470,7 +549,130 @@ export class ScreenView {
     );
     this.root.append(account, el("h1", "title", "SERFDOM"), nav);
     if (notice) this.root.append(el("p", "notice", notice));
+    const invites = this.inviteStrip();
+    if (invites) this.root.append(invites);
     this.root.append(body);
+  }
+
+  /** Invites to you, and the latest party news, above every menu tab (D-143). */
+  private inviteStrip(): HTMLElement | null {
+    const now = performance.now();
+    this.invites = this.invites.filter((i) => i.expiresAtMs > now);
+    if (this.invites.length === 0 && !this.partyMessage) return null;
+    const strip = el("div", "party-strip");
+    for (const i of this.invites) {
+      const row = el("div", "party-invite");
+      row.append(
+        el(
+          "span",
+          "",
+          `${i.from.name} (${className(i.from.classId)} · Lv ${i.from.level}) invites you to their party.`,
+        ),
+        button("Accept", () => this.actions.answerInvite(i.inviteId, true)),
+        button("Decline", () => this.actions.answerInvite(i.inviteId, false)),
+      );
+      strip.append(row);
+    }
+    if (this.partyMessage) {
+      strip.append(
+        el(
+          "p",
+          this.partyMessage.error ? "error" : "party-news",
+          this.partyMessage.text,
+        ),
+      );
+    }
+    return strip;
+  }
+
+  /**
+   * Party tab (14a, D-143): who is in your party, the leader's remove
+   * buttons, leaving, and inviting by serf name. Queueing together comes
+   * in 14b. Minimal until the home screen (Phase 15).
+   */
+  private buildParty(body: HTMLElement): void {
+    const party = this.party?.party ?? null;
+    body.append(el("h2", "", "Party"));
+    if (party) {
+      const leading = party.leaderId === this.myPlayerId;
+      const list = el("div", "party-list");
+      for (const m of party.members) {
+        const row = el("div", "party-member");
+        const you = m.playerId === this.myPlayerId;
+        row.append(
+          el(
+            "span",
+            "serf-name",
+            `${m.name ?? "Choosing a serf"}${you ? " (you)" : ""}`,
+          ),
+          el(
+            "span",
+            "hint",
+            m.name ? `${className(m.classId)} · Lv ${m.level}` : "",
+          ),
+          m.playerId === party.leaderId
+            ? el("span", "serf-chosen", "Leader")
+            : leading
+              ? button("Remove", () => this.actions.removeMember(m.playerId))
+              : el("span", "", ""),
+        );
+        list.append(row);
+      }
+      body.append(
+        list,
+        button("Leave party", () => this.actions.leaveParty()),
+      );
+    } else {
+      body.append(
+        el(
+          "p",
+          "hint",
+          "You're not in a party. Invite a friend by their serf's name; they must be online.",
+        ),
+      );
+    }
+    const invited = this.party?.invited ?? [];
+    for (const i of invited) {
+      body.append(el("p", "hint", `Invited ${i.name}: waiting for an answer.`));
+    }
+    if (!this.playing) {
+      body.append(
+        el("p", "notice", "Choose or create a serf first (Serfs tab)."),
+      );
+    } else if (!party || party.members.length < MAX_PARTY_SIZE) {
+      body.append(this.inviteForm());
+    }
+    body.append(
+      el(
+        "p",
+        "hint",
+        `Up to ${MAX_PARTY_SIZE} in a party. You stay together between runs; queueing as a party comes next.`,
+      ),
+    );
+  }
+
+  private inviteForm(): HTMLElement {
+    const form = document.createElement("form");
+    form.className = "serf-form";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.placeholder = "Friend's serf name";
+    name.setAttribute("aria-label", "Friend's serf name");
+    name.maxLength = SERF_NAME_MAX;
+    name.value = this.typedInviteName;
+    name.addEventListener("input", () => (this.typedInviteName = name.value));
+    const send = document.createElement("button");
+    send.type = "submit";
+    send.textContent = "Invite";
+    form.append(name, send);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const clean = normalizeSerfName(name.value);
+      if (!clean) return;
+      this.typedInviteName = "";
+      this.actions.invite(clean);
+    });
+    return form;
   }
 
   /**
