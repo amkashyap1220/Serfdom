@@ -268,6 +268,12 @@ export class ScreenView {
     window.addEventListener("keydown", (e) => this.onRebindKey(e), {
       capture: true,
     });
+    // The Full screen button's label follows the browser (F11, Escape).
+    document.addEventListener("fullscreenchange", () => {
+      if (this.shown?.kind === "menu" && this.shown.tab === "settings") {
+        this.shown = null;
+      }
+    });
   }
 
   setAccount(email: string | null): void {
@@ -940,6 +946,24 @@ export class ScreenView {
       ` Show the debug readout in the HUD (the ${keyName(binds.debug)} key; this device only)`,
     );
     body.append(label);
+    // Full screen (D-159): the game box grows to fill it; F11 works too.
+    const full = document.fullscreenElement !== null;
+    body.append(
+      button(full ? "Leave full screen" : "Full screen", () => {
+        const done = full
+          ? document.exitFullscreen()
+          : document.documentElement.requestFullscreen();
+        done.catch(() => {
+          this.keyNote = "This browser would not go full screen; try F11.";
+          this.shown = null;
+        });
+      }),
+      el(
+        "p",
+        "hint",
+        "The game scales to fit any window from 900×600 up; everyone sees the same amount of the world.",
+      ),
+    );
   }
 
   /**

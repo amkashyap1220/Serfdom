@@ -115,6 +115,7 @@ export class Hud {
       expText: HTMLElement;
       ability: HTMLElement;
       fire: HTMLElement;
+      keys: HTMLElement;
       run: HTMLElement;
       party: HTMLElement;
     },
@@ -122,6 +123,9 @@ export class Hud {
 
   render(input: HudInput): void {
     const { els } = this;
+    const keys = keyLine(input.binds);
+    // Written only when it changes: it is the same nearly every frame.
+    if (els.keys.textContent !== keys) els.keys.textContent = keys;
     const serf = input.serf;
     els.name.textContent = serf
       ? `${serf.name} · ${className(serf.classId)} · Lv ${serf.level}`
@@ -205,4 +209,18 @@ function text(tag: string, content: string): HTMLElement {
   const e = document.createElement(tag);
   e.textContent = content;
   return e;
+}
+
+/** "W A S D move · Q/E turn (Z resets) · …", with the account's own keys (D-159). */
+export function keyLine(binds: KeyBinds): string {
+  const k = (id: keyof KeyBinds) => keyName(binds[id]);
+  return [
+    `${k("up")} ${k("left")} ${k("down")} ${k("right")} move`,
+    `${k("turnLeft")}/${k("turnRight")} turn (${k("resetView")} resets)`,
+    `${k("fireMode")} fire mode`,
+    `${k("ability")} ability`,
+    "click to fire (Manual)",
+    `${k("leave")} leave`,
+    `${k("debug")} debug`,
+  ].join(" · ");
 }

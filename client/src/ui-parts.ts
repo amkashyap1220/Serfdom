@@ -192,11 +192,13 @@ export function attachTip(card: HTMLElement, build: () => HTMLElement[]): void {
     // the window: a tall browser window would let it hang below the game.
     const box = tipBounds();
     const r = card.getBoundingClientRect();
+    // Its size as drawn (the game box may be scaled, window-fit.ts).
+    const size = t.getBoundingClientRect();
     let x = r.right + 8;
-    if (x + t.offsetWidth > box.right - 8) x = r.left - t.offsetWidth - 8;
+    if (x + size.width > box.right - 8) x = r.left - size.width - 8;
     let y = r.top;
-    if (y + t.offsetHeight > box.bottom - 8) {
-      y = box.bottom - t.offsetHeight - 8;
+    if (y + size.height > box.bottom - 8) {
+      y = box.bottom - size.height - 8;
     }
     t.style.left = `${Math.max(box.left + 8, x)}px`;
     t.style.top = `${Math.max(box.top + 8, y)}px`;

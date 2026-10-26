@@ -9,6 +9,10 @@
     <link rel="icon" href="data:," />
   </head>
   <body>
+    <p id="window-notice" hidden>
+      This window is smaller than 900×600: make it bigger (or zoom the page out)
+      to see the whole game.
+    </p>
     <div id="game-container">
       <aside id="hud">
         <p id="hud-name" class="hud-name"></p>
@@ -26,10 +30,7 @@
         <canvas id="hud-minimap" width="216" height="216"></canvas>
         <p id="hud-run" class="hud-line"></p>
         <div id="hud-party"></div>
-        <p class="hud-keys">
-          WASD move · Q/E turn (Z resets) · T fire mode · Space ability · click
-          to fire (Manual) · R leave · ` debug
-        </p>
+        <p id="hud-keys" class="hud-keys"></p>
         <div id="hud-debug" hidden>
           <h2>Serf</h2>
           <dl id="hud-serf" class="debug-list"></dl>

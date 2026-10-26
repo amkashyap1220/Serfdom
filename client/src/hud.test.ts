@@ -5,7 +5,8 @@ import {
   type SnapshotPlayer,
 } from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
-import { abilityLine, expBar, partyRows } from "./hud";
+import { DEFAULT_BINDS, rebind } from "@serfdom/shared";
+import { abilityLine, expBar, keyLine, partyRows } from "./hud";
 
 const player = (id: number, hp: number, maxHp = 100): SnapshotPlayer => ({
   id,
@@ -64,5 +65,20 @@ describe("the HUD's EXP bar", () => {
       fill: 1,
       text: `Max level · ${totalExpForLevel(20) + 5} EXP`,
     });
+  });
+});
+
+describe("the HUD's key reminder (D-159)", () => {
+  it("names the account's own keys", () => {
+    expect(keyLine(DEFAULT_BINDS)).toBe(
+      "W A S D move · Q/E turn (Z resets) · T fire mode · Space ability · click to fire (Manual) · R leave · Backtick (`) debug",
+    );
+    const mine = rebind(
+      rebind(DEFAULT_BINDS, "up", "ArrowUp"),
+      "ability",
+      "KeyT",
+    );
+    expect(keyLine(mine)).toContain("Up arrow A S D move");
+    expect(keyLine(mine)).toContain("Space fire mode · T ability");
   });
 });

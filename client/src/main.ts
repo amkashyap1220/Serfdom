@@ -36,6 +36,7 @@ import { minimapShapes, MinimapView } from "./minimap";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
+import { fitGameToWindow, fitWindow } from "./window-fit";
 import type { ConnectionStatus } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
 import { ScreenView, statText } from "./screens";
@@ -70,6 +71,7 @@ const hud = new Hud({
   expText: requireElement("exp-text"),
   ability: requireElement("hud-ability"),
   fire: requireElement("hud-fire"),
+  keys: requireElement("hud-keys"),
   run: requireElement("hud-run"),
   party: requireElement("hud-party"),
 });
@@ -96,7 +98,8 @@ const game = new Phaser.Game({
   // Disables texture smoothing/antialiasing and rounds sprite positions (D-030).
   pixelArt: true,
   scale: {
-    // Fixed size; no automatic scaling. Smaller-window behavior is PROVISIONAL (T-012).
+    // The canvas stays 960×800; the whole game box is scaled to the window
+    // by window-fit.ts (D-159), so Phaser does no scaling of its own.
     mode: Phaser.Scale.NONE,
     // Stop Phaser from resizing the parent element; style.css owns the layout.
     expandParent: false,
@@ -352,8 +355,17 @@ game.events.once(Phaser.Core.Events.READY, () => {
       if (debugHud) reportLive(game);
     });
   });
-  // Re-measure on resize so the readout reflects what the window does now.
-  window.addEventListener("resize", () => reportLayout(game, false));
+  // Scale the game box to the window (D-159); after each change Phaser
+  // re-measures its canvas so the mouse aims true, and the readout updates.
+  fitGameToWindow(
+    requireElement("game-container"),
+    requireElement("window-notice"),
+    () => {
+      game.scale.updateBounds();
+      // The first fit can come before the world scene (and its camera) exists.
+      if (worldScene(game).ready) reportLayout(game, false);
+    },
+  );
 });
 
 /** The player HUD (D-146), every frame. */
@@ -410,8 +422,10 @@ function reportLayout(game: Phaser.Game, logTable: boolean): void {
     camera.zoom,
   );
 
+  const scale = fitWindow(window.innerWidth, window.innerHeight).scale;
   const rows: [string, string][] = [
     ["Window (CSS px)", `${window.innerWidth}×${window.innerHeight}`],
+    ["Game box scale", scale.toFixed(3)],
     ["Container (CSS px)", size(container)],
     ["HUD (CSS px)", size(hud)],
     ["Gameplay (CSS px)", size(view)],
@@ -426,7 +440,7 @@ function reportLayout(game: Phaser.Game, logTable: boolean): void {
   layoutList.set(rows);
   if (logTable) console.table(Object.fromEntries(rows));
 
-  verifyLayout(container, hud, view, canvas);
+  verifyLayout(container, hud, view, canvas, scale);
 }
 
 /** Per-frame readout: where the player is and whether the camera is centered on them. */
@@ -553,6 +567,8 @@ function verifyLayout(
   hud: DOMRect,
   view: DOMRect,
   canvas: DOMRect,
+  /** The game box's scale (D-159): on screen everything is this much bigger. */
+  scale: number,
 ): void {
   const checks: [string, DOMRect, { width: number; height: number }][] = [
     ["container", container, LAYOUT.container],
@@ -561,9 +577,12 @@ function verifyLayout(
     ["canvas", canvas, LAYOUT.gameplay],
   ];
   for (const [name, rect, expected] of checks) {
-    if (rect.width !== expected.width || rect.height !== expected.height) {
+    // Scaled sizes are not whole pixels: half a pixel either way is fine.
+    const w = expected.width * scale;
+    const h = expected.height * scale;
+    if (Math.abs(rect.width - w) > 0.5 || Math.abs(rect.height - h) > 0.5) {
       console.warn(
-        `[layout] ${name} is ${size(rect)}, expected ${expected.width}×${expected.height}`,
+        `[layout] ${name} is ${size(rect)}, expected ${w.toFixed(1)}×${h.toFixed(1)} (${expected.width}×${expected.height} at scale ${scale.toFixed(3)})`,
       );
     }
   }

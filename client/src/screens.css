@@ -1305,6 +1305,9 @@ button.sell {
 /* The one floating tooltip (D-156). */
 .item-tip {
   position: fixed;
+  /* Outside the game box, so it scales with it here (window-fit.ts). */
+  transform: scale(var(--ui-scale, 1));
+  transform-origin: top left;
   z-index: 50;
   display: flex;
   flex-direction: column;

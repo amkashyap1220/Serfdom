@@ -6,17 +6,41 @@ body {
   background: #0e1014;
   color: #c9d1dc;
   font-family: system-ui, sans-serif;
+  /* The game box is scaled to fit (window-fit.ts): nothing to scroll. */
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Below 900×600 (D-159). Placeholder colours. */
+#window-notice {
+  position: fixed;
+  z-index: 100;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px 12px;
+  background: #5a1e1e;
+  color: #ffffff;
+  font-size: 13px;
+  text-align: center;
+}
+
+#window-notice[hidden] {
+  display: none;
 }
 
 #game-container {
   display: flex;
   width: 1200px;
   height: 800px;
-  /* Centered horizontally. Below 1200×800 the page scrolls rather than
-     shrinking: PROVISIONAL until smaller-window behavior is decided. */
-  margin: 0 auto;
-  /* Anchor for the full-container screens (#screen). */
-  position: relative;
+  /* Scaled to fit the window and centred by window-fit.ts (D-159): inside,
+     everything keeps its 1200×800 CSS-pixel layout. Also the anchor for
+     the full-container screens (#screen). */
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
 }
 
 #hud {
@@ -170,7 +194,8 @@ body {
   color: #c9d1dc;
 }
 
-#hud .hud-keys {
+#hud .hud-keys,
+#hud-keys {
   margin: auto 0 0;
   font-size: 10px;
   color: #6f7888;
