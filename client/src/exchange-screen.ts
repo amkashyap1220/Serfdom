@@ -30,7 +30,6 @@ import {
   RARITY_NAMES,
   ROLL_WISHES,
   type RollWish,
-  type SerfSummary,
   type ServerMessage,
   STAT_KEYS,
   STAT_LABELS,
@@ -40,6 +39,7 @@ import {
 import {
   button,
   el,
+  gridBox,
   itemCard,
   potionCard,
   refreshTip,
@@ -182,7 +182,7 @@ export class ExchangeScreen {
     this.redraw();
   }
 
-  build(body: HTMLElement, stash: Stash | null, playing: SerfSummary | null) {
+  build(body: HTMLElement, stash: Stash | null) {
     this.panels = [];
     const waiting = this.mine
       ? this.mine.collection.items.length + this.mine.collection.potions.length
@@ -213,16 +213,12 @@ export class ExchangeScreen {
     );
     if (this.view === "sell") this.buildSell(body, stash);
     else if (this.view === "trades") this.buildTrades(body);
-    else this.buildBrowse(body, stash, playing);
+    else this.buildBrowse(body, stash);
   }
 
   // ---- Browse ----
 
-  private buildBrowse(
-    body: HTMLElement,
-    stash: Stash | null,
-    playing: SerfSummary | null,
-  ): void {
+  private buildBrowse(body: HTMLElement, stash: Stash | null): void {
     const q = this.query;
     const filters = el("div", "lb-filters exchange-filters");
     const slot = select(
@@ -270,14 +266,6 @@ export class ExchangeScreen {
       this.browse({ shiny: on }),
     );
     filters.append(slot, type, rarity, classes, shiny);
-    if (playing?.classId && q.classId !== playing.classId) {
-      const id = playing.classId;
-      filters.append(
-        button(`For my ${CLASSES[id].name}`, () =>
-          this.browse({ classId: id }),
-        ),
-      );
-    }
     const search = document.createElement("form");
     const text = document.createElement("input");
     text.type = "text";
@@ -348,7 +336,7 @@ export class ExchangeScreen {
       );
       grid.append(card);
     }
-    body.append(grid);
+    body.append(gridBox(grid));
     const pages = Math.max(1, Math.ceil(page.total / EXCHANGE.pageSize));
     const pager = el("div", "lb-filters");
     const prev = button("Previous", () => this.browse({ page: q.page - 1 }));
@@ -633,7 +621,7 @@ export class ExchangeScreen {
       for (const item of box.items) grid.append(itemCard(item));
       for (const p of box.potions) grid.append(potionCard(p.stat, 1));
       body.append(
-        grid,
+        gridBox(grid),
         button(`Collect ${waiting}`, () => this.actions.collectExchange()),
         el(
           "p",
@@ -689,7 +677,7 @@ export class ExchangeScreen {
         );
         grid.append(card);
       }
-      body.append(grid);
+      body.append(gridBox(grid));
     }
     body.append(el("h3", "dungeon-group", "Latest trades"));
     if (mine.sales.length === 0) {

@@ -66,7 +66,15 @@ import {
 } from "./app-state";
 import { ExchangeScreen, type ExchangeActions } from "./exchange-screen";
 import { ENEMY_NAMES } from "./names";
-import { button, el, hideTip, itemCard, potionCard, select } from "./ui-parts";
+import {
+  button,
+  el,
+  gridBox,
+  hideTip,
+  itemCard,
+  potionCard,
+  select,
+} from "./ui-parts";
 
 export interface ScreenActions extends ExchangeActions {
   queue(dungeon: DungeonId): void;
@@ -767,7 +775,7 @@ export class ScreenView {
   private buildExchange(body: HTMLElement): void {
     body.append(el("h2", "", "The Grand Serf Exchange"));
     if (this.stashError) body.append(el("p", "error", this.stashError));
-    this.exchange.build(body, this.stash, this.playing);
+    this.exchange.build(body, this.stash);
   }
 
   /** Settings (D-145): only the debug readout for now; key binds and more are Phase 18. */
@@ -1164,7 +1172,7 @@ export class ScreenView {
       card.append(pour);
       grid.append(card);
     }
-    return grid;
+    return gridBox(grid);
   }
 
   /** Drink on this serf, or the reason it cannot (greyed out, D-118). */
@@ -1195,7 +1203,7 @@ export class ScreenView {
       card.append(sellButton(item, () => this.actions.sellItem(item.id)));
       grid.append(card);
     }
-    return grid;
+    return gridBox(grid);
   }
 
   /** The serf's 10 slots (D-082), each with what it wears and Unequip. */

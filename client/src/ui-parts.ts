@@ -121,6 +121,19 @@ export function itemDetails(item: ItemSpec): HTMLElement[] {
   return out;
 }
 
+/**
+ * A card grid inside its own scroll box. The grid itself never has a
+ * height limit, so its rows can all be as tall as the tallest card (a grid
+ * with a max height shares that height out instead, and cards differ).
+ * The grid's size classes ("short", "pending-grid") go on the box.
+ */
+export function gridBox(grid: HTMLElement): HTMLElement {
+  const sizes = [...grid.classList].filter((c) => c !== "item-grid");
+  const box = el("div", ["grid-scroll", ...sizes].join(" "));
+  box.append(grid);
+  return box;
+}
+
 /** The one floating tooltip (D-156), on screen so no scrolling list clips it. */
 let tip: HTMLElement | null = null;
 /** Shows the tooltip again for the card it shows (when its data arrives). */
@@ -133,6 +146,23 @@ function tipElement(): HTMLElement {
     document.body.append(tip);
   }
   return tip;
+}
+
+/** Where the tooltip may go: the game box, cut to the visible window. */
+function tipBounds(): {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+} {
+  const game = document.getElementById("game-container");
+  const r = game?.getBoundingClientRect();
+  return {
+    left: Math.max(0, r?.left ?? 0),
+    top: Math.max(0, r?.top ?? 0),
+    right: Math.min(window.innerWidth, r?.right ?? window.innerWidth),
+    bottom: Math.min(window.innerHeight, r?.bottom ?? window.innerHeight),
+  };
 }
 
 /** Hides the tooltip (a screen rebuild removes its card without a mouseleave). */
@@ -158,16 +188,18 @@ export function attachTip(card: HTMLElement, build: () => HTMLElement[]): void {
     const t = tipElement();
     t.replaceChildren(...build());
     t.hidden = false;
+    // Kept inside the 1200×800 game box (and the visible window), not just
+    // the window: a tall browser window would let it hang below the game.
+    const box = tipBounds();
     const r = card.getBoundingClientRect();
     let x = r.right + 8;
-    if (x + t.offsetWidth > window.innerWidth - 8)
-      x = r.left - t.offsetWidth - 8;
+    if (x + t.offsetWidth > box.right - 8) x = r.left - t.offsetWidth - 8;
     let y = r.top;
-    if (y + t.offsetHeight > window.innerHeight - 8) {
-      y = window.innerHeight - t.offsetHeight - 8;
+    if (y + t.offsetHeight > box.bottom - 8) {
+      y = box.bottom - t.offsetHeight - 8;
     }
-    t.style.left = `${Math.max(8, x)}px`;
-    t.style.top = `${Math.max(8, y)}px`;
+    t.style.left = `${Math.max(box.left + 8, x)}px`;
+    t.style.top = `${Math.max(box.top + 8, y)}px`;
   };
   card.addEventListener("mouseenter", show);
   card.addEventListener("focus", show);

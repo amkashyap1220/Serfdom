@@ -1187,6 +1187,18 @@
   font-size: 14px;
 }
 
+/* A card name always takes two lines (D-156): one-line and wrapped names
+   make the same size card; a longer one ends in "…" (the tooltip has it all). */
+.item-card > .item-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  line-height: 18px;
+  height: 36px;
+}
+
 .item-base {
   color: #9fb4d0;
 }
@@ -1229,10 +1241,17 @@
 .item-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
+  /* Every row as tall as the tallest, so all the cards match. */
+  grid-auto-rows: 1fr;
   gap: 6px;
   width: 900px;
+}
+
+/* The scroll box round a card grid (gridBox). */
+.grid-scroll {
   max-height: 470px;
   overflow-y: auto;
+  flex-shrink: 0;
 }
 
 button.sell {
@@ -1247,13 +1266,13 @@ button.sell {
 }
 
 /* Waiting rewards never shrink; the stash scrolls in what is left. */
-.item-grid.pending-grid {
+.grid-scroll.pending-grid {
   flex: none;
   max-height: none;
 }
 
 /* Under the worn gear: what is left of the 690 px tab (D-145). */
-.item-grid.short {
+.grid-scroll.short {
   max-height: 400px;
 }
 
