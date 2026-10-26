@@ -1,3 +1,4 @@
+import { rollArtifact } from "./items.ts";
 import { describe, expect, it } from "vitest";
 import { CLASS_IDS } from "./classes.ts";
 import { SERF_BASE, zeroStats } from "./stats.ts";
@@ -555,7 +556,9 @@ describe("menu, queue, and run messages (v4)", () => {
     };
     expect(server(started).ok).toBe(true);
     expect(server({ ...started, weaponTier: 3 }).ok).toBe(true);
-    expect(server({ ...started, weaponTier: 11 }).ok).toBe(false);
+    // Up to an Artifact's T12 power (D-153), no further.
+    expect(server({ ...started, weaponTier: 12 }).ok).toBe(true);
+    expect(server({ ...started, weaponTier: 13 }).ok).toBe(false);
     expect(server({ ...started, weaponTier: -1 }).ok).toBe(false);
     // v18: your ability, a known kind with a tier in range.
     expect(
@@ -565,7 +568,10 @@ describe("menu, queue, and run messages (v4)", () => {
       server({ ...started, ability: { kind: "fireball", tier: 2 } }).ok,
     ).toBe(false);
     expect(
-      server({ ...started, ability: { kind: "volley", tier: 11 } }).ok,
+      server({ ...started, ability: { kind: "volley", tier: 12 } }).ok,
+    ).toBe(true);
+    expect(
+      server({ ...started, ability: { kind: "volley", tier: 13 } }).ok,
     ).toBe(false);
     expect(server({ ...started, ability: undefined }).ok).toBe(false);
     // v22: a room's rockfall can be the killer; nothing else unknown (D-110).
@@ -1060,6 +1066,32 @@ describe("stash messages (v15, D-085–D-088)", () => {
       ok: true,
       message: stash,
     });
+    // An Artifact and a Shiny item travel as they are (v50, D-152).
+    const axe = {
+      ...rollArtifact("doomrend", () => 0.5),
+      shiny: true,
+      id: 9,
+      equipped: null,
+    };
+    expect(
+      parseServerMessage(JSON.stringify({ ...stash, items: [axe] })),
+    ).toEqual({ ok: true, message: { ...stash, items: [axe] } });
+    // A tampered one is refused: Artifact power on a tiered item, a wrong type.
+    expect(
+      parseServerMessage(
+        JSON.stringify({ ...stash, items: [{ ...owned, tier: 12 }] }),
+      ).ok,
+    ).toBe(false);
+    expect(
+      parseServerMessage(
+        JSON.stringify({ ...stash, items: [{ ...axe, type: "sword" }] }),
+      ).ok,
+    ).toBe(false);
+    expect(
+      parseServerMessage(
+        JSON.stringify({ ...stash, items: [{ ...owned, shiny: "yes" }] }),
+      ).ok,
+    ).toBe(false);
     const bad = (m: object) =>
       parseServerMessage(JSON.stringify({ ...stash, ...m })).ok;
     expect(bad({ gold: -1 })).toBe(false);

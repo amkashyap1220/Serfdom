@@ -15,7 +15,6 @@ import { isEnemyKind, type EnemyKind } from "./enemy-config.ts";
 import {
   EQUIP_SLOTS,
   isValidItemSpec,
-  MAX_TIER,
   type EquipSlot,
   type Item,
   type ItemSpec,
@@ -30,6 +29,7 @@ import {
   type SerfSummary,
 } from "./serf-rules.ts";
 import type { Vec2 } from "./geometry.ts";
+import { ARTIFACT_TIER } from "./artifacts.ts";
 import {
   RUN_RESULTS,
   RUN_STAT_KEYS,
@@ -70,6 +70,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v50 (16a): items may carry `artifact` (its id, D-153) and `shiny`
+ *          (D-152); weapon and ability tiers go up to an Artifact's 12.
  * v49: serfs carry `potionStats`, what potions added to their stats,
  *          shown apart from the base and gear (D-151).
  * v48 (15d): leaderboards (D-148). Client getLeaderboard {board,
@@ -172,7 +174,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 49;
+export const PROTOCOL_VERSION = 50;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -1102,7 +1104,7 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         obj.weaponTier !== null &&
         !(
           isNonNegativeInt(obj.weaponTier) &&
-          (obj.weaponTier as number) <= MAX_TIER
+          (obj.weaponTier as number) <= ARTIFACT_TIER
         )
       ) {
         return fail("runStarted: bad weaponTier");
@@ -1721,7 +1723,16 @@ function parseLifeStats(v: unknown): LifeStats | null {
 function parseItemSpec(v: unknown): ItemSpec | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["slot", "type", "tier", "rolls", "luck"]) ||
+    // Artifact and Shiny are optional: absent on ordinary items (D-152).
+    !hasExactKeys(v, [
+      "slot",
+      "type",
+      "tier",
+      "rolls",
+      "luck",
+      ...(Object.hasOwn(v, "artifact") ? ["artifact"] : []),
+      ...(Object.hasOwn(v, "shiny") ? ["shiny"] : []),
+    ]) ||
     typeof v.slot !== "string" ||
     (v.type !== null && typeof v.type !== "string") ||
     typeof v.tier !== "number" ||
@@ -1748,6 +1759,8 @@ function parseItemSpec(v: unknown): ItemSpec | null {
     tier: v.tier,
     rolls,
     luck: v.luck,
+    ...(Object.hasOwn(v, "artifact") ? { artifact: v.artifact } : {}),
+    ...(Object.hasOwn(v, "shiny") ? { shiny: v.shiny } : {}),
   } as ItemSpec;
   return isValidItemSpec(spec) ? spec : null;
 }
@@ -1771,7 +1784,8 @@ function parseAbility(v: unknown): AbilityLoadout | null | undefined {
   if (v === null) return null;
   if (!isPlainObject(v) || !hasExactKeys(v, ["kind", "tier"])) return undefined;
   if (typeof v.kind !== "string" || !(v.kind in ABILITIES)) return undefined;
-  if (!isNonNegativeInt(v.tier) || (v.tier as number) > MAX_TIER) {
+  // Up to an Artifact's power (D-153).
+  if (!isNonNegativeInt(v.tier) || (v.tier as number) > ARTIFACT_TIER) {
     return undefined;
   }
   return { kind: v.kind as AbilityKind, tier: v.tier as number };

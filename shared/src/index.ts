@@ -372,6 +372,9 @@ export {
   MAX_TIER,
   maxRoll,
   rollItem,
+  rollChestItem,
+  rollArtifact,
+  itemKindName,
   rollFromPool,
   type LootPool,
   sellPrice,
@@ -569,3 +572,15 @@ export {
   type SwingAttack,
   type WeaponAttack,
 } from "./weapon-patterns.ts";
+export {
+  ARTIFACT_IDS,
+  ARTIFACT_ROLLS,
+  ARTIFACT_TIER,
+  ARTIFACTS,
+  artifactDef,
+  artifactsOf,
+  isArtifactId,
+  RARE_LOOT,
+  type ArtifactDef,
+  type ArtifactId,
+} from "./artifacts.ts";

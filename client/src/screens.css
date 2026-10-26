@@ -941,6 +941,45 @@
 .item-card.tier-0 {
   border-color: #6b7380;
 }
+
+/* Artifacts (D-153): their own colour, and the effect spelled out.
+   Placeholder colours, not the verified palette. */
+.item-card.artifact {
+  border-color: #ff8c2e;
+  max-width: 260px;
+}
+
+.artifact .item-name {
+  color: #ffb066;
+}
+
+.item-kind {
+  color: #c98a4e;
+  font-size: 11px;
+}
+
+.item-effect {
+  color: #e8d2b8;
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* Shiny (D-152): looks only; a gold shimmer round the card. */
+.item-card.shiny {
+  border-color: #f0c419;
+  box-shadow: 0 0 6px #f0c41988;
+  animation: shiny-shimmer 2.4s ease-in-out infinite;
+}
+
+@keyframes shiny-shimmer {
+  0%,
+  100% {
+    box-shadow: 0 0 4px #f0c41966;
+  }
+  50% {
+    box-shadow: 0 0 12px #ffe58acc;
+  }
+}
 .item-card.tier-1 {
   border-color: #7ed957;
 }

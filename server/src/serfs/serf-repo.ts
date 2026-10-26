@@ -337,6 +337,8 @@ interface ItemRow {
   rolls: unknown;
   luck: number;
   equipped: string | null;
+  artifact: string | null;
+  shiny: boolean;
 }
 
 /** A stored item the rules would never allow is a bug, not an item. */
@@ -347,6 +349,9 @@ function itemFromRow(r: ItemRow): Item {
     tier: r.tier,
     rolls: r.rolls,
     luck: r.luck,
+    // Only on Artifacts and Shiny items (D-152): absent otherwise.
+    ...(r.artifact !== null ? { artifact: r.artifact } : {}),
+    ...(r.shiny ? { shiny: true } : {}),
   } as ItemSpec;
   const equippedOk =
     r.equipped === null ||
@@ -532,8 +537,8 @@ export class PgSerfRepo implements SerfRepo {
       for (const spec of items) {
         const pending = room <= 0;
         const inserted = await client.query<{ id: string }>(
-          `insert into items (account_id, serf_id, location, slot, type, tier, rolls, luck)
-           values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+          `insert into items (account_id, serf_id, location, slot, type, tier, rolls, luck, artifact, shiny)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id`,
           [
             accountId,
             pending ? serfId : null,
@@ -543,6 +548,8 @@ export class PgSerfRepo implements SerfRepo {
             spec.tier,
             JSON.stringify(spec.rolls),
             spec.luck,
+            spec.artifact ?? null,
+            spec.shiny === true,
           ],
         );
         drops.push({

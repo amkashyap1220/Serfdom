@@ -1,3 +1,12 @@
+import {
+  ARTIFACT_ROLLS,
+  ARTIFACT_TIER,
+  ARTIFACTS,
+  artifactsOf,
+  isArtifactId,
+  RARE_LOOT,
+  type ArtifactId,
+} from "./artifacts.ts";
 import { CLASSES, type ClassId } from "./classes.ts";
 import { abilityForItem, type AbilityLoadout } from "./abilities.ts";
 import { PLAYER_WEAPON } from "./combat-config.ts";
@@ -129,6 +138,10 @@ export interface ItemSpec {
   rolls: StatRoll[];
   /** 0 or +1 (D-067): never negative, never more than one. */
   luck: number;
+  /** Set on an Artifact (D-152, D-153): which one; absent on tiered items. */
+  artifact?: ArtifactId;
+  /** Shiny (D-152): looks only; absent means not Shiny. */
+  shiny?: boolean;
 }
 
 /** An item an account owns. */
@@ -353,12 +366,27 @@ export function rollFromPool(pool: LootPool, random: () => number): ItemSpec {
         : isArmorSlot(slot)
           ? pick(ARMOR_TYPES, random)
           : pick(STAT_KEYS, random); // an accessory's base stat
-  // An accessory's extra rolls are other stats than its base (D-106).
+  const rolls = rollStats(slot, type, rollsFor(slot, tier), random);
+  const luck = rolls.length > 0 && random() < LUCK_CHANCE ? 1 : 0;
+  return { slot, type, tier, rolls, luck };
+}
+
+/**
+ * `count` extra rolls: random stats (an accessory's are other stats than
+ * its base, D-106), sizes 1 to the stat's max, 20% of them negative.
+ * Artifacts roll the same way, only more of them (D-153).
+ */
+function rollStats(
+  slot: ItemSlot,
+  type: ItemSpec["type"],
+  count: number,
+  random: () => number,
+): StatRoll[] {
   const rollable = isAccessorySlot(slot)
     ? STAT_KEYS.filter((k) => k !== type)
     : STAT_KEYS;
   const rolls: StatRoll[] = [];
-  for (let i = 0; i < rollsFor(slot, tier); i++) {
+  for (let i = 0; i < count; i++) {
     const stat = pick(rollable, random);
     const size = between(1, maxRoll(stat), random);
     rolls.push({
@@ -366,8 +394,40 @@ export function rollFromPool(pool: LootPool, random: () => number): ItemSpec {
       amount: random() < NEGATIVE_ROLL_CHANCE ? -size : size,
     });
   }
-  const luck = rolls.length > 0 && random() < LUCK_CHANCE ? 1 : 0;
-  return { slot, type, tier, rolls, luck };
+  return rolls;
+}
+
+/** One Artifact as it drops (D-153): its fixed type, T12 power, 6 random rolls. */
+export function rollArtifact(id: ArtifactId, random: () => number): ItemSpec {
+  const def = ARTIFACTS[id];
+  const rolls = rollStats(def.slot, def.type, ARTIFACT_ROLLS, random);
+  const luck = random() < LUCK_CHANCE ? 1 : 0;
+  return {
+    slot: def.slot,
+    type: def.type,
+    tier: ARTIFACT_TIER,
+    rolls,
+    luck,
+    artifact: id,
+  };
+}
+
+/**
+ * What one reward chest holds (D-080, D-152): in an endgame dungeon, an
+ * Artifact 1 time in 500 (one of that dungeon's, each equally likely),
+ * else a tiered item from its pool; then 1 time in 2,000 it is Shiny.
+ * Server only.
+ */
+export function rollChestItem(
+  dungeon: DungeonId,
+  random: () => number,
+): ItemSpec {
+  const own = artifactsOf(dungeon);
+  const item =
+    own.length > 0 && random() < RARE_LOOT.artifactChance
+      ? rollArtifact(pick(own, random), random)
+      : rollItem(dungeon, random);
+  return random() < RARE_LOOT.shinyChance ? { ...item, shiny: true } : item;
 }
 
 export function isArmorSlot(slot: ItemSlot): slot is ArmorSlot {
@@ -445,9 +505,20 @@ const BASE_STAT_NAMES: Record<StatKey, string> = {
   wisdom: "Wisdom",
 };
 
-/** "T1 Wand", "T2 Robe", "T0 Gauntlets", "T5 Ring of Defense". */
+/**
+ * "T1 Wand", "T2 Robe", "T5 Ring of Defense"; an Artifact by its own
+ * name, with no tier; "Shiny " in front of a Shiny one (D-152).
+ */
 export function itemName(item: ItemSpec): string {
-  return `T${item.tier} ${pieceName(item)}`;
+  const name = item.artifact
+    ? ARTIFACTS[item.artifact].name
+    : `T${item.tier} ${pieceName(item)}`;
+  return item.shiny ? `Shiny ${name}` : name;
+}
+
+/** "Axe", "Robe", "Ring of Vitality": what kind of item it is, Artifacts too. */
+export function itemKindName(item: ItemSpec): string {
+  return pieceName(item);
 }
 
 function pieceName(item: ItemSpec): string {
@@ -496,7 +567,17 @@ function capitalize(word: string): string {
  */
 export function isValidItemSpec(v: ItemSpec): boolean {
   if (!(ITEM_SLOTS as readonly string[]).includes(v.slot)) return false;
-  if (!Number.isInteger(v.tier) || v.tier < 0 || v.tier > MAX_TIER) {
+  if (v.shiny !== undefined && typeof v.shiny !== "boolean") return false;
+  if (v.artifact !== undefined) {
+    // An Artifact is exactly its definition's slot and type, at T12 power,
+    // with 6 rolls of the usual kind (D-153).
+    if (!isArtifactId(v.artifact)) return false;
+    const def = ARTIFACTS[v.artifact];
+    if (v.slot !== def.slot || v.type !== def.type) return false;
+    if (v.tier !== ARTIFACT_TIER || v.rolls.length !== ARTIFACT_ROLLS) {
+      return false;
+    }
+  } else if (!Number.isInteger(v.tier) || v.tier < 0 || v.tier > MAX_TIER) {
     return false;
   }
   const typeOk =
@@ -508,7 +589,9 @@ export function isValidItemSpec(v: ItemSpec): boolean {
           ? (ARMOR_TYPES as readonly unknown[]).includes(v.type)
           : isStatKey(v.type);
   if (!typeOk) return false;
-  if (v.rolls.length !== rollsFor(v.slot, v.tier)) return false;
+  if (v.artifact === undefined && v.rolls.length !== rollsFor(v.slot, v.tier)) {
+    return false;
+  }
   for (const roll of v.rolls) {
     if (!(STAT_KEYS as readonly string[]).includes(roll.stat)) return false;
     const size = Math.abs(roll.amount);

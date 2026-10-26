@@ -14,6 +14,7 @@ import {
   type ServerMessage,
   type LeaderboardQuery,
   zeroStats,
+  rollArtifact,
 } from "@serfdom/shared";
 import {
   MemorySerfRepo,
@@ -620,6 +621,23 @@ function serfContract(
       // Not someone else's serf.
       const b = await account();
       expect(await repo.addLoot(b, serf.id, [RING], 16)).toBeNull();
+    });
+
+    it("keeps an Artifact and a Shiny item as they dropped (D-152, D-153)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const serf = await repo.create(a, `${name}Lucky`, 2);
+      if (typeof serf === "string") throw new Error(serf);
+      const axe = { ...rollArtifact("doomrend", () => 0.5), shiny: true };
+      const drops = await repo.addLoot(a, serf.id, [axe, RING], 20);
+      const [kept, plain] = (await repo.stash(a)).items;
+      expect(kept).toEqual({ ...axe, id: drops![0]!.item.id, equipped: null });
+      // An ordinary item gets neither field.
+      expect(plain).toEqual({
+        ...RING,
+        id: drops![1]!.item.id,
+        equipped: null,
+      });
     });
 
     it("sells once for the vendor price, and room made takes in a pending reward (D-087)", async () => {

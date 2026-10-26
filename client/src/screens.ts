@@ -49,6 +49,8 @@ import {
   itemBonus,
   armorTypeName,
   itemName,
+  itemKindName,
+  ARTIFACTS,
   weaponDamage,
   type ItemSpec,
   type DungeonId,
@@ -1673,8 +1675,13 @@ function countingStatList(
 
 /** An item's name (coloured by tier), what it gives, and its rolls. */
 export function itemCard(item: ItemSpec): HTMLElement {
-  const card = el("div", `item-card tier-${Math.min(item.tier, 3)}`);
+  // An Artifact has its own look, not a tier colour; Shiny shimmers (D-152).
+  const look = item.artifact ? "artifact" : `tier-${Math.min(item.tier, 3)}`;
+  const card = el("div", `item-card ${look}${item.shiny ? " shiny" : ""}`);
   card.append(el("span", "item-name", itemName(item)));
+  if (item.artifact) {
+    card.append(el("span", "item-kind", `Artifact ${itemKindName(item)}`));
+  }
   // Armor also names its material, which decides who can wear it (D-081).
   const material = armorTypeName(item);
   const base =
@@ -1698,6 +1705,9 @@ export function itemCard(item: ItemSpec): HTMLElement {
     card.append(rolls);
   }
   if (item.luck > 0) card.append(el("span", "item-luck", "+1 LUCK"));
+  if (item.artifact) {
+    card.append(el("span", "item-effect", ARTIFACTS[item.artifact].effect));
+  }
   return card;
 }
 

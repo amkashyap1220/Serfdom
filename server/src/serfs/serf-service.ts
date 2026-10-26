@@ -10,7 +10,7 @@ import {
   slotsFor,
   type EquipSlot,
   luckOf,
-  rollItem,
+  rollChestItem,
   type LootDrop,
   potionProblem,
   type PotionDrop,
@@ -199,8 +199,9 @@ export class SerfService {
     dungeon: DungeonId,
   ): Promise<LootDrop[]> {
     const chests = luckOf(serf.items.filter((i) => i.equipped !== null));
+    // An endgame chest may hold an Artifact; any item may be Shiny (D-152).
     const items = Array.from({ length: chests }, () =>
-      rollItem(dungeon, this.random),
+      rollChestItem(dungeon, this.random),
     );
     const drops = await this.repo.addLoot(
       accountId,

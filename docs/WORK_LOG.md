@@ -798,3 +798,11 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 
 - The user ran the combined Phase 14–15 checklists (party, party queue, home screen, HUD, minimap, leaderboards, and the stat display changes D-150 and D-151): all pass. `phase-14` merged into `main` and pushed.
 - Next step: Phase 16 (rare loot): draft for approval.
+
+### Phase 16a: Artifacts and Shiny items as items — 2026-10-26
+
+- The user decided what Artifacts and Shiny items are (D-152) and approved the 23 Artifacts (D-153, rolls as tiered items).
+- Built: `shared/src/artifacts.ts` (the 23 definitions, `ARTIFACT_TIER` 12, `ARTIFACT_ROLLS` 6, `RARE_LOOT` rates); items may carry `artifact` and `shiny`; `rollChestItem` (an endgame chest's 1 in 500 Artifact, then any item's 1 in 2,000 Shiny) replaces `rollItem` for rewards; names ("Shiny …", an Artifact's own name); validation (an Artifact is exactly its definition at T12 with 6 rolls; tampering refused); migration 013 (columns, and the tier check allowing 12 only for an Artifact); item cards (Artifact colour, kind, effect text; Shiny shimmer). Protocol v50. No effects yet (16b–16d).
+- Caught by the PostgreSQL test: the items table's tier check (0–10) would have refused every Artifact; migration 013 now replaces it.
+- `npm run check`: 591 shared, 247 server, 91 client, build. The drop-rate test rolls 400,000 chests per dungeon: an endgame one gives Artifacts at 1 in 500 and each of its Artifacts alike, Shiny at 1 in 2,000; a ladder one never gives an Artifact.
+- Live (harness, **test** DB, headless): a Shiny Doomrend (75 damage, 6 rolls, +1 Luck, its effect) and a Shiny T0 Cape of HP in the stash; no console errors.
