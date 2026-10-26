@@ -41,7 +41,6 @@ import {
 import {
   button,
   el,
-  gridBox,
   itemCard,
   potionCard,
   refreshTip,
@@ -310,7 +309,7 @@ export class ExchangeScreen {
       );
       grid.append(card);
     }
-    body.append(gridBox(grid));
+    body.append(grid);
     const pages = Math.max(1, Math.ceil(page.total / EXCHANGE.pageSize));
     const pager = el("div", "lb-filters");
     const prev = button("Previous", () => this.browse({ page: q.page - 1 }));
@@ -590,7 +589,7 @@ export class ExchangeScreen {
       for (const item of box.items) grid.append(itemCard(item));
       for (const p of box.potions) grid.append(potionCard(p.stat, 1));
       body.append(
-        gridBox(grid),
+        grid,
         button(`Collect ${waiting}`, () => this.actions.collectExchange()),
         el(
           "p",
@@ -646,7 +645,7 @@ export class ExchangeScreen {
         );
         grid.append(card);
       }
-      body.append(gridBox(grid));
+      body.append(grid);
     }
     body.append(el("h3", "dungeon-group", "Latest trades"));
     if (mine.sales.length === 0) {
@@ -718,7 +717,7 @@ export class ExchangeScreen {
     if (d.slot === "potion") {
       // Potions have no rolls.
     } else if (!hasExtraRolls(d.slot, d.tier)) {
-      wrap.append(el("p", "hint", `T${d.tier} items have no extra rolls.`));
+      wrap.append(el("p", "hint", `Tier ${d.tier} items have no extra rolls.`));
     } else {
       wrap.append(
         rollChips(
@@ -810,7 +809,7 @@ function hasExtraRolls(slot: ItemSlot, tier: TierFilter): boolean {
 const TIER_OPTIONS: readonly (readonly [string, string])[] = [
   ...Array.from(
     { length: MAX_TIER + 1 },
-    (_, t) => [String(t), `T${t}`] as const,
+    (_, t) => [String(t), `Tier ${t}`] as const,
   ),
   ["artifact", "Artifact"],
 ];

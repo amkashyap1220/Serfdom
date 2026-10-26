@@ -5,7 +5,7 @@ import {
   ABILITIES,
   className,
   FIRE_MODE_LABELS,
-  itemName,
+  itemFullName,
   loadoutOf,
   rotateVec,
   STAT_KEYS,
@@ -49,10 +49,10 @@ function abilityText(serf: SerfSummary | null): string {
   if (!serf) return "—";
   const ability = loadoutOf(serf).ability;
   if (ability) {
-    return `${ABILITY_NAMES[ability.kind]} (T${ability.tier}) · ${ABILITIES[ability.kind].mpCost} MP`;
+    return `${ABILITY_NAMES[ability.kind]} (Tier ${ability.tier}) · ${ABILITIES[ability.kind].mpCost} MP`;
   }
   const item = serf.items.find((i) => i.equipped === "ability");
-  if (item) return `${itemName(item)}: its ability arrives in 10b–10d`;
+  if (item) return `${itemFullName(item)}: its ability arrives in 10b–10d`;
   return serf.classId
     ? "none (wear your class ability item)"
     : "none before a class";

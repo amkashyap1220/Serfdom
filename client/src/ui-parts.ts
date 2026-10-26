@@ -10,8 +10,7 @@ import {
   type ItemSpec,
   potionAmount,
   potionName,
-  RARITY_NAMES,
-  rarityOf,
+  tierLabel,
   STAT_KEYS,
   STAT_LABELS,
   type StatKey,
@@ -67,23 +66,33 @@ export function itemCard(
 ): HTMLElement {
   const card = el(
     "div",
-    `item-card rarity-${rarityOf(item)}${item.shiny ? " shiny" : ""}`,
+    `item-card ${tierClass(item)}${item.shiny ? " shiny" : ""}`,
   );
   card.append(el("span", "item-name", itemName(item)));
   attachTip(card, () => [...itemDetails(item), ...(more?.() ?? [])]);
   return card;
 }
 
+/** The CSS class that colours an item by its tier (T0 grey, the worst). */
+export function tierClass(item: Pick<ItemSpec, "tier" | "artifact">): string {
+  return item.artifact ? "tier-artifact" : `tier-${item.tier}`;
+}
+
 /** An item's full details, for its tooltip. */
 export function itemDetails(item: ItemSpec): HTMLElement[] {
   const out: HTMLElement[] = [
-    el("span", `item-name rarity-${rarityOf(item)}`, itemName(item)),
-    el(
-      "span",
-      "item-kind",
-      `${RARITY_NAMES[rarityOf(item)]} ${item.artifact ? itemKindName(item) : armorTypeName(item) ? `${armorTypeName(item)} ${itemKindName(item)}` : itemKindName(item)}`,
-    ),
+    el("span", `item-name tier-color ${tierClass(item)}`, itemName(item)),
+    // The tier sits under the name (the user, 2026-10-26), in its colour.
+    el("span", `item-tier tier-color ${tierClass(item)}`, tierLabel(item)),
   ];
+  // What kind it is, when the name does not already say: "Leather Tunic", an Artifact's "Axe".
+  const material = armorTypeName(item);
+  const kind = material
+    ? `${material} ${itemKindName(item)}`
+    : itemKindName(item);
+  if (kind !== itemName({ ...item, shiny: false })) {
+    out.push(el("span", "item-kind", kind));
+  }
   const base =
     item.slot === "weapon"
       ? `${weaponDamage(item.tier)} damage`

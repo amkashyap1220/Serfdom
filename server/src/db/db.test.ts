@@ -675,7 +675,7 @@ function serfContract(
         kind: "deal",
         sellerId: seller,
         buyerId: buyer,
-        what: "T4 Ring of Defense",
+        what: "Ring of Defense (Tier 4)",
         price: 100,
         fee: 5,
       });
@@ -816,7 +816,7 @@ function serfContract(
         kind: "deal",
         sellerId: seller,
         buyerId: early,
-        what: "T4 Ring of Wisdom",
+        what: "Ring of Wisdom (Tier 4)",
         price: 250,
         fee: 12,
       });

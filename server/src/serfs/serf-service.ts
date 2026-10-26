@@ -4,7 +4,7 @@ import {
   addStats,
   canEquip,
   CLASS_ABILITY_ITEM,
-  itemName,
+  itemFullName,
   slotsFor,
   type EquipSlot,
   luckOf,
@@ -362,14 +362,17 @@ export class SerfService {
     );
     if (!item) return { ok: false, reason: "No such item in your stash." };
     if (!slotsFor(item.slot).includes(slot)) {
-      return { ok: false, reason: `A ${itemName(item)} does not go there.` };
+      return {
+        ok: false,
+        reason: `A ${itemFullName(item)} does not go there.`,
+      };
     }
     if (!canEquip(item, serf.classId)) {
       return {
         ok: false,
         reason: serf.classId
-          ? `A ${className(serf.classId)} cannot use a ${itemName(item)}.`
-          : `Before choosing a class, ${serf.name} can only wear T0 weapons and armor.`,
+          ? `A ${className(serf.classId)} cannot use a ${itemFullName(item)}.`
+          : `Before choosing a class, ${serf.name} can only wear Tier 0 weapons and armor.`,
       };
     }
     const done = await this.repo.equip(

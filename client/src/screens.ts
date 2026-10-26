@@ -51,7 +51,7 @@ import {
   MAX_PARTY_SIZE,
   sellPrice,
   type Item,
-  itemName,
+  itemFullName,
   weaponDamage,
   type ItemSpec,
   type DungeonId,
@@ -689,7 +689,7 @@ export class ScreenView {
           "p",
           "side-gear",
           worn.length > 0
-            ? worn.map((i) => itemName(i)).join(" · ")
+            ? worn.map((i) => itemFullName(i)).join(" · ")
             : "Nothing worn",
         ),
       );
@@ -1246,7 +1246,7 @@ export class ScreenView {
           "hint",
           serf.classId
             ? `A ${className(serf.classId)} cannot use this`
-            : "Needs a class (only T0 weapons and armor before level 5)",
+            : "Needs a class (only Tier 0 weapons and armor before level 5)",
         ),
       );
       return box;
@@ -1900,7 +1900,11 @@ function equipTargets(
 function compareBox(next: ItemSpec, current: Item | null): HTMLElement {
   const box = el("div", "compare");
   box.append(
-    el("span", "hint", current ? `vs ${itemName(current)}` : "vs empty slot"),
+    el(
+      "span",
+      "hint",
+      current ? `vs ${itemFullName(current)}` : "vs empty slot",
+    ),
   );
   const diff = compareItems(next, current);
   const line = el("span", "compare-line");

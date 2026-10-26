@@ -2,7 +2,7 @@ import { ARTIFACTS } from "./artifacts.ts";
 import type { ClassId } from "./classes.ts";
 import {
   canEquip,
-  itemName,
+  itemFullName,
   MAX_TIER,
   type Item,
   type ItemSlot,
@@ -167,7 +167,7 @@ export function fitsOrder(
 
 /** A listing's name, as shown and searched. */
 export function listingName(l: Pick<Listing, "item" | "potion">): string {
-  if (l.item) return itemName(l.item);
+  if (l.item) return itemFullName(l.item);
   if (l.potion) return potionName(l.potion.stat);
   return "";
 }

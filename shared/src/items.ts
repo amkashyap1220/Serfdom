@@ -506,14 +506,26 @@ const BASE_STAT_NAMES: Record<StatKey, string> = {
 };
 
 /**
- * "T1 Wand", "T2 Robe", "T5 Ring of Defense"; an Artifact by its own
- * name, with no tier; "Shiny " in front of a Shiny one (D-152).
+ * An item's name: "Wand", "Robe", "Ring of Defense"; an Artifact by its own
+ * name; "Shiny " in front of a Shiny one (D-152). The tier is not part of
+ * it (the user, 2026-10-26): cards show it by colour and, on hover, as
+ * `tierLabel`. Text away from a card uses `itemFullName`.
  */
 export function itemName(item: ItemSpec): string {
-  const name = item.artifact
-    ? ARTIFACTS[item.artifact].name
-    : `T${item.tier} ${pieceName(item)}`;
+  const name = item.artifact ? ARTIFACTS[item.artifact].name : pieceName(item);
   return item.shiny ? `Shiny ${name}` : name;
+}
+
+/** "Tier 5", or "Artifact". */
+export function tierLabel(item: Pick<ItemSpec, "tier" | "artifact">): string {
+  return item.artifact ? "Artifact" : `Tier ${item.tier}`;
+}
+
+/** For notices and trade history: "Ring of Defense (Tier 5)"; an Artifact by its name. */
+export function itemFullName(item: ItemSpec): string {
+  return item.artifact
+    ? itemName(item)
+    : `${itemName(item)} (Tier ${item.tier})`;
 }
 
 /** "Axe", "Robe", "Ring of Vitality": what kind of item it is, Artifacts too. */

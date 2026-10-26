@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { CLASS_IDS } from "./classes.ts";
 import {
+  itemFullName,
+  tierLabel,
   ARMOR_SLOTS,
   CLASS_GEAR,
   canEquip,
@@ -165,7 +167,9 @@ describe("base stats and extra rolls (D-106)", () => {
       ],
       luck: 0,
     };
-    expect(itemName(ring)).toBe("T5 Ring of Defense");
+    expect(itemName(ring)).toBe("Ring of Defense");
+    expect(itemFullName(ring)).toBe("Ring of Defense (Tier 5)");
+    expect(tierLabel(ring)).toBe("Tier 5");
     expect(itemBonus(ring)).toMatchObject({
       defense: 6,
       speed: 3,
@@ -174,7 +178,7 @@ describe("base stats and extra rolls (D-106)", () => {
     });
     expect(
       itemName({ ...ring, slot: "cape", type: "hp", tier: 0, rolls: [] }),
-    ).toBe("T0 Cape of HP");
+    ).toBe("Cape of HP");
     expect(
       itemBonus({ ...ring, slot: "necklace", type: "mp", rolls: [] }).mp,
     ).toBe(18);
@@ -316,7 +320,7 @@ describe("what items give and who may wear them (D-081, D-083)", () => {
   it("names items plainly; armor by material and slot (D-091)", () => {
     expect(
       itemName({ slot: "weapon", type: "wand", tier: 1, rolls: [], luck: 0 }),
-    ).toBe("T1 Wand");
+    ).toBe("Wand");
     const armor = (
       type: "cloth" | "leather" | "plate",
       slot: "head" | "chest" | "legs" | "gloves",
@@ -325,17 +329,17 @@ describe("what items give and who may wear them (D-081, D-083)", () => {
       ["head", "chest", "legs", "gloves"].map((s) =>
         armor("cloth", s as "head"),
       ),
-    ).toEqual(["T2 Hood", "T2 Robe", "T2 Trousers", "T2 Wraps"]);
+    ).toEqual(["Hood", "Robe", "Trousers", "Wraps"]);
     expect(
       ["head", "chest", "legs", "gloves"].map((s) =>
         armor("leather", s as "head"),
       ),
-    ).toEqual(["T2 Cap", "T2 Tunic", "T2 Leggings", "T2 Gloves"]);
+    ).toEqual(["Cap", "Tunic", "Leggings", "Gloves"]);
     expect(
       ["head", "chest", "legs", "gloves"].map((s) =>
         armor("plate", s as "head"),
       ),
-    ).toEqual(["T2 Helm", "T2 Breastplate", "T2 Greaves", "T2 Gauntlets"]);
+    ).toEqual(["Helm", "Breastplate", "Greaves", "Gauntlets"]);
     expect(
       armorTypeName({
         slot: "chest",
@@ -362,7 +366,7 @@ describe("what items give and who may wear them (D-081, D-083)", () => {
         rolls: [],
         luck: 0,
       }),
-    ).toBe("T0 Ring of HP");
+    ).toBe("Ring of HP");
   });
 });
 
@@ -504,8 +508,8 @@ describe("ability items (D-092, D-096)", () => {
     }
   });
   it("are named after GDD §4 and roll like weapons (none before T4)", () => {
-    expect(itemName(book)).toBe("T0 Spellbook");
-    expect(itemName({ ...book, type: "warhorn" })).toBe("T0 War Horn");
+    expect(itemName(book)).toBe("Spellbook");
+    expect(itemName({ ...book, type: "warhorn" })).toBe("War Horn");
     expect(abilityItemClass({ ...book, type: "totem" })).toBe("druid");
     expect(rollsFor("ability", 0)).toBe(0);
     expect(rollsFor("ability", 3)).toBe(0);

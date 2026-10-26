@@ -13,35 +13,9 @@ import { potionName } from "./potions.ts";
 import { STAT_KEYS, type StatKey } from "./stats.ts";
 
 /*
- * What the Exchange knows about items (D-156): rarity bands, "the same
- * item" for prices and buy orders, and roll filters.
+ * What the Exchange knows about items (D-156): "the same item" for prices
+ * and buy orders, and roll filters.
  */
-
-/** Rarity by tier (D-156): extra rolls start at T4 (D-106). */
-export const RARITIES = [
-  "common",
-  "uncommon",
-  "rare",
-  "epic",
-  "artifact",
-] as const;
-export type Rarity = (typeof RARITIES)[number];
-
-export const RARITY_NAMES: Record<Rarity, string> = {
-  common: "Common",
-  uncommon: "Uncommon",
-  rare: "Rare",
-  epic: "Epic",
-  artifact: "Artifact",
-};
-
-export function rarityOf(item: Pick<ItemSpec, "tier" | "artifact">): Rarity {
-  if (item.artifact) return "artifact";
-  if (item.tier >= 10) return "epic";
-  if (item.tier >= 7) return "rare";
-  if (item.tier >= 4) return "uncommon";
-  return "common";
-}
 
 /** A roll a filter or order can ask for: a stat, or Luck. */
 export type RollWish = StatKey | "luck";
@@ -131,7 +105,7 @@ export function parseMarketKey(key: unknown):
   return null;
 }
 
-/** A key's name for people: "T7 Sword", "Shiny Doomrend, …", "Potion of Health". */
+/** A key's name for people: "Sword (Tier 7)", "Shiny Doomrend, …", "Potion of Health". */
 export function marketKeyName(key: MarketKey): string {
   const k = parseMarketKey(key);
   if (!k) return key;
@@ -145,7 +119,7 @@ export function marketKeyName(key: MarketKey): string {
     rolls: [],
     luck: 0,
   });
-  return `${shiny}T${k.tier} ${piece}`;
+  return `${shiny}${piece} (Tier ${k.tier})`;
 }
 
 /** Whether a tiered piece of this slot can be of this type (an accessory: its base stat). */

@@ -113,7 +113,7 @@ describe("names (D-152)", () => {
         luck: 0,
         shiny: true,
       }),
-    ).toBe("Shiny T7 Sword");
+    ).toBe("Shiny Sword");
   });
 });
 

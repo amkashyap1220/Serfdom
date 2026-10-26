@@ -29,7 +29,7 @@ export const RARE_LOOT = {
 } as const;
 
 export interface ArtifactDef {
-  /** Its own name, shown instead of "T7 Axe". */
+  /** Its own name, shown instead of a tiered piece's ("Axe"). */
   name: string;
   slot: ItemSlot;
   /** As for tiered items: weapon, armor, or ability item type, or an accessory's base stat. */

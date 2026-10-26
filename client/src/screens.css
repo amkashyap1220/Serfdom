@@ -1334,42 +1334,57 @@ button.sell {
   display: none;
 }
 
-/* Rarity colours (D-156). Placeholder colours, not the verified palette. */
-.item-card.rarity-common,
-.item-tip .rarity-common {
-  border-color: #6b7380;
+/* Tier colours (the user, 2026-10-26): every tier its own, Tier 0 grey (the
+   worst) rising to Tier 10 gold, Artifacts orange. PROVISIONAL placeholder
+   colours, not the verified palette (ASSET_MANIFEST.md). */
+.tier-0 {
+  --tier: #8a8f98;
 }
-.rarity-common .item-name,
-.item-tip .item-name.rarity-common {
-  color: #c3cad5;
+.tier-1 {
+  --tier: #e8e8e8;
 }
-.item-card.rarity-uncommon {
-  border-color: #7ed957;
+.tier-2 {
+  --tier: #7ed957;
 }
-.rarity-uncommon .item-name,
-.item-tip .item-name.rarity-uncommon {
-  color: #7ed957;
+.tier-3 {
+  --tier: #2fbf8f;
 }
-.item-card.rarity-rare {
-  border-color: #5bc0de;
+.tier-4 {
+  --tier: #5bc0de;
 }
-.rarity-rare .item-name,
-.item-tip .item-name.rarity-rare {
-  color: #5bc0de;
+.tier-5 {
+  --tier: #4a8cff;
 }
-.item-card.rarity-epic {
-  border-color: #c77dff;
+.tier-6 {
+  --tier: #8f6bff;
 }
-.rarity-epic .item-name,
-.item-tip .item-name.rarity-epic {
-  color: #c77dff;
+.tier-7 {
+  --tier: #c77dff;
 }
-.item-card.rarity-artifact {
-  border-color: #ff8c2e;
+.tier-8 {
+  --tier: #ff6fcf;
 }
-.rarity-artifact .item-name,
-.item-tip .item-name.rarity-artifact {
-  color: #ffb066;
+.tier-9 {
+  --tier: #ff5c5c;
+}
+.tier-10 {
+  --tier: #ffd23f;
+}
+.tier-artifact {
+  --tier: #ff8c2e;
+}
+
+.item-card[class*="tier-"] {
+  border-color: var(--tier);
+}
+
+.item-card[class*="tier-"] > .item-name,
+.item-tip .tier-color {
+  color: var(--tier);
+}
+
+.item-tier {
+  font-size: 11px;
 }
 
 .item-card:focus-visible {

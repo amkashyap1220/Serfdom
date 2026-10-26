@@ -395,7 +395,7 @@ describe("equipping (9b, D-081, D-086)", () => {
     expect(await serfs.equip(1, id, ids[1]!, "weapon")).toEqual({
       ok: false,
       reason:
-        "Before choosing a class, Ada Gear can only wear T0 weapons and armor.",
+        "Before choosing a class, Ada Gear can only wear Tier 0 weapons and armor.",
     });
     expect(await serfs.equip(1, id, ids[2]!, "ring2")).toEqual({ ok: true });
   });
@@ -415,11 +415,11 @@ describe("equipping (9b, D-081, D-086)", () => {
     expect(await serfs.equip(1, id, ids[0]!, "weapon")).toEqual({ ok: true });
     expect(await serfs.equip(1, id, ids[1]!, "weapon")).toEqual({
       ok: false,
-      reason: "A Wizard cannot use a T1 Bow.",
+      reason: "A Wizard cannot use a Bow (Tier 1).",
     });
     expect(await serfs.equip(1, id, ids[2]!, "cape")).toEqual({
       ok: false,
-      reason: "A T4 Ring of Attack does not go there.",
+      reason: "A Ring of Attack (Tier 4) does not go there.",
     });
     expect(await serfs.equip(1, id, 999, "cape")).toEqual({
       ok: false,

@@ -44,7 +44,7 @@ export function abilityLine(
 ): string {
   if (!ability) return "Space: no ability";
   const { mpCost } = ABILITIES[ability.kind];
-  const head = `Space: ${ABILITY_NAMES[ability.kind]} (T${ability.tier}) · ${mpCost} MP`;
+  const head = `Space: ${ABILITY_NAMES[ability.kind]} (Tier ${ability.tier}) · ${mpCost} MP`;
   if (cooldown > 0.05) return `${head} · ${cooldown.toFixed(1)} s`;
   if (mp < mpCost) return `${head} · need MP`;
   return `${head} · ready`;
