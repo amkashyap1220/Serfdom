@@ -754,3 +754,10 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Live (harness, **test** DB, three headless browsers in separate contexts): A invited B by a lowercase name; B saw the strip and accepted; both showed Party (2) with A leading; an unknown name was refused with the message; B (not the leader) invited C, who joined A's party; A removed B, who was told; no console errors. The tabs still fit the box.
 - Next step: the user's 14a test, then 14b (queueing as a party).
 - User ran the 14a party checklist: pass (2026-10-25). Pushed.
+
+### Phase 14b: queueing as a party — 2026-10-25
+
+- Built: the Matchmaker queues places (a solo player or a party) and keeps a party in one run; open runs take a party only if all of it fits; the leader's queue checks every member (entry rules, a serf and class, rewards, still in a run) and names who blocks it; any change while waiting takes the whole party out with a reason (D-144, PROVISIONAL); protocol v45 (`queueLeft`); members who don't lead see "The leader picks" and follow the leader into the queue.
+- `npm run check`: 583 shared, 239 server (5 queue rules, 7 party-queue server tests), 78 client, build.
+- Live (harness, **test** DB, two headless browsers): B saw "The leader picks" and Enter did nothing; A queued with Enter; B's screen switched to "Your party is waiting for Goblin Warrens"; both started in the same run and saw each other; after R in both, A queued and B pressed Esc: A was taken out with "… left the queue."; no console errors.
+- Next step: the user's 14b test; then the Phase 14 acceptance review.

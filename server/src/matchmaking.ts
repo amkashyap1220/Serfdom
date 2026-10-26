@@ -1,7 +1,8 @@
 import { MAX_PARTY_SIZE, type DungeonId } from "@serfdom/shared";
 
+/** One place in the queue: a solo player, or a party that must share a run (D-143). */
 interface Waiting {
-  playerId: number;
+  players: number[];
   dungeon: DungeonId;
   /** Server tick at which they joined the queue. */
   sinceTick: number;
@@ -17,8 +18,10 @@ export interface StartingRun {
  * a run starts as soon as `MAX_PARTY_SIZE` players are waiting for the same
  * dungeon, or when the longest-waiting player has waited `waitTicks`, with
  * whoever is there (so solo play never waits more than that). First come,
- * first served. Pure bookkeeping: time is the server's tick count, passed
- * in, so tests control it exactly.
+ * first served. A party (14b, D-143) waits as one place and always goes
+ * into the same run; a party that does not fit the run being filled waits
+ * for the next one. Pure bookkeeping: time is the server's tick count,
+ * passed in, so tests control it exactly.
  */
 export class Matchmaker {
   private waiting: Waiting[] = [];
@@ -32,35 +35,57 @@ export class Matchmaker {
   }
 
   has(playerId: number): boolean {
-    return this.waiting.some((w) => w.playerId === playerId);
+    return this.placeOf(playerId) !== undefined;
   }
 
   dungeonOf(playerId: number): DungeonId | null {
-    return this.waiting.find((w) => w.playerId === playerId)?.dungeon ?? null;
+    return this.placeOf(playerId)?.dungeon ?? null;
   }
 
   /** Players waiting for `dungeon`, longest-waiting first. */
   queuedFor(dungeon: DungeonId): number[] {
     return this.waiting
       .filter((w) => w.dungeon === dungeon)
-      .map((w) => w.playerId);
+      .flatMap((w) => w.players);
   }
 
-  /** Everyone waiting, longest-waiting first. */
-  get waitingPlayers(): { playerId: number; dungeon: DungeonId }[] {
-    return this.waiting.map(({ playerId, dungeon }) => ({ playerId, dungeon }));
+  /** Every place in the queue (a solo player or a party), longest-waiting first. */
+  get waitingGroups(): { players: number[]; dungeon: DungeonId }[] {
+    return this.waiting.map(({ players, dungeon }) => ({
+      players: [...players],
+      dungeon,
+    }));
   }
 
   join(playerId: number, dungeon: DungeonId, tick: number): void {
-    if (this.has(playerId)) throw new Error(`player ${playerId} is queued`);
-    this.waiting.push({ playerId, dungeon, sinceTick: tick });
+    this.joinGroup([playerId], dungeon, tick);
   }
 
-  /** Returns the dungeon they were waiting for, or null if they were not queued. */
-  leave(playerId: number): DungeonId | null {
-    const dungeon = this.dungeonOf(playerId);
-    this.waiting = this.waiting.filter((w) => w.playerId !== playerId);
-    return dungeon;
+  /** Queues a party as one place: they will share a run (D-143). */
+  joinGroup(
+    players: readonly number[],
+    dungeon: DungeonId,
+    tick: number,
+  ): void {
+    if (players.length === 0 || players.length > MAX_PARTY_SIZE) {
+      throw new RangeError(`a group has 1 to ${MAX_PARTY_SIZE} players`);
+    }
+    for (const id of players) {
+      if (this.has(id)) throw new Error(`player ${id} is queued`);
+    }
+    this.waiting.push({ players: [...players], dungeon, sinceTick: tick });
+  }
+
+  /**
+   * Takes a player's whole place out of the queue: a party waits together,
+   * so it leaves together. Returns who left and for which dungeon, or null
+   * if they were not queued.
+   */
+  leave(playerId: number): { dungeon: DungeonId; players: number[] } | null {
+    const place = this.placeOf(playerId);
+    if (!place) return null;
+    this.waiting = this.waiting.filter((w) => w !== place);
+    return { dungeon: place.dungeon, players: [...place.players] };
   }
 
   /** Ticks until `dungeon`'s next run starts if nobody else joins (0 = now). */
@@ -77,17 +102,28 @@ export class Matchmaker {
     const dungeons = [...new Set(this.waiting.map((w) => w.dungeon))];
     for (const dungeon of dungeons) {
       let queue = this.waiting.filter((w) => w.dungeon === dungeon);
-      while (
-        queue.length >= MAX_PARTY_SIZE ||
-        (queue.length > 0 && this.ticksUntilStartOf(queue, tick) === 0)
-      ) {
-        const party = queue.slice(0, MAX_PARTY_SIZE).map((w) => w.playerId);
-        runs.push({ dungeon, players: party });
-        this.waiting = this.waiting.filter((w) => !party.includes(w.playerId));
-        queue = queue.slice(MAX_PARTY_SIZE);
+      while (queue.length > 0) {
+        // Fill a run in queue order, skipping parties that would overflow it.
+        const taken: Waiting[] = [];
+        let size = 0;
+        for (const w of queue) {
+          if (size + w.players.length > MAX_PARTY_SIZE) continue;
+          taken.push(w);
+          size += w.players.length;
+        }
+        if (size < MAX_PARTY_SIZE && this.ticksUntilStartOf(queue, tick) > 0) {
+          break;
+        }
+        runs.push({ dungeon, players: taken.flatMap((w) => w.players) });
+        this.waiting = this.waiting.filter((w) => !taken.includes(w));
+        queue = queue.filter((w) => !taken.includes(w));
       }
     }
     return runs;
+  }
+
+  private placeOf(playerId: number): Waiting | undefined {
+    return this.waiting.find((w) => w.players.includes(playerId));
   }
 
   private ticksUntilStartOf(queue: readonly Waiting[], tick: number): number {

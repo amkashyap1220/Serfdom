@@ -53,7 +53,7 @@ describe("Matchmaker", () => {
     const m = new Matchmaker(300);
     m.join(1, GW, 0);
     m.join(2, GW, 100);
-    expect(m.leave(1)).toBe(GW);
+    expect(m.leave(1)).toEqual({ dungeon: GW, players: [1] });
     expect(m.leave(1)).toBeNull();
     expect(m.takeReady(300)).toEqual([]);
     expect(m.takeReady(400)).toEqual([{ dungeon: GW, players: [2] }]);
@@ -70,5 +70,56 @@ describe("Matchmaker", () => {
     m.join(1, GW, 5);
     m.join(2, GW, 5);
     expect(m.takeReady(5)).toEqual([{ dungeon: GW, players: [1, 2] }]);
+  });
+
+  describe("parties wait as one place (14b, D-143)", () => {
+    it("a party always starts in the same run", () => {
+      const m = new Matchmaker(300);
+      m.join(1, GW, 0);
+      m.joinGroup([2, 3, 4], GW, 10);
+      expect(m.queuedFor(GW)).toEqual([1, 2, 3, 4]);
+      expect(m.takeReady(300)).toEqual([
+        { dungeon: GW, players: [1, 2, 3, 4] },
+      ]);
+    });
+
+    it("a party that would overflow the run waits for the next; later solos fill the gap", () => {
+      const m = new Matchmaker(300);
+      m.joinGroup(ids(1, 6), GW, 0);
+      m.joinGroup(ids(7, 5), GW, 1);
+      m.join(12, GW, 2);
+      m.join(13, GW, 3);
+      m.join(14, GW, 4);
+      m.join(15, GW, 5);
+      // 6 + four solos fill a run at once; the party of five waits.
+      expect(m.takeReady(5)).toEqual([
+        { dungeon: GW, players: [...ids(1, 6), 12, 13, 14, 15] },
+      ]);
+      expect(m.queuedFor(GW)).toEqual(ids(7, 5));
+      expect(m.takeReady(301)).toEqual([{ dungeon: GW, players: ids(7, 5) }]);
+    });
+
+    it("a full party of ten starts at once", () => {
+      const m = new Matchmaker(300);
+      m.joinGroup(ids(1, 10), GW, 0);
+      expect(m.takeReady(0)).toEqual([{ dungeon: GW, players: ids(1, 10) }]);
+    });
+
+    it("any member leaving takes the whole party out of the queue", () => {
+      const m = new Matchmaker(300);
+      m.joinGroup([1, 2, 3], GW, 0);
+      expect(m.leave(2)).toEqual({ dungeon: GW, players: [1, 2, 3] });
+      expect(m.has(1)).toBe(false);
+      expect(m.has(3)).toBe(false);
+    });
+
+    it("refuses an empty or oversized group, or someone already queued", () => {
+      const m = new Matchmaker(300);
+      m.join(1, GW, 0);
+      expect(() => m.joinGroup([], GW, 0)).toThrow();
+      expect(() => m.joinGroup(ids(2, 11), GW, 0)).toThrow();
+      expect(() => m.joinGroup([5, 1], GW, 0)).toThrow();
+      expect(m.queuedFor(GW)).toEqual([1]);
+    });
   });
 });

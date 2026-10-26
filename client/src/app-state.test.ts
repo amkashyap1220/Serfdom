@@ -249,18 +249,43 @@ describe("screen flow", () => {
     });
   });
 
-  it("ignores a queue status that arrives after leaving the queue", () => {
+  it("a late queue status after leaving is undone by the server's queueLeft", () => {
     const menu = run(
       ...LOGGED_IN,
       { type: "queueRequested", dungeon: GW },
       { type: "leaveQueue" },
     );
+    const late = nextScreen(
+      menu,
+      server({ type: "queueStatus", dungeon: GW, queued: 1, startsIn: 4 }),
+    );
+    expect(late.kind).toBe("queued");
+    expect(
+      nextScreen(late, server({ type: "queueLeft", reason: null })),
+    ).toEqual({ kind: "menu", tab: "dungeons", notice: null });
+  });
+
+  it("the party leader queueing us moves us from the menu to the queue (D-143)", () => {
+    const menu = run(...LOGGED_IN);
     expect(
       nextScreen(
         menu,
-        server({ type: "queueStatus", dungeon: GW, queued: 1, startsIn: 4 }),
+        server(
+          { type: "queueStatus", dungeon: GW, queued: 3, startsIn: 4 },
+          1000,
+        ),
       ),
-    ).toBe(menu);
+    ).toEqual({ kind: "queued", dungeon: GW, queued: 3, startsAtMs: 5000 });
+  });
+
+  it("queueLeft with a reason shows it at the menu", () => {
+    const queued = run(...LOGGED_IN, { type: "queueRequested", dungeon: GW });
+    expect(
+      nextScreen(
+        queued,
+        server({ type: "queueLeft", reason: "Bea left the queue." }),
+      ),
+    ).toEqual({ kind: "menu", tab: "dungeons", notice: "Bea left the queue." });
   });
 
   it("the server wins a race: runStarted after leaving still puts us in the run", () => {

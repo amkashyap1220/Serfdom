@@ -422,6 +422,8 @@ describe("menu, queue, and run messages (v4)", () => {
         expiresIn: 60,
       },
       { type: "partyInviteGone", inviteId: 4 },
+      { type: "queueLeft", reason: null },
+      { type: "queueLeft", reason: "Bran left the queue." },
       { type: "partyNotice", text: "Wynne joined the party." },
       { type: "partyError", reason: "Your party is full." },
     ];

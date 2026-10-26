@@ -154,7 +154,17 @@ function onServerMessage(
     case "loggedOut":
       return login(msg.reason);
     case "queueStatus":
-      // Ignore a late status after we left the queue or the run began.
+      // At the menu or results: our party's leader queued us (D-143). A
+      // status sent just before we left the queue lands here too, and the
+      // server's queueLeft that follows it brings the menu back.
+      if (screen.kind === "menu" || screen.kind === "results") {
+        return {
+          kind: "queued",
+          dungeon: msg.dungeon,
+          queued: msg.queued,
+          startsAtMs: nowMs + msg.startsIn * 1000,
+        };
+      }
       if (screen.kind !== "queued" || screen.dungeon !== msg.dungeon) {
         return screen;
       }
@@ -163,6 +173,19 @@ function onServerMessage(
         queued: msg.queued,
         startsAtMs: nowMs + msg.startsIn * 1000,
       };
+    case "queueLeft":
+      // Out of the queue: we left, someone in our party did, or the
+      // leader's queue was refused (the reason says which).
+      if (
+        screen.kind === "queued" ||
+        (screen.kind === "results" && msg.reason)
+      ) {
+        return { kind: "menu", tab: "dungeons", notice: msg.reason };
+      }
+      if (screen.kind === "menu" && msg.reason) {
+        return { ...screen, notice: msg.reason };
+      }
+      return screen;
     case "runStarted":
       return { kind: "inRun", dungeon: msg.dungeon };
     case "runEnded":

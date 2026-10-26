@@ -284,6 +284,12 @@ export class ScreenView {
     this.redraw();
   }
 
+  /** In a party but not its leader: the leader picks the dungeon (D-143). */
+  private get followsLeader(): boolean {
+    const party = this.party?.party;
+    return !!party && party.leaderId !== this.myPlayerId;
+  }
+
   /** The serf being played, if any. */
   private get playing(): SerfSummary | null {
     const list = this.serfs;
@@ -340,7 +346,13 @@ export class ScreenView {
         const name = dungeonInfo(screen.dungeon).name;
         this.countdown = el("p", "countdown", "");
         this.root.append(
-          el("h1", "", `Finding a party for ${name}`),
+          el(
+            "h1",
+            "",
+            this.party?.party
+              ? `Your party is waiting for ${name}`
+              : `Finding a party for ${name}`,
+          ),
           el(
             "p",
             "",
@@ -520,7 +532,14 @@ export class ScreenView {
             ? button("Choose a serf", () => this.actions.openTab("serfs"))
             : locked
               ? el("p", "notice", `Locked: ${locked}`)
-              : button("Enter queue (Enter)", () => this.actions.queue(d.id)),
+              : this.followsLeader
+                ? el("p", "hint", "The leader picks")
+                : button(
+                    this.party?.party
+                      ? "Queue party (Enter)"
+                      : "Enter queue (Enter)",
+                    () => this.actions.queue(d.id),
+                  ),
         );
         grids.get(("minLevel" in d ? d.minLevel : 1) >= 20)!.append(card);
       }
@@ -529,7 +548,9 @@ export class ScreenView {
         el(
           "p",
           "hint",
-          `Open queue: you join a run that started under 15 s ago if it has room; otherwise a new run starts with up to ${MAX_PARTY_SIZE - 1} others, or alone after 5 s.`,
+          this.party?.party
+            ? "Your party queues together and always shares a run; everyone must be able to enter. Players from the open queue may fill its empty places."
+            : `Open queue: you join a run that started under 15 s ago if it has room; otherwise a new run starts with up to ${MAX_PARTY_SIZE - 1} others, or alone after 5 s.`,
         ),
       );
     }
@@ -1258,9 +1279,11 @@ export class ScreenView {
           ? button("Choose your class (Enter)", () =>
               this.actions.dismissResults(),
             )
-          : button(`Requeue ${info.name} (Enter)`, () =>
-              this.actions.queue(screen.dungeon),
-            ),
+          : this.followsLeader
+            ? el("p", "hint", "Your party's leader picks the next dungeon.")
+            : button(`Requeue ${info.name} (Enter)`, () =>
+                this.actions.queue(screen.dungeon),
+              ),
       button("Menu (Esc)", () => this.actions.dismissResults()),
     );
     const shots = s.shotsFired;
@@ -1308,6 +1331,7 @@ export class ScreenView {
         if (!playing) this.actions.openTab("serfs");
         else if (needsClass(playing))
           return; // pick a class with the mouse
+        else if (this.followsLeader) return;
         else if (first) this.actions.queue(first.id);
       } else if (screen.kind === "results" && screen.result === "completed") {
         // A full stash first, then a class at level 5; otherwise requeue.
@@ -1316,7 +1340,10 @@ export class ScreenView {
           screen.potions.some((d) => d.pending)
         ) {
           this.settleRewards(screen);
-        } else if (screen.serf && needsClass(screen.serf))
+        } else if (
+          (screen.serf && needsClass(screen.serf)) ||
+          this.followsLeader
+        )
           this.actions.dismissResults();
         else this.actions.queue(screen.dungeon);
       } else if (

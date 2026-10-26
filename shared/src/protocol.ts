@@ -70,6 +70,10 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v45 (14b): queueing as a party (D-143): server queueLeft {reason}:
+ *          you are not (or no longer) queued; `reason` says why when
+ *          someone else or a refusal caused it. queueStatus may now arrive
+ *          at the menu: your party's leader queued you.
  * v44 (14a): parties (D-142, D-143). Client partyInvite {name},
  *          partyAnswer {inviteId, accept}, partyLeave, partyKick
  *          {playerId}; server party (your party and the invites you sent),
@@ -157,7 +161,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 44;
+export const PROTOCOL_VERSION = 45;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -642,6 +646,8 @@ export type ServerMessage =
       party: { leaderId: number; members: PartyMember[] } | null;
       invited: { inviteId: number; name: string }[];
     }
+  /** You are not queued (any more); `reason` (safe to show) when it was not your doing. */
+  | { type: "queueLeft"; reason: string | null }
   /** Someone invites you; it lapses after `expiresIn` seconds. */
   | {
       type: "partyInvited";
@@ -1176,6 +1182,14 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         return fail("stashError: reason must be a string");
       }
       return { ok: true, message: { type: "stashError", reason: obj.reason } };
+    case "queueLeft":
+      if (!hasExactKeys(obj, ["type", "reason"])) {
+        return fail("queueLeft: unexpected fields");
+      }
+      if (obj.reason !== null && typeof obj.reason !== "string") {
+        return fail("queueLeft: reason must be a string or null");
+      }
+      return { ok: true, message: { type: "queueLeft", reason: obj.reason } };
     case "partyNotice":
       if (!hasExactKeys(obj, ["type", "text"])) {
         return fail("partyNotice: unexpected fields");

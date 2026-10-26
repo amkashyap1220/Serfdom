@@ -1992,4 +1992,125 @@ describe("parties (14a, D-142, D-143)", () => {
     await nextOfType(b.client, "partyError");
     expect(server.partyMembers(a.id)).toEqual([]);
   });
+
+  describe("queueing as a party (14b, D-143)", () => {
+    const go = (dungeon: DungeonId = GW) =>
+      encodeMessage({ type: "queue", dungeon });
+
+    it("the leader queues the party and they always share a run", async () => {
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      await team(a, b);
+      a.client.send(go());
+      // B, at the menu, learns it is queued.
+      expect(await nextOfType(b.client, "queueStatus")).toMatchObject({
+        dungeon: GW,
+        queued: 2,
+      });
+      server.tick();
+      await nextOfType(a.client, "runStarted");
+      await nextOfType(b.client, "runStarted");
+      expect(server.instanceOf(a.id)).toBe(server.instanceOf(b.id));
+    });
+
+    it("only the leader picks: a member's queue is refused", async () => {
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      await team(a, b);
+      b.client.send(go());
+      expect(await nextOfType(b.client, "queueLeft")).toEqual({
+        type: "queueLeft",
+        reason: "Only the party leader can choose a dungeon.",
+      });
+      expect(server.isQueued(a.id) || server.isQueued(b.id)).toBe(false);
+    });
+
+    it("a dungeon locked for any member refuses the whole party, naming them", async () => {
+      const a = await partyPlayer();
+      await clearOnce(a.client, a.id, 0);
+      const b = await partyPlayer();
+      await team(a, b);
+      // A has completed the Warrens; B has not (D-107).
+      a.client.send(go("goblin-stronghold"));
+      expect(await nextOfType(a.client, "queueLeft")).toEqual({
+        type: "queueLeft",
+        reason: `${b.name} can't enter: Complete the Goblin Warrens first.`,
+      });
+      expect(server.isQueued(a.id) || server.isQueued(b.id)).toBe(false);
+    });
+
+    it("a member leaving the queue takes the party out, and the others are told", async () => {
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      await team(a, b);
+      a.client.send(go());
+      await nextOfType(b.client, "queueStatus");
+      b.client.send(encodeMessage({ type: "leaveQueue" }));
+      expect(await nextOfType(a.client, "queueLeft")).toEqual({
+        type: "queueLeft",
+        reason: `${b.name} left the queue.`,
+      });
+      expect(await nextOfType(b.client, "queueLeft")).toEqual({
+        type: "queueLeft",
+        reason: null,
+      });
+      expect(server.isQueued(a.id)).toBe(false);
+    });
+
+    it("leaving the party while queued takes the party out of the queue", async () => {
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      await team(a, b);
+      a.client.send(go());
+      await nextOfType(b.client, "queueStatus");
+      b.client.send(encodeMessage({ type: "partyLeave" }));
+      expect(await nextOfType(a.client, "queueLeft")).toMatchObject({
+        reason: `${b.name} left the party, so the party left the queue.`,
+      });
+      expect(server.isQueued(a.id)).toBe(false);
+    });
+
+    it("joins a run in progress only if the whole party fits", async () => {
+      await inRun(8);
+      const strangers = server.instanceOf(1)!;
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      const c = await partyPlayer();
+      await team(a, b);
+      await team(a, c);
+      // 8 + 3 > 10: a run of their own.
+      a.client.send(go());
+      await until(() => server.isQueued(a.id));
+      server.tick();
+      await nextOfType(c.client, "runStarted");
+      expect(server.instanceOf(a.id)).not.toBe(strangers);
+      expect(server.instanceOf(c.id)).toBe(server.instanceOf(a.id));
+      // A party of two fits the strangers' run, inside its 15 s window.
+      const d = await partyPlayer();
+      const e = await partyPlayer();
+      await team(d, e);
+      d.client.send(go());
+      await until(() => server.isQueued(d.id));
+      server.tick();
+      await nextOfType(e.client, "runStarted");
+      expect(server.instanceOf(d.id)).toBe(strangers);
+      expect(server.instanceOf(e.id)).toBe(strangers);
+    });
+
+    it("refuses while a member is still in a dungeon", async () => {
+      const a = await partyPlayer();
+      const b = await partyPlayer();
+      await team(a, b);
+      a.client.send(go());
+      await nextOfType(b.client, "queueStatus");
+      server.tick();
+      await nextOfType(a.client, "runStarted");
+      a.client.send(encodeMessage({ type: "exitDungeon" }));
+      await nextOfType(a.client, "runEnded");
+      a.client.send(go());
+      expect(await nextOfType(a.client, "queueLeft")).toMatchObject({
+        reason: `${b.name} is still in a dungeon.`,
+      });
+    });
+  });
 });

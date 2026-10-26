@@ -36,6 +36,7 @@ export type LobbyMessage = Extract<
   {
     type:
       | "queueStatus"
+      | "queueLeft"
       | "runStarted"
       | "runEnded"
       | "authOk"
@@ -280,6 +281,7 @@ export class Connection {
         this.handlers.onSnapshot?.(msg, performance.now(), bytes);
         break;
       case "queueStatus":
+      case "queueLeft":
       case "runStarted":
       case "runEnded":
       case "authOk":

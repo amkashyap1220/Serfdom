@@ -20,6 +20,7 @@ import {
   loadoutOf,
   type Loadout,
   normalizeSerfName,
+  MAX_PARTY_SIZE,
   type ClassId,
   type PartyMember,
   type SerfSummary,
@@ -461,6 +462,11 @@ export class GameServer {
             return;
           }
         }
+        // A party queues together, and only its leader picks (D-143).
+        if (this.parties.partyOf(session.id)) {
+          this.onPartyQueue(session.id, message.dungeon);
+          return;
+        }
         this.onQueue(socket, session, session.id, message.dungeon);
         return;
       case "register":
@@ -516,10 +522,10 @@ export class GameServer {
         return;
       case "leaveQueue": {
         if (session.id === null) return;
-        const dungeon = this.matchmaker.leave(session.id);
-        if (dungeon) {
+        if (
+          this.unqueue(session.id, `${this.nameOf(session.id)} left the queue.`)
+        ) {
           this.log.info(`${label(session)} left the queue`);
-          this.sendQueueStatus(dungeon);
         }
         return;
       }
@@ -616,7 +622,7 @@ export class GameServer {
     // Not notified with runEnded: the client resets on loggedOut, and an
     // async runEnded arriving after it would show a results screen.
     if (session.id !== null) {
-      this.leaveEverything(session.id, false);
+      this.leaveEverything(session.id, false, session.serfName);
       this.dropFromParties(session.id, session.serfName);
     }
     session.serfId = null;
@@ -632,9 +638,12 @@ export class GameServer {
   }
 
   /** Takes a player out of the queue and out of any run; `notify` sends them runEnded. */
-  private leaveEverything(id: number, notify: boolean): void {
-    const dungeon = this.matchmaker.leave(id);
-    if (dungeon) this.sendQueueStatus(dungeon);
+  private leaveEverything(
+    id: number,
+    notify: boolean,
+    name: string | null = null,
+  ): void {
+    this.unqueue(id, `${name ?? "A party member"} left the game.`);
     const instance = this.runOf.get(id);
     const end = instance?.leave(id);
     // Recorded on the serf either way (as "left").
@@ -660,6 +669,68 @@ export class GameServer {
     this.sendQueueStatus(dungeon);
   }
 
+  /**
+   * Takes a player's whole place out of the queue (with their party, who
+   * wait together, D-143) and tells each of them why; the one who asked
+   * gets no reason. Returns whether anyone was queued.
+   */
+  private unqueue(id: number, reason: string): boolean {
+    const left = this.matchmaker.leave(id);
+    if (!left) return false;
+    for (const p of left.players) {
+      this.sendTo(p, { type: "queueLeft", reason: p === id ? null : reason });
+    }
+    this.sendQueueStatus(left.dungeon);
+    return true;
+  }
+
+  /**
+   * The party leader queues the whole party (14b, D-143). Every member must
+   * be at the menu with a serf that may enter (D-107, D-073, D-088);
+   * otherwise nobody is queued and the leader is told who. A refusal comes
+   * as queueLeft, which brings the leader's screen back to the menu.
+   */
+  private onPartyQueue(id: number, dungeon: DungeonId): void {
+    const members = this.parties.partyOf(id)?.members ?? [id];
+    const refuse = (reason: string) =>
+      this.sendTo(id, { type: "queueLeft", reason });
+    if (members[0] !== id) {
+      refuse("Only the party leader can choose a dungeon.");
+      return;
+    }
+    if (members.some((m) => this.matchmaker.has(m))) {
+      refuse("Your party is already waiting for a dungeon.");
+      return;
+    }
+    for (const m of members) {
+      const problem = this.memberQueueProblem(m, dungeon);
+      if (problem) {
+        refuse(problem);
+        return;
+      }
+    }
+    this.matchmaker.joinGroup(members, dungeon, this.tickCount);
+    this.log.info(
+      `party of guest #${id} (${members.length}) queued for ${dungeon}`,
+    );
+    this.sendQueueStatus(dungeon);
+  }
+
+  /** Why this party member cannot go into `dungeon` now, naming them; null if they can. */
+  private memberQueueProblem(id: number, dungeon: DungeonId): string | null {
+    const s = this.sessionOf(id);
+    const name = s?.serfName ?? "A party member";
+    if (!s || s.serfId === null) return `${name} must choose a serf first.`;
+    if (this.runOf.has(id)) return `${name} is still in a dungeon.`;
+    if (s.serfBlocked) return `${name} must settle their rewards first.`;
+    if (s.serfNeedsClass) return `${name} must choose a class first.`;
+    if (dungeonInfo(dungeon).listed) {
+      const problem = entryProblem(dungeon, s.serfClears, s.serfLevel);
+      if (problem) return `${name} can't enter: ${problem}`;
+    }
+    return null;
+  }
+
   /** Tells everyone waiting for `dungeon` how many are waiting and when it starts. */
   private sendQueueStatus(dungeon: DungeonId): void {
     const waiting = this.matchmaker.queuedFor(dungeon);
@@ -680,35 +751,40 @@ export class GameServer {
    */
   private joinOpenRuns(): void {
     const changed = new Set<DungeonId>();
-    for (const { playerId, dungeon } of this.matchmaker.waitingPlayers) {
+    for (const { players, dungeon } of this.matchmaker.waitingGroups) {
+      // A party goes in whole or waits (D-143).
       let best: DungeonInstance | undefined;
       for (const run of this.instances.values()) {
-        if (run.dungeon !== dungeon || !run.canJoin(playerId)) continue;
+        if (run.dungeon !== dungeon) continue;
+        if (run.playerIds.length + players.length > MAX_PARTY_SIZE) continue;
+        if (!players.every((p) => run.canJoin(p))) continue;
         if (!best || run.playerIds.length > best.playerIds.length) best = run;
       }
-      if (!best) continue;
-      this.matchmaker.leave(playerId);
+      if (!best || players[0] === undefined) continue;
+      this.matchmaker.leave(players[0]);
       changed.add(dungeon);
-      const loadout = this.loadoutOf(playerId);
-      best.join(playerId, loadout);
-      this.runOf.set(playerId, best);
-      this.setRunOwner(playerId);
-      this.sendEncoded(
-        playerId,
-        encodeMessage({
-          type: "runStarted",
-          dungeon,
-          seed: best.seed,
-          players: best.playerIds,
-          stats: loadout.stats,
-          weaponTier: loadout.weaponTier,
-          weaponType: loadout.weaponType,
-          ability: loadout.ability,
-        }),
-      );
-      this.log.info(`guest #${playerId} joined run #${best.id} in progress`);
+      for (const playerId of players) this.joinRun(best, playerId);
     }
     for (const dungeon of changed) this.sendQueueStatus(dungeon);
+  }
+
+  /** Puts a queued player into a run in progress (D-052). */
+  private joinRun(best: DungeonInstance, playerId: number): void {
+    const loadout = this.loadoutOf(playerId);
+    best.join(playerId, loadout);
+    this.runOf.set(playerId, best);
+    this.setRunOwner(playerId);
+    this.sendTo(playerId, {
+      type: "runStarted",
+      dungeon: best.dungeon,
+      seed: best.seed,
+      players: best.playerIds,
+      stats: loadout.stats,
+      weaponTier: loadout.weaponTier,
+      weaponType: loadout.weaponType,
+      ability: loadout.ability,
+    });
+    this.log.info(`guest #${playerId} joined run #${best.id} in progress`);
   }
 
   private startRun(dungeon: DungeonId, players: readonly number[]): void {
@@ -1153,6 +1229,17 @@ export class GameServer {
           this.partyError(socket, "Leave the queue first.");
           return;
         }
+        // A waiting party cannot change; the invite stays open.
+        const asked = this.parties
+          .invitesTo(id)
+          .find((i) => i.id === message.inviteId);
+        if (message.accept && asked && this.matchmaker.has(asked.from)) {
+          this.partyError(
+            socket,
+            "That party is waiting for a dungeon. Try again in a moment.",
+          );
+          return;
+        }
         const answered = this.parties.answer(
           id,
           message.inviteId,
@@ -1187,6 +1274,12 @@ export class GameServer {
       }
       case "partyLeave": {
         const name = this.nameOf(id);
+        if (!this.parties.partyOf(id)) return;
+        // The party changed, so it no longer waits together (D-143).
+        this.unqueue(
+          id,
+          `${name} left the party, so the party left the queue.`,
+        );
         const leaving = this.parties.leave(id);
         if (!leaving) return;
         this.sendPartyState(id);
@@ -1195,6 +1288,15 @@ export class GameServer {
         return;
       }
       case "partyKick": {
+        if (
+          this.parties.leaderOf(id) === id &&
+          this.partyMembers(id).includes(message.playerId)
+        ) {
+          this.unqueue(
+            message.playerId,
+            `${this.nameOf(message.playerId)} was removed, so the party left the queue.`,
+          );
+        }
         const kicked = this.parties.kick(id, message.playerId);
         if (!kicked.ok) {
           this.partyError(
@@ -1382,7 +1484,7 @@ export class GameServer {
     if (session.id !== null) {
       const id = session.id;
       this.socketOf.delete(id);
-      this.leaveEverything(id, false);
+      this.leaveEverything(id, false, session.serfName);
       this.dropFromParties(id, session.serfName);
       this.broadcast({ type: "playerLeft", playerId: session.id });
       this.log.info(`${label(session)} left (${this.playerIds.length} online)`);

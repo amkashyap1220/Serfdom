@@ -214,6 +214,21 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
+#### Party queue checklist (Phase 14b, D-143, D-144)
+
+Same set-up as the party checklist below: two different browsers, A (serfdom@test.com) and B (serfdom1@test.com), in one party with A leading.
+
+1. In B, the Dungeons tab shows **"The leader picks"** instead of queue buttons, and Enter does nothing. In A the buttons read **"Queue party (Enter)"**.
+2. In A, queue the Warrens: B's screen switches by itself to **"Your party is waiting for Goblin Warrens"**, and both start in the **same run** (each sees the other).
+3. Finish or leave the run (R) in both. From A's results screen, Requeue: B is pulled into the queue too, and B's results screen offers no Requeue ("Your party's leader picks the next dungeon.").
+4. Queue again from A, then press **Esc in B**: both go back to the menu and A sees "… left the queue."
+5. Queue again from A, then leave the party in B: A sees "… left the party, so the party left the queue."
+6. Make a fresh serf in B (level 1, no Warrens clear), rejoin A's party, and have A queue an endgame dungeon or the Stronghold: refused with "… can't enter: …"; nobody is queued.
+7. With B still in a run, A (at the menu) queues: "… is still in a dungeon."
+8. Consoles: no red errors.
+
+Report: pass or fail per step, with the exact text for any failure.
+
 #### Party checklist (Phase 14a, D-142, D-143)
 
 Run `npm run dev`. Use **two different browsers** (or a normal and a private window), because one browser profile shares one saved login. Log in as serfdom@test.com in A and serfdom1@test.com in B, each playing a serf (for example Bran Holloway and Wynne Ashby).
