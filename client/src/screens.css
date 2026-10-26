@@ -77,6 +77,27 @@
   border-color: #f0c419;
 }
 
+.lb-boards,
+.lb-filters {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.lb-boards button.active {
+  border-color: #f0c419;
+  color: #f0c419;
+}
+
+.screen select {
+  padding: 6px 8px;
+  border: 2px solid #46505f;
+  background: #0e1014;
+  color: #ffffff;
+  font: inherit;
+}
+
 .setting {
   display: flex;
   align-items: center;

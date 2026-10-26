@@ -119,7 +119,9 @@ game.events.once(Phaser.Core.Events.READY, () => {
     },
     dismissResults: () => dispatch({ type: "dismissResults" }),
     openTab: (tab) => {
-      if (tab === "leaderboard") net.connection.sendGetLeaderboard();
+      if (tab === "leaderboard") {
+        net.connection.sendGetLeaderboard(view.leaderboardQuery);
+      }
       if (tab === "stash" || tab === "rack") net.connection.sendGetStash();
       dispatch({ type: "openTab", tab });
     },
@@ -150,6 +152,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
     leaveParty: () => net.connection.sendPartyLeave(),
     removeMember: (playerId) => net.connection.sendPartyKick(playerId),
     setDebugHud: (on) => setDebug(on),
+    getLeaderboard: (query) => net.connection.sendGetLeaderboard(query),
   });
   const setDebug = (on: boolean) => {
     debugHud = on;
@@ -205,7 +208,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
     } else if (message.type === "stashError") {
       view.setStashError(message.reason);
     } else if (message.type === "leaderboard") {
-      view.setLeaderboard(message.entries);
+      view.setLeaderboard(message);
     } else if (message.type === "serfError") {
       view.setSerfError(message.reason);
     } else if (message.type === "party") {

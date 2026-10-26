@@ -128,6 +128,7 @@ export class DungeonInstance {
   private readonly members = new Map<number, Member>();
   /** Everyone who was ever in this run, so nobody rejoins it. */
   private readonly everJoined = new Set<number>();
+  private peak = 0;
   private readonly maxQueuedInputs: number;
   private readonly joinWindowTicks: number;
   /** Ticks this run has been running. */
@@ -206,6 +207,12 @@ export class DungeonInstance {
       inputs: newInputQueue(),
       stats: newRunStats(),
     });
+    this.peak = Math.max(this.peak, this.members.size);
+  }
+
+  /** The most players this run has held: a clear's party size (D-148). */
+  get peakPlayers(): number {
+    return this.peak;
   }
 
   get playerIds(): number[] {

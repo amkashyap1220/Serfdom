@@ -6,6 +6,7 @@ import {
   type ClientMessage,
   type DungeonId,
   type EquipSlot,
+  type LeaderboardQuery,
   type PlayerInput,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -175,8 +176,9 @@ export class Connection {
     this.send({ type: "pourPotion", potionId });
   }
 
-  sendGetLeaderboard(): void {
-    this.send({ type: "getLeaderboard" });
+  /** Asks for one leaderboard (D-148). */
+  sendGetLeaderboard(query: LeaderboardQuery): void {
+    this.send({ type: "getLeaderboard", ...query });
   }
 
   sendChooseClass(serfId: number, classId: ClassId): void {

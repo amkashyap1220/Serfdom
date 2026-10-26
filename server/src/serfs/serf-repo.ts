@@ -22,6 +22,7 @@ import {
   type LootDrop,
   type PendingReward,
   type LeaderboardEntry,
+  type LeaderboardQuery,
   type LifeStats,
   type RunResult,
   type RunStats,
@@ -69,9 +70,17 @@ export interface SerfRepo {
     run: RunStats,
     death: Death | null,
     expGained: number,
+    clear?: Clear | null,
   ): Promise<SerfSummary | null>;
-  /** All serfs, living and dead, by lifetime EXP (ties: older serf first). */
-  leaderboard(limit: number): Promise<LeaderboardEntry[]>;
+  /**
+   * A leaderboard (D-148), living and dead: lifetime EXP (optionally one
+   * class), clears, or enemies slain (ties: older serf first); or each
+   * serf's fastest clear of a dungeon (ties: the earlier clear).
+   */
+  leaderboard(
+    query: LeaderboardQuery,
+    limit: number,
+  ): Promise<LeaderboardEntry[]>;
   /**
    * Sets a serf's permanent class, only if it is this account's, alive,
    * classless, and has at least `minExp` lifetime EXP, all checked in the
@@ -438,6 +447,7 @@ export class PgSerfRepo implements SerfRepo {
     run: RunStats,
     death: Death | null,
     expGained: number,
+    clear: Clear | null = null,
   ): Promise<SerfSummary | null> {
     // One statement: the "still alive" check and the update cannot be
     // separated by another write. A death also deletes everything the serf
@@ -482,6 +492,13 @@ export class PgSerfRepo implements SerfRepo {
         await client.query(
           "delete from items where serf_id = $1 and location = 'equipped'",
           [serfId],
+        );
+      }
+      // The clear's record lands with the run, or not at all (D-148).
+      if (clear && r.rows[0]) {
+        await client.query(
+          "insert into clears (serf_id, dungeon, seconds, party_size) values ($1, $2, $3, $4)",
+          [serfId, clear.dungeon, run.seconds, clear.partySize],
         );
       }
       await client.query("commit");
@@ -857,16 +874,51 @@ export class PgSerfRepo implements SerfRepo {
     return serfs.map((x) => ({ ...x, items: bySerf.get(x.id) ?? [] }));
   }
 
-  async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
-    const r = await this.pool.query<{
+  async leaderboard(
+    query: LeaderboardQuery,
+    limit: number,
+  ): Promise<LeaderboardEntry[]> {
+    type Row = {
       name: string;
       exp: string;
       class_id: string | null;
       died_at: Date | null;
-    }>(
-      "select name, exp, class_id, died_at from serfs order by exp desc, id limit $1",
-      [limit],
-    );
+      value: string | number;
+      party_size: number | null;
+    };
+    let r: pg.QueryResult<Row>;
+    if (query.board === "fastest") {
+      // Each serf's best time, then the best of those (D-148).
+      r = await this.pool.query<Row>(
+        `select s.name, s.exp, s.class_id, s.died_at,
+                b.seconds as value, b.party_size
+         from (select distinct on (serf_id) serf_id, seconds, party_size, id
+               from clears
+               where dungeon = $2 and (not $3::boolean or party_size = 1)
+               order by serf_id, seconds, id) b
+         join serfs s on s.id = b.serf_id
+         order by b.seconds, b.id
+         limit $1`,
+        [limit, query.dungeon ?? "", query.soloOnly],
+      );
+    } else if (query.board === "exp") {
+      r = await this.pool.query<Row>(
+        `select name, exp, class_id, died_at, exp as value, null as party_size
+         from serfs where ($2::text is null or class_id = $2)
+         order by exp desc, id limit $1`,
+        [limit, query.classId],
+      );
+    } else {
+      // A fixed column per board: never built from the request.
+      const column = query.board === "clears" ? "clears" : "enemies_defeated";
+      r = await this.pool.query<Row>(
+        `select name, exp, class_id, died_at, ${column} as value,
+                null as party_size
+         from serfs where ${column} > 0
+         order by ${column} desc, id limit $1`,
+        [limit],
+      );
+    }
     return r.rows.map((row, i) =>
       toEntry(
         i,
@@ -874,6 +926,8 @@ export class PgSerfRepo implements SerfRepo {
         Number(row.exp),
         classFromRow(row.class_id),
         row.died_at === null,
+        Number(row.value),
+        row.party_size,
       ),
     );
   }
@@ -935,15 +989,24 @@ function toEntry(
   exp: number,
   classId: ClassId | null,
   alive: boolean,
+  value: number,
+  partySize: number | null,
 ): LeaderboardEntry {
   return {
     rank: index + 1,
     name,
     level: levelForExp(exp),
-    exp,
+    value,
     classId,
     alive,
+    partySize,
   };
+}
+
+/** A completed run, for the fastest clears (D-148). */
+export interface Clear {
+  dungeon: string;
+  partySize: number;
 }
 
 function isPgError(err: unknown): err is { code: string } {
@@ -960,8 +1023,15 @@ interface MemorySerf {
 }
 
 /** In-memory twin of PgSerfRepo (game-server tests). */
+interface MemoryClear extends Clear {
+  serfId: number;
+  seconds: number;
+  seq: number;
+}
+
 export class MemorySerfRepo implements SerfRepo {
   private readonly serfs: MemorySerf[] = [];
+  private readonly clears: MemoryClear[] = [];
   private seq = 0;
   private nextItemId = 1;
   private items: {
@@ -1052,6 +1122,7 @@ export class MemorySerfRepo implements SerfRepo {
     run: RunStats,
     death: Death | null,
     expGained: number,
+    clear: Clear | null = null,
   ): Promise<SerfSummary | null> {
     const s = this.serfs.find(
       (x) =>
@@ -1072,6 +1143,14 @@ export class MemorySerfRepo implements SerfRepo {
       alive: death === null,
       death,
     };
+    if (clear) {
+      this.clears.push({
+        ...clear,
+        serfId,
+        seconds: run.seconds,
+        seq: ++this.seq,
+      });
+    }
     if (death) {
       s.diedSeq = ++this.seq;
       // D-079: what it wore is gone; the stash and pending rewards stay.
@@ -1082,21 +1161,56 @@ export class MemorySerfRepo implements SerfRepo {
     return this.out(s);
   }
 
-  async leaderboard(limit: number): Promise<LeaderboardEntry[]> {
-    return [...this.serfs]
-      .sort(
-        (a, b) => b.summary.exp - a.summary.exp || a.summary.id - b.summary.id,
-      )
-      .slice(0, limit)
-      .map((s, i) =>
-        toEntry(
-          i,
-          s.summary.name,
-          s.summary.exp,
-          s.summary.classId,
-          s.summary.alive,
-        ),
+  async leaderboard(
+    query: LeaderboardQuery,
+    limit: number,
+  ): Promise<LeaderboardEntry[]> {
+    const entry = (
+      s: MemorySerf,
+      i: number,
+      value: number,
+      partySize: number | null,
+    ) =>
+      toEntry(
+        i,
+        s.summary.name,
+        s.summary.exp,
+        s.summary.classId,
+        s.summary.alive,
+        value,
+        partySize,
       );
+    if (query.board === "fastest") {
+      const best = new Map<number, MemoryClear>();
+      for (const c of this.clears) {
+        if (c.dungeon !== query.dungeon) continue;
+        if (query.soloOnly && c.partySize !== 1) continue;
+        const was = best.get(c.serfId);
+        if (!was || c.seconds < was.seconds) best.set(c.serfId, c);
+      }
+      return [...best.values()]
+        .sort((a, b) => a.seconds - b.seconds || a.seq - b.seq)
+        .slice(0, limit)
+        .map((c, i) => {
+          const s = this.serfs.find((x) => x.summary.id === c.serfId)!;
+          return entry(s, i, c.seconds, c.partySize);
+        });
+    }
+    const score = (s: MemorySerf) =>
+      query.board === "exp"
+        ? s.summary.exp
+        : query.board === "clears"
+          ? s.summary.life.clears
+          : s.summary.life.enemiesDefeated;
+    return this.serfs
+      .filter((s) =>
+        query.board === "exp"
+          ? query.classId === null || s.summary.classId === query.classId
+          : score(s) > 0,
+      )
+      .sort((a, b) => score(b) - score(a) || a.summary.id - b.summary.id)
+      .slice(0, limit)
+      .map((s, i) => entry(s, i, score(s), null));
   }
 
   async chooseClass(

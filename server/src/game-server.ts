@@ -20,6 +20,8 @@ import {
   loadoutOf,
   type Loadout,
   normalizeSerfName,
+  normalizeLeaderboardQuery,
+  type LeaderboardQuery,
   MAX_PARTY_SIZE,
   type ClassId,
   type PartyMember,
@@ -114,6 +116,9 @@ interface Session {
   /** The chosen serf's name and class: how others find and see you (invites by name, D-142). */
   serfName: string | null;
   serfClass: ClassId | null;
+  /** A leaderboard query is in flight; the latest one asked meanwhile waits. */
+  boardBusy: boolean;
+  boardNext: LeaderboardQuery | null;
 }
 
 /** PROVISIONAL (T-030): a solo player never waits longer than this for a run. */
@@ -372,6 +377,8 @@ export class GameServer {
       },
       serfName: null,
       serfClass: null,
+      boardBusy: false,
+      boardNext: null,
     };
     this.sessions.set(socket, session);
 
@@ -499,22 +506,22 @@ export class GameServer {
       case "partyKick":
         this.onParty(socket, session, message);
         return;
-      case "getLeaderboard":
+      case "getLeaderboard": {
         if (session.accountId === null) {
           this.reject(socket, session, "log in first");
           return;
         }
-        this.serfs
-          .leaderboard()
-          .then((entries) =>
-            this.send(socket, { type: "leaderboard", entries }),
-          )
-          .catch((err: unknown) =>
-            this.log.warn(
-              `${label(session)} leaderboard error: ${String(err)}`,
-            ),
-          );
+        const query = normalizeLeaderboardQuery(message);
+        if (
+          query.board === "fastest" &&
+          (query.dungeon === null || !dungeonInfo(query.dungeon).listed)
+        ) {
+          this.reject(socket, session, "getLeaderboard: pick a listed dungeon");
+          return;
+        }
+        this.onLeaderboard(socket, session, query);
         return;
+      }
       case "logout":
         if (session.accountId === null) return;
         if (session.token) {
@@ -878,6 +885,7 @@ export class GameServer {
           end.result,
           end.stats,
           died ? { dungeon: instance.dungeon, killedBy: end.killedBy } : null,
+          instance.peakPlayers,
         )
       : Promise.resolve(null);
     recorded
@@ -1154,6 +1162,39 @@ export class GameServer {
       })
       .finally(() => {
         session.serfBusy = false;
+      });
+  }
+
+  /**
+   * One leaderboard query at a time per connection (D-148): a request made
+   * while one is in flight waits, and only the latest waiting one runs, so
+   * clicking through filters cannot pile up database work.
+   */
+  private onLeaderboard(
+    socket: WebSocket,
+    session: Session,
+    query: LeaderboardQuery,
+  ): void {
+    if (session.boardBusy) {
+      session.boardNext = query;
+      return;
+    }
+    session.boardBusy = true;
+    this.serfs
+      .leaderboard(query)
+      .then((entries) =>
+        this.send(socket, { type: "leaderboard", query, entries }),
+      )
+      .catch((err: unknown) =>
+        this.log.warn(`${label(session)} leaderboard error: ${String(err)}`),
+      )
+      .finally(() => {
+        session.boardBusy = false;
+        const next = session.boardNext;
+        session.boardNext = null;
+        if (next && this.sessions.has(socket)) {
+          this.onLeaderboard(socket, session, next);
+        }
       });
   }
 

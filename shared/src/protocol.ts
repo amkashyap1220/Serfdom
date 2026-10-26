@@ -70,6 +70,10 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v48 (15d): leaderboards (D-148). Client getLeaderboard {board,
+ *          classId, dungeon, soloOnly}; server leaderboard {query,
+ *          entries}; entries carry `value` (EXP, clears, enemies slain, or
+ *          seconds) and `partySize` (fastest clears) instead of `exp`.
  * v47 (15c): server rooms {seen, cleared}: the rooms the run has woken
  *          and which of those are cleared, sent when they change and to
  *          late joiners (the minimap, D-147).
@@ -166,7 +170,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 47;
+export const PROTOCOL_VERSION = 48;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -227,7 +231,7 @@ export type ClientMessage =
   /** Play as this serf (must be one of yours and alive). */
   | { type: "selectSerf"; serfId: number }
   /** The lifetime EXP leaderboard (GDD §12). */
-  | { type: "getLeaderboard" }
+  | ({ type: "getLeaderboard" } & LeaderboardQuery)
   /** Give one of your serfs its permanent class (level 5+, none yet; D-073). */
   | { type: "chooseClass"; serfId: number; classId: ClassId }
   /** Your stash, gold, and pending rewards. */
@@ -290,13 +294,49 @@ export interface PendingPotion {
   serfId: number;
 }
 
+/** The leaderboards (D-148). */
+export const LEADERBOARD_BOARDS = [
+  "exp",
+  "clears",
+  "kills",
+  "fastest",
+] as const;
+export type LeaderboardBoard = (typeof LEADERBOARD_BOARDS)[number];
+
+/**
+ * Which board: `classId` filters lifetime EXP; `dungeon` and `soloOnly`
+ * pick the fastest clears. The others ignore them (the server sends them
+ * back as null and false).
+ */
+export interface LeaderboardQuery {
+  board: LeaderboardBoard;
+  classId: ClassId | null;
+  dungeon: DungeonId | null;
+  soloOnly: boolean;
+}
+
+/** Keeps only what the board uses: the class for EXP, the dungeon and Solo only for clear times. */
+export function normalizeLeaderboardQuery(
+  q: LeaderboardQuery,
+): LeaderboardQuery {
+  return {
+    board: q.board,
+    classId: q.board === "exp" ? q.classId : null,
+    dungeon: q.board === "fastest" ? q.dungeon : null,
+    soloOnly: q.board === "fastest" && q.soloOnly,
+  };
+}
+
 export interface LeaderboardEntry {
   rank: number;
   name: string;
   level: number;
-  exp: number;
+  /** Lifetime EXP, clears, enemies slain, or a clear time in seconds, by board. */
+  value: number;
   classId: ClassId | null;
   alive: boolean;
+  /** The party size of a fastest clear; null on the other boards. */
+  partySize: number | null;
 }
 
 /** One player's authoritative state in a snapshot. */
@@ -626,7 +666,11 @@ export type ServerMessage =
       statGains: Stats;
     }
   /** Top serfs by lifetime EXP, living and dead. Names only: no account data. */
-  | { type: "leaderboard"; entries: LeaderboardEntry[] }
+  | {
+      type: "leaderboard";
+      query: LeaderboardQuery;
+      entries: LeaderboardEntry[];
+    }
   /** Your serfs (living first, then the fallen) and which one you play as. */
   | {
       type: "serfList";
@@ -853,11 +897,21 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         ok: true,
         message: { type: "pourPotion", potionId: obj.potionId },
       };
-    case "getLeaderboard":
-      if (!hasExactKeys(obj, ["type"])) {
-        return fail("getLeaderboard: unexpected fields");
+    case "getLeaderboard": {
+      if (
+        !hasExactKeys(obj, ["type", "board", "classId", "dungeon", "soloOnly"])
+      ) {
+        return fail("getLeaderboard: bad query");
       }
-      return { ok: true, message: { type: "getLeaderboard" } };
+      const query = parseLeaderboardQuery({
+        board: obj.board,
+        classId: obj.classId,
+        dungeon: obj.dungeon,
+        soloOnly: obj.soloOnly,
+      });
+      if (!query) return fail("getLeaderboard: bad query");
+      return { ok: true, message: { type: "getLeaderboard", ...query } };
+    }
     case "chooseClass":
       if (!hasExactKeys(obj, ["type", "serfId", "classId"])) {
         return fail("chooseClass: unexpected fields");
@@ -1146,12 +1200,14 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
       };
     }
     case "leaderboard": {
-      if (!hasExactKeys(obj, ["type", "entries"])) {
+      if (!hasExactKeys(obj, ["type", "query", "entries"])) {
         return fail("leaderboard: unexpected fields");
       }
+      const query = parseLeaderboardQuery(obj.query);
+      if (!query) return fail("leaderboard: bad query");
       const entries = parseList(obj.entries, parseLeaderboardEntry);
       if (!entries) return fail("leaderboard: bad entry");
-      return { ok: true, message: { type: "leaderboard", entries } };
+      return { ok: true, message: { type: "leaderboard", query, entries } };
     }
     case "serfList": {
       if (!hasExactKeys(obj, ["type", "slots", "serfs", "selectedId"])) {
@@ -1584,21 +1640,51 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
 function parseLeaderboardEntry(v: unknown): LeaderboardEntry | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["rank", "name", "level", "exp", "classId", "alive"])
+    !hasExactKeys(v, [
+      "rank",
+      "name",
+      "level",
+      "value",
+      "classId",
+      "alive",
+      "partySize",
+    ])
   ) {
     return null;
   }
   if (v.classId !== null && !isClassId(v.classId)) return null;
   if (!isPlayerId(v.rank) || typeof v.name !== "string") return null;
-  if (!isPlayerId(v.level) || !isNonNegativeInt(v.exp)) return null;
+  if (!isPlayerId(v.level) || !isNonNegative(v.value)) return null;
   if (typeof v.alive !== "boolean") return null;
+  if (v.partySize !== null && !isPlayerId(v.partySize)) return null;
   return {
     rank: v.rank,
     name: v.name,
     level: v.level,
-    exp: v.exp,
+    value: v.value,
     classId: v.classId,
     alive: v.alive,
+    partySize: v.partySize,
+  };
+}
+
+/** A leaderboard query (D-148): a known board, class, and dungeon. */
+function parseLeaderboardQuery(v: unknown): LeaderboardQuery | null {
+  if (
+    !isPlainObject(v) ||
+    !hasExactKeys(v, ["board", "classId", "dungeon", "soloOnly"]) ||
+    !(LEADERBOARD_BOARDS as readonly unknown[]).includes(v.board) ||
+    (v.classId !== null && !isClassId(v.classId)) ||
+    (v.dungeon !== null && !isDungeonId(v.dungeon)) ||
+    typeof v.soloOnly !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    board: v.board as LeaderboardBoard,
+    classId: v.classId,
+    dungeon: v.dungeon,
+    soloOnly: v.soloOnly,
   };
 }
 

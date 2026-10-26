@@ -12,6 +12,7 @@ import {
   newRunStats,
   SERF_BASE,
   type ServerMessage,
+  type LeaderboardQuery,
 } from "@serfdom/shared";
 import {
   MemorySerfRepo,
@@ -163,6 +164,7 @@ describe("migrations", () => {
     ).rows.map((r) => r.table_name);
     expect(tables).toEqual([
       "accounts",
+      "clears",
       "items",
       "potions",
       "schema_migrations",
@@ -288,6 +290,13 @@ const RING = {
   luck: 1,
 };
 
+const EXP_BOARD = {
+  board: "exp",
+  classId: null,
+  dungeon: null,
+  soloOnly: false,
+} as const;
+
 /** Serf storage behaves the same in memory and in PostgreSQL. */
 function serfContract(
   name: string,
@@ -300,6 +309,61 @@ function serfContract(
       enemiesDefeated: 2,
       damageTaken: 6,
     };
+
+    it("keeps the boards (D-148): EXP by class, clears, enemies slain, each serf's fastest clear", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      const fast = await repo.create(a, `${name}Fast`, 2);
+      const slow = await repo.create(a, `${name}Slow`, 2);
+      if (typeof fast === "string" || typeof slow === "string") {
+        throw new Error("create failed");
+      }
+      const d = "dragons-roost" as const;
+      const at = (seconds: number) => ({ ...run, seconds });
+      await repo.recordRun(a, fast.id, "completed", at(90), null, 10, {
+        dungeon: d,
+        partySize: 3,
+      });
+      await repo.recordRun(a, fast.id, "completed", at(120), null, 10, {
+        dungeon: d,
+        partySize: 1,
+      });
+      await repo.recordRun(a, slow.id, "completed", at(100), null, 10, {
+        dungeon: d,
+        partySize: 1,
+      });
+      // A run left early records no clear.
+      await repo.recordRun(a, slow.id, "left", at(5), null, 0, null);
+      const mine = (e: { name: string }) =>
+        e.name === `${name}Fast` || e.name === `${name}Slow`;
+      const board = async (q: Partial<LeaderboardQuery>) =>
+        (await repo.leaderboard({ ...EXP_BOARD, ...q }, 100))
+          .filter(mine)
+          .map((e) => [e.name, e.value, e.partySize]);
+      // Each serf's best time only, fastest first, with its party size.
+      expect(await board({ board: "fastest", dungeon: d })).toEqual([
+        [`${name}Fast`, 90, 3],
+        [`${name}Slow`, 100, 1],
+      ]);
+      expect(
+        await board({ board: "fastest", dungeon: d, soloOnly: true }),
+      ).toEqual([
+        [`${name}Slow`, 100, 1],
+        [`${name}Fast`, 120, 1],
+      ]);
+      expect(await board({ board: "clears" })).toEqual([
+        [`${name}Fast`, 2, null],
+        [`${name}Slow`, 1, null],
+      ]);
+      // Two enemies a run each; a tie goes to the older serf.
+      expect(await board({ board: "kills" })).toEqual([
+        [`${name}Fast`, 4, null],
+        [`${name}Slow`, 4, null],
+      ]);
+      // The class filter: neither has a class.
+      expect(await board({ classId: "wizard" })).toEqual([]);
+      expect((await board({})).length).toBe(2);
+    });
 
     it("creates up to the slot limit, names unique among the living (any case)", async () => {
       const { repo, account } = await make();
@@ -385,14 +449,15 @@ function serfContract(
         { dungeon: "x", killedBy: null },
         0,
       );
-      const board = await repo.leaderboard(3);
+      const board = await repo.leaderboard(EXP_BOARD, 3);
       expect(board[0]).toEqual({
         rank: 1,
         name: `${name}Top`,
         level: 20,
-        exp: 1_000_000,
+        value: 1_000_000,
         classId: null,
         alive: false,
+        partySize: null,
       });
       expect(board.length).toBeLessThanOrEqual(3);
       expect(board.map((e) => e.rank)).toEqual(board.map((_, i) => i + 1));
@@ -437,7 +502,9 @@ function serfContract(
       ).toBeNull();
       expect((await repo.find(a, serf.id))?.classId).toBe("cleric");
       expect(
-        (await repo.leaderboard(100)).find((e) => e.name === `${name}Maud`),
+        (await repo.leaderboard(EXP_BOARD, 100)).find(
+          (e) => e.name === `${name}Maud`,
+        ),
       ).toMatchObject({ classId: "cleric" });
 
       const other = await account();

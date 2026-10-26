@@ -21,6 +21,9 @@ import {
   classBonus,
   className,
   clearExp,
+  dungeonInfo,
+  normalizeLeaderboardQuery,
+  type LeaderboardQuery,
   rollLevelGains,
   zeroStats,
   type Stats,
@@ -116,6 +119,8 @@ export class SerfService {
     result: RunResult,
     run: RunStats,
     death: Death | null,
+    /** The most players the run held, for its clear record (D-148). */
+    partySize = 1,
   ): Promise<{
     serf: SerfSummary;
     expGained: number;
@@ -137,6 +142,10 @@ export class SerfService {
       run,
       death,
       expGained,
+      // Fastest clears count listed dungeons only (D-148).
+      result === "completed" && dungeonInfo(dungeon).listed
+        ? { dungeon, partySize }
+        : null,
     );
     if (!serf) return null;
     if (result !== "completed" || !serf.alive) {
@@ -442,8 +451,11 @@ export class SerfService {
     });
   }
 
-  /** The lifetime EXP leaderboard: serf names and scores only. */
-  leaderboard(): Promise<LeaderboardEntry[]> {
-    return this.repo.leaderboard(LEADERBOARD_SIZE);
+  /** A leaderboard (D-148): serf names and scores only, never account data. */
+  leaderboard(query: LeaderboardQuery): Promise<LeaderboardEntry[]> {
+    return this.repo.leaderboard(
+      normalizeLeaderboardQuery(query),
+      LEADERBOARD_SIZE,
+    );
   }
 }

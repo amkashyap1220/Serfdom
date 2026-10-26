@@ -1281,22 +1281,72 @@ describe("EXP and the leaderboard (8a)", () => {
 
   it("the leaderboard lists serfs by EXP with no account data, and needs a login", async () => {
     const { client: anon } = await joined({ login: false });
-    anon.send(encodeMessage({ type: "getLeaderboard" }));
+    const lifetime = {
+      type: "getLeaderboard",
+      board: "exp",
+      classId: null,
+      dungeon: null,
+      soloOnly: false,
+    } as const;
+    anon.send(encodeMessage(lifetime));
     expect((await nextOfType(anon, "error")).reason).toBe("log in first");
 
     const { client } = await joined();
     await clearOnce(client, 2, 0);
-    client.send(encodeMessage({ type: "getLeaderboard" }));
+    client.send(encodeMessage(lifetime));
     const board = await nextOfType(client, "leaderboard");
     expect(board.entries[0]).toEqual({
       rank: 1,
       name: expect.any(String),
       level: 2,
-      exp: 100,
+      value: 100,
       classId: null,
       alive: true,
+      partySize: null,
     });
     expect(JSON.stringify(board)).not.toContain("@");
+  });
+
+  it("the boards (D-148): only listed dungeons have clear times, and the reply names its query", async () => {
+    const { client } = await joined();
+    // The Training Yard (a test fixture) never makes the fastest boards.
+    await clearOnce(client, 1, 0);
+    const ask = (q: object) =>
+      client.send(
+        JSON.stringify({
+          type: "getLeaderboard",
+          board: "exp",
+          classId: null,
+          dungeon: null,
+          soloOnly: false,
+          ...q,
+        }),
+      );
+    ask({ board: "fastest", dungeon: "training" });
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "getLeaderboard: pick a listed dungeon",
+    );
+    ask({ board: "fastest", dungeon: "goblin-warrens", soloOnly: true });
+    expect(await nextOfType(client, "leaderboard")).toEqual({
+      type: "leaderboard",
+      query: {
+        board: "fastest",
+        classId: null,
+        dungeon: "goblin-warrens",
+        soloOnly: true,
+      },
+      entries: [],
+    });
+    // Fields a board does not use come back cleared.
+    ask({ board: "clears", classId: "bard", dungeon: "goblin-warrens" });
+    const clears = await nextOfType(client, "leaderboard");
+    expect(clears.query).toEqual({
+      board: "clears",
+      classId: null,
+      dungeon: null,
+      soloOnly: false,
+    });
+    expect(clears.entries[0]).toMatchObject({ value: 1, partySize: null });
   });
 });
 

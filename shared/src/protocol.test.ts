@@ -988,36 +988,51 @@ describe("class choice (v11, D-073)", () => {
   });
 });
 
-describe("leaderboard messages (v10, class in v11)", () => {
+describe("leaderboard messages (v10, class in v11, boards in v48)", () => {
+  const query = {
+    board: "fastest",
+    classId: null,
+    dungeon: "goblin-warrens",
+    soloOnly: true,
+  };
   it("round-trips a leaderboard and rejects account data in it", () => {
     const entry = {
       rank: 1,
       name: "Edda",
       level: 9,
-      exp: 1500,
+      value: 184.5,
       classId: "bard",
       alive: false,
+      partySize: 1,
     };
-    expect(
-      parseServerMessage(
-        JSON.stringify({ type: "leaderboard", entries: [entry] }),
-      ),
-    ).toEqual({ ok: true, message: { type: "leaderboard", entries: [entry] } });
+    const board = { type: "leaderboard", query, entries: [entry] };
+    expect(parseServerMessage(JSON.stringify(board))).toEqual({
+      ok: true,
+      message: board,
+    });
     expect(
       parseServerMessage(
         JSON.stringify({
-          type: "leaderboard",
+          ...board,
           entries: [{ ...entry, email: "a@b.co" }],
         }),
       ).ok,
     ).toBe(false);
+  });
+
+  it("accepts only known boards, classes, and dungeons in a request", () => {
+    const ask = (q: object) =>
+      parseClientMessage(JSON.stringify({ type: "getLeaderboard", ...q })).ok;
+    expect(ask(query)).toBe(true);
     expect(
-      parseClientMessage(JSON.stringify({ type: "getLeaderboard" })).ok,
+      ask({ ...query, board: "exp", classId: "bard", dungeon: null }),
     ).toBe(true);
-    expect(
-      parseClientMessage(JSON.stringify({ type: "getLeaderboard", top: 9999 }))
-        .ok,
-    ).toBe(false);
+    expect(ask({ type: "getLeaderboard" })).toBe(false);
+    expect(ask({ ...query, board: "gold" })).toBe(false);
+    expect(ask({ ...query, classId: "king" })).toBe(false);
+    expect(ask({ ...query, dungeon: "moon" })).toBe(false);
+    expect(ask({ ...query, soloOnly: "yes" })).toBe(false);
+    expect(ask({ ...query, top: 9999 })).toBe(false);
   });
 });
 

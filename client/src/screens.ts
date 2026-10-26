@@ -32,6 +32,10 @@ import {
   levelProgress,
   normalizeSerfName,
   type LeaderboardEntry,
+  type LeaderboardBoard,
+  type LeaderboardQuery,
+  LEADERBOARD_BOARDS,
+  normalizeLeaderboardQuery,
   SERF_NAME_MAX,
   SERF_NAME_MIN,
   serfNameProblem,
@@ -89,6 +93,8 @@ export interface ScreenActions {
   removeMember(playerId: number): void;
   /** The HUD's debug readout (D-146). */
   setDebugHud(on: boolean): void;
+  /** Another leaderboard or filter (D-148). */
+  getLeaderboard(query: LeaderboardQuery): void;
 }
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
@@ -237,9 +243,36 @@ export class ScreenView {
   /** Who drank which potion, from this browser's clicks (for "Drunk by …" labels). */
   private readonly drunkBy = new Map<number, string>();
 
-  setLeaderboard(entries: LeaderboardEntry[]): void {
-    this.leaderboard = entries;
+  /** The board being shown (D-148); a reply for an older query is ignored. */
+  leaderboardQuery: LeaderboardQuery = {
+    board: "exp",
+    classId: null,
+    dungeon: null,
+    soloOnly: false,
+  };
+
+  setLeaderboard(reply: Extract<ServerMessage, { type: "leaderboard" }>): void {
+    if (
+      JSON.stringify(reply.query) !==
+      JSON.stringify(normalizeLeaderboardQuery(this.leaderboardQuery))
+    ) {
+      return;
+    }
+    this.leaderboard = reply.entries;
     this.shown = null;
+  }
+
+  /** Switches board or filter, and asks the server for it. */
+  private pickBoard(change: Partial<LeaderboardQuery>): void {
+    const next = { ...this.leaderboardQuery, ...change };
+    // The fastest clears need a dungeon: the first one until another is picked.
+    if (next.board === "fastest" && next.dungeon === null) {
+      next.dungeon = LISTED_DUNGEONS[0]?.id ?? null;
+    }
+    this.leaderboardQuery = next;
+    this.leaderboard = null;
+    this.shown = null;
+    this.actions.getLeaderboard(normalizeLeaderboardQuery(next));
   }
 
   setSerfError(reason: string): void {
@@ -1304,16 +1337,67 @@ export class ScreenView {
     return box;
   }
 
-  /** Lifetime EXP leaderboard (GDD §12): living and dead, serf names only. */
+  /**
+   * Leaderboards (GDD §12, D-148): living and dead, serf names only. Pick a
+   * board; lifetime EXP filters by class, the fastest clears by dungeon and
+   * Solo only.
+   */
   private buildLeaderboard(body: HTMLElement): void {
-    body.append(el("h2", "", "Lifetime EXP"));
+    const q = this.leaderboardQuery;
+    const boards = el("div", "lb-boards");
+    for (const b of LEADERBOARD_BOARDS) {
+      const pick = button(BOARD_NAMES[b], () => this.pickBoard({ board: b }));
+      if (b === q.board) pick.classList.add("active");
+      boards.append(pick);
+    }
+    body.append(boards);
+    const filters = el("div", "lb-filters");
+    if (q.board === "exp") {
+      filters.append(
+        select(
+          [
+            ["", "All classes"],
+            ...CLASS_IDS.map((c) => [c, CLASSES[c].name] as const),
+          ],
+          q.classId ?? "",
+          (v) => this.pickBoard({ classId: v === "" ? null : (v as ClassId) }),
+        ),
+      );
+    } else if (q.board === "fastest") {
+      filters.append(
+        select(
+          LISTED_DUNGEONS.map((d) => [d.id, d.name] as const),
+          q.dungeon ?? "",
+          (v) => this.pickBoard({ dungeon: v as DungeonId }),
+        ),
+      );
+      const solo = document.createElement("label");
+      solo.className = "setting";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = q.soloOnly;
+      box.addEventListener("change", () =>
+        this.pickBoard({ soloOnly: box.checked }),
+      );
+      solo.append(box, " Solo only");
+      filters.append(solo);
+    }
+    if (filters.childElementCount > 0) body.append(filters);
     const entries = this.leaderboard;
     if (!entries) {
       body.append(el("p", "hint", "Loading…"));
       return;
     }
     if (entries.length === 0) {
-      body.append(el("p", "hint", "No serf has earned EXP yet."));
+      body.append(
+        el(
+          "p",
+          "hint",
+          q.board === "fastest"
+            ? "No clears recorded here yet. Clear times count from Phase 15 on."
+            : "Nobody is on this board yet.",
+        ),
+      );
       return;
     }
     const table = el("div", "leaderboard");
@@ -1324,7 +1408,7 @@ export class ScreenView {
         el("span", "lb-name", e.alive ? e.name : `† ${e.name}`),
         el("span", "", className(e.classId)),
         el("span", "", `Lv ${e.level}`),
-        el("span", "lb-exp", `${e.exp} EXP`),
+        el("span", "lb-exp", boardValue(q.board, e)),
       );
       table.append(row);
     }
@@ -1476,6 +1560,47 @@ export class ScreenView {
       }
     }
   }
+}
+
+const BOARD_NAMES: Record<LeaderboardBoard, string> = {
+  exp: "Lifetime EXP",
+  clears: "Most clears",
+  kills: "Enemies slain",
+  fastest: "Fastest clear",
+};
+
+/** A board's score: EXP, clears, kills, or a clear time with its party size. */
+export function boardValue(
+  board: LeaderboardBoard,
+  e: LeaderboardEntry,
+): string {
+  switch (board) {
+    case "exp":
+      return `${e.value} EXP`;
+    case "clears":
+      return `${e.value} clear${e.value === 1 ? "" : "s"}`;
+    case "kills":
+      return `${e.value} slain`;
+    case "fastest":
+      return `${formatDuration(e.value)} · ${e.partySize === 1 ? "solo" : `party of ${e.partySize ?? "?"}`}`;
+  }
+}
+
+function select(
+  options: readonly (readonly [string, string])[],
+  value: string,
+  onChange: (value: string) => void,
+): HTMLSelectElement {
+  const s = document.createElement("select");
+  for (const [v, label] of options) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = label;
+    s.append(o);
+  }
+  s.value = value;
+  s.addEventListener("change", () => onChange(s.value));
+  return s;
 }
 
 function el(tag: string, className: string, text?: string): HTMLElement {
