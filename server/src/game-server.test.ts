@@ -22,6 +22,7 @@ import {
   rollArtifact,
   type DungeonId,
   ANY_LISTING,
+  type Wear,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
@@ -141,7 +142,7 @@ beforeEach(async () => {
   server = await GameServer.start({
     allowTestDungeons: true,
     accounts: testAccounts(),
-    serfs: new SerfService(new MemorySerfRepo()),
+    serfs: new SerfService(new MemorySerfRepo(), undefined, undefined, BARE),
     port: 0,
     helloTimeoutMs: 200,
     autoTick: false,
@@ -176,6 +177,9 @@ async function joined(
   }
   return { client, welcome };
 }
+
+/** Most tests here test other things than starting gear (D-157): their serfs start bare. */
+const BARE: readonly Wear[] = [];
 
 describe("handshake and presence", () => {
   it("gives each client a distinct guest id and lists who is online", async () => {
@@ -289,7 +293,12 @@ describe("startup", () => {
         allowTestDungeons: true,
         port: server.port,
         accounts: testAccounts(),
-        serfs: new SerfService(new MemorySerfRepo()),
+        serfs: new SerfService(
+          new MemorySerfRepo(),
+          undefined,
+          undefined,
+          BARE,
+        ),
         log: silentLogger,
       }),
     ).rejects.toMatchObject({ code: "EADDRINUSE" });
@@ -449,7 +458,7 @@ describe("menu and queue (6a)", () => {
     const live = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(new MemorySerfRepo()),
+      serfs: new SerfService(new MemorySerfRepo(), undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -488,7 +497,7 @@ describe("menu and queue (6a)", () => {
     const live = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(new MemorySerfRepo()),
+      serfs: new SerfService(new MemorySerfRepo(), undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 5,
@@ -517,7 +526,7 @@ describe("menu and queue (6a)", () => {
     const live = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(new MemorySerfRepo()),
+      serfs: new SerfService(new MemorySerfRepo(), undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 5,
@@ -565,7 +574,7 @@ describe("menu and queue (6a)", () => {
   it("refuses the unlisted Training Yard unless test dungeons are on (D-107)", async () => {
     const live = await GameServer.start({
       accounts: testAccounts(),
-      serfs: new SerfService(new MemorySerfRepo()),
+      serfs: new SerfService(new MemorySerfRepo(), undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -741,7 +750,7 @@ describe("real-time loop", () => {
     const live = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(new MemorySerfRepo()),
+      serfs: new SerfService(new MemorySerfRepo(), undefined, undefined, BARE),
       port: 0,
       queueWaitSeconds: 0,
       log: silentLogger,
@@ -1434,7 +1443,7 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -1484,7 +1493,7 @@ describe("stash, selling, and held rewards (9a, D-085–D-088)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -1545,7 +1554,7 @@ describe("equipping over the network (9b)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -1601,7 +1610,7 @@ describe("the potion rack over the network (D-118)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -1671,7 +1680,7 @@ describe("Arcane Blast over the network (10a, D-092–D-096)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -1695,7 +1704,15 @@ describe("Arcane Blast over the network (10a, D-092–D-096)", () => {
     client.send(
       encodeMessage({ type: "chooseClass", serfId, classId: "wizard" }),
     );
+    // The class only offers its Tier 0 set (D-157): Equip it.
     let list = await nextOfType(client, "serfList");
+    while (!list.serfs[0]?.classSetOffered) {
+      list = await nextOfType(client, "serfList");
+    }
+    expect(list.serfs[0]?.items.some((i) => i.slot === "ability")).toBe(false);
+    client.send(
+      encodeMessage({ type: "answerClassSet", serfId, accept: true }),
+    );
     while (!list.serfs[0]?.items.some((i) => i.type === "spellbook")) {
       list = await nextOfType(client, "serfList");
     }
@@ -1741,7 +1758,7 @@ describe("Phase 13 acceptance: entry, and a party clear of every new dungeon (D-
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -2230,7 +2247,7 @@ describe("the Resurrection Necklace on the server (16c, D-153)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -2296,7 +2313,7 @@ describe("account upgrades (D-154)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,
@@ -2341,6 +2358,60 @@ describe("account upgrades (D-154)", () => {
   });
 });
 
+describe("Tier 0 starter gear over the network (D-157)", () => {
+  it("a new serf starts in Tier 0 gear; a free Tier 0 item is taken into the stash", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      allowTestDungeons: true,
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const { client } = await joined();
+    const [serf] = await repo.list(1);
+    expect(serf!.items.map((i) => i.equipped).sort()).toEqual([
+      "chest",
+      "gloves",
+      "head",
+      "legs",
+      "weapon",
+    ]);
+    // A made-up item is a malformed message; a real Tier 0 kind is taken.
+    client.send(
+      JSON.stringify({
+        type: "takeFreeItem",
+        slot: "weapon",
+        itemType: "lance",
+      }),
+    );
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "takeFreeItem: no such Tier 0 item",
+    );
+    client.send(
+      encodeMessage({ type: "takeFreeItem", slot: "cape", itemType: "hp" }),
+    );
+    let stash = await nextOfType(client, "stash");
+    while (stash.items.length === 0) stash = await nextOfType(client, "stash");
+    expect(stash.items[0]).toMatchObject({ slot: "cape", type: "hp", tier: 0 });
+    // It cannot be listed: Tier 0 is free (D-157).
+    client.send(
+      encodeMessage({
+        type: "exchangeList",
+        itemId: stash.items[0]!.id,
+        potionId: null,
+        price: 10,
+      }),
+    );
+    expect((await nextOfType(client, "exchangeError")).reason).toBe(
+      "Tier 0 gear is free on the Exchange, so it cannot be sold there.",
+    );
+  });
+});
+
 describe("the Grand Serf Exchange over the network (D-155, D-156)", () => {
   it("one player lists, another buys and collects; a buy order fills from a listing; both hear of each trade", async () => {
     await server.close();
@@ -2348,7 +2419,7 @@ describe("the Grand Serf Exchange over the network (D-155, D-156)", () => {
     server = await GameServer.start({
       allowTestDungeons: true,
       accounts: testAccounts(),
-      serfs: new SerfService(repo),
+      serfs: new SerfService(repo, undefined, undefined, BARE),
       port: 0,
       autoTick: false,
       queueWaitSeconds: 0,

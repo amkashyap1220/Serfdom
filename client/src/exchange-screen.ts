@@ -22,6 +22,9 @@ import {
   type ItemSpec,
   itemKindName,
   type Listing,
+  FREE_TIER0,
+  filterListings,
+  isFreeTier0,
   type MarketKey,
   marketKeyName,
   marketKeyOf,
@@ -75,6 +78,8 @@ export interface ExchangeActions {
     what: { itemId: number } | { potionId: number },
   ): void;
   collectExchange(): void;
+  /** Take one free Tier 0 item into the stash (D-157). */
+  takeFreeItem(slot: ItemSlot, type: string): void;
 }
 
 type Stash = Extract<ServerMessage, { type: "stash" }>;
@@ -276,6 +281,15 @@ export class ExchangeScreen {
         "None picked: any rolls or none.",
       ),
     );
+    if (q.tier === 0) {
+      this.buildFree(body, q);
+      return;
+    }
+    if (q.tier === null) {
+      body.append(
+        el("p", "hint", "Tier 0 gear is free: choose Tier 0 to take some."),
+      );
+    }
     const page = this.page;
     if (!page) {
       body.append(el("p", "hint", "Loading…"));
@@ -313,8 +327,49 @@ export class ExchangeScreen {
       );
       grid.append(card);
     }
-    body.append(grid);
-    const pages = Math.max(1, Math.ceil(page.total / EXCHANGE.pageSize));
+    body.append(grid, this.pager(q, page.total, "listed"));
+  }
+
+  /** Tier 0 is free (D-157): every kind the filters allow, each with Take. */
+  private buildFree(body: HTMLElement, q: ExchangeQuery): void {
+    const all: Listing[] = FREE_TIER0.map((item, i) => ({
+      id: -1 - i,
+      price: 0,
+      listedAt: 0,
+      item: { ...item, id: -1 - i, equipped: null },
+      potion: null,
+      mine: false,
+    }));
+    const page = filterListings(all, q);
+    body.append(
+      el(
+        "p",
+        "hint",
+        "Tier 0 gear is free, as much as your stash holds. It cannot be listed.",
+      ),
+    );
+    if (page.listings.length === 0) {
+      body.append(el("p", "hint", "No Tier 0 gear matches."));
+      return;
+    }
+    const grid = el("div", "item-grid exchange-grid");
+    for (const l of page.listings) {
+      const item = l.item!;
+      const card = itemCard(item);
+      card.append(
+        el("span", "price", "Free"),
+        button("Take", () =>
+          this.actions.takeFreeItem(item.slot, item.type as string),
+        ),
+      );
+      grid.append(card);
+    }
+    body.append(grid, this.pager(q, page.total, "kinds"));
+  }
+
+  /** Previous / Next under a page of cards. */
+  private pager(q: ExchangeQuery, total: number, noun: string): HTMLElement {
+    const pages = Math.max(1, Math.ceil(total / EXCHANGE.pageSize));
     const pager = el("div", "lb-filters");
     const prev = button("Previous", () => this.browse({ page: q.page - 1 }));
     prev.disabled = q.page <= 0;
@@ -322,14 +377,10 @@ export class ExchangeScreen {
     next.disabled = q.page + 1 >= pages;
     pager.append(
       prev,
-      el(
-        "span",
-        "hint",
-        `Page ${q.page + 1} of ${pages} · ${page.total} listed`,
-      ),
+      el("span", "hint", `Page ${q.page + 1} of ${pages} · ${total} ${noun}`),
       next,
     );
-    body.append(pager);
+    return pager;
   }
 
   /** A listing's price history and best order, short, for its tooltip. */
@@ -458,6 +509,17 @@ export class ExchangeScreen {
       return panel;
     }
     const { thing, what } = picked;
+    if (thing.item && isFreeTier0(thing.item)) {
+      panel.append(
+        itemCard(thing.item),
+        el(
+          "p",
+          "hint",
+          "Tier 0 gear is free on the Exchange, so it cannot be listed. The Lord takes it for nothing (Discard, in the Stash).",
+        ),
+      );
+      return panel;
+    }
     const key = keyOf(thing);
     panel.append(
       thing.item ? itemCard(thing.item) : el("h3", "", marketKeyName(key)),
@@ -694,7 +756,7 @@ export class ExchangeScreen {
     type.setAttribute("aria-label", "Item type");
     row.append(slot, type);
     if (d.slot !== "potion") {
-      const tier = select(TIER_OPTIONS, String(d.tier), (v) =>
+      const tier = select(ORDER_TIER_OPTIONS, String(d.tier), (v) =>
         set({ tier: tierOf(v) }),
       );
       tier.setAttribute("aria-label", "Tier");
@@ -815,6 +877,9 @@ const TIER_OPTIONS: readonly (readonly [string, string])[] = [
   ["artifact", "Artifact"],
 ];
 
+/** Orders: Tier 1 up and Artifact (Tier 0 is free, D-157). */
+const ORDER_TIER_OPTIONS = TIER_OPTIONS.filter(([v]) => v !== "0");
+
 function tierOf(v: string): TierFilter {
   return v === "artifact" ? "artifact" : Number(v);
 }
@@ -832,6 +897,7 @@ function settleDraft(d: OrderDraft): OrderDraft {
   return {
     ...d,
     type,
+    tier: d.tier === 0 ? 1 : d.tier,
     artifact:
       d.artifact && ids.includes(d.artifact) ? d.artifact : (ids[0] ?? null),
     rolls: hasExtraRolls(d.slot, d.tier) ? d.rolls : [],

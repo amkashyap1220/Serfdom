@@ -1014,28 +1014,72 @@ function serfContract(
       expect(await repo.equip(a, serf.id, r2!.item.id, "ring1", 20)).toBeNull();
     });
 
-    it("grants the free ability item once, only to a living classed serf (D-092)", async () => {
+    it("a new serf wears what it is given; the class set is answered once, and only Tier 0 goes (D-157)", async () => {
       const { repo, account } = await make();
       const a = await account();
-      const serf = await repo.create(a, `${name}Grant`, 2);
-      if (typeof serf === "string") throw new Error(serf);
-      const book = {
-        slot: "ability" as const,
-        type: "spellbook" as const,
+      const t0 = (slot: "weapon" | "head" | "ability", type: string) => ({
+        slot,
+        type: type as "sword",
         tier: 0,
         rolls: [],
         luck: 0,
-      };
-      expect(await repo.grantAbilityItem(a, serf.id, book)).toBe(false); // no class yet
+      });
+      const serf = await repo.create(a, `${name}Grant`, 2, [
+        { slot: "weapon", item: t0("weapon", "sword") },
+        { slot: "head", item: t0("head", "leather") },
+      ]);
+      if (typeof serf === "string") throw new Error(serf);
+      expect(serf.items.map((i) => [i.equipped, i.type])).toEqual([
+        ["weapon", "sword"],
+        ["head", "leather"],
+      ]);
+      expect(serf.classSetOffered).toBe(false);
+      const sword = serf.items[0]!;
+      const book = t0("ability", "spellbook");
+      // No class yet: nothing to answer.
+      expect(await repo.answerClassSet(a, serf.id, [], [])).toBe(false);
       await repo.recordRun(a, serf.id, "completed", run, null, 500);
       await repo.chooseClass(a, serf.id, "wizard", 500, SERF_BASE, 1);
+      expect((await repo.find(a, serf.id))?.classSetOffered).toBe(true);
       const b = await account();
-      expect(await repo.grantAbilityItem(b, serf.id, book)).toBe(false);
-      expect(await repo.grantAbilityItem(a, serf.id, book)).toBe(true);
-      expect(await repo.grantAbilityItem(a, serf.id, book)).toBe(false);
-      expect((await repo.find(a, serf.id))?.items).toEqual([
-        expect.objectContaining({ ...book, equipped: "ability" }),
-      ]);
+      expect(await repo.answerClassSet(b, serf.id, [], [])).toBe(false);
+      // Drop the sword; the staff goes in its slot, the book in the empty
+      // ability slot; the taken head slot is not doubled.
+      expect(
+        await repo.answerClassSet(
+          a,
+          serf.id,
+          [
+            { slot: "weapon", item: t0("weapon", "staff") },
+            { slot: "head", item: t0("head", "cloth") },
+            { slot: "ability", item: book },
+          ],
+          [sword.id],
+        ),
+      ).toBe(true);
+      expect(await repo.answerClassSet(a, serf.id, [], [])).toBe(false);
+      const after = (await repo.find(a, serf.id))!;
+      expect(after.classSetOffered).toBe(false);
+      expect(after.items.map((i) => [i.equipped, i.type]).sort()).toEqual(
+        [
+          ["ability", "spellbook"],
+          ["head", "leather"],
+          ["weapon", "staff"],
+        ].sort(),
+      );
+      // A free item goes to the stash only while there is room.
+      expect(await repo.addToStash(a, t0("head", "plate"), 0)).toBe("full");
+      expect(await repo.addToStash(a, t0("head", "plate"), 20)).toMatchObject({
+        slot: "head",
+        type: "plate",
+        tier: 0,
+        equipped: null,
+      });
+      // Tier 0 cannot be listed.
+      const [listed] = (await repo.stash(a)).items;
+      expect(
+        await repo.listOnExchange(a, { itemId: listed!.id }, 10, 10),
+      ).toEqual({ kind: "refused", reason: "free" });
     });
 
     it("another account's serf does not exist for you", async () => {

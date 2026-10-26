@@ -58,6 +58,8 @@ import {
   type DungeonId,
   potionProblem,
   type Potion,
+  classSet,
+  itemName,
 } from "@serfdom/shared";
 import {
   accuracy,
@@ -97,6 +99,8 @@ export interface ScreenActions extends ExchangeActions {
   drinkPotion(potionId: number, serfId: number): void;
   pourPotion(potionId: number): void;
   chooseClass(serfId: number, classId: ClassId): void;
+  /** Equip the free Tier 0 class set, or not (D-157). */
+  answerClassSet(serfId: number, accept: boolean): void;
   logout(): void;
   /** Parties (D-142, D-143). */
   invite(name: string): void;
@@ -726,6 +730,8 @@ export class ScreenView {
     if (party) buttons.append(button("Leave", () => this.actions.leaveParty()));
     box.append(buttons);
     side.append(box);
+    const offers = this.classSetStrip();
+    if (offers) side.append(offers);
     const invites = this.inviteStrip();
     if (invites) side.append(invites);
     return side;
@@ -793,6 +799,37 @@ export class ScreenView {
     body.append(
       el("p", "hint", "Key binds, sound, and more settings come in Phase 18."),
     );
+  }
+
+  /**
+   * The free Tier 0 class set waiting for each newly classed serf (D-157):
+   * what is in it, Equip, and No thanks (then it is never created).
+   */
+  private classSetStrip(): HTMLElement | null {
+    const waiting = (this.serfs?.serfs ?? []).filter(
+      (x) => x.alive && x.classSetOffered && x.classId,
+    );
+    if (waiting.length === 0) return null;
+    const strip = el("div", "party-strip");
+    for (const serf of waiting) {
+      const name = className(serf.classId);
+      const row = el("div", "party-invite class-set");
+      row.append(
+        el(
+          "span",
+          "",
+          `${serf.name} is now a ${name}. Take the free Tier 0 ${name} set? ${classSet(
+            serf.classId!,
+          )
+            .map((w) => itemName(w.item))
+            .join(", ")}.`,
+        ),
+        button("Equip", () => this.actions.answerClassSet(serf.id, true)),
+        button("No thanks", () => this.actions.answerClassSet(serf.id, false)),
+      );
+      strip.append(row);
+    }
+    return strip;
   }
 
   /** Invites to you, and the latest party news, above every menu tab (D-143). */

@@ -43,6 +43,8 @@ import {
   type MarketKey,
   type PriceWindow,
   type RollWish,
+  isFreeTier0,
+  type Wear,
 } from "@serfdom/shared";
 import type pg from "pg";
 
@@ -70,6 +72,8 @@ export interface SerfRepo {
     accountId: number,
     name: string,
     maxLiving: number,
+    /** What it wears from the start (D-157's Tier 0 set). */
+    wear?: readonly Wear[],
   ): Promise<CreateResult>;
   /** The account's serf, or null if it does not exist or is someone else's. */
   find(accountId: number, serfId: number): Promise<SerfSummary | null>;
@@ -223,16 +227,24 @@ export interface SerfRepo {
   /** Whether rewards wait for this serf (it may not start a dungeon, D-088). */
   hasPending(accountId: number, serfId: number): Promise<boolean>;
   /**
-   * Once per serf (D-092): if this living, classed serf has not had its
-   * free ability item, puts `item` in its ability slot and marks it given,
-   * in one transaction. False if it was given before (or the serf is not
-   * this account's, dead, or classless).
+   * Once per serf (D-157): answers the free Tier 0 class set offer of this
+   * living, classed serf. Deletes the listed worn Tier 0 items (`dropIds`;
+   * anything else is kept), then creates and wears `wear`, each piece only
+   * where its slot is empty, all in one transaction. False if it was
+   * answered before (or the serf is not this account's, dead, or classless).
    */
-  grantAbilityItem(
+  answerClassSet(
     accountId: number,
     serfId: number,
-    item: ItemSpec,
+    wear: readonly Wear[],
+    dropIds: readonly number[],
   ): Promise<boolean>;
+  /** Creates `item` in the account's stash if it has room (a free Tier 0 item, D-157). */
+  addToStash(
+    accountId: number,
+    item: ItemSpec,
+    capacity: number,
+  ): Promise<Item | "full">;
   /**
    * Puts one of the account's stash or pending items on a living serf in
    * `slot` (the caller has checked the rules). What was worn there goes to
@@ -307,6 +319,7 @@ export interface Stash {
 const UNIQUE_VIOLATION = "23505";
 
 interface SerfRow {
+  ability_granted: boolean;
   id: string;
   name: string;
   exp: string;
@@ -329,13 +342,14 @@ interface SerfRow {
 
 function fromRow(r: SerfRow): SerfSummary {
   const alive = r.died_at === null;
+  const classId = classFromRow(r.class_id);
   const exp = Number(r.exp);
   return {
     id: Number(r.id),
     name: r.name,
     level: levelForExp(exp),
     exp,
-    classId: classFromRow(r.class_id),
+    classId,
     stats: statsFromRow(r.stats),
     potionStats: statsFromRow(r.potion_stats),
     items: [],
@@ -353,6 +367,8 @@ function fromRow(r: SerfRow): SerfSummary {
     death: alive
       ? null
       : { dungeon: r.death_dungeon ?? "", killedBy: r.killed_by },
+    // The class set waits until answered (D-157; the 008 flag).
+    classSetOffered: alive && classId !== null && !r.ability_granted,
   };
 }
 
@@ -490,6 +506,7 @@ export class PgSerfRepo implements SerfRepo {
     accountId: number,
     name: string,
     maxLiving: number,
+    wear: readonly Wear[] = [],
   ): Promise<CreateResult> {
     const client = await this.pool.connect();
     try {
@@ -511,10 +528,12 @@ export class PgSerfRepo implements SerfRepo {
         "insert into serfs (account_id, name) values ($1, $2) returning *",
         [accountId, name],
       );
-      await client.query("commit");
       const row = r.rows[0];
       if (!row) throw new Error("insert returned no row");
-      return fromRow(row); // a new serf has no items
+      await insertWorn(client, accountId, Number(row.id), wear);
+      await client.query("commit");
+      const [made] = await this.withItems([fromRow(row)]);
+      return made!;
     } catch (err) {
       await client.query("rollback").catch(() => {});
       if (isPgError(err) && err.code === UNIQUE_VIOLATION) return "nameTaken";
@@ -808,12 +827,13 @@ export class PgSerfRepo implements SerfRepo {
     });
   }
 
-  async grantAbilityItem(
+  async answerClassSet(
     accountId: number,
     serfId: number,
-    item: ItemSpec,
+    wear: readonly Wear[],
+    dropIds: readonly number[],
   ): Promise<boolean> {
-    const granted = await this.inAccount(accountId, async (client) => {
+    const done = await this.inAccount(accountId, async (client) => {
       const r = await client.query(
         `update serfs set ability_granted = true
          where id = $1 and account_id = $2 and died_at is null
@@ -822,14 +842,32 @@ export class PgSerfRepo implements SerfRepo {
         [serfId, accountId],
       );
       if (r.rowCount === 0) return null;
-      // The ability slot is empty: only the class's own item fits there,
-      // and none existed before the grant (D-096).
+      // Only worn Tier 0 pieces go: they are free (D-157).
       await client.query(
-        `insert into items (account_id, serf_id, location, equipped, slot, type, tier, rolls, luck)
-         values ($1, $2, 'equipped', 'ability', $3, $4, $5, $6, $7)`,
+        `delete from items where id = any($1::bigint[]) and serf_id = $2
+           and location = 'equipped' and tier = 0 and artifact is null`,
+        [[...dropIds], serfId],
+      );
+      await insertWorn(client, accountId, serfId, wear);
+      return true;
+    });
+    return done === true;
+  }
+
+  async addToStash(
+    accountId: number,
+    item: ItemSpec,
+    capacity: number,
+  ): Promise<Item | "full"> {
+    const made = await this.inAccount(accountId, async (client) => {
+      if ((await stashCount(client, accountId)) >= capacity) {
+        return "full" as const;
+      }
+      const r = await client.query<ItemRow>(
+        `insert into items (account_id, location, slot, type, tier, rolls, luck)
+         values ($1, 'stash', $2, $3, $4, $5, $6) returning *`,
         [
           accountId,
-          serfId,
           item.slot,
           item.type,
           item.tier,
@@ -837,9 +875,9 @@ export class PgSerfRepo implements SerfRepo {
           item.luck,
         ],
       );
-      return true;
+      return itemFromRow(r.rows[0]!);
     });
-    return granted === true;
+    return made ?? "full";
   }
 
   async hasPending(accountId: number, serfId: number): Promise<boolean> {
@@ -1139,6 +1177,9 @@ export class PgSerfRepo implements SerfRepo {
           itemId: "itemId" in what ? what.itemId : null,
           potionId: "potionId" in what ? what.potionId : null,
         }))!;
+        if (thing.item && isFreeTier0(thing.item)) {
+          return { value: refusal("free"), commit: false };
+        }
         const key = marketKeyOfThing(thing);
         // The best fitting order pays its own price (it was there first).
         const orders = await client.query<OrderRow>(
@@ -1355,6 +1396,9 @@ export class PgSerfRepo implements SerfRepo {
         itemId: "itemId" in what ? what.itemId : null,
         potionId: "potionId" in what ? what.potionId : null,
       }))!;
+      if (thing.item && isFreeTier0(thing.item)) {
+        return { value: refusal("free"), commit: false };
+      }
       if (
         !fitsOrder(thing, {
           key: order.market_key,
@@ -1672,7 +1716,7 @@ export interface ExchangeDeal {
 
 export interface ExchangeRefusal {
   kind: "refused";
-  reason: "notYours" | "tooMany" | "gone" | "own" | "gold" | "noFit";
+  reason: "notYours" | "tooMany" | "gone" | "own" | "gold" | "noFit" | "free";
 }
 
 function refusal(reason: ExchangeRefusal["reason"]): ExchangeRefusal {
@@ -1687,6 +1731,33 @@ function marketKeyOfThing(thing: {
   return thing.item
     ? marketKeyOf({ item: thing.item })
     : marketKeyOf({ potion: thing.potion! });
+}
+
+/** Creates and wears each piece where its slot on the serf is empty (D-157). */
+async function insertWorn(
+  client: pg.PoolClient,
+  accountId: number,
+  serfId: number,
+  wear: readonly Wear[],
+): Promise<void> {
+  for (const w of wear) {
+    await client.query(
+      `insert into items (account_id, serf_id, location, equipped, slot, type, tier, rolls, luck)
+       select $1, $2, 'equipped', $3, $4, $5, $6, $7, $8
+       where not exists (
+         select 1 from items where serf_id = $2 and location = 'equipped' and equipped = $3)`,
+      [
+        accountId,
+        serfId,
+        w.slot,
+        w.item.slot,
+        w.item.type,
+        w.item.tier,
+        JSON.stringify(w.item.rolls),
+        w.item.luck,
+      ],
+    );
+  }
 }
 
 /** The one Exchange lock (D-156): every Exchange change holds it. */
@@ -1779,7 +1850,12 @@ export class MemorySerfRepo implements SerfRepo {
     const worn = this.items
       .filter((x) => x.serfId === m.summary.id && x.location === "equipped")
       .map((x) => x.item);
-    return structuredClone({ ...m.summary, items: worn });
+    return structuredClone({
+      ...m.summary,
+      items: worn,
+      classSetOffered:
+        m.summary.alive && m.summary.classId !== null && !m.abilityGranted,
+    });
   }
 
   async list(accountId: number): Promise<SerfSummary[]> {
@@ -1798,6 +1874,7 @@ export class MemorySerfRepo implements SerfRepo {
     accountId: number,
     name: string,
     maxLiving: number,
+    wear: readonly Wear[] = [],
   ): Promise<CreateResult> {
     const living = this.serfs.filter(
       (s) => s.accountId === accountId && s.summary.alive,
@@ -1823,15 +1900,18 @@ export class MemorySerfRepo implements SerfRepo {
       alive: true,
       life: newLifeStats(),
       death: null,
+      classSetOffered: false,
     };
-    this.serfs.push({
+    const made: MemorySerf = {
       accountId,
       summary,
       statsLevel: 1,
       createdSeq: ++this.seq,
       diedSeq: null,
-    });
-    return structuredClone(summary);
+    };
+    this.serfs.push(made);
+    this.memWear(accountId, summary.id, wear);
+    return this.out(made);
   }
 
   async find(accountId: number, serfId: number): Promise<SerfSummary | null> {
@@ -2042,6 +2122,7 @@ export class MemorySerfRepo implements SerfRepo {
       "item" in entry
         ? { item: entry.item, potion: null }
         : { item: null, potion: entry.potion };
+    if (thing.item && isFreeTier0(thing.item)) return refusal("free");
     const key = marketKeyOfThing(thing);
     const order = this.orders
       .filter(
@@ -2193,6 +2274,7 @@ export class MemorySerfRepo implements SerfRepo {
       "item" in entry
         ? { item: entry.item, potion: null }
         : { item: null, potion: entry.potion };
+    if (thing.item && isFreeTier0(thing.item)) return refusal("free");
     if (!fitsOrder(thing, order)) return refusal("noFit");
     this.orders = this.orders.filter((x) => x !== order);
     return this.memSettle({
@@ -2571,10 +2653,34 @@ export class MemorySerfRepo implements SerfRepo {
     return { price };
   }
 
-  async grantAbilityItem(
+  /** Creates and wears each piece where its slot on the serf is empty. */
+  private memWear(accountId: number, serfId: number, wear: readonly Wear[]) {
+    for (const w of wear) {
+      const taken = this.items.some(
+        (x) =>
+          x.serfId === serfId &&
+          x.location === "equipped" &&
+          x.item.equipped === w.slot,
+      );
+      if (taken) continue;
+      this.items.push({
+        accountId,
+        serfId,
+        location: "equipped",
+        item: {
+          ...structuredClone(w.item),
+          id: this.nextItemId++,
+          equipped: w.slot,
+        },
+      });
+    }
+  }
+
+  async answerClassSet(
     accountId: number,
     serfId: number,
-    item: ItemSpec,
+    wear: readonly Wear[],
+    dropIds: readonly number[],
   ): Promise<boolean> {
     const s = this.serfs.find(
       (x) =>
@@ -2586,17 +2692,32 @@ export class MemorySerfRepo implements SerfRepo {
     );
     if (!s) return false;
     s.abilityGranted = true;
-    this.items.push({
-      accountId,
-      serfId,
-      location: "equipped",
-      item: {
-        ...structuredClone(item),
-        id: this.nextItemId++,
-        equipped: "ability",
-      },
-    });
+    this.items = this.items.filter(
+      (x) =>
+        !(
+          dropIds.includes(x.item.id) &&
+          x.serfId === serfId &&
+          x.location === "equipped" &&
+          isFreeTier0(x.item)
+        ),
+    );
+    this.memWear(accountId, serfId, wear);
     return true;
+  }
+
+  async addToStash(
+    accountId: number,
+    item: ItemSpec,
+    capacity: number,
+  ): Promise<Item | "full"> {
+    if (this.stashOf(accountId).length >= capacity) return "full";
+    const made: Item = {
+      ...structuredClone(item),
+      id: this.nextItemId++,
+      equipped: null,
+    };
+    this.items.push({ accountId, serfId: null, location: "stash", item: made });
+    return structuredClone(made);
   }
 
   async hasPending(accountId: number, serfId: number): Promise<boolean> {

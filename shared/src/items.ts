@@ -201,10 +201,10 @@ const SLOT_WEIGHTS = [
 /** Loot pools are specific to the dungeon (D-016). */
 export const LOOT_POOLS: Record<DungeonId, LootPool> = {
   "goblin-warrens": {
+    // No Tier 0: it is free starter gear (D-157).
     tiers: [
-      [0, 50],
-      [1, 35],
-      [2, 15],
+      [1, 60],
+      [2, 40],
     ],
     slots: SLOT_WEIGHTS,
   },
@@ -290,10 +290,10 @@ export const LOOT_POOLS: Record<DungeonId, LootPool> = {
     slots: SLOT_WEIGHTS,
   },
   training: {
+    // No Tier 0: it is free starter gear (D-157).
     tiers: [
-      [0, 50],
-      [1, 35],
-      [2, 15],
+      [1, 60],
+      [2, 40],
     ],
     slots: SLOT_WEIGHTS,
   },

@@ -265,7 +265,14 @@ describe("reward chests (D-065, D-068, D-080, D-086)", () => {
     expect(isValidItemSpec(drop.item)).toBe(true);
     expect(drop.item.tier).toBeLessThanOrEqual(2);
     expect(drop.pending).toBe(false);
-    expect(r?.serf.items).toEqual([]); // nothing is worn without equipping
+    // Nothing new is worn without equipping: only the starting set (D-157).
+    expect(r?.serf.items.map((i) => i.equipped)).toEqual([
+      "weapon",
+      "head",
+      "chest",
+      "legs",
+      "gloves",
+    ]);
     const stash = await serfs.stash(1);
     expect(stash).toMatchObject({ capacity: STASH_SIZE, gold: 0, pending: [] });
     expect(stash.items).toEqual([drop.item]);
@@ -480,11 +487,12 @@ describe("equipping (9b, D-081, D-086)", () => {
   });
 });
 
-describe("the free ability item (D-092)", () => {
-  it("choosing a class wears a T0 one at once; it is given only once", async () => {
+describe("Tier 0 starter gear (D-157)", () => {
+  /** A level-5 classless serf on account 1, in its starting set. */
+  const ready = async (name: string) => {
     const repo = new MemorySerfRepo();
     const serfs = new SerfService(repo);
-    const made = await serfs.create(1, "Ada Book");
+    const made = await serfs.create(1, name);
     if (!made.ok) throw new Error(made.reason);
     await repo.recordRun(
       1,
@@ -494,47 +502,96 @@ describe("the free ability item (D-092)", () => {
       null,
       totalExpForLevel(5),
     );
-    await serfs.choose(1, made.serf.id);
-    const chosen = await serfs.chooseClass(1, made.serf.id, "wizard");
-    if (!chosen.ok) throw new Error(chosen.reason);
-    expect(chosen.serf.items).toEqual([
-      expect.objectContaining({
-        slot: "ability",
-        type: "spellbook",
-        tier: 0,
-        rolls: [],
-        equipped: "ability",
-      }),
+    return { repo, serfs, made: made.serf };
+  };
+  const worn = (serf: {
+    items: { equipped: string | null; type: string | null; tier: number }[];
+  }) => serf.items.map((i) => `${i.equipped}:${i.type}:${i.tier}`).sort();
+
+  it("a new serf wears a Tier 0 Sword and leather; a class choice only offers the set", async () => {
+    const { serfs, made } = await ready("Ada Book");
+    expect(worn(made)).toEqual([
+      "chest:leather:0",
+      "gloves:leather:0",
+      "head:leather:0",
+      "legs:leather:0",
+      "weapon:sword:0",
     ]);
-    // Unequip and sell it: selecting the serf again does not give another.
-    expect(await serfs.unequip(1, made.serf.id, "ability")).toEqual({
-      ok: true,
-    });
-    const book = (await serfs.stash(1)).items[0]!;
-    expect(await serfs.sell(1, book.id)).toMatchObject({ ok: true });
-    const again = await serfs.choose(1, made.serf.id);
-    expect(again.ok && again.serf.items).toEqual([]);
+    expect(made.classSetOffered).toBe(false);
+    const chosen = await serfs.chooseClass(1, made.id, "wizard");
+    if (!chosen.ok) throw new Error(chosen.reason);
+    expect(chosen.serf.classSetOffered).toBe(true);
+    expect(worn(chosen.serf)).toEqual(worn(made));
   });
 
-  it("a serf that chose its class before 10a gets one when next played", async () => {
+  it("Equip wears the class set; the replaced Tier 0 pieces are gone, not stashed; once only", async () => {
+    const { serfs, made } = await ready("Ada Staff");
+    await serfs.chooseClass(1, made.id, "wizard");
+    const r = await serfs.answerClassSet(1, made.id, true);
+    if (!r.ok) throw new Error(r.reason);
+    expect(worn(r.serf)).toEqual([
+      "ability:spellbook:0",
+      "chest:cloth:0",
+      "gloves:cloth:0",
+      "head:cloth:0",
+      "legs:cloth:0",
+      "weapon:staff:0",
+    ]);
+    expect(r.serf.classSetOffered).toBe(false);
+    expect((await serfs.stash(1)).items).toEqual([]);
+    expect(await serfs.answerClassSet(1, made.id, true)).toEqual({
+      ok: false,
+      reason: "Ada Staff has no class set waiting.",
+    });
+  });
+
+  it("No thanks creates nothing and drops only the starting pieces the class cannot use", async () => {
+    const { serfs, made } = await ready("Bo Hide");
+    await serfs.chooseClass(1, made.id, "barbarian");
+    const r = await serfs.answerClassSet(1, made.id, false);
+    if (!r.ok) throw new Error(r.reason);
+    // A Barbarian wears leather but not a sword; it has no ability item yet.
+    expect(worn(r.serf)).toEqual([
+      "chest:leather:0",
+      "gloves:leather:0",
+      "head:leather:0",
+      "legs:leather:0",
+    ]);
+    expect((await serfs.stash(1)).items).toEqual([]);
+  });
+
+  it("a serf classed before this (no answer yet) is offered the set, not given anything", async () => {
+    const { repo, serfs, made } = await ready("Old Wizard");
+    await repo.chooseClass(1, made.id, "druid", 0, SERF_BASE, 1);
+    const picked = await serfs.choose(1, made.id);
+    expect(picked.ok && picked.serf.classSetOffered).toBe(true);
+    expect(
+      picked.ok && picked.serf.items.some((i) => i.slot === "ability"),
+    ).toBe(false);
+  });
+
+  it("a free Tier 0 item goes to the stash while there is room", async () => {
     const repo = new MemorySerfRepo();
     const serfs = new SerfService(repo);
-    const made = await serfs.create(1, "Old Wizard");
-    if (!made.ok) throw new Error(made.reason);
-    await repo.recordRun(
-      1,
-      made.serf.id,
-      "completed",
-      run,
-      null,
-      totalExpForLevel(5),
-    );
-    // The class set the old way: straight in the store, no grant.
-    await repo.chooseClass(1, made.serf.id, "druid", 0, SERF_BASE, 1);
-    const picked = await serfs.choose(1, made.serf.id);
-    expect(picked.ok && picked.serf.items.map((i) => i.type)).toEqual([
-      "totem",
+    expect(await serfs.takeFree(1, "cape", "hp")).toEqual({ ok: true });
+    expect((await serfs.stash(1)).items).toEqual([
+      expect.objectContaining({
+        slot: "cape",
+        type: "hp",
+        tier: 0,
+        rolls: [],
+        luck: 0,
+      }),
     ]);
+    expect(await serfs.takeFree(1, "weapon", "lance")).toEqual({
+      ok: false,
+      reason: "No such Tier 0 item.",
+    });
+    for (let i = 1; i < STASH_SIZE; i++) await serfs.takeFree(1, "ring", "hp");
+    expect(await serfs.takeFree(1, "ring", "hp")).toEqual({
+      ok: false,
+      reason: "Your stash is full.",
+    });
   });
 });
 

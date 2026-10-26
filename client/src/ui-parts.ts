@@ -255,7 +255,9 @@ export function bonusText(stats: Stats): string {
 /** Money as coins (D-157), each in its own colour: "2 Silver 535 Bronze". */
 export function moneyEl(money: number, className = ""): HTMLElement {
   const out = el("span", `money ${className}`.trim());
-  for (const p of coinsOf(money)) {
+  for (const [i, p] of coinsOf(money).entries()) {
+    // A real space between coins, so copied text reads "2 Silver 535 Bronze".
+    if (i > 0) out.append(" ");
     out.append(
       el(
         "span",

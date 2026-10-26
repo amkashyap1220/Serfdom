@@ -214,18 +214,21 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
-#### Phase 17 checklist: the Grand Serf Exchange (D-155, D-156)
+#### Phase 17 checklist: the Grand Serf Exchange, coins, and Tier 0 (D-155, D-156, D-157)
 
-Restart `npm run dev` (migrations 016 and 017 run on start) and hard-refresh. Two different browsers: A = serfdom1@test.com (has gold and Artifacts), B = serfdom@test.com (ask Claude for gold for B if it has none).
+Restart `npm run dev` (migrations up to 019 run on start) and hard-refresh. Two different browsers: A = serfdom1@test.com, B = serfdom@test.com. The dev Exchange already holds about 53 listings and 9 buy orders from six trader accounts.
 
-1. **Cards.** In A's **Stash** and **Potion rack**: each card shows only the name (in its rarity colour) and its buttons; hovering it (or tabbing to it) shows the full details. There is no "List on the Exchange" there any more.
-2. **Sell.** A: **Exchange → Sell**, click an item: the right panel shows its price history (24 hours, week, month, all time) and buy orders; type a price: "You get N gold after the 5% fee"; List: it leaves the stash and the count reads 1/10. List a potion the same way.
-3. **Browse.** B: **Exchange → Browse**: A's listings are there. Try: slot and type, tier (T0–T10, Artifact), class ("Wizard can use" hides axes), Shiny only, the roll chips (ATK alone keeps an item with +ATK; adding a roll it lacks hides it; a negative roll does not count), and sort (Newest, Cheapest, Most expensive; Cheapest first by default). There is no name search box and no gold line (gold is top right). Hover a listing: its price, average sales, and best buy order.
-4. **Buy and collect.** B buys one: B sees "Bought: … waits in your collection box"; A (logged in) sees "Sold: … (you got … after the fee)". B's **My trades** shows it under Collection box; Collect moves it to the stash (with a full stash it stays and says so).
-5. **Buy order.** B: **My trades → Place a buy order** (the same dropdowns as Browse: slot, type, tier; with tier Artifact a last dropdown shows the one Artifact of that slot and type, e.g. Weapons → Axe → Artifact → Doomrend; Potions → a potion; roll chips from T4), price, Place order: B's gold drops by the price at once; the order is listed. Cancel one: the gold comes back.
-6. **Matching.** With B's order waiting: A lists a matching thing for **less** than the order: it sells at once for the **order's** price. Or A opens it under Sell and uses **Sell now**. Then B places an order **above** one of A's listings: it buys at once at the **listing's** price.
-7. **Refusals.** B cannot buy B's own listing; an 11th listing or order is refused with a message; a potion order with roll chips is not offered.
-8. Consoles: no red errors.
+1. **Coins.** The top bar shows money as coins in their colours (e.g. "1 Gold 250 Silver"), and so do prices everywhere. Upgrades cost 170 / 340 / 680 Silver for the first step.
+2. **Cards.** In the **Stash**: names carry no tier; each tier has its own colour (Tier 0 grey up to Tier 10 gold, Artifacts orange); hovering shows "Tier N" (or "Artifact") under the name. The button reads "Sell to Lord · +…" (a fixed price per tier; Luck changes nothing), and "Discard" on Tier 0.
+3. **Starting gear.** Create a new serf: it wears a Tier 0 Sword, Cap, Tunic, Leggings, Gloves.
+4. **Class set.** Bring a serf to level 5 and choose a class: the left panel asks "Take the free Tier 0 … set?" listing the pieces. Equip: the set is worn and the old starting pieces are gone (not in the stash). On another serf, No thanks: nothing is created, and starting pieces the class cannot use are removed.
+5. **Free Tier 0.** **Exchange → Browse**, Tier: Tier 0: every Tier 0 kind shows as Free with Take (pages). Take one: it lands in the stash (a full stash refuses). In Sell, a Tier 0 item says it cannot be listed; the order form starts at Tier 1.
+6. **Sell.** A: **Exchange → Sell**, click an item: price history and buy orders; type a price in the four coin boxes (Platinum, Gold, Silver, Bronze): "You get … after the 5% fee"; List.
+7. **Browse.** One scroll bar. Try slot and type, tier (Tier 0–Tier 10, Artifact), class, Shiny only, the roll chips, and sort (Newest, Cheapest, Most expensive; Cheapest by default). Hover a listing: its price, average sales, best buy order.
+8. **Buy and collect.** B buys one: both get a notice; it waits in B's **My trades → Collection box** until Collect.
+9. **Buy orders and matching.** B places an order (Browse's dropdowns; Artifact shows the one Artifact of that slot and type): B's money drops at once; Cancel refunds. A listing at or under an order sells at once at the order's price (or use Sell now); an order at or over a listing buys at once at the listing's price.
+10. **Refusals.** No buying your own listing; an 11th listing or order is refused; Tier 0 cannot be listed.
+11. Consoles: no red errors.
 
 Report: pass or fail per step, with the exact text for any failure.
 

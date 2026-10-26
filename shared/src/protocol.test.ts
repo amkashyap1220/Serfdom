@@ -409,6 +409,7 @@ describe("menu, queue, and run messages (v4)", () => {
           alive: false,
           life: { ...stats, runs: 4, clears: 2 },
           death: { dungeon: "goblin-warrens", killedBy: "brute" },
+          classSetOffered: false,
         },
       },
       {
@@ -959,6 +960,7 @@ describe("serf messages (v9)", () => {
       alive: true,
       life,
       death: null,
+      classSetOffered: false,
     };
     const list = (serfs: unknown[], selectedId: unknown = 1) =>
       server({ type: "serfList", slots: 2, serfs, selectedId }).ok;

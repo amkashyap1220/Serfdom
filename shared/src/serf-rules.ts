@@ -92,6 +92,8 @@ export interface SerfSummary {
   life: LifeStats;
   /** Where and to what it died (dead serfs only). */
   death: { dungeon: string; killedBy: string | null } | null;
+  /** Its class is chosen and the free Tier 0 class set waits for Equip or No thanks (D-157). */
+  classSetOffered: boolean;
 }
 
 export const LIFE_STAT_KEYS = [

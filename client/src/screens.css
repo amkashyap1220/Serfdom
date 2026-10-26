@@ -1441,9 +1441,6 @@ button.sell {
 }
 
 /* Coins (D-157). Placeholder colours, not the verified palette. */
-.money .coin + .coin {
-  margin-left: 0.35em;
-}
 .coin-bronze {
   color: #d08a4f;
 }

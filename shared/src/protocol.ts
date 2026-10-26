@@ -16,6 +16,7 @@ import {
   EQUIP_SLOTS,
   isValidItemSpec,
   type EquipSlot,
+  type ItemSlot,
   type Item,
   type ItemSpec,
   type StatRoll,
@@ -31,6 +32,7 @@ import {
 } from "./serf-rules.ts";
 import type { Vec2 } from "./geometry.ts";
 import { ARTIFACT_TIER } from "./artifacts.ts";
+import { freeTier0 } from "./starter-gear.ts";
 import { isUpgradeKind, type UpgradeKind } from "./upgrades.ts";
 import {
   EXCHANGE,
@@ -274,6 +276,10 @@ export type ClientMessage =
   | ({ type: "getLeaderboard" } & LeaderboardQuery)
   /** Give one of your serfs its permanent class (level 5+, none yet; D-073). */
   | { type: "chooseClass"; serfId: number; classId: ClassId }
+  /** Equip the free Tier 0 class set, or not (D-157); once per serf. */
+  | { type: "answerClassSet"; serfId: number; accept: boolean }
+  /** Take one free Tier 0 item from the Exchange into the stash (D-157). */
+  | { type: "takeFreeItem"; slot: ItemSlot; itemType: string }
   /** Your stash, gold, and pending rewards. */
   | { type: "getStash" }
   /** Sell one of your stash or pending items to the vendor for gold (D-087). */
@@ -940,6 +946,36 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         return fail("getStash: unexpected fields");
       }
       return { ok: true, message: { type: "getStash" } };
+    case "answerClassSet":
+      if (!hasExactKeys(obj, ["type", "serfId", "accept"])) {
+        return fail("answerClassSet: unexpected fields");
+      }
+      if (!isPlayerId(obj.serfId) || typeof obj.accept !== "boolean") {
+        return fail("answerClassSet: bad answer");
+      }
+      return {
+        ok: true,
+        message: {
+          type: "answerClassSet",
+          serfId: obj.serfId,
+          accept: obj.accept,
+        },
+      };
+    case "takeFreeItem": {
+      if (!hasExactKeys(obj, ["type", "slot", "itemType"])) {
+        return fail("takeFreeItem: unexpected fields");
+      }
+      const free = freeTier0(obj.slot, obj.itemType);
+      if (!free) return fail("takeFreeItem: no such Tier 0 item");
+      return {
+        ok: true,
+        message: {
+          type: "takeFreeItem",
+          slot: free.slot,
+          itemType: free.type as string,
+        },
+      };
+    }
     case "sellItem":
       if (!hasExactKeys(obj, ["type", "itemId"])) {
         return fail("sellItem: unexpected fields");
@@ -2044,10 +2080,12 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
       "alive",
       "life",
       "death",
+      "classSetOffered",
     ])
   ) {
     return undefined;
   }
+  if (typeof v.classSetOffered !== "boolean") return undefined;
   const potionStats = parseStats(v.potionStats);
   if (!potionStats) return undefined;
   const items = parseList(v.items, parseItem);
@@ -2085,6 +2123,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
     alive: v.alive,
     life,
     death,
+    classSetOffered: v.classSetOffered,
   };
 }
 

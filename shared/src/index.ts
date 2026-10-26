@@ -637,3 +637,11 @@ export {
   SILVER,
   type CoinId,
 } from "./money.ts";
+export {
+  classSet,
+  FREE_TIER0,
+  freeTier0,
+  isFreeTier0,
+  STARTER_GEAR,
+  type Wear,
+} from "./starter-gear.ts";

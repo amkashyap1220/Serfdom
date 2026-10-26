@@ -3,7 +3,6 @@ import {
   serfNameProblem,
   addStats,
   canEquip,
-  CLASS_ABILITY_ITEM,
   itemFullName,
   slotsFor,
   type EquipSlot,
@@ -50,6 +49,12 @@ import {
   type Potion,
   type PriceWindow,
   type RollWish,
+  classSet,
+  freeTier0,
+  isFreeTier0,
+  STARTER_GEAR,
+  type ItemSlot,
+  type Wear,
 } from "@serfdom/shared";
 import type {
   Death,
@@ -76,16 +81,20 @@ export class SerfService {
   private readonly slots: number;
   /** Stat rolls (D-074); injectable so tests are deterministic. */
   private readonly random: () => number;
+  private readonly starter: readonly Wear[];
 
   constructor(
     repo: SerfRepo,
     /** Serf slots before any are bought (D-061; tests may give fewer). */
     slots: number = UPGRADES.serfSlots.base,
     random: () => number = Math.random,
+    /** What a new serf wears (D-157); tests of other things may start bare. */
+    starter: readonly Wear[] = STARTER_GEAR,
   ) {
     this.repo = repo;
     this.slots = slots;
     this.random = random;
+    this.starter = starter;
   }
 
   /** This account's capacity of each upgradable thing (D-154). */
@@ -136,7 +145,13 @@ export class SerfService {
     const problem = serfNameProblem(name);
     if (problem) return { ok: false, reason: problem };
     const slots = await this.slotsFor(accountId);
-    const created = await this.repo.create(accountId, name, slots);
+    // A new serf starts in free Tier 0 gear (D-157).
+    const created = await this.repo.create(
+      accountId,
+      name,
+      slots,
+      this.starter,
+    );
     if (created === "slotsFull") {
       return {
         ok: false,
@@ -155,15 +170,9 @@ export class SerfService {
     // Someone else's serf looks exactly like one that does not exist.
     if (!serf) return { ok: false, reason: "No such serf." };
     if (!serf.alive) return { ok: false, reason: `${serf.name} is dead.` };
-    // Serfs from before Phase 8c (or given EXP by hand) catch up here,
-    // and classed serfs from before 10a get their ability item.
+    // Serfs from before Phase 8c (or given EXP by hand) catch up here.
     const settled = await this.settle(accountId, serfId);
-    const current = settled?.serf ?? serf;
-    if (current.classId && (await this.grantAbilityItem(accountId, current))) {
-      const fresh = await this.repo.find(accountId, serfId);
-      return { ok: true, serf: fresh ?? current };
-    }
-    return { ok: true, serf: current };
+    return { ok: true, serf: settled?.serf ?? serf };
   }
 
   /**
@@ -503,28 +512,66 @@ export class SerfService {
     if (!chosen) return { ok: false, reason: "Could not choose a class." };
     // A serf already past level 5 rolls its class levels now.
     await this.settle(accountId, serfId);
-    // D-092: the class comes with a T0 ability item, worn at once.
-    const withClass = (await this.repo.find(accountId, serfId)) ?? chosen;
-    await this.grantAbilityItem(accountId, withClass);
+    // D-157: the free Tier 0 class set now waits for Equip or No thanks.
     return {
       ok: true,
-      serf: (await this.repo.find(accountId, serfId)) ?? withClass,
+      serf: (await this.repo.find(accountId, serfId)) ?? chosen,
     };
   }
 
-  /** The free T0 ability item for the serf's class, once per serf (D-092). */
-  private grantAbilityItem(
+  /**
+   * Answers the free Tier 0 class set offer, once per serf (D-157). Equip
+   * creates and wears the set, deleting the Tier 0 pieces it replaces; No
+   * thanks creates nothing and removes worn Tier 0 pieces the class cannot
+   * use. Nothing better than Tier 0 is ever touched.
+   */
+  async answerClassSet(
     accountId: number,
-    serf: SerfSummary,
-  ): Promise<boolean> {
-    if (!serf.classId) return Promise.resolve(false);
-    return this.repo.grantAbilityItem(accountId, serf.id, {
-      slot: "ability",
-      type: CLASS_ABILITY_ITEM[serf.classId],
-      tier: 0,
-      rolls: [],
-      luck: 0,
-    });
+    serfId: number,
+    accept: boolean,
+  ): Promise<SerfResult> {
+    const serf = await this.repo.find(accountId, serfId);
+    if (!serf) return { ok: false, reason: "No such serf." };
+    if (!serf.alive) return { ok: false, reason: `${serf.name} is dead.` };
+    const classId = serf.classId;
+    if (!classId || !serf.classSetOffered) {
+      return { ok: false, reason: `${serf.name} has no class set waiting.` };
+    }
+    const set = classSet(classId);
+    const slots = new Set<string>(set.map((w) => w.slot));
+    const wornFree = serf.items.filter((i) => i.equipped && isFreeTier0(i));
+    const drop = accept
+      ? wornFree.filter((i) => slots.has(i.equipped!))
+      : wornFree.filter((i) => !canEquip(i, classId));
+    const done = await this.repo.answerClassSet(
+      accountId,
+      serfId,
+      accept ? set : [],
+      drop.map((i) => i.id),
+    );
+    if (!done)
+      return { ok: false, reason: `${serf.name} has no class set waiting.` };
+    return {
+      ok: true,
+      serf: (await this.repo.find(accountId, serfId)) ?? serf,
+    };
+  }
+
+  /** Takes one free Tier 0 item from the Exchange into the stash (D-157). */
+  async takeFree(
+    accountId: number,
+    slot: ItemSlot,
+    type: string,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const item = freeTier0(slot, type);
+    if (!item) return { ok: false, reason: "No such Tier 0 item." };
+    const made = await this.repo.addToStash(
+      accountId,
+      item,
+      await this.capacity(accountId, "stash"),
+    );
+    if (made === "full") return { ok: false, reason: "Your stash is full." };
+    return { ok: true };
   }
 
   /**
@@ -548,9 +595,11 @@ export class SerfService {
     return refused(
       r.reason === "tooMany"
         ? `You already have ${EXCHANGE.maxListings} listings.`
-        : "itemId" in what
-          ? "Only an item in your stash can be listed (not one a serf wears)."
-          : "Only a potion in your rack can be listed.",
+        : r.reason === "free"
+          ? DEAL_REFUSALS.free
+          : "itemId" in what
+            ? "Only an item in your stash can be listed (not one a serf wears)."
+            : "Only a potion in your rack can be listed.",
     );
   }
 
@@ -593,6 +642,9 @@ export class SerfService {
     if (!isValidPrice(price)) return refused(BAD_PRICE);
     if (parsed.kind === "potion" && rolls.length > 0) {
       return refused("Potions have no rolls.");
+    }
+    if (parsed.kind === "tiered" && parsed.tier === 0) {
+      return refused("Tier 0 gear is free: take it from Browse (Tier 0).");
     }
     const r = await this.repo.placeOrder(
       accountId,
@@ -717,5 +769,6 @@ const DEAL_REFUSALS: Record<ExchangeRefusal["reason"], string> = {
   gold: "Not enough money.",
   notYours: "Only an item in your stash or a potion in your rack can be sold.",
   noFit: "That is not what the order asks for.",
+  free: "Tier 0 gear is free on the Exchange, so it cannot be sold there.",
   tooMany: "Too many.",
 };

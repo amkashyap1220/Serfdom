@@ -68,13 +68,13 @@ describe("item generation (D-080, D-083)", () => {
     }
   });
 
-  it("the Goblin Warrens drops T0–T2 at about 50/35/15", () => {
+  it("the Goblin Warrens drops Tier 1 and 2 at about 60/40, never Tier 0 (D-157)", () => {
     const items = many(20000);
     const share = (tier: number) =>
       items.filter((i) => i.tier === tier).length / items.length;
-    expect(share(0)).toBeCloseTo(0.5, 1);
-    expect(share(1)).toBeCloseTo(0.35, 1);
-    expect(share(2)).toBeCloseTo(0.15, 1);
+    expect(share(0)).toBe(0);
+    expect(share(1)).toBeCloseTo(0.6, 1);
+    expect(share(2)).toBeCloseTo(0.4, 1);
     expect(items.every((i) => i.tier <= 2)).toBe(true);
   });
 

@@ -13,6 +13,7 @@ import {
   type RollWish,
   type PlayerInput,
   type ServerMessage,
+  type ItemSlot,
 } from "@serfdom/shared";
 
 /** Default dev server; override with VITE_SERVER_URL (see .env.example). */
@@ -192,6 +193,16 @@ export class Connection {
 
   sendChooseClass(serfId: number, classId: ClassId): void {
     this.send({ type: "chooseClass", serfId, classId });
+  }
+
+  /** The free Tier 0 class set: Equip or No thanks (D-157). */
+  sendAnswerClassSet(serfId: number, accept: boolean): void {
+    this.send({ type: "answerClassSet", serfId, accept });
+  }
+
+  /** Take one free Tier 0 item into the stash (D-157). */
+  sendTakeFreeItem(slot: ItemSlot, itemType: string): void {
+    this.send({ type: "takeFreeItem", slot, itemType });
   }
 
   sendSelectSerf(serfId: number): void {

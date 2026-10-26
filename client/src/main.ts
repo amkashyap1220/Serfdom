@@ -146,6 +146,9 @@ game.events.once(Phaser.Core.Events.READY, () => {
     pourPotion: (potionId) => net.connection.sendPourPotion(potionId),
     chooseClass: (serfId, classId) =>
       net.connection.sendChooseClass(serfId, classId),
+    answerClassSet: (serfId, accept) =>
+      net.connection.sendAnswerClassSet(serfId, accept),
+    takeFreeItem: (slot, type) => net.connection.sendTakeFreeItem(slot, type),
     selectSerf: (serfId) => {
       saveLastSerf(serfId);
       net.connection.sendSelectSerf(serfId);
