@@ -96,7 +96,7 @@ describe("stat potions (D-118)", () => {
     const plain = { ...serf, classId: null, stats: { ...SERF_BASE } };
     expect(potionProblem(plain, "attack")).toBeNull();
     expect(potionProblem({ ...plain, stats: { ...SERF_MAX } }, "attack")).toBe(
-      "Ida's Attack is at the Serf max (14); a class raises it.",
+      "Ida's Attack is at the Serf max; a class raises it.",
     );
     expect(potionProblem(plain, "defense")).toBe(
       "A Serf has no Defense to raise: Ida needs a class first.",

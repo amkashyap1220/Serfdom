@@ -96,7 +96,7 @@ export function potionProblem(
   }
   return SERF_MAX[stat] === 0
     ? `A Serf has no ${POTION_NAMES[stat]} to raise: ${serf.name} needs a class first.`
-    : `${serf.name}'s ${POTION_NAMES[stat]} is at the Serf max (${SERF_MAX[stat]}); a class raises it.`;
+    : `${serf.name}'s ${POTION_NAMES[stat]} is at the Serf max; a class raises it.`;
 }
 
 /** The serf's stats after drinking: up by the potion's amount, never past its max. */

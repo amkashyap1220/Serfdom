@@ -17,8 +17,6 @@ import {
   luckOf,
   STAT_KEYS,
   STAT_LABELS,
-  statMax,
-  serfStatMax,
   type StatKey,
   type Stats,
   CLASSES,
@@ -1109,8 +1107,8 @@ export class ScreenView {
   private drinkControl(potion: Potion, serf: SerfSummary): HTMLElement {
     const box = el("div", "equip");
     const problem = potionProblem(serf, potion.stat);
-    // The class max, or the Serf max before a class (D-119).
-    const now = ` (${STAT_LABELS[potion.stat]} ${serf.stats[potion.stat]}/${serfStatMax(serf.classId, potion.stat)})`;
+    // The stat now; its cap stays hidden (D-150).
+    const now = ` (${STAT_LABELS[potion.stat]} ${serf.stats[potion.stat]})`;
     const drink = button(`Drink on ${serf.name}${now}`, () => {
       this.drunkBy.set(potion.id, serf.name);
       this.actions.drinkPotion(potion.id, serf.id);
@@ -1813,18 +1811,15 @@ export function statLine(serf: SerfSummary): string {
 }
 
 /**
- * One stat with gear: "18 (+3)", or "18/60 (+3)" once the serf has a
- * class max (the max limits leveling and potions, not gear, D-083).
+ * One stat with gear: "18 (+3)". The caps (class and Serf maxes) are never
+ * shown (D-150, the user); they still limit leveling and potions.
  */
 export function statText(serf: SerfSummary, key: StatKey): string {
   const value = loadoutOf(serf).stats[key];
   const gear = value - serf.stats[key];
-  const shown = serf.classId
-    ? `${value}/${statMax(serf.classId, key)}`
-    : String(value);
   return gear === 0
-    ? shown
-    : `${shown} (${gear > 0 ? "+" : "−"}${Math.abs(gear)})`;
+    ? String(value)
+    : `${value} (${gear > 0 ? "+" : "−"}${Math.abs(gear)})`;
 }
 
 /** Display names of the 10 worn slots (D-082). */

@@ -780,3 +780,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - `npm run check`: 584 shared, 245 server, 87 client, build. The board storage test ran on memory and on PostgreSQL.
 - Live (harness, **test** DB, headless): every tab screenshotted; a party of two in the Warrens with the HUD, the minimap (entrance cleared and dimmer, the tunnel woken, the partner as a blue dot), the ` toggle and the Settings switch; a fast-forwarded Warrens clear on every board, the class filter, Solo only, an empty Stronghold board; no console errors.
 - Next step: the user's combined Phase 14–15 test; push after the pass; then Phase 16 (rare loot).
+
+### Stat caps hidden — 2026-10-26
+
+- The user asked to hide what the stat caps are (D-150). Stats now read "18 (+3)" instead of "18/60 (+3)" everywhere (`statText`: the home panel, the Serfs tab, the HUD readout); potion buttons show the stat without its cap; the Serf-max refusal no longer names the number. The caps still limit leveling and potions on the server.
+- `npm run check`: 584 shared, 245 server, 87 client, build.

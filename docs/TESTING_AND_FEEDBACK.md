@@ -214,11 +214,11 @@ Death flow (Phase 5a, D-046 prototype): at 0 HP the player disappears and a cent
 
 Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-authoritative`. Both windows show the **same** dummy HP at all times; its max HP follows D-045 for the number of living players (1→500, 2→750, 3→1000, 4→1250 since 6d). Your shots appear instantly; the dummy's HP drops ~20 ms after a shot visibly lands (measured 17–22 ms median). The other window sees your shots and the dummy's rings. Dying shows the placeholder menu; the other window stops drawing you; Enter puts you back at (1000, 1000) with 200 HP. HUD `Snapshot size / rate` shows bandwidth (~0.4 KB idle, ~2 KB / ~130 KB/s mid-fight).
 
-#### Phase 15 checklist: home screen, HUD, minimap, leaderboards (D-145 to D-149)
+#### Phase 15 checklist: home screen, HUD, minimap, leaderboards (D-145 to D-150)
 
 Run `npm run dev` (it applies migration 011 to the dev database on start), then hard-refresh (Ctrl+Shift+R).
 
-1. **Home screen:** the left panel shows your serf (name, class, level, EXP bar, stats, worn gear) and your party with Invite (and Leave when in one). The tabs read Play, Serfs, Party, Stash, Potion rack, Leaderboards, Settings, with gold and Log out above them. Open every tab: nothing overlaps or spills out of the box; a full stash scrolls inside its grid.
+1. **Home screen:** the left panel shows your serf (name, class, level, EXP bar, stats with no caps shown, D-150, worn gear) and your party with Invite (and Leave when in one). The tabs read Play, Serfs, Party, Stash, Potion rack, Leaderboards, Settings, with gold and Log out above them. Open every tab: nothing overlaps or spills out of the box; a full stash scrolls inside its grid.
 2. **Invites** appear in the left panel (Accept, Decline) whatever tab is open.
 3. **HUD in a run:** name, class, level; HP and MP bars with numbers; the EXP bar; "Space: … · ready" (it shows the seconds while cooling down, or "need MP"); "Fire (T): Full auto" at the start; the dungeon and a running clock; party members with HP bars. Nothing covers the 960×800 gameplay area.
 4. Press **T** once: "Auto aim + Space". Press **`** (left of 1): the debug readout appears below (the panel scrolls) and the world shows the green box, room coordinates, and "#id" tags; press it again to hide them. Settings has the same switch, and a reload keeps your choice.
@@ -401,7 +401,7 @@ Restart `npm run dev` (protocol v27, migration 010 runs on start) and reload. Yo
 1. Clear the **Goblin Stronghold** a few times. About 1 clear in 5 (per Luck point) shows "1 stat potion" under the chest: a gold card such as "Potion of Attack, +1 ATK, up to the class max", "→ Potion rack".
 2. Click **Drink on <serf> (ATK x/y)**: the card says "Drunk by <serf>", and the Serfs tab shows that stat up by 1 (HP or MP by 5).
 3. **Potion rack** tab: undrunk potions grouped by stat ("×2"), each with a drink button per living serf showing current/max, and "Pour out one".
-4. A stat already at its max shows the button greyed out with the reason. A Serf without a class drinks up to the Serf max (HP 32, MP 18, the rest 14; the button shows e.g. ATK 10/14); a Defense potion says a Serf needs a class first. After choosing a class, the same stats show the class max and can go higher.
+4. A stat already at its max shows the button greyed out with the reason. A Serf without a class drinks up to the Serf max (HP 32, MP 18, the rest 14; the button shows the stat now, e.g. ATK 10, never the cap, D-150); a Defense potion says a Serf needs a class first. After choosing a class, the same stats can go higher.
 5. Clearing the Warrens never gives potions.
 6. While queued, drinking is refused; pouring out still works.
 7. (Optional, slow) Fill the rack to 20: the next potion says "Rack full", the Dungeons tab blocks that serf until you drink or pour one out, then the waiting potion moves into the rack.
@@ -669,7 +669,7 @@ Restart `npm run dev` (protocol v12); the server prints `database migrated: 005_
 2. Clear to level 2: under **LEVEL UP! Level 2** a green line of rolls appears, e.g. "+2 HP +1 MP +1 ATK …" (HP always +1 to +3; DEF never grows before a class).
 3. Serfs tab: the serf's row has a stat line matching the HUD (base + the rolls).
 4. Clear again without leveling: no roll line; stats unchanged.
-5. Reach level 5 and choose a class: the Serfs tab shows each stat as value/max (e.g. Barbarian "HP 38/200"), and the class's High stats jumped (+10 HP/MP, +3 others). The HUD matches.
+5. Reach level 5 and choose a class: the Serfs tab shows each stat's value only (e.g. Barbarian "HP 38"; caps are hidden since D-150), and the class's High stats jumped (+10 HP/MP, +3 others). The HUD matches.
 6. A serf that already had EXP before this change: the first time you play as it, its stats catch up to its level (to 5 at most until it has a class). Selecting it again does not change them.
 7. Restart the server and reload: stats unchanged.
 8. Stats do **not** change combat yet (that is 8c-2): damage, fire rate, speed, and HP in the dungeon are as before.
