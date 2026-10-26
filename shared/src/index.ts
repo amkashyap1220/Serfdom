@@ -605,6 +605,7 @@ export {
   exchangeFee,
   filterListings,
   fitsOrder,
+  usableKinds,
   isTierFilter,
   type TierFilter,
   type BuyOrder,

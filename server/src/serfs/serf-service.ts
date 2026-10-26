@@ -36,7 +36,6 @@ import {
   UPGRADES,
   type UpgradeKind,
   EXCHANGE,
-  filterListings,
   isValidPrice,
   type ExchangeQuery,
   type Listing,
@@ -56,6 +55,7 @@ import {
   type ItemSlot,
   type Wear,
 } from "@serfdom/shared";
+import { isPoolTimeout } from "../db/pool.ts";
 import type {
   Death,
   ExchangeDeal,
@@ -199,31 +199,47 @@ export class SerfService {
     // The level is read before the update. A serf plays one run at a time
     // (it is fixed for the run, one connection per account), so no other
     // write can change its EXP in between.
-    const before = await this.repo.find(accountId, serfId);
+    // Each step retries if it could not get a database connection in time
+    // (it then did nothing), so a short stall never costs a run its reward.
+    const before = await retryWhenPoolBusy(() =>
+      this.repo.find(accountId, serfId),
+    );
     if (!before?.alive) return null;
     const expGained =
       result === "completed" ? clearExp(dungeon, before.level) : 0;
-    const serf = await this.repo.recordRun(
-      accountId,
-      serfId,
-      result,
-      run,
-      death,
-      expGained,
-      // Fastest clears count listed dungeons only (D-148).
-      result === "completed" && dungeonInfo(dungeon).listed
-        ? { dungeon, partySize }
-        : null,
+    const serf = await retryWhenPoolBusy(() =>
+      this.repo.recordRun(
+        accountId,
+        serfId,
+        result,
+        run,
+        death,
+        expGained,
+        // Fastest clears count listed dungeons only (D-148).
+        result === "completed" && dungeonInfo(dungeon).listed
+          ? { dungeon, partySize }
+          : null,
+      ),
     );
     if (!serf) return null;
     if (result !== "completed" || !serf.alive) {
       return { serf, expGained, statGains: zeroStats(), loot: [], potions: [] };
     }
-    const settled = await this.settle(accountId, serfId);
-    const loot = await this.rollLoot(accountId, before, dungeon);
-    const potions = await this.rollPotions(accountId, before, dungeon);
+    // settle saves only from the level it read, so a repeat adds nothing;
+    // loot and potions are rolled again on a retry, as nothing was saved.
+    const settled = await retryWhenPoolBusy(() =>
+      this.settle(accountId, serfId),
+    );
+    const loot = await retryWhenPoolBusy(() =>
+      this.rollLoot(accountId, before, dungeon),
+    );
+    const potions = await retryWhenPoolBusy(() =>
+      this.rollPotions(accountId, before, dungeon),
+    );
     // Read once more so the serf comes back with its new items.
-    const latest = await this.repo.find(accountId, serfId);
+    const latest = await retryWhenPoolBusy(() =>
+      this.repo.find(accountId, serfId),
+    );
     return {
       serf: latest ?? settled?.serf ?? serf,
       expGained,
@@ -685,11 +701,8 @@ export class SerfService {
 
   /** A page of the Exchange for this account (its own listings marked). */
   async browse(accountId: number, query: ExchangeQuery) {
-    const all = (await this.repo.allListings()).map(({ sellerId, ...l }) => ({
-      ...l,
-      mine: sellerId === accountId,
-    }));
-    return filterListings(all, query);
+    // Filtered and paged by the storage: only the page is loaded.
+    return this.repo.browse(accountId, query);
   }
 
   /** One item's price history and its best buy orders (D-156). */
@@ -697,10 +710,11 @@ export class SerfService {
     accountId: number,
     key: MarketKey,
   ): Promise<{ windows: PriceWindow[]; orders: BuyOrder[] }> {
-    const orders = (await this.repo.allOrders())
-      .filter((o) => o.key === key)
-      .slice(0, EXCHANGE.topOrders)
-      .map(({ buyerId, ...o }) => ({ ...o, mine: buyerId === accountId }));
+    const orders = await this.repo.ordersFor(
+      key,
+      accountId,
+      EXCHANGE.topOrders,
+    );
     return { windows: await this.repo.priceWindows(key), orders };
   }
 
@@ -711,15 +725,9 @@ export class SerfService {
     collection: { items: Item[]; potions: Potion[] };
     sales: Sale[];
   }> {
-    const listings = (await this.repo.allListings())
-      .filter((l) => l.sellerId === accountId)
-      .map(({ sellerId, ...l }) => ({ ...l, mine: sellerId === accountId }));
-    const orders = (await this.repo.allOrders())
-      .filter((o) => o.buyerId === accountId)
-      .map(({ buyerId, ...o }) => ({ ...o, mine: buyerId === accountId }));
     return {
-      listings,
-      orders,
+      listings: await this.repo.listingsOf(accountId),
+      orders: await this.repo.ordersOf(accountId),
       collection: await this.repo.collection(accountId),
       sales: await this.repo.sales(accountId, EXCHANGE.history),
     };
@@ -772,3 +780,22 @@ const DEAL_REFUSALS: Record<ExchangeRefusal["reason"], string> = {
   free: "Tier 0 gear is free on the Exchange, so it cannot be sold there.",
   tooMany: "Too many.",
 };
+
+/**
+ * Runs a storage step, and runs it again (up to `tries` times in all) when
+ * it failed only because no database connection came free in time: then it
+ * reached nothing, so repeating it cannot do anything twice. Any other error
+ * is passed on at once.
+ */
+export async function retryWhenPoolBusy<T>(
+  step: () => Promise<T>,
+  tries = 3,
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await step();
+    } catch (err) {
+      if (attempt >= tries || !isPoolTimeout(err)) throw err;
+    }
+  }
+}

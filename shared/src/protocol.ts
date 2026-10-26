@@ -35,7 +35,6 @@ import { ARTIFACT_TIER } from "./artifacts.ts";
 import { freeTier0 } from "./starter-gear.ts";
 import { isUpgradeKind, type UpgradeKind } from "./upgrades.ts";
 import {
-  EXCHANGE,
   EXCHANGE_SORTS,
   isTierFilter,
   isValidPrice,
@@ -1891,8 +1890,7 @@ function parseFire(v: unknown): FireInput | string {
 }
 
 /** undefined means malformed. */
-/** An Exchange query (D-155): known slots, tiers 0-12, a short search. */
-/** An Exchange query (D-156): known slots, types, rarities, classes, rolls; a short search. */
+/** An Exchange query (D-156, D-157): known slots, types, tiers, classes, rolls. */
 function parseExchangeQuery(v: unknown): ExchangeQuery | null {
   if (
     !isPlainObject(v) ||
@@ -1903,7 +1901,6 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
       "shiny",
       "classId",
       "rolls",
-      "search",
       "sort",
       "page",
     ]) ||
@@ -1922,8 +1919,6 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
     !Array.isArray(v.rolls) ||
     v.rolls.length > ROLL_WISHES.length ||
     !v.rolls.every(isRollWish) ||
-    typeof v.search !== "string" ||
-    v.search.length > EXCHANGE.maxSearch ||
     !(EXCHANGE_SORTS as readonly unknown[]).includes(v.sort) ||
     !isNonNegativeInt(v.page) ||
     (v.page as number) > 10_000
@@ -1937,7 +1932,6 @@ function parseExchangeQuery(v: unknown): ExchangeQuery | null {
     shiny: v.shiny,
     classId: v.classId,
     rolls: [...new Set(v.rolls as RollWish[])],
-    search: v.search,
     sort: v.sort as ExchangeQuery["sort"],
     page: v.page as number,
   };

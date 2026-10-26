@@ -7,6 +7,7 @@ const cryptoRandom = () => randomInt(2 ** 47) / 2 ** 47;
 import { PgAccountRepo } from "./auth/account-repo.ts";
 import { AccountService } from "./auth/account-service.ts";
 import { migrate } from "./db/migrate.ts";
+import { createPool } from "./db/pool.ts";
 import { PgSerfRepo } from "./serfs/serf-repo.ts";
 import { SerfService } from "./serfs/serf-service.ts";
 import { GameServer } from "./game-server.ts";
@@ -55,7 +56,8 @@ function readDatabaseUrl(): string {
 let pool: pg.Pool | undefined;
 try {
   const port = readPort();
-  pool = new pg.Pool({ connectionString: readDatabaseUrl() });
+  // Waits at most 5 s for a connection, so a stuck pool recovers (pool.ts).
+  pool = createPool(readDatabaseUrl());
   const applied = await migrate(pool);
   consoleLogger.info(
     applied.length > 0

@@ -45,6 +45,10 @@ import {
   type RollWish,
   isFreeTier0,
   type Wear,
+  EXCHANGE,
+  filterListings,
+  usableKinds,
+  type ExchangeQuery,
 } from "@serfdom/shared";
 import type pg from "pg";
 
@@ -142,10 +146,29 @@ export interface SerfRepo {
     room: { stash: number; rack: number },
   ): Promise<number>;
   collection(accountId: number): Promise<{ items: Item[]; potions: Potion[] }>;
-  /** Every listing on the Exchange, with its seller. */
+  /** Every listing on the Exchange, with its seller (tests and tools; the game pages instead). */
   allListings(): Promise<(Listing & { sellerId: number })[]>;
-  /** Every buy order, with its buyer. */
+  /** Every buy order, with its buyer (tests and tools). */
   allOrders(): Promise<(BuyOrder & { buyerId: number })[]>;
+  /**
+   * One page of the Exchange for a viewer (D-156): exactly
+   * `filterListings` over every listing, but done by the storage, so only
+   * the page is loaded. The viewer's own listings are marked.
+   */
+  browse(
+    viewerId: number,
+    query: ExchangeQuery,
+  ): Promise<{ total: number; listings: Listing[] }>;
+  /** This seller's listings, oldest first. */
+  listingsOf(sellerId: number): Promise<Listing[]>;
+  /** This buyer's orders, best first. */
+  ordersOf(buyerId: number): Promise<BuyOrder[]>;
+  /** The best `limit` orders for one kind of item, best first; the viewer's marked. */
+  ordersFor(
+    key: MarketKey,
+    viewerId: number,
+    limit: number,
+  ): Promise<BuyOrder[]>;
   /** The average sale price of one kind of item over the windows (D-156). */
   priceWindows(key: MarketKey): Promise<PriceWindow[]>;
   /** An account's latest sales and purchases, newest first. */
@@ -1478,6 +1501,114 @@ export class PgSerfRepo implements SerfRepo {
     const r = await this.pool.query<ListingRow>(
       "select * from listings order by id",
     );
+    return this.hydrate(r.rows);
+  }
+
+  async browse(
+    viewerId: number,
+    q: ExchangeQuery,
+  ): Promise<{ total: number; listings: Listing[] }> {
+    // Each filter as SQL, the same rules as filterListings (shared).
+    const args: unknown[] = [];
+    const arg = (v: unknown) => {
+      args.push(v);
+      return `$${args.length}`;
+    };
+    const where: string[] = [];
+    if (q.slot === "potion") where.push("l.potion_id is not null");
+    else if (q.slot !== null) where.push(`i.slot = ${arg(q.slot)}`);
+    if (q.type !== null)
+      where.push(`coalesce(i.type, p.stat) = ${arg(q.type)}`);
+    // Potions have no tier, Shine, or rolls: those filters pass items only.
+    if (q.tier === "artifact") where.push("i.artifact is not null");
+    else if (q.tier !== null) {
+      where.push(`i.artifact is null and i.tier = ${arg(q.tier)}`);
+    }
+    if (q.shiny) where.push("i.shiny");
+    if (q.classId !== null) {
+      const kinds = usableKinds(q.classId);
+      where.push(
+        `(l.potion_id is not null or i.slot in ('ring', 'necklace', 'cape')
+          or (i.slot, i.type) in (select * from unnest(${arg(kinds.map((k) => k.slot))}::text[], ${arg(kinds.map((k) => k.type))}::text[])))`,
+      );
+    }
+    for (const w of q.rolls) {
+      where.push(
+        w === "luck"
+          ? "i.luck > 0"
+          : `exists (select 1 from jsonb_array_elements(i.rolls) r
+               where r->>'stat' = ${arg(w)} and (r->>'amount')::int > 0)`,
+      );
+    }
+    const from = `from listings l
+      left join items i on i.id = l.item_id
+      left join potions p on p.id = l.potion_id
+      ${where.length > 0 ? `where ${where.join(" and ")}` : ""}`;
+    const order =
+      q.sort === "cheapest"
+        ? "l.price,"
+        : q.sort === "dearest"
+          ? "l.price desc,"
+          : "";
+    const total = await this.pool.query<{ n: string }>(
+      `select count(*) n ${from}`,
+      args,
+    );
+    const page = await this.pool.query<ListingRow>(
+      `select l.* ${from}
+       order by ${order} l.listed_at desc, l.id desc
+       limit ${arg(EXCHANGE.pageSize)} offset ${arg(q.page * EXCHANGE.pageSize)}`,
+      args,
+    );
+    const listings = await this.hydrate(page.rows);
+    return {
+      total: Number(total.rows[0]?.n ?? 0),
+      listings: listings.map(({ sellerId, ...l }) => ({
+        ...l,
+        mine: sellerId === viewerId,
+      })),
+    };
+  }
+
+  async listingsOf(sellerId: number): Promise<Listing[]> {
+    const r = await this.pool.query<ListingRow>(
+      "select * from listings where seller_id = $1 order by id",
+      [sellerId],
+    );
+    return (await this.hydrate(r.rows)).map(({ sellerId: seller, ...l }) => ({
+      ...l,
+      mine: seller === sellerId,
+    }));
+  }
+
+  async ordersOf(buyerId: number): Promise<BuyOrder[]> {
+    const r = await this.pool.query<OrderRow>(
+      "select * from orders where buyer_id = $1 order by price desc, placed_at, id",
+      [buyerId],
+    );
+    return r.rows.map((o) => ({ ...orderFromRow(o), mine: true }));
+  }
+
+  async ordersFor(
+    key: MarketKey,
+    viewerId: number,
+    limit: number,
+  ): Promise<BuyOrder[]> {
+    const r = await this.pool.query<OrderRow>(
+      "select * from orders where market_key = $1 order by price desc, placed_at, id limit $2",
+      [key, limit],
+    );
+    return r.rows.map((o) => ({
+      ...orderFromRow(o),
+      mine: Number(o.buyer_id) === viewerId,
+    }));
+  }
+
+  /** Listing rows with their items and potions (two queries, any number of rows). */
+  private async hydrate(
+    rows: ListingRow[],
+  ): Promise<(Listing & { sellerId: number })[]> {
+    const r = { rows };
     if (r.rows.length === 0) return [];
     const items = await this.pool.query<ItemRow>(
       "select * from items where id = any($1)",
@@ -1512,13 +1643,8 @@ export class PgSerfRepo implements SerfRepo {
       "select * from orders order by price desc, placed_at, id",
     );
     return r.rows.map((o) => ({
-      id: Number(o.id),
+      ...orderFromRow(o),
       buyerId: Number(o.buyer_id),
-      key: o.market_key,
-      rolls: o.rolls as RollWish[],
-      price: o.price,
-      placedAt: o.placed_at.getTime(),
-      mine: false,
     }));
   }
 
@@ -1786,6 +1912,17 @@ interface OrderRow {
   rolls: string[];
   price: number;
   placed_at: Date;
+}
+
+function orderFromRow(o: OrderRow): BuyOrder {
+  return {
+    id: Number(o.id),
+    key: o.market_key,
+    rolls: o.rolls as RollWish[],
+    price: o.price,
+    placedAt: o.placed_at.getTime(),
+    mine: false,
+  };
 }
 
 interface ListingRow {
@@ -2358,6 +2495,43 @@ export class MemorySerfRepo implements SerfRepo {
         mine: false,
       };
     });
+  }
+
+  async browse(
+    viewerId: number,
+    q: ExchangeQuery,
+  ): Promise<{ total: number; listings: Listing[] }> {
+    const all = (await this.allListings()).map(({ sellerId, ...l }) => ({
+      ...l,
+      mine: sellerId === viewerId,
+    }));
+    return filterListings(all, q);
+  }
+
+  async listingsOf(sellerId: number): Promise<Listing[]> {
+    return (await this.allListings())
+      .filter((l) => l.sellerId === sellerId)
+      .map(({ sellerId: seller, ...l }) => ({
+        ...l,
+        mine: seller === sellerId,
+      }));
+  }
+
+  async ordersOf(buyerId: number): Promise<BuyOrder[]> {
+    return (await this.allOrders())
+      .filter((o) => o.buyerId === buyerId)
+      .map(({ buyerId: buyer, ...o }) => ({ ...o, mine: buyer === buyerId }));
+  }
+
+  async ordersFor(
+    key: MarketKey,
+    viewerId: number,
+    limit: number,
+  ): Promise<BuyOrder[]> {
+    return (await this.allOrders())
+      .filter((o) => o.key === key)
+      .slice(0, limit)
+      .map(({ buyerId, ...o }) => ({ ...o, mine: buyerId === viewerId }));
   }
 
   async allOrders(): Promise<(BuyOrder & { buyerId: number })[]> {

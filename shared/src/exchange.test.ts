@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { CLASS_IDS } from "./classes.ts";
+import { canEquip, isAccessorySlot } from "./items.ts";
+import { FREE_TIER0 } from "./starter-gear.ts";
 import {
   ANY_LISTING,
   EXCHANGE,
@@ -6,6 +9,7 @@ import {
   filterListings,
   isValidPrice,
   type Listing,
+  usableKinds,
 } from "./exchange.ts";
 import { rollArtifact, type Item } from "./items.ts";
 
@@ -43,7 +47,7 @@ describe("the Exchange's rules (D-155)", () => {
     }
   });
 
-  it("filters by slot, type, tier, Shiny, class, rolls, and name (D-156)", () => {
+  it("filters by slot, type, tier, Shiny, class, and rolls (D-156)", () => {
     const sword = listing({
       item: item({ tier: 3, rolls: [] }),
     });
@@ -85,8 +89,6 @@ describe("the Exchange's rules (D-155)", () => {
     // Rolls: all of them, positive only; a -3 HP roll does not count.
     expect(ids({ rolls: ["dexterity", "luck"] })).toEqual([ring.id]);
     expect(ids({ rolls: ["hp"] }).includes(ring.id)).toBe(false);
-    expect(ids({ search: "DOOMREND" })).toEqual([axe.id]);
-    expect(ids({ search: "potion of health" })).toEqual([potion.id]);
   });
 
   it("sorts by price or newest, 20 a page, and counts every match", () => {
@@ -108,5 +110,24 @@ describe("the Exchange's rules (D-155)", () => {
     const newest = filterListings(many, { ...ANY_LISTING, sort: "newest" })
       .listings[0]!;
     expect(newest.listedAt).toBe(Math.max(...many.map((l) => l.listedAt)));
+  });
+});
+
+describe("the class filter as kinds (for the database)", () => {
+  it("matches canEquip for every class, item kind, and tier", () => {
+    for (const classId of CLASS_IDS) {
+      const kinds = usableKinds(classId);
+      for (const kind of FREE_TIER0) {
+        for (const tier of [1, 7]) {
+          const item = { ...kind, tier };
+          const listed =
+            isAccessorySlot(item.slot) ||
+            kinds.some((k) => k.slot === item.slot && k.type === item.type);
+          expect(listed, `${classId} ${item.slot} ${item.type}`).toBe(
+            canEquip(item, classId),
+          );
+        }
+      }
+    }
   });
 });

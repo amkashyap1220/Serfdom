@@ -1,7 +1,8 @@
-import { ARTIFACTS } from "./artifacts.ts";
 import type { ClassId } from "./classes.ts";
+import { FREE_TIER0 } from "./starter-gear.ts";
 import {
   canEquip,
+  isAccessorySlot,
   itemFullName,
   MAX_TIER,
   type Item,
@@ -38,8 +39,6 @@ export const EXCHANGE = {
   pageSize: 20,
   /** Sales kept in "My listings". */
   history: 20,
-  /** The longest name search. */
-  maxSearch: 32,
 } as const;
 
 /** What the seller pays out of a sale. */
@@ -99,7 +98,6 @@ export interface ExchangeQuery {
   /** Rolls it must have, all of them, positive (D-156); none: any. */
   rolls: RollWish[];
   /** Part of the name, any case. */
-  search: string;
   sort: ExchangeSort;
   /** 0-based. */
   page: number;
@@ -122,7 +120,6 @@ export const ANY_LISTING: ExchangeQuery = {
   shiny: false,
   classId: null,
   rolls: [],
-  search: "",
   // The user: cheapest first by default (2026-10-26).
   sort: "cheapest",
   page: 0,
@@ -166,7 +163,20 @@ export function fitsOrder(
   return false;
 }
 
-/** A listing's name, as shown and searched. */
+/**
+ * The weapons, armor, and ability items a class can wear, as slot and type
+ * pairs (accessories: every class), so a database can apply the class
+ * filter. Derived from `canEquip`, so the rule lives in one place.
+ */
+export function usableKinds(
+  classId: ClassId,
+): { slot: ItemSlot; type: string }[] {
+  return FREE_TIER0.filter(
+    (k) => !isAccessorySlot(k.slot) && canEquip({ ...k, tier: 1 }, classId),
+  ).map((k) => ({ slot: k.slot, type: k.type as string }));
+}
+
+/** A listing's name, as shown. */
 export function listingName(l: Pick<Listing, "item" | "potion">): string {
   if (l.item) return itemFullName(l.item);
   if (l.potion) return potionName(l.potion.stat);
@@ -181,7 +191,6 @@ export function filterListings(
   listings: readonly Listing[],
   q: ExchangeQuery,
 ): { total: number; listings: Listing[] } {
-  const search = q.search.trim().toLowerCase();
   const matching = listings.filter((l) => {
     const item = l.item;
     if (q.slot === "potion" && !l.potion) return false;
@@ -206,23 +215,18 @@ export function filterListings(
     if (q.shiny && !item?.shiny) return false;
     if (q.classId && item && !canEquip(item, q.classId)) return false;
     if (q.rolls.length > 0 && (!item || !hasRolls(item, q.rolls))) return false;
-    if (search) {
-      const words = [
-        listingName(l),
-        item?.artifact ? ARTIFACTS[item.artifact].effect : "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      if (!words.includes(search)) return false;
-    }
     return true;
   });
-  const sorted = [...matching].sort((a, b) =>
-    q.sort === "cheapest"
-      ? a.price - b.price || b.listedAt - a.listedAt
-      : q.sort === "dearest"
-        ? b.price - a.price || b.listedAt - a.listedAt
-        : b.listedAt - a.listedAt || b.id - a.id,
+  // Ties: the newer listing first (the storage sorts the same way).
+  const sorted = [...matching].sort(
+    (a, b) =>
+      (q.sort === "cheapest"
+        ? a.price - b.price
+        : q.sort === "dearest"
+          ? b.price - a.price
+          : 0) ||
+      b.listedAt - a.listedAt ||
+      b.id - a.id,
   );
   const start = q.page * EXCHANGE.pageSize;
   return {

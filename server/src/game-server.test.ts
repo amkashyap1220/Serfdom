@@ -23,6 +23,7 @@ import {
   type DungeonId,
   ANY_LISTING,
   type Wear,
+  artifactsOf,
 } from "@serfdom/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
@@ -1885,7 +1886,14 @@ describe("Phase 13 acceptance: entry, and a party clear of every new dungeon (D-
         expect(end.dungeon).toBe(dungeon);
         expect(end.expGained).toBe(clearExp(dungeon, 20));
         expect(end.loot).toHaveLength(1);
-        expect(tiers).toContain(end.loot[0]!.item.tier);
+        // From the dungeon's own tiers, or now and then one of its Artifacts
+        // (1 in 500 in endgame dungeons, D-153).
+        const item = end.loot[0]!.item;
+        if (item.artifact) {
+          expect(artifactsOf(dungeon)).toContain(item.artifact);
+        } else {
+          expect(tiers).toContain(item.tier);
+        }
       }
     });
   }

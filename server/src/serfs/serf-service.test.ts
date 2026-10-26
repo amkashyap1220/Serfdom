@@ -12,7 +12,7 @@ import {
 } from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
 import { MemorySerfRepo } from "./serf-repo.ts";
-import { SerfService } from "./serf-service.ts";
+import { retryWhenPoolBusy, SerfService } from "./serf-service.ts";
 
 const run = { ...newRunStats(), seconds: 30 };
 
@@ -23,7 +23,7 @@ async function serfWith(exp: number) {
   const made = await serfs.create(1, "Odo Flax");
   if (!made.ok) throw new Error(made.reason);
   await repo.recordRun(1, made.serf.id, "completed", run, null, exp);
-  return { serfs, id: made.serf.id };
+  return { repo, serfs, id: made.serf.id };
 }
 
 describe("SerfService.recordRun EXP (D-069, D-071)", () => {
@@ -484,6 +484,61 @@ describe("equipping (9b, D-081, D-086)", () => {
       ok: false,
       reason: "Nothing is worn there.",
     });
+  });
+});
+
+describe("a run save survives a stalled pool", () => {
+  const stalled = () => new Error("timeout exceeded when trying to connect");
+
+  it("a step that could not get a connection runs again; the run counts once", async () => {
+    const { repo, serfs, id } = await serfWith(0);
+    const real = repo.recordRun.bind(repo);
+    let calls = 0;
+    repo.recordRun = (...args) => {
+      calls++;
+      if (calls === 1) return Promise.reject(stalled());
+      return real(...args);
+    };
+    const r = await serfs.recordRun(
+      1,
+      id,
+      "goblin-warrens",
+      "completed",
+      run,
+      null,
+    );
+    expect(calls).toBe(2);
+    expect(r?.expGained).toBe(100);
+    expect(r?.serf.exp).toBe(100);
+    expect(r?.loot).toHaveLength(1);
+  });
+
+  it("other errors are not retried, and a pool that stays stuck gives up", async () => {
+    const { repo, serfs, id } = await serfWith(0);
+    let calls = 0;
+    repo.recordRun = () => {
+      calls++;
+      return Promise.reject(new Error("constraint broken"));
+    };
+    await expect(
+      serfs.recordRun(1, id, "goblin-warrens", "completed", run, null),
+    ).rejects.toThrow("constraint broken");
+    expect(calls).toBe(1);
+    expect(
+      await retryWhenPoolBusy(async () => {
+        calls++;
+        if (calls < 3) throw stalled();
+        return "ok";
+      }),
+    ).toBe("ok");
+    calls = 0;
+    await expect(
+      retryWhenPoolBusy(async () => {
+        calls++;
+        throw stalled();
+      }),
+    ).rejects.toThrow("timeout exceeded");
+    expect(calls).toBe(3);
   });
 });
 

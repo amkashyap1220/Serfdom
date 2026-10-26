@@ -16,6 +16,10 @@ import {
   zeroStats,
   rollArtifact,
   STARTER_GEAR,
+  ANY_LISTING,
+  filterListings,
+  rollItem,
+  type ExchangeQuery,
 } from "@serfdom/shared";
 import {
   MemorySerfRepo,
@@ -23,6 +27,7 @@ import {
   type SerfRepo,
 } from "../serfs/serf-repo.ts";
 import { migrate } from "./migrate.ts";
+import { createPool, isPoolTimeout } from "./pool.ts";
 import { freshTestDatabase } from "./test-db.ts";
 
 /*
@@ -843,6 +848,122 @@ function serfContract(
       });
     });
 
+    it("browsing in the storage gives exactly the shared filter's pages, for every filter and sort (D-156)", async () => {
+      const { repo, account } = await make();
+      let seed = 11;
+      const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const sellers: { id: number; serf: number }[] = [];
+      for (let i = 0; i < 4; i++) {
+        const id = await account();
+        const serf = await repo.create(id, `${name}Browse${i}`, 2);
+        if (typeof serf === "string") throw new Error(serf);
+        sellers.push({ id, serf: serf.id });
+      }
+      const dungeons = [
+        "goblin-warrens",
+        "ember-forge",
+        "frost-hollow",
+        "dragons-roost",
+      ] as const;
+      for (const [i, seller] of sellers.entries()) {
+        const specs = Array.from({ length: 8 }, (_, k) => {
+          const item =
+            k === 0
+              ? rollArtifact(i % 2 ? "doomrend" : "excalibur", random)
+              : rollItem(dungeons[(i + k) % 4]!, random);
+          return k === 1 ? { ...item, shiny: true } : item;
+        });
+        const drops = (await repo.addLoot(seller.id, seller.serf, specs, 100))!;
+        for (const d of drops) {
+          const price = 1 + Math.floor(random() * 50) * 10;
+          expect(
+            (
+              await repo.listOnExchange(
+                seller.id,
+                { itemId: d.item.id },
+                price,
+                10,
+              )
+            ).kind,
+          ).toBe("listed");
+        }
+        const potions = (await repo.addPotions(
+          seller.id,
+          seller.serf,
+          ["hp", "attack"],
+          100,
+        ))!;
+        for (const p of potions) {
+          expect(
+            (
+              await repo.listOnExchange(
+                seller.id,
+                { potionId: p.potion.id },
+                30 + i,
+                10,
+              )
+            ).kind,
+          ).toBe("listed");
+        }
+      }
+      const viewer = sellers[1]!.id;
+      const queries: Partial<ExchangeQuery>[] = [
+        {},
+        { sort: "dearest" },
+        { sort: "newest" },
+        { page: 1 },
+        { slot: "weapon" },
+        { slot: "potion" },
+        { slot: "potion", type: "hp" },
+        { type: "plate" },
+        { tier: 2 },
+        { tier: 9, sort: "dearest" },
+        { tier: "artifact" },
+        { shiny: true },
+        { classId: "wizard" },
+        { classId: "fighter", slot: "weapon" },
+        { rolls: ["attack"] },
+        { rolls: ["attack", "speed"] },
+        { rolls: ["luck"] },
+        { slot: "ring", rolls: ["hp"], sort: "newest" },
+      ];
+      for (const change of queries) {
+        const q = { ...ANY_LISTING, ...change };
+        const all = (await repo.allListings()).map(({ sellerId, ...l }) => ({
+          ...l,
+          mine: sellerId === viewer,
+        }));
+        const expected = filterListings(all, q);
+        const got = await repo.browse(viewer, q);
+        expect(got.total, JSON.stringify(change)).toBe(expected.total);
+        expect(
+          got.listings.map((l) => l.id),
+          JSON.stringify(change),
+        ).toEqual(expected.listings.map((l) => l.id));
+        expect(got.listings, JSON.stringify(change)).toEqual(expected.listings);
+      }
+      // A seller's own listings, and the order lookups.
+      expect((await repo.listingsOf(viewer)).every((l) => l.mine)).toBe(true);
+      expect(await repo.listingsOf(viewer)).toHaveLength(10);
+      await repo.addGold(viewer, 10_000);
+      expect((await repo.placeOrder(viewer, "p:mp", [], 5, 10)).kind).toBe(
+        "placed",
+      );
+      expect(await repo.ordersOf(viewer)).toMatchObject([
+        { key: "p:mp", mine: true },
+      ]);
+      expect(await repo.ordersFor("p:mp", sellers[0]!.id, 10)).toMatchObject([
+        { price: 5, mine: false },
+      ]);
+      // Leave the board empty for the other tests.
+      for (const o of await repo.allOrders())
+        await repo.cancelOrder(o.buyerId, o.id);
+      for (const l of await repo.allListings()) {
+        await repo.cancelListing(l.sellerId, l.id, { stash: 100, rack: 100 });
+      }
+      expect(await repo.allListings()).toEqual([]);
+    });
+
     it("a listed item cannot be sold to the vendor or worn (D-155)", async () => {
       const { repo, account } = await make();
       const a = await account();
@@ -1308,6 +1429,20 @@ describe("the Exchange in PostgreSQL (D-155, D-156)", () => {
 });
 
 describe("serfs in PostgreSQL", () => {
+  it("a request gives up after the pool wait, with an error the run save retries on; then it works again", async () => {
+    const small = createPool(process.env.TEST_DATABASE_URL!, 200, 1);
+    try {
+      const held = await small.connect();
+      const err = await small.query("select 1").catch((e: unknown) => e);
+      expect(isPoolTimeout(err)).toBe(true);
+      expect(isPoolTimeout(new Error("duplicate key"))).toBe(false);
+      held.release();
+      expect((await small.query("select 1 n")).rows[0]).toEqual({ n: 1 });
+    } finally {
+      await small.end();
+    }
+  });
+
   it("more serfs made at once than the pool has connections all succeed (no pool starvation)", async () => {
     const { default: pgModule } = await import("pg");
     // Two connections, six creates with starting gear at once: each create
