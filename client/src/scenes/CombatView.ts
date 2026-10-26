@@ -296,11 +296,13 @@ export class CombatView {
       sprite.label
         .setPosition(Math.round(x + above.x), Math.round(y + above.y))
         .setRotation(-viewRotation)
+        // No HP numbers over enemies (the user, 2026-10-26): the boss bar
+        // is the only health bar. Only a bone pile or a respawn says so.
         .setText(
           enemy.pile
             ? "bones"
             : alive
-              ? `${Math.ceil(enemy.hp)}`
+              ? ""
               : `respawn ${enemy.respawnIn.toFixed(1)}s`,
         );
     }

@@ -173,7 +173,7 @@ Confirmed controls and rules (built):
 - **Ability:** Space (D-035); costs and cooldowns per class in §4.
 - **Leave a run:** R, at no cost except that run's rewards (D-036, D-053).
 - **First run (D-159):** a welcome card on the home screen, one-at-a-time hints in the first runs (moving, the fire mode, turning, leaving; being hit, a boss, the portal, the ability), and a note after the first clear; each once per account (Settings: Show hints, Show all hints again).
-- **Window and text (D-159):** the 1200×800 game scales to fit any window from 900×600 up (Full screen in Settings), always showing the same amount of world; text size Normal or Large; enemy bullets are round and yours square.
+- **Window and text (D-159):** the 1200×800 game shrinks to fit any window from 900×600 up and never grows past 1200×800 (bigger windows get margins; Full screen in Settings), always showing the same amount of world; no HP numbers over enemies (only a boss has a health bar); text size Normal or Large; enemy bullets are round and yours square.
 - **Formulas:** damage, fire rate, speed, Defense, and regen are D-078, with Defense changed by D-121 (§6). Hit authority is the server's (D-043, D-044).
 
 Still open:

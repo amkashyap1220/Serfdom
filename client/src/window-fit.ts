@@ -1,11 +1,11 @@
 import { LAYOUT } from "./layout";
 
 /*
- * Window size (D-159): the whole 1200×800 game box scales to fit the
- * window, keeping its shape, with plain margins. Everyone sees the same
- * world whatever their screen (the camera never changes), so a big screen
- * is no advantage. Below 900×600 (75%) it stops shrinking and a notice
- * asks for a bigger window.
+ * Window size (D-159): the whole 1200×800 game box shrinks to fit a smaller
+ * window, keeping its shape, and never grows past 1200×800 (the user,
+ * 2026-10-26): a bigger window gets plain margins. Everyone sees the same
+ * world whatever their screen. Below 900×600 (75%) it stops shrinking and
+ * a notice asks for a bigger window.
  */
 
 /** The smallest supported window, as a share of the game box. */
@@ -29,7 +29,7 @@ export interface Fit {
 export function fitWindow(width: number, height: number): Fit {
   const { width: w, height: h } = LAYOUT.container;
   const tooSmall = width < MIN_WINDOW.width || height < MIN_WINDOW.height;
-  const scale = Math.max(MIN_SCALE, Math.min(width / w, height / h));
+  const scale = Math.max(MIN_SCALE, Math.min(1, width / w, height / h));
   return {
     scale,
     // Centred when it fits; pinned to the corner when the window is too small.

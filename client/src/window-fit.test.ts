@@ -11,12 +11,11 @@ describe("fitting the game box to the window (D-159)", () => {
     });
   });
 
-  it("grows to fill a bigger window, keeping its shape, centred with margins", () => {
+  it("never grows past 1200×800: a bigger window gets plain margins, centred", () => {
     const fit = fitWindow(1920, 1080);
-    expect(fit.scale).toBeCloseTo(1.35);
-    // 1200 × 1.35 = 1620 wide: 150 px margins left and right.
-    expect(fit.left).toBe(150);
-    expect(fit.top).toBe(0);
+    expect(fit.scale).toBe(1);
+    expect(fit.left).toBe(360);
+    expect(fit.top).toBe(140);
     expect(fit.tooSmall).toBe(false);
   });
 

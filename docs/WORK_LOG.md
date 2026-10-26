@@ -893,3 +893,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - The user ran the Phase 18 checklist: all pass. `phase-18` merged into `main` and pushed.
 - Open for later: open question 28 (enemy HP numbers overlapping in crowds; whether the game grows past 1200×800).
 - Next step: Phase 19 (production hosting).
+
+### After Phase 18 — 2026-10-26
+
+- The user answered open question 28: no HP numbers over enemies at all (the boss bar is the only health bar), and the game never grows past 1200×800. Built on `phase-18-followup`: enemy labels show only a bone pile or a respawn; `fitWindow` caps the scale at 1.
+- Checks: `npm run check`. Live (headless, test DB): the box stayed 1200×800 and centred at 1920×1080 (360, 140) and 2560×1440 (680, 320), and still shrank at 1000×640; no numbers over goblins or the Warlord, the Warlord's bar shown; no console errors.
