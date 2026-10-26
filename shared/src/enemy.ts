@@ -1,3 +1,4 @@
+import { ABILITY_ARTIFACT } from "./artifact-effects.ts";
 import {
   ENEMY_STATS,
   FIRST_ATTACK_DELAY,
@@ -52,7 +53,9 @@ export interface EnemyState {
   /** Inside a Nature's Reach this tick: moves at half speed (D-097). Set by the world step. */
   slowed?: boolean;
   /** Warlock Curse (D-098): takes `bonus` more damage from every source while `remaining` > 0. */
-  curse?: { remaining: number; bonus: number };
+  curse?: { remaining: number; bonus: number; by?: number };
+  /** Rooted by the Worldroot Totem (D-153); `bonus` until the next hit. */
+  rooted?: { remaining: number; bonus: boolean };
 }
 
 /**
@@ -535,7 +538,11 @@ export function damageEnemy(
           ? AUTOMATON.ventTaken
           : AUTOMATON.armourTaken
         : 1;
-  const taken = damage * (1 + (enemy.curse?.bonus ?? 0)) * crust;
+  // A rooted enemy's next hit lands harder (the Worldroot Totem, D-153).
+  const rootBonus = enemy.rooted?.bonus
+    ? 1 + ABILITY_ARTIFACT.worldroot.bonus
+    : 1;
+  const taken = damage * (1 + (enemy.curse?.bonus ?? 0)) * crust * rootBonus;
   const { hp, died } = applyDamage(enemy.hp, taken);
   // A skeleton's first death leaves a bone pile instead (D-120); a hit on
   // the pile is the real death.
@@ -552,7 +559,15 @@ export function damageEnemy(
     };
   }
   return {
-    enemy: { ...enemy, hp, respawnIn: died ? (enemy.respawnSeconds ?? 0) : 0 },
+    enemy: {
+      ...enemy,
+      hp,
+      respawnIn: died ? (enemy.respawnSeconds ?? 0) : 0,
+      // That hit spent the root's bonus; the root itself stays.
+      ...(enemy.rooted?.bonus
+        ? { rooted: { ...enemy.rooted, bonus: false } }
+        : {}),
+    },
     defeated: died,
     damage: taken,
   };

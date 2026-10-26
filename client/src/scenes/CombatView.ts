@@ -628,6 +628,20 @@ export class CombatView {
     const bl = this.blasts.clear();
     // Nature's Reach (D-097): a green patch, fading as it runs out.
     for (const z of view.zones) {
+      // A Vanish decoy (D-153): a ghostly player outline.
+      if (z.kind === "decoy") {
+        bl.lineStyle(px(2), COLORS.phased, 0.6 + 0.3 * Math.sin(nowMs / 120));
+        bl.strokeRect(z.x - 16, z.y - 16, 32, 32);
+        continue;
+      }
+      // A Conduit field (D-153): crackling blue.
+      if (z.kind === "field") {
+        bl.fillStyle(COLORS.lightning, 0.12);
+        bl.fillCircle(z.x, z.y, z.radius);
+        bl.lineStyle(px(2), COLORS.lightning, 0.5 + 0.4 * Math.sin(nowMs / 60));
+        bl.strokeCircle(z.x, z.y, z.radius);
+        continue;
+      }
       const life = Math.min(1, z.remaining / 3);
       bl.fillStyle(COLORS.zone, 0.12 + 0.18 * life);
       bl.fillCircle(z.x, z.y, z.radius);

@@ -70,6 +70,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v52 (16d): snapshot zones may be a Vanish decoy or a Conduit field
+ *          (`kind`, D-153).
  * v51 (16c): snapshot players carry `boost` (the Hide of the First
  *          Beast's speed, seconds, so prediction moves as the server does)
  *          and buffs may be "shielded" or "phased" (D-153).
@@ -177,7 +179,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 51;
+export const PROTOCOL_VERSION = 52;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -585,6 +587,8 @@ export interface SnapshotZone {
   y: number;
   radius: number;
   remaining: number;
+  /** Absent: Nature's Reach. A Vanish decoy, or a Conduit field (D-153). */
+  kind?: "decoy" | "field";
 }
 
 /** A warning circle that lands after `landsIn` seconds. */
@@ -2159,15 +2163,28 @@ function parseSnapshotChain(v: unknown): SnapshotChain | null {
 function parseSnapshotZone(v: unknown): SnapshotZone | null {
   if (
     !isPlainObject(v) ||
-    !hasExactKeys(v, ["x", "y", "radius", "remaining"]) ||
+    !hasExactKeys(v, [
+      "x",
+      "y",
+      "radius",
+      "remaining",
+      ...(Object.hasOwn(v, "kind") ? ["kind"] : []),
+    ]) ||
     !isFiniteNumber(v.x) ||
     !isFiniteNumber(v.y) ||
     !isNonNegative(v.radius) ||
-    !isNonNegative(v.remaining)
+    !isNonNegative(v.remaining) ||
+    (Object.hasOwn(v, "kind") && v.kind !== "decoy" && v.kind !== "field")
   ) {
     return null;
   }
-  return { x: v.x, y: v.y, radius: v.radius, remaining: v.remaining };
+  return {
+    x: v.x,
+    y: v.y,
+    radius: v.radius,
+    remaining: v.remaining,
+    ...(Object.hasOwn(v, "kind") ? { kind: v.kind as "decoy" | "field" } : {}),
+  };
 }
 
 function parseRuneWarning(v: unknown): RuneWarning | null {

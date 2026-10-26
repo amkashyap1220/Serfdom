@@ -31,6 +31,8 @@ export interface Projectile {
   growth?: number;
   /** Eternity (D-153): on a hit, splits into this many seeking bolts. */
   split?: number;
+  /** A Worldseeker Volley arrow (D-153): a boss hit sends a seeking arrow. */
+  seeker?: boolean;
 }
 
 /** Something a projectile can hit: an id and its hit box. */

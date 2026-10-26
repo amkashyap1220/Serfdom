@@ -1,5 +1,10 @@
 import type { ArtifactId } from "./artifacts.ts";
-import { GEAR_ARTIFACT, WEAPON_ARTIFACT, wears } from "./artifact-effects.ts";
+import {
+  ABILITY_ARTIFACT,
+  GEAR_ARTIFACT,
+  WEAPON_ARTIFACT,
+  wears,
+} from "./artifact-effects.ts";
 import {
   BOSS_KINDS,
   EELPRIEST,
@@ -94,6 +99,7 @@ import {
   VOLLEY,
   volleyArrowDamage,
   type AbilityLoadout,
+  type AbilityKind,
 } from "./abilities.ts";
 import { weaponDamage, type WeaponType } from "./items.ts";
 import { attackOf, swingCatches } from "./weapon-patterns.ts";
@@ -163,6 +169,29 @@ export interface PlayerState {
   hideStrike?: boolean;
   /** Seconds until the Hide can trigger again. */
   hideReady?: number;
+  /** Damage Guard has blocked this cast (Aegis of the Last Stand, D-153). */
+  lastStand?: number;
+  /** Share of max HP healed this Battle Cry (Horn of the Blood King). */
+  bloodHealed?: number;
+  /** Nature's Reach casts this run (the Worldroot Totem's every 3rd). */
+  reachCasts?: number;
+}
+
+/** Vanish's decoy (Veil of the Unseen End, D-153): enemies aim at it while its Rogue is vanished. */
+export interface Decoy {
+  ownerId: number;
+  at: Vec2;
+}
+
+/** Eternity's Conduit's field (D-153): zaps each enemy that walks in, once. */
+export interface Field {
+  ownerId: number;
+  at: Vec2;
+  radius: number;
+  remaining: number;
+  damage: number;
+  /** Enemies already zapped, or inside when it formed. */
+  hit: readonly number[];
 }
 
 /** A timed bonus: `bonus` is a share (0.3 = +30%), `remaining` seconds. */
@@ -248,6 +277,10 @@ export interface SimState {
   blades?: readonly LiveBlade[];
   /** Wind channels (D-139): gusts on the run clock push players. */
   winds?: readonly Wind[];
+  /** Vanish decoys (D-153). */
+  decoys?: readonly Decoy[];
+  /** Conduit fields (D-153). */
+  fields?: readonly Field[];
 }
 
 /** A blade arm as it is now (D-137): from `pivot` at `angle` (radians), turning `speed` rad/s. */
@@ -398,6 +431,8 @@ export interface Zone {
   /** Seconds until the next pulse of damage. */
   pulseIn: number;
   damage: number;
+  /** The Worldroot Totem (D-153): its first pulse roots for this long. */
+  root?: number;
 }
 
 /** What one cast puts into the world. */
@@ -412,6 +447,12 @@ interface Cast {
   buffs?: { playerId: number; kind: keyof PlayerBuffs; buff: Buff }[];
   /** HP to restore, by player. */
   heals?: { playerId: number; amount: number }[];
+  /** Shields to give, by player (the Tome of the First Dawn, D-153). */
+  shields?: { playerId: number; amount: number }[];
+  /** Enemy projectiles to destroy (the Worldsong, D-153). */
+  clearShots?: { at: Vec2; radius: number; max: number };
+  decoy?: Decoy;
+  field?: Field;
 }
 
 /**
@@ -597,7 +638,11 @@ function curse(
 ): Cast {
   const offset = clampToRange(target, CURSE.range);
   const at = { x: position.x + offset.x, y: position.y + offset.y };
-  const mark = { remaining: CURSE.seconds, bonus: curseBonus(tier) };
+  const mark = {
+    remaining: CURSE.seconds,
+    bonus: curseBonus(tier),
+    by: ownerId,
+  };
   return {
     enemies: enemies.map((e) =>
       isHittable(e) &&
@@ -723,6 +768,8 @@ export interface Blast {
   at: Vec2;
   radius: number;
   damage: number;
+  /** Aetherion's Codex (D-153): enemies this close are pulled in first. */
+  pull?: number;
 }
 
 export interface PlayerInput {
@@ -1019,6 +1066,7 @@ export function applyPlayerInput(
     mp >= ABILITIES[ability.kind].mpCost
   ) {
     cast = castAbility(ability, player, position, target, state);
+    if (cast) cast = artifactCast(cast, ability.kind, player, position, state);
     if (cast) {
       mp -= ABILITIES[ability.kind].mpCost;
       abilityCooldown = ABILITIES[ability.kind].cooldownSeconds;
@@ -1041,6 +1089,16 @@ export function applyPlayerInput(
     // The Hide's stronger attack is spent on the next one (D-153).
     ...(player.hideStrike && cooldown.fired && aim
       ? { hideStrike: false }
+      : {}),
+    // Ability Artifacts' bookkeeping (D-153).
+    ...(cast && ability?.kind === "guard" && wears(player, "lastStand")
+      ? { lastStand: 0 }
+      : {}),
+    ...(cast && ability?.kind === "battleCry" && wears(player, "bloodKing")
+      ? { bloodHealed: 0 }
+      : {}),
+    ...(cast && ability?.kind === "naturesReach" && wears(player, "worldroot")
+      ? { reachCasts: (player.reachCasts ?? 0) + 1 }
       : {}),
     // The Mantle: casting arms it against projectiles (D-153).
     ...(cast && wears(player, "mantle")
@@ -1082,6 +1140,16 @@ export function applyPlayerInput(
       ? { ...p, buffs: { ...p.buffs, [gain.kind]: gain.buff } }
       : p;
     if (heal) out = { ...out, hp: Math.min(out.maxHp, out.hp + heal.amount) };
+    const shield = cast?.shields?.find((s) => s.playerId === p.id);
+    if (shield) {
+      out = {
+        ...out,
+        shield: {
+          amount: Math.max(out.shield?.amount ?? 0, shield.amount),
+          left: ABILITY_ARTIFACT.firstDawn.seconds,
+        },
+      };
+    }
     return out;
   };
   let next: SimState = {
@@ -1089,7 +1157,37 @@ export function applyPlayerInput(
     players: state.players.map((p) => buffed(p.id === playerId ? updated : p)),
     blasts: cast?.blast ? [...state.blasts, cast.blast] : state.blasts,
     zones: cast?.zone ? [...state.zones, cast.zone] : state.zones,
+    // One decoy per Rogue; fields add up (D-153).
+    ...(cast?.decoy
+      ? {
+          decoys: [
+            ...(state.decoys ?? []).filter((d) => d.ownerId !== playerId),
+            cast.decoy,
+          ],
+        }
+      : {}),
+    ...(cast?.field ? { fields: [...(state.fields ?? []), cast.field] } : {}),
   };
+  // The Worldsong destroys the nearest enemy projectiles (D-153).
+  if (cast?.clearShots) {
+    const c = cast.clearShots;
+    const gone = new Set(
+      next.projectiles
+        .filter((p) => p.owner === "enemy")
+        .map((p) => ({
+          p,
+          d: Math.hypot(p.position.x - c.at.x, p.position.y - c.at.y),
+        }))
+        .filter((x) => x.d <= c.radius)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, c.max)
+        .map((x) => x.p),
+    );
+    next = {
+      ...next,
+      projectiles: next.projectiles.filter((p) => !gone.has(p)),
+    };
+  }
   const events: SimEvent[] = [];
   // Chain Lightning hits at once (it needs the enemies where they are now).
   if (cast?.enemies) next = { ...next, enemies: cast.enemies };
@@ -1208,7 +1306,161 @@ export function applyPlayerInput(
     }
   }
   next = ouroboros(next, events);
+  next = testament(next, events);
   return { state: next, events };
+}
+
+/**
+ * The ability Artifacts' twists on a cast (D-153): the Codex's pull, the
+ * Worldseeker's arrows, the Worldroot's root, the Unseen End's decoy, the
+ * First Dawn's shields, the Worldsong's pulse, the Conduit's field.
+ */
+function artifactCast(
+  cast: Cast,
+  kind: AbilityKind,
+  player: PlayerState,
+  position: Vec2,
+  state: SimState,
+): Cast {
+  if (kind === "arcaneBlast" && cast.blast && wears(player, "codex")) {
+    return {
+      ...cast,
+      blast: {
+        ...cast.blast,
+        pull: cast.blast.radius * ABILITY_ARTIFACT.codex.pull,
+      },
+    };
+  }
+  if (kind === "volley" && cast.projectiles && wears(player, "worldseeker")) {
+    return {
+      ...cast,
+      projectiles: cast.projectiles.map((p) => ({ ...p, seeker: true })),
+    };
+  }
+  if (kind === "naturesReach" && cast.zone && wears(player, "worldroot")) {
+    const n = (player.reachCasts ?? 0) + 1;
+    return n % ABILITY_ARTIFACT.worldroot.every === 0
+      ? {
+          ...cast,
+          zone: { ...cast.zone, root: ABILITY_ARTIFACT.worldroot.seconds },
+        }
+      : cast;
+  }
+  if (kind === "vanish" && wears(player, "unseenEnd")) {
+    return { ...cast, decoy: { ownerId: player.id, at: { ...position } } };
+  }
+  if (kind === "healing" && cast.heals && wears(player, "firstDawn")) {
+    const r = ABILITY_ARTIFACT.firstDawn;
+    return {
+      ...cast,
+      shields: cast.heals.map((h) => {
+        const p = state.players.find((x) => x.id === h.playerId);
+        return {
+          playerId: h.playerId,
+          amount: Math.min(h.amount * r.share, (p?.maxHp ?? 0) * r.max),
+        };
+      }),
+    };
+  }
+  if (kind === "inspiration" && wears(player, "worldsong")) {
+    const r = ABILITY_ARTIFACT.worldsong;
+    return {
+      ...cast,
+      clearShots: { at: { ...position }, radius: r.radius, max: r.max },
+    };
+  }
+  if (kind === "chainLightning" && wears(player, "conduit")) {
+    const chain = cast.events?.find((e) => e.type === "chain");
+    const last = chain?.type === "chain" ? chain.points.at(-1) : undefined;
+    if (!last) return cast;
+    const r = ABILITY_ARTIFACT.conduit;
+    const inside = (cast.enemies ?? state.enemies)
+      .filter(
+        (e) =>
+          Math.hypot(e.position.x - last.x, e.position.y - last.y) <=
+          r.radius + e.size / 2,
+      )
+      .map((e) => e.id);
+    return {
+      ...cast,
+      field: {
+        ownerId: player.id,
+        at: { ...last },
+        radius: r.radius,
+        remaining: r.seconds,
+        damage:
+          chainLightningDamage(player.ability?.tier ?? 0) *
+          player.combat.attackFactor *
+          damageMultiplier(player) *
+          r.damage,
+        hit: inside,
+      },
+    };
+  }
+  return cast;
+}
+
+/**
+ * The Black Testament (D-153): a cursed enemy's death gives its Warlock MP
+ * and makes curses near it last longer. Run while the dead are still listed.
+ */
+function testament(state: SimState, events: readonly SimEvent[]): SimState {
+  const r = ABILITY_ARTIFACT.testament;
+  let next = state;
+  for (const e of events) {
+    if (e.type !== "defeated") continue;
+    const dead = next.enemies.find((x) => x.id === e.enemyId);
+    const by = dead?.curse?.by;
+    if (!dead || by === undefined) continue;
+    const warlock = next.players.find((p) => p.id === by);
+    if (!warlock || !wears(warlock, "testament") || !isPlayerAlive(warlock))
+      continue;
+    next = {
+      ...next,
+      players: next.players.map((p) =>
+        p.id === by ? { ...p, mp: Math.min(p.combat.maxMp, p.mp + r.mp) } : p,
+      ),
+      enemies: next.enemies.map((x) =>
+        x.curse &&
+        isAlive(x) &&
+        Math.hypot(
+          x.position.x - dead.position.x,
+          x.position.y - dead.position.y,
+        ) <= r.radius
+          ? {
+              ...x,
+              curse: { ...x.curse, remaining: x.curse.remaining + r.extend },
+            }
+          : x,
+      ),
+    };
+  }
+  return next;
+}
+
+/** Pulls enemies within `reach` of `at` in to it, never through walls (Aetherion and its Codex, D-153). */
+function pullEnemies(
+  enemies: EnemyState[],
+  at: Vec2,
+  reach: number,
+  walls: readonly Rect[],
+): EnemyState[] {
+  return enemies.map((e) => {
+    if (!isHittable(e)) return e;
+    const dx = at.x - e.position.x;
+    const dy = at.y - e.position.y;
+    const d = Math.hypot(dx, dy);
+    if (d > reach || d < 1e-6) return e;
+    const position = stepMovement(
+      e.position,
+      { x: dx / d, y: dy / d },
+      { width: e.size, height: e.size },
+      walls,
+      1,
+      Math.max(0, d - e.size / 2),
+    );
+    return { ...e, position };
+  });
 }
 
 /** The Ouroboros (D-153): each kill restores a share of the killer's max HP and MP. */
@@ -1223,13 +1475,29 @@ function ouroboros(state: SimState, events: readonly SimEvent[]): SimState {
     ...state,
     players: state.players.map((p) => {
       const n = kills.get(p.id) ?? 0;
-      if (n === 0 || !wears(p, "ouroboros") || !isPlayerAlive(p)) return p;
-      const r = GEAR_ARTIFACT.ouroboros;
-      return {
-        ...p,
-        hp: Math.min(p.maxHp, p.hp + n * r.hp * p.maxHp),
-        mp: Math.min(p.combat.maxMp, p.mp + n * r.mp * p.combat.maxMp),
-      };
+      if (n === 0 || !isPlayerAlive(p)) return p;
+      let out = p;
+      if (wears(p, "ouroboros")) {
+        const r = GEAR_ARTIFACT.ouroboros;
+        out = {
+          ...out,
+          hp: Math.min(p.maxHp, out.hp + n * r.hp * p.maxHp),
+          mp: Math.min(p.combat.maxMp, out.mp + n * r.mp * p.combat.maxMp),
+        };
+      }
+      // The Horn of the Blood King: kills in Battle Cry heal, capped a cry.
+      if (wears(p, "bloodKing") && p.buffs.battleCry) {
+        const r = ABILITY_ARTIFACT.bloodKing;
+        const share = Math.min(n * r.perKill, r.max - (p.bloodHealed ?? 0));
+        if (share > 1e-9) {
+          out = {
+            ...out,
+            hp: Math.min(p.maxHp, out.hp + share * p.maxHp),
+            bloodHealed: (p.bloodHealed ?? 0) + share,
+          };
+        }
+      }
+      return out;
     }),
   };
 }
@@ -1510,15 +1778,32 @@ export function stepWorld(
     ...(holesOf ? { holesOf } : {}),
     ...(boundsOf ? { boundsOf } : {}),
   };
-  enemies = enemies.map((enemy) => {
+  // Decoys stand in for their vanished Rogues (D-153): seen, never hurt.
+  const decoyTargets = (state.decoys ?? [])
+    .filter((d) => {
+      const owner = players.find((p) => p.id === d.ownerId);
+      return owner && isPlayerAlive(owner) && isVanished(owner);
+    })
+    .map((d) => ({ id: DECOY_ID - d.ownerId, position: d.at }));
+  enemies = enemies.map((before) => {
+    // A rooted enemy acts but does not move (the Worldroot Totem, D-153).
+    const rootLeft = (before.rooted?.remaining ?? 0) - dtSeconds;
+    const enemy: EnemyState = before.rooted
+      ? rootLeft > 1e-9
+        ? { ...before, rooted: { ...before.rooted, remaining: rootLeft } }
+        : withoutRoot(before)
+      : before;
     // A vanished player is out of sight: not aimed at, chased, or touched.
     const action = enemyAct(
       enemy,
-      alivePlayers().filter((p) => !isVanished(p)),
+      [...alivePlayers().filter((p) => !isVanished(p)), ...decoyTargets],
       enemyWalls,
       dtSeconds,
       context,
     );
+    if (before.rooted && rootLeft > 1e-9) {
+      action.enemy = { ...action.enemy, position: { ...before.position } };
+    }
     for (const s of action.summons) {
       summons.push({ ...s, roomId: enemy.roomId, summonerId: enemy.id });
     }
@@ -2105,6 +2390,7 @@ export function stepWorld(
   // 2c. Blasts cast since the last step hit every living enemy in their
   // area once (D-096), credited to the caster like a shot.
   for (const b of state.blasts) {
+    if (b.pull) enemies = pullEnemies(enemies, b.at, b.pull, walls);
     events.push({
       type: "blast",
       kind: "arcaneBlast",
@@ -2148,7 +2434,11 @@ export function stepWorld(
           continue;
         }
         const result = damageEnemy(e, z.damage);
-        enemies[i] = result.enemy;
+        // The Worldroot roots them, and its next hit lands harder (D-153).
+        enemies[i] =
+          z.root && isAlive(result.enemy)
+            ? { ...result.enemy, rooted: { remaining: z.root, bonus: true } }
+            : result.enemy;
         events.push({
           type: "hit",
           enemyId: e.id,
@@ -2163,8 +2453,12 @@ export function stepWorld(
       pulseIn += NATURES_REACH.pulseSeconds;
     }
     const remaining = z.remaining - dtSeconds;
-    if (remaining > 1e-9)
-      zones.push({ ...z, remaining, pulseIn: pulseIn - dtSeconds });
+    // The root is the first pulse's only.
+    if (remaining > 1e-9) {
+      const next: Zone = { ...z, remaining, pulseIn: pulseIn - dtSeconds };
+      delete next.root;
+      zones.push(next);
+    }
   }
 
   // 3. Projectiles. Targets are rebuilt per projectile so anything defeated
@@ -2174,25 +2468,7 @@ export function stepWorld(
   const burstAt = (p: Projectile, at: Vec2) => {
     const radius = p.burst ?? 0;
     // Aetherion pulls enemies together first (D-153), never through walls.
-    if (p.pull) {
-      const reach = p.pull;
-      enemies = enemies.map((e) => {
-        if (!isHittable(e)) return e;
-        const dx = at.x - e.position.x;
-        const dy = at.y - e.position.y;
-        const d = Math.hypot(dx, dy);
-        if (d > reach || d < 1e-6) return e;
-        const position = stepMovement(
-          e.position,
-          { x: dx / d, y: dy / d },
-          { width: e.size, height: e.size },
-          walls,
-          1,
-          Math.max(0, d - e.size / 2),
-        );
-        return { ...e, position };
-      });
-    }
+    if (p.pull) enemies = pullEnemies(enemies, at, p.pull, walls);
     events.push({
       type: "blast",
       kind: "burst",
@@ -2319,6 +2595,29 @@ export function stepWorld(
         // An arrow's second and later victims are not further accurate shots.
         ...((p.pierced ?? []).length > 0 ? { extra: true } : {}),
       });
+      // The Worldseeker: a Volley arrow on a boss sends a seeking arrow
+      // from its Ranger (D-153).
+      if (p.seeker && BOSS_KINDS.includes(target.kind)) {
+        const ranger = players.find((pl) => pl.id === p.ownerId);
+        if (ranger && isPlayerAlive(ranger)) {
+          const dx = target.position.x - ranger.position.x;
+          const dy = target.position.y - ranger.position.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const w = ABILITY_ARTIFACT.worldseeker;
+          surviving.push({
+            id: nextId++,
+            owner: "player",
+            ownerId: p.ownerId,
+            position: { ...ranger.position },
+            direction: { x: dx / d, y: dy / d },
+            speed: w.speed,
+            remaining: w.range,
+            damage: p.damage * w.damage,
+            size: w.size,
+            fromAbility: true,
+          });
+        }
+      }
       // Eternity: a charged bolt splits into seeking bolts at the nearest
       // other enemies (D-153), drawn from the server.
       if (p.split) {
@@ -2379,6 +2678,93 @@ export function stepWorld(
     }
   }
 
+  // Conduit fields zap enemies walking in (D-153).
+  const fields: Field[] = [];
+  for (const f of state.fields ?? []) {
+    const hit = [...f.hit];
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i]!;
+      if (!isHittable(e) || hit.includes(e.id)) continue;
+      if (
+        Math.hypot(e.position.x - f.at.x, e.position.y - f.at.y) >
+        f.radius + e.size / 2
+      )
+        continue;
+      hit.push(e.id);
+      const result = damageEnemy(e, f.damage);
+      enemies[i] = result.enemy;
+      events.push({
+        type: "hit",
+        enemyId: e.id,
+        playerId: f.ownerId,
+        damage: result.damage,
+        position: { ...e.position },
+      });
+      if (result.defeated) {
+        events.push({ type: "defeated", enemyId: e.id, playerId: f.ownerId });
+      }
+    }
+    const remaining = f.remaining - dtSeconds;
+    if (remaining > 1e-9) fields.push({ ...f, remaining, hit });
+  }
+  /** A ring of Artifact damage from `at` (decoy bursts, Last Stand). */
+  const ringHit = (
+    ownerId: number,
+    at: Vec2,
+    radius: number,
+    damage: number,
+  ) => {
+    events.push({
+      type: "blast",
+      kind: "artifact",
+      playerId: ownerId,
+      at: { ...at },
+      radius,
+    });
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i]!;
+      if (!isHittable(e)) continue;
+      if (
+        Math.hypot(e.position.x - at.x, e.position.y - at.y) >
+        radius + e.size / 2
+      )
+        continue;
+      const result = damageEnemy(e, damage);
+      enemies[i] = result.enemy;
+      events.push({
+        type: "hit",
+        enemyId: e.id,
+        playerId: ownerId,
+        damage: result.damage,
+        position: { ...e.position },
+      });
+      if (result.defeated)
+        events.push({ type: "defeated", enemyId: e.id, playerId: ownerId });
+    }
+  };
+  // A decoy bursts when its Rogue is no longer vanished (D-153).
+  const decoys: Decoy[] = [];
+  for (const d of state.decoys ?? []) {
+    const owner = players.find((p) => p.id === d.ownerId);
+    if (owner && isPlayerAlive(owner) && isVanished(owner)) {
+      decoys.push(d);
+    } else {
+      const r = ABILITY_ARTIFACT.unseenEnd;
+      ringHit(d.ownerId, d.at, r.radius, r.damage);
+    }
+  }
+  // Guard over: the Aegis of the Last Stand lets go what it stored (D-153).
+  players = players.map((p) => {
+    if (!p.lastStand || p.buffs.guard || !isPlayerAlive(p)) return p;
+    const r = ABILITY_ARTIFACT.lastStand;
+    ringHit(p.id, p.position, r.radius, Math.min(r.max, p.lastStand * r.times));
+    return { ...p, lastStand: 0 };
+  });
+  // Cursed deaths feed the Testament, while the dead are still listed.
+  const fed = testament({ ...state, players, enemies }, events);
+  players = [...fed.players];
+  enemies = [...fed.enemies];
+
   // 4. Enemy respawn timers; the permanently dead are dropped, and so are
   // the summons of anything dead.
   const deadIds = new Set(enemies.filter((e) => !isAlive(e)).map((e) => e.id));
@@ -2422,10 +2808,22 @@ export function stepWorld(
       fires: burning,
       blasts: [],
       zones,
+      ...(state.decoys || decoys.length > 0 ? { decoys } : {}),
+      ...(state.fields || fields.length > 0 ? { fields } : {}),
     },
     events,
   };
 }
+
+/** The enemy with its root gone (D-153). */
+function withoutRoot(enemy: EnemyState): EnemyState {
+  const out = { ...enemy };
+  delete out.rooted;
+  return out;
+}
+
+/** A decoy's target id: below every player id (D-153). */
+const DECOY_ID = -1000;
 
 /**
  * Always-on HP and MP regeneration (D-056, D-096), plus Inspiration's
@@ -2740,6 +3138,11 @@ function damagePlayer(
     player.combat.damageTakenFactor *
     (1 - (player.buffs.guard?.bonus ?? 0)) *
     (1 - (player.buffs.vanish?.bonus ?? 0));
+  // The Aegis of the Last Stand stores what Guard blocked (D-153).
+  const guarded =
+    player.buffs.guard && wears(player, "lastStand")
+      ? hit * player.combat.damageTakenFactor * player.buffs.guard.bonus
+      : 0;
   // The Aegis's shield soaks up what it can first (D-153).
   const soaked = Math.min(player.shield?.amount ?? 0, blocked);
   const damage = blocked - soaked;
@@ -2762,6 +3165,8 @@ function damagePlayer(
     position,
   });
   out = { ...out, hp };
+  if (guarded > 0)
+    out = { ...out, lastStand: (player.lastStand ?? 0) + guarded };
   if (died && wears(player, "resurrection")) {
     // The Resurrection Necklace (D-153): survive, then it shatters.
     const r = GEAR_ARTIFACT.resurrection;

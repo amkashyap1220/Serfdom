@@ -55,3 +55,27 @@ export const GEAR_ARTIFACT = {
   /** After a hit: untouchable for `seconds`, at most once every `every` seconds. */
   veil: { seconds: 1, every: 10 },
 } as const;
+
+/** The ten class ability Artifacts (16d). */
+export const ABILITY_ARTIFACT = {
+  /** Guard stores what it blocks; when it ends, a shockwave of `times` that, at most `max`, within `radius`. */
+  lastStand: { times: 2, max: 400, radius: 150 },
+  /** During Battle Cry each kill heals `perKill` of max HP, at most `max` a cry. */
+  bloodKing: { perKill: 0.03, max: 0.3 },
+  /** Vanish's decoy bursts for `damage` within `radius` when Vanish ends. */
+  unseenEnd: { damage: 150, radius: 100 },
+  /** A Volley arrow hitting a boss sends a seeking arrow from you, for `damage` of it. */
+  worldseeker: { damage: 0.5, speed: 600, range: 600, size: 5 },
+  /** Arcane Blast pulls in enemies within `pull` × its radius before it detonates. */
+  codex: { pull: 1.5 },
+  /** Healing also shields for `share` of the heal, at most `max` of max HP, for `seconds`. */
+  firstDawn: { share: 0.5, max: 0.2, seconds: 4 },
+  /** Inspiration's pulse destroys up to `max` enemy projectiles within `radius`. */
+  worldsong: { radius: 150, max: 6 },
+  /** A cursed enemy's death: `mp` to its Warlock; curses within `radius` last `extend` s longer. */
+  testament: { mp: 10, radius: 150, extend: 2 },
+  /** Every `every`th Nature's Reach roots for `seconds`; the next hit on a rooted enemy +`bonus`. */
+  worldroot: { every: 3, seconds: 1.5, bonus: 0.5 },
+  /** The chain's last target leaves a field `radius` px round for `seconds`, zapping walkers-in for `damage`. */
+  conduit: { radius: 40, seconds: 2, damage: 0.3 },
+} as const;

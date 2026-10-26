@@ -659,12 +659,29 @@ export class DungeonInstance {
       blasts: this.blastsToSend.splice(0),
       swings: this.swingsToSend.splice(0),
       chains: this.chainsToSend.splice(0),
-      zones: this.sim.zones.map((z) => ({
-        x: roundCoord(z.at.x),
-        y: roundCoord(z.at.y),
-        radius: z.radius,
-        remaining: roundCoord(z.remaining),
-      })),
+      zones: [
+        ...this.sim.zones.map((z) => ({
+          x: roundCoord(z.at.x),
+          y: roundCoord(z.at.y),
+          radius: z.radius,
+          remaining: roundCoord(z.remaining),
+        })),
+        // Artifact areas (D-153): decoys while their Rogue hides, fields.
+        ...(this.sim.decoys ?? []).map((d) => ({
+          x: roundCoord(d.at.x),
+          y: roundCoord(d.at.y),
+          radius: 16,
+          remaining: 1,
+          kind: "decoy" as const,
+        })),
+        ...(this.sim.fields ?? []).map((f) => ({
+          x: roundCoord(f.at.x),
+          y: roundCoord(f.at.y),
+          radius: f.radius,
+          remaining: roundCoord(f.remaining),
+          kind: "field" as const,
+        })),
+      ],
     };
   }
 

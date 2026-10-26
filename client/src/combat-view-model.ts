@@ -246,6 +246,8 @@ export interface ZoneView {
   y: number;
   radius: number;
   remaining: number;
+  /** Absent: Nature's Reach; else an Artifact's (D-153). */
+  kind?: "decoy" | "field";
 }
 
 /** A buffed player's glow (D-098), drawn under them. */

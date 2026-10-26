@@ -499,7 +499,8 @@ describe("10c buffs and the curse (D-098)", () => {
       { x: 100, y: 80 },
     ]);
     s = applyPlayerInput(s, 1, AT(100, 0), [], TICK_SECONDS).state;
-    expect(s.enemies[0]!.curse).toEqual({ remaining: 5, bonus: 0.3 });
+    // The curse knows its Warlock (the Black Testament, D-153).
+    expect(s.enemies[0]!.curse).toEqual({ remaining: 5, bonus: 0.3, by: 1 });
     expect(s.enemies[1]!.curse).toBeUndefined(); // 80 px from the centre
     // A plain shot (not an ability) hits the cursed one for 25 × 1.3. (A
     // second player would rescale enemy HP for the party, D-045.)
