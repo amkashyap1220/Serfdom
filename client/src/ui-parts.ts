@@ -134,19 +134,6 @@ export function itemDetails(item: ItemSpec): HTMLElement[] {
   return out;
 }
 
-/**
- * A card grid inside its own scroll box. The grid itself never has a
- * height limit, so its rows can all be as tall as the tallest card (a grid
- * with a max height shares that height out instead, and cards differ).
- * The grid's size classes ("short", "pending-grid") go on the box.
- */
-export function gridBox(grid: HTMLElement): HTMLElement {
-  const sizes = [...grid.classList].filter((c) => c !== "item-grid");
-  const box = el("div", ["grid-scroll", ...sizes].join(" "));
-  box.append(grid);
-  return box;
-}
-
 /** The one floating tooltip (D-156), on screen so no scrolling list clips it. */
 let tip: HTMLElement | null = null;
 /** Shows the tooltip again for the card it shows (when its data arrives). */

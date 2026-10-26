@@ -72,7 +72,6 @@ import { ENEMY_NAMES } from "./names";
 import {
   button,
   el,
-  gridBox,
   hideTip,
   itemCard,
   moneyEl,
@@ -1210,7 +1209,7 @@ export class ScreenView {
       card.append(pour);
       grid.append(card);
     }
-    return gridBox(grid);
+    return grid;
   }
 
   /** Drink on this serf, or the reason it cannot (greyed out, D-118). */
@@ -1241,7 +1240,7 @@ export class ScreenView {
       card.append(sellButton(item, () => this.actions.sellItem(item.id)));
       grid.append(card);
     }
-    return gridBox(grid);
+    return grid;
   }
 
   /** The serf's 10 slots (D-082), each with what it wears and Unequip. */
@@ -1828,15 +1827,32 @@ function expGain(
   return box;
 }
 
-/** "Sell to Lord · +250 Bronze"; Tier 0 is worth nothing: "Discard" (D-157; the server pays the same). */
-function sellButton(item: ItemSpec, onSell: () => void): HTMLButtonElement {
-  const price = sellPrice(item);
-  const b = button(
-    price > 0 ? `Sell to Lord · +${formatMoney(price)}` : "Discard",
-    onSell,
+/**
+ * "Sell to Lord": a click shows what he pays and asks to confirm (the
+ * user, 2026-10-26). Tier 0 is worth nothing (D-157). The server pays the
+ * same.
+ */
+function sellButton(item: ItemSpec, onSell: () => void): HTMLElement {
+  const wrap = el("div", "sell-control");
+  const small = (b: HTMLButtonElement) => {
+    b.classList.add("sell");
+    return b;
+  };
+  const ask = small(
+    button("Sell to Lord", () => {
+      const price = sellPrice(item);
+      const worth = el("span", "sell-worth", "Worth ");
+      if (price > 0) worth.append(moneyEl(price));
+      else worth.textContent = "Worth nothing: it will be gone.";
+      wrap.replaceChildren(
+        worth,
+        small(button("Confirm", onSell)),
+        small(button("Cancel", () => wrap.replaceChildren(ask))),
+      );
+    }),
   );
-  b.classList.add("sell");
-  return b;
+  wrap.append(ask);
+  return wrap;
 }
 
 /** "HP 23 · MP 12 · … · LUCK 1"; a classed serf shows its maxes (D-075) too. */
