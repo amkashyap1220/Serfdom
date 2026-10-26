@@ -509,6 +509,7 @@ export class PgSerfRepo implements SerfRepo {
     wear: readonly Wear[] = [],
   ): Promise<CreateResult> {
     const client = await this.pool.connect();
+    let row: SerfRow;
     try {
       await client.query("begin");
       // Locking the account row serializes concurrent creates for one
@@ -528,12 +529,11 @@ export class PgSerfRepo implements SerfRepo {
         "insert into serfs (account_id, name) values ($1, $2) returning *",
         [accountId, name],
       );
-      const row = r.rows[0];
-      if (!row) throw new Error("insert returned no row");
+      const inserted = r.rows[0];
+      if (!inserted) throw new Error("insert returned no row");
+      row = inserted;
       await insertWorn(client, accountId, Number(row.id), wear);
       await client.query("commit");
-      const [made] = await this.withItems([fromRow(row)]);
-      return made!;
     } catch (err) {
       await client.query("rollback").catch(() => {});
       if (isPgError(err) && err.code === UNIQUE_VIOLATION) return "nameTaken";
@@ -541,6 +541,11 @@ export class PgSerfRepo implements SerfRepo {
     } finally {
       client.release();
     }
+    // Read what it wears only after giving the connection back: asking the
+    // pool for a second one while holding this one can starve the pool
+    // when many serfs are made at once.
+    const [made] = await this.withItems([fromRow(row)]);
+    return made!;
   }
 
   async find(accountId: number, serfId: number): Promise<SerfSummary | null> {

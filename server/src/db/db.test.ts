@@ -15,6 +15,7 @@ import {
   type LeaderboardQuery,
   zeroStats,
   rollArtifact,
+  STARTER_GEAR,
 } from "@serfdom/shared";
 import {
   MemorySerfRepo,
@@ -1307,6 +1308,50 @@ describe("the Exchange in PostgreSQL (D-155, D-156)", () => {
 });
 
 describe("serfs in PostgreSQL", () => {
+  it("more serfs made at once than the pool has connections all succeed (no pool starvation)", async () => {
+    const { default: pgModule } = await import("pg");
+    // Two connections, six creates with starting gear at once: each create
+    // must give its connection back before reading what the serf wears.
+    const small = new pgModule.Pool({
+      connectionString: process.env.TEST_DATABASE_URL,
+      max: 2,
+    });
+    try {
+      const accounts = new PgAccountRepo(small);
+      const repo = new PgSerfRepo(small);
+      const ids = [];
+      for (let i = 0; i < 6; i++) {
+        const acc = await accounts.createAccount(`starve${i}@b.co`, "h");
+        if (acc === "taken") throw new Error("taken");
+        ids.push(acc.id);
+      }
+      const made = await Promise.race([
+        Promise.all(
+          ids.map((id, i) =>
+            repo.create(
+              id,
+              `Starve ${String.fromCharCode(65 + i)}`,
+              2,
+              STARTER_GEAR,
+            ),
+          ),
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("creates hung: pool starved")),
+            5000,
+          ),
+        ),
+      ]);
+      for (const serf of made) {
+        if (typeof serf === "string") throw new Error(serf);
+        expect(serf.items).toHaveLength(STARTER_GEAR.length);
+      }
+    } finally {
+      await small.end();
+    }
+  });
+
   it("two creates racing for the last slot: exactly one wins", async () => {
     const a = await new PgAccountRepo(pool).createAccount("race@b.co", "h");
     if (a === "taken") throw new Error("taken");
