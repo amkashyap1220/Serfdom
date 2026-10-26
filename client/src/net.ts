@@ -7,6 +7,7 @@ import {
   type DungeonId,
   type EquipSlot,
   type LeaderboardQuery,
+  type UpgradeKind,
   type PlayerInput,
   type ServerMessage,
 } from "@serfdom/shared";
@@ -187,6 +188,11 @@ export class Connection {
 
   sendSelectSerf(serfId: number): void {
     this.send({ type: "selectSerf", serfId });
+  }
+
+  /** Buy the next step of an account upgrade (D-154). */
+  sendBuyUpgrade(kind: UpgradeKind): void {
+    this.send({ type: "buyUpgrade", kind });
   }
 
   /** Invite whoever plays this serf to your party (D-142). */

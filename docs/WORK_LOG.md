@@ -830,3 +830,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - Live (harness, **test** DB, headless): a level-20 Fighter wearing a Shiny Doomrend in the Warrens: the goblins went down, the prediction correction stayed 0.00 px, no console errors. The spectral axes show for a moment only and were not caught on a screenshot (their drawing is Chain Lightning's).
 - `npm run check`: 616 shared, 248 server, 92 client, build.
 - Next step: the user's Phase 16 test (Artifacts can be put in their stash for it on request); push after the pass.
+
+### Account upgrades bought with gold — 2026-10-26
+
+- The user asked to buy serf slots, stash space, and potion rack space with gold; prices drafted and approved (D-154). Built: shared `upgrades.ts` (the rules); migration 014 (purchase counts on the account, with checks); the repository's `upgrades`, `buyUpgrade` (price and balance checked in one write), and `addGold`; every capacity now per account (`SerfService.capacity`); protocol v53 `buyUpgrade`; an upgrade bar at the top of the Stash tab.
+- `npm run check`: 619 shared, 251 server (purchases on memory and PostgreSQL; buying over the network: refused without gold, a third serf slot that really holds a third serf, stash space), 92 client, build. Live: 3,000 gold bought the first serf slot (3/10), the next one greyed out at 4,000.

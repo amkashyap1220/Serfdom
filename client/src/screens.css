@@ -107,6 +107,34 @@
   color: #c792ff;
 }
 
+/* Account upgrades (D-154), at the top of the Stash tab. */
+.upgrade-bar {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.upgrade {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid #2c3340;
+  background: #0e1014;
+  font-size: 12px;
+}
+
+.screen .upgrade button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.screen .upgrade button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .setting {
   display: flex;
   align-items: center;

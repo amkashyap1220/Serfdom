@@ -500,6 +500,7 @@ export class GameServer {
       case "unequipItem":
       case "drinkPotion":
       case "pourPotion":
+      case "buyUpgrade":
         this.onStash(socket, session, message);
         return;
       case "partyInvite":
@@ -982,7 +983,8 @@ export class GameServer {
           | "equipItem"
           | "unequipItem"
           | "drinkPotion"
-          | "pourPotion";
+          | "pourPotion"
+          | "buyUpgrade";
       }
     >,
   ): void {
@@ -1004,6 +1006,7 @@ export class GameServer {
     if (
       message.type !== "sellItem" &&
       message.type !== "pourPotion" &&
+      message.type !== "buyUpgrade" &&
       id !== null &&
       (this.runOf.has(id) || this.matchmaker.has(id))
     ) {
@@ -1014,20 +1017,22 @@ export class GameServer {
     const attempt: Promise<
       { ok: true; price?: number } | { ok: false; reason: string }
     > =
-      message.type === "sellItem"
-        ? this.serfs.sell(accountId, message.itemId)
-        : message.type === "drinkPotion"
-          ? this.serfs.drink(accountId, message.serfId, message.potionId)
-          : message.type === "pourPotion"
-            ? this.serfs.pour(accountId, message.potionId)
-            : message.type === "equipItem"
-              ? this.serfs.equip(
-                  accountId,
-                  message.serfId,
-                  message.itemId,
-                  message.slot,
-                )
-              : this.serfs.unequip(accountId, message.serfId, message.slot);
+      message.type === "buyUpgrade"
+        ? this.serfs.buyUpgrade(accountId, message.kind)
+        : message.type === "sellItem"
+          ? this.serfs.sell(accountId, message.itemId)
+          : message.type === "drinkPotion"
+            ? this.serfs.drink(accountId, message.serfId, message.potionId)
+            : message.type === "pourPotion"
+              ? this.serfs.pour(accountId, message.potionId)
+              : message.type === "equipItem"
+                ? this.serfs.equip(
+                    accountId,
+                    message.serfId,
+                    message.itemId,
+                    message.slot,
+                  )
+                : this.serfs.unequip(accountId, message.serfId, message.slot);
     attempt
       .then(async (done) => {
         if (session.accountId !== accountId) return;
@@ -1036,15 +1041,17 @@ export class GameServer {
           return;
         }
         this.log.info(
-          message.type === "sellItem"
-            ? `${label(session)} sold item #${message.itemId} for ${done.price ?? 0} gold`
-            : message.type === "drinkPotion"
-              ? `${label(session)} serf #${message.serfId} drank potion #${message.potionId}`
-              : message.type === "pourPotion"
-                ? `${label(session)} poured out potion #${message.potionId}`
-                : message.type === "equipItem"
-                  ? `${label(session)} equipped item #${message.itemId} on serf #${message.serfId}`
-                  : `${label(session)} unequipped serf #${message.serfId} ${message.slot}`,
+          message.type === "buyUpgrade"
+            ? `${label(session)} bought ${message.kind} for ${done.price ?? 0} gold`
+            : message.type === "sellItem"
+              ? `${label(session)} sold item #${message.itemId} for ${done.price ?? 0} gold`
+              : message.type === "drinkPotion"
+                ? `${label(session)} serf #${message.serfId} drank potion #${message.potionId}`
+                : message.type === "pourPotion"
+                  ? `${label(session)} poured out potion #${message.potionId}`
+                  : message.type === "equipItem"
+                    ? `${label(session)} equipped item #${message.itemId} on serf #${message.serfId}`
+                    : `${label(session)} unequipped serf #${message.serfId} ${message.slot}`,
         );
         // The played serf's gear or waiting rewards may have changed.
         if (session.serfId !== null) {
@@ -1057,6 +1064,7 @@ export class GameServer {
         }
         this.sendStash(socket);
         if (message.type !== "sellItem" && message.type !== "pourPotion") {
+          // Equipping changes serfs; a serf slot shows in the serf list.
           this.sendSerfList(socket);
         }
       })
@@ -1511,13 +1519,12 @@ export class GameServer {
     const session = this.sessions.get(socket);
     const accountId = session?.accountId;
     if (!session || accountId == null) return;
-    this.serfs
-      .list(accountId)
-      .then((serfs) => {
+    Promise.all([this.serfs.list(accountId), this.serfs.slotsFor(accountId)])
+      .then(([serfs, slots]) => {
         if (session.accountId !== accountId) return;
         this.send(socket, {
           type: "serfList",
-          slots: this.serfs.slotCount,
+          slots,
           serfs,
           selectedId: session.serfId,
         });

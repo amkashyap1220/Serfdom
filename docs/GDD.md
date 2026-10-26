@@ -227,12 +227,12 @@ Growth (D-074–D-078, CONFIRMED): every level gained rolls each stat within a r
 - **Gold** is account-wide and survives death; it comes from selling items (D-087).
 - Stat potions not drunk at once wait in the account's **potion rack** (D-089).
 
-- An account has **2 serf slots**; a dead serf frees its slot (D-061). Buying more slots with gold is Phase 17.
+- An account has **2 serf slots** to start; a dead serf frees its slot (D-061). More can be bought with gold, up to 10 (D-154).
 - Drunk potions die with the serf; undrunk potions in the rack survive (D-118).
 
 ### Still open
 
-- Gold upgrades (more serf slots, a bigger stash and potion rack) and what happens to them on death: Phase 17 (open question 5).
+- Gold upgrades (D-154): serf slots (2 → 10, 2,000 × n gold), stash space (20 → 100, +10 for 500 × n), potion rack space (20 → 60, +10 for 1,000 × n), bought in the Stash tab; they belong to the account and survive any death.
 - The Resurrection Necklace's exact rule and its edge cases: Phase 16.
 
 ## 8. Equipment

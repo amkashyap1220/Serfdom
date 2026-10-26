@@ -623,6 +623,31 @@ function serfContract(
       expect(await repo.addLoot(b, serf.id, [RING], 16)).toBeNull();
     });
 
+    it("buys upgrades with gold, once per price, never past the max or the balance (D-154)", async () => {
+      const { repo, account } = await make();
+      const a = await account();
+      expect(await repo.upgrades(a)).toEqual({
+        serfSlots: 0,
+        stash: 0,
+        rack: 0,
+      });
+      // No gold: refused.
+      expect(await repo.buyUpgrade(a, "stash", 0, 500)).toBe(false);
+      await repo.addGold(a, 1200);
+      expect(await repo.buyUpgrade(a, "stash", 0, 500)).toBe(true);
+      // A repeat of the same purchase (stale count) is refused.
+      expect(await repo.buyUpgrade(a, "stash", 0, 500)).toBe(false);
+      expect(await repo.upgrades(a)).toEqual({
+        serfSlots: 0,
+        stash: 1,
+        rack: 0,
+      });
+      expect((await repo.stash(a)).gold).toBe(700);
+      // Not enough for the next.
+      expect(await repo.buyUpgrade(a, "stash", 1, 1000)).toBe(false);
+      expect((await repo.stash(a)).gold).toBe(700);
+    });
+
     it("keeps an Artifact and a Shiny item as they dropped (D-152, D-153)", async () => {
       const { repo, account } = await make();
       const a = await account();

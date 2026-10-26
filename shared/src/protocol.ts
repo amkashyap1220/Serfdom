@@ -30,6 +30,7 @@ import {
 } from "./serf-rules.ts";
 import type { Vec2 } from "./geometry.ts";
 import { ARTIFACT_TIER } from "./artifacts.ts";
+import { isUpgradeKind, type UpgradeKind } from "./upgrades.ts";
 import {
   RUN_RESULTS,
   RUN_STAT_KEYS,
@@ -70,6 +71,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v53: client buyUpgrade {kind} (D-154); the stash's capacities and the
+ *          serf list's slots are now each account's own.
  * v52 (16d): snapshot zones may be a Vanish decoy or a Conduit field
  *          (`kind`, D-153).
  * v51 (16c): snapshot players carry `boost` (the Hide of the First
@@ -179,7 +182,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 52;
+export const PROTOCOL_VERSION = 53;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -260,7 +263,9 @@ export type ClientMessage =
   | { type: "partyAnswer"; inviteId: number; accept: boolean }
   | { type: "partyLeave" }
   /** The leader removes a member (D-143). */
-  | { type: "partyKick"; playerId: number };
+  | { type: "partyKick"; playerId: number }
+  /** Buy the next step of an account upgrade with gold (D-154). */
+  | { type: "buyUpgrade"; kind: UpgradeKind };
 
 /** A party member as others see them: their serf (null while choosing one). */
 export interface PartyMember {
@@ -988,6 +993,12 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
           accept: obj.accept,
         },
       };
+    case "buyUpgrade":
+      if (!hasExactKeys(obj, ["type", "kind"])) {
+        return fail("buyUpgrade: unexpected fields");
+      }
+      if (!isUpgradeKind(obj.kind)) return fail("buyUpgrade: unknown upgrade");
+      return { ok: true, message: { type: "buyUpgrade", kind: obj.kind } };
     case "partyLeave":
       if (!hasExactKeys(obj, ["type"])) {
         return fail("partyLeave: unexpected fields");

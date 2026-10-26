@@ -2287,3 +2287,55 @@ describe("the Resurrection Necklace on the server (16c, D-153)", () => {
     ).toBe(false);
   });
 });
+
+describe("account upgrades (D-154)", () => {
+  it("buys a serf slot and stash space with gold; the server checks the balance", async () => {
+    await server.close();
+    const repo = new MemorySerfRepo();
+    server = await GameServer.start({
+      allowTestDungeons: true,
+      accounts: testAccounts(),
+      serfs: new SerfService(repo),
+      port: 0,
+      autoTick: false,
+      queueWaitSeconds: 0,
+      log: silentLogger,
+    });
+    const { client } = await joined();
+    const buy = (kind: string) =>
+      client.send(JSON.stringify({ type: "buyUpgrade", kind }));
+    buy("serfSlots");
+    expect((await nextOfType(client, "stashError")).reason).toBe(
+      "Not enough gold: it costs 2000.",
+    );
+    await repo.addGold(1, 2500);
+    buy("serfSlots");
+    for (let i = 0; i < 10; i++) {
+      const list = await nextOfType(client, "serfList");
+      if (list.slots === 3) break;
+    }
+    // Three living serfs now fit (joined() made the first); one at a time,
+    // as the server takes one serf request at a time.
+    for (const name of ["Second Serf", "Third Serf"]) {
+      client.send(encodeMessage({ type: "createSerf", name }));
+      for (let i = 0; i < 10; i++) {
+        const list = await nextOfType(client, "serfList");
+        if (list.serfs.some((x) => x.name === name)) break;
+      }
+    }
+    client.send(encodeMessage({ type: "createSerf", name: "Fourth Serf" }));
+    expect((await nextOfType(client, "serfError")).reason).toBe(
+      "You already have 3 living serfs.",
+    );
+    // 500 gold left: one step of stash space.
+    buy("stash");
+    let stash = await nextOfType(client, "stash");
+    while (stash.capacity !== 30) stash = await nextOfType(client, "stash");
+    expect(stash.gold).toBe(0);
+    // An unknown upgrade is a malformed message.
+    buy("castle");
+    expect((await nextOfType(client, "error")).reason).toBe(
+      "buyUpgrade: unknown upgrade",
+    );
+  });
+});

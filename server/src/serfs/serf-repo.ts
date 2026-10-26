@@ -30,6 +30,9 @@ import {
   drinkPotionTally,
   zeroStats,
   type ArtifactId,
+  NO_UPGRADES,
+  type UpgradeKind,
+  type Upgrades,
 } from "@serfdom/shared";
 import type pg from "pg";
 
@@ -84,6 +87,20 @@ export interface SerfRepo {
     query: LeaderboardQuery,
     limit: number,
   ): Promise<LeaderboardEntry[]>;
+  /** How many of each upgrade the account has bought (D-154). */
+  upgrades(accountId: number): Promise<Upgrades>;
+  /** Adds gold to an account (tests and admin scripts; play earns it by selling). */
+  addGold(accountId: number, amount: number): Promise<void>;
+  /**
+   * Buys one more of `kind` for `price` gold, only if the account still has
+   * `expected` of it and enough gold, in one write. False if not.
+   */
+  buyUpgrade(
+    accountId: number,
+    kind: UpgradeKind,
+    expected: number,
+    price: number,
+  ): Promise<boolean>;
   /** Deletes the worn item that is this Artifact (D-153); false if there is none. */
   destroyWorn(
     accountId: number,
@@ -954,6 +971,48 @@ export class PgSerfRepo implements SerfRepo {
     );
   }
 
+  async upgrades(accountId: number): Promise<Upgrades> {
+    const r = await this.pool.query<{
+      serf_slots_bought: number;
+      stash_bought: number;
+      rack_bought: number;
+    }>(
+      "select serf_slots_bought, stash_bought, rack_bought from accounts where id = $1",
+      [accountId],
+    );
+    const row = r.rows[0];
+    return row
+      ? {
+          serfSlots: row.serf_slots_bought,
+          stash: row.stash_bought,
+          rack: row.rack_bought,
+        }
+      : { ...NO_UPGRADES };
+  }
+
+  async addGold(accountId: number, amount: number): Promise<void> {
+    await this.pool.query(
+      "update accounts set gold = gold + $2 where id = $1",
+      [accountId, amount],
+    );
+  }
+
+  async buyUpgrade(
+    accountId: number,
+    kind: UpgradeKind,
+    expected: number,
+    price: number,
+  ): Promise<boolean> {
+    // A fixed column per kind: never built from the request.
+    const column = UPGRADE_COLUMNS[kind];
+    const r = await this.pool.query(
+      `update accounts set gold = gold - $3, ${column} = ${column} + 1
+       where id = $1 and ${column} = $2 and gold >= $3`,
+      [accountId, expected, price],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
+
   async destroyWorn(
     accountId: number,
     serfId: number,
@@ -1038,6 +1097,13 @@ function toEntry(
     partySize,
   };
 }
+
+/** Where each upgrade's purchases are stored (migration 014). */
+const UPGRADE_COLUMNS: Record<UpgradeKind, string> = {
+  serfSlots: "serf_slots_bought",
+  stash: "stash_bought",
+  rack: "rack_bought",
+};
 
 /** A completed run, for the fastest clears (D-148). */
 export interface Clear {
@@ -1248,6 +1314,30 @@ export class MemorySerfRepo implements SerfRepo {
       .sort((a, b) => score(b) - score(a) || a.summary.id - b.summary.id)
       .slice(0, limit)
       .map((s, i) => entry(s, i, score(s), null));
+  }
+
+  private readonly bought = new Map<number, Upgrades>();
+
+  async addGold(accountId: number, amount: number): Promise<void> {
+    this.gold.set(accountId, (this.gold.get(accountId) ?? 0) + amount);
+  }
+
+  async upgrades(accountId: number): Promise<Upgrades> {
+    return { ...(this.bought.get(accountId) ?? NO_UPGRADES) };
+  }
+
+  async buyUpgrade(
+    accountId: number,
+    kind: UpgradeKind,
+    expected: number,
+    price: number,
+  ): Promise<boolean> {
+    const now = this.bought.get(accountId) ?? { ...NO_UPGRADES };
+    const gold = this.gold.get(accountId) ?? 0;
+    if (now[kind] !== expected || gold < price) return false;
+    this.gold.set(accountId, gold - price);
+    this.bought.set(accountId, { ...now, [kind]: now[kind] + 1 });
+    return true;
   }
 
   async destroyWorn(

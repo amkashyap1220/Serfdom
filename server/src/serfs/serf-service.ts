@@ -1,9 +1,7 @@
 import {
   normalizeSerfName,
-  SERF_SLOTS,
   serfNameProblem,
   addStats,
-  STASH_SIZE,
   canEquip,
   CLASS_ABILITY_ITEM,
   itemName,
@@ -14,7 +12,6 @@ import {
   type LootDrop,
   potionProblem,
   type PotionDrop,
-  RACK_SIZE,
   rollPotions,
   applyGains,
   CLASS_CHOICE_LEVEL,
@@ -35,6 +32,10 @@ import {
   type RunResult,
   type RunStats,
   type SerfSummary,
+  capacityOf,
+  nextPrice,
+  UPGRADES,
+  type UpgradeKind,
 } from "@serfdom/shared";
 import type { Death, SerfRepo, Stash } from "./serf-repo.ts";
 
@@ -58,7 +59,8 @@ export class SerfService {
 
   constructor(
     repo: SerfRepo,
-    slots: number = SERF_SLOTS,
+    /** Serf slots before any are bought (D-061; tests may give fewer). */
+    slots: number = UPGRADES.serfSlots.base,
     random: () => number = Math.random,
   ) {
     this.repo = repo;
@@ -66,8 +68,40 @@ export class SerfService {
     this.random = random;
   }
 
-  get slotCount(): number {
-    return this.slots;
+  /** This account's capacity of each upgradable thing (D-154). */
+  async capacity(accountId: number, kind: UpgradeKind): Promise<number> {
+    const bought = (await this.repo.upgrades(accountId))[kind];
+    return kind === "serfSlots"
+      ? this.slots + UPGRADES.serfSlots.step * bought
+      : capacityOf(kind, bought);
+  }
+
+  /** Living serfs this account may have at once (2, plus those bought). */
+  slotsFor(accountId: number): Promise<number> {
+    return this.capacity(accountId, "serfSlots");
+  }
+
+  /**
+   * Buys the next step of an upgrade with gold (D-154): the price and the
+   * balance are checked in the same write, so a repeated or stale request
+   * cannot buy twice or for less.
+   */
+  async buyUpgrade(
+    accountId: number,
+    kind: UpgradeKind,
+  ): Promise<{ ok: true; price: number } | { ok: false; reason: string }> {
+    const bought = (await this.repo.upgrades(accountId))[kind];
+    const price = nextPrice(kind, bought);
+    if (price === null) {
+      return {
+        ok: false,
+        reason: `${UPGRADES[kind].name}s are at their most.`,
+      };
+    }
+    const done = await this.repo.buyUpgrade(accountId, kind, bought, price);
+    if (!done)
+      return { ok: false, reason: `Not enough gold: it costs ${price}.` };
+    return { ok: true, price };
   }
 
   list(accountId: number): Promise<SerfSummary[]> {
@@ -78,11 +112,12 @@ export class SerfService {
     const name = normalizeSerfName(rawName);
     const problem = serfNameProblem(name);
     if (problem) return { ok: false, reason: problem };
-    const created = await this.repo.create(accountId, name, this.slots);
+    const slots = await this.slotsFor(accountId);
+    const created = await this.repo.create(accountId, name, slots);
     if (created === "slotsFull") {
       return {
         ok: false,
-        reason: `You already have ${this.slots} living serfs.`,
+        reason: `You already have ${slots} living serfs.`,
       };
     }
     if (created === "nameTaken") {
@@ -183,7 +218,7 @@ export class SerfService {
       accountId,
       serf.id,
       won,
-      RACK_SIZE,
+      await this.capacity(accountId, "rack"),
     );
     return drops ?? [];
   }
@@ -208,7 +243,7 @@ export class SerfService {
       accountId,
       serf.id,
       items,
-      STASH_SIZE,
+      await this.capacity(accountId, "stash"),
     );
     return drops ?? [];
   }
@@ -219,8 +254,8 @@ export class SerfService {
   ): Promise<Stash & { capacity: number; rackCapacity: number }> {
     return {
       ...(await this.repo.stash(accountId)),
-      capacity: STASH_SIZE,
-      rackCapacity: RACK_SIZE,
+      capacity: await this.capacity(accountId, "stash"),
+      rackCapacity: await this.capacity(accountId, "rack"),
     };
   }
 
@@ -249,7 +284,7 @@ export class SerfService {
       accountId,
       serfId,
       potionId,
-      RACK_SIZE,
+      await this.capacity(accountId, "rack"),
     );
     if (!done) return { ok: false, reason: "No such potion in your rack." };
     if ("refused" in done) return { ok: false, reason: done.refused };
@@ -261,7 +296,11 @@ export class SerfService {
     accountId: number,
     potionId: number,
   ): Promise<{ ok: true } | { ok: false; reason: string }> {
-    const poured = await this.repo.pourPotion(accountId, potionId, RACK_SIZE);
+    const poured = await this.repo.pourPotion(
+      accountId,
+      potionId,
+      await this.capacity(accountId, "rack"),
+    );
     return poured
       ? { ok: true }
       : { ok: false, reason: "No such potion in your rack." };
@@ -272,7 +311,11 @@ export class SerfService {
     accountId: number,
     itemId: number,
   ): Promise<{ ok: true; price: number } | { ok: false; reason: string }> {
-    const sold = await this.repo.sell(accountId, itemId, STASH_SIZE);
+    const sold = await this.repo.sell(
+      accountId,
+      itemId,
+      await this.capacity(accountId, "stash"),
+    );
     // Someone else's item looks exactly like one that does not exist.
     return sold
       ? { ok: true, price: sold.price }
@@ -315,7 +358,7 @@ export class SerfService {
       serfId,
       itemId,
       slot,
-      STASH_SIZE,
+      await this.capacity(accountId, "stash"),
     );
     return done
       ? { ok: true }
@@ -328,7 +371,12 @@ export class SerfService {
     serfId: number,
     slot: EquipSlot,
   ): Promise<{ ok: true } | { ok: false; reason: string }> {
-    const done = await this.repo.unequip(accountId, serfId, slot, STASH_SIZE);
+    const done = await this.repo.unequip(
+      accountId,
+      serfId,
+      slot,
+      await this.capacity(accountId, "stash"),
+    );
     if (done === "ok") return { ok: true };
     return {
       ok: false,

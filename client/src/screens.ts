@@ -42,6 +42,11 @@ import {
   type ServerMessage,
   type PartyInviter,
   MAX_LEVEL,
+  boughtFor,
+  nextPrice,
+  UPGRADE_KINDS,
+  UPGRADES,
+  type UpgradeKind,
   BASE_LUCK,
   MAX_PARTY_SIZE,
   sellPrice,
@@ -96,6 +101,8 @@ export interface ScreenActions {
   setDebugHud(on: boolean): void;
   /** Another leaderboard or filter (D-148). */
   getLeaderboard(query: LeaderboardQuery): void;
+  /** Buy the next step of an account upgrade with gold (D-154). */
+  buyUpgrade(kind: UpgradeKind): void;
 }
 
 /** The death screen's Return button appears after this, so the moment lands (D-050). */
@@ -713,6 +720,42 @@ export class ScreenView {
     return side;
   }
 
+  /**
+   * Account upgrades (D-154): each one's capacity, the next step's price,
+   * and Buy (greyed out at the max or without the gold). The server checks
+   * again; prices come from the shared rules.
+   */
+  private upgradeBar(
+    stash: Extract<ServerMessage, { type: "stash" }>,
+  ): HTMLElement {
+    const bar = el("div", "upgrade-bar");
+    const have: Record<UpgradeKind, number> = {
+      serfSlots: this.serfs?.slots ?? UPGRADES.serfSlots.base,
+      stash: stash.capacity,
+      rack: stash.rackCapacity,
+    };
+    for (const kind of UPGRADE_KINDS) {
+      const u = UPGRADES[kind];
+      const price = nextPrice(kind, boughtFor(kind, have[kind]));
+      const row = el("div", "upgrade");
+      row.append(
+        el("span", "upgrade-name", `${u.name}s ${have[kind]}/${u.max}`),
+      );
+      if (price === null) {
+        row.append(el("span", "hint", "All bought"));
+      } else {
+        const buy = button(
+          `+${u.step} · ${price.toLocaleString("en")} gold`,
+          () => this.actions.buyUpgrade(kind),
+        );
+        buy.disabled = stash.gold < price;
+        row.append(buy);
+      }
+      bar.append(row);
+    }
+    return bar;
+  }
+
   /** Settings (D-145): only the debug readout for now; key binds and more are Phase 18. */
   private buildSettings(body: HTMLElement): void {
     body.append(el("h2", "", "Settings"));
@@ -1009,6 +1052,7 @@ export class ScreenView {
       return;
     }
     if (this.stashError) body.append(el("p", "error", this.stashError));
+    body.append(this.upgradeBar(stash));
     const playing = this.playing;
     if (playing) body.append(this.gearPanel(playing));
     if (stash.pending.length > 0) {

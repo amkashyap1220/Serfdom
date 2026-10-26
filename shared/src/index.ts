@@ -585,3 +585,15 @@ export {
   type ArtifactDef,
   type ArtifactId,
 } from "./artifacts.ts";
+export {
+  boughtFor,
+  capacityOf,
+  isUpgradeKind,
+  maxBought,
+  nextPrice,
+  NO_UPGRADES,
+  UPGRADE_KINDS,
+  UPGRADES,
+  type UpgradeKind,
+  type Upgrades,
+} from "./upgrades.ts";

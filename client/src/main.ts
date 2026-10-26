@@ -152,6 +152,7 @@ game.events.once(Phaser.Core.Events.READY, () => {
     removeMember: (playerId) => net.connection.sendPartyKick(playerId),
     setDebugHud: (on) => setDebug(on),
     getLeaderboard: (query) => net.connection.sendGetLeaderboard(query),
+    buyUpgrade: (kind) => net.connection.sendBuyUpgrade(kind),
   });
   const setDebug = (on: boolean) => {
     debugHud = on;
