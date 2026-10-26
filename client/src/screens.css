@@ -167,12 +167,28 @@
   background: #f0c419;
 }
 
+/* Label, total, gear, potions (D-151): numbers right-aligned in columns. */
 .side-stats {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1px 8px;
+  grid-template-columns: 34px 40px 52px 56px;
+  gap: 1px 6px;
   margin: 4px 0 0;
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-stats dd {
+  text-align: right;
+}
+
+.side-stats .st-head {
+  color: #8a94a6;
+  font-size: 10px;
+}
+
+.side-stats .st-head.src-gear,
+.side-stats .st-head.src-potion {
+  opacity: 0.8;
 }
 
 .side-stats dt {

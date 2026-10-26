@@ -646,16 +646,25 @@ export class ScreenView {
             : `${p.into} / ${p.needed} EXP to level ${p.level + 1}`,
         ),
       );
+      // A table: the label, then the total, gear, and potions, each in its
+      // own right-aligned column; the headings are the key (D-151).
       const stats = el("dl", "side-stats");
+      stats.append(
+        el("dt", "", ""),
+        el("dd", "st-head", "Total"),
+        el("dd", "st-head src-gear", "Gear"),
+        el("dd", "st-head src-potion", "Potions"),
+      );
       for (const key of [...STAT_KEYS, "luck" as const]) {
-        const value = el("dd", "");
-        value.append(statNode(serf, key));
+        const { total, gear, potions } = statParts(serf, key);
         stats.append(
           el("dt", "", key === "luck" ? "LUCK" : STAT_LABELS[key]),
-          value,
+          el("dd", "", String(total)),
+          el("dd", "src-gear", gear !== 0 ? signed(gear) : ""),
+          el("dd", "src-potion", potions !== 0 ? signed(potions) : ""),
         );
       }
-      card.append(stats, statKey());
+      card.append(stats);
       const worn = serf.items.filter((i) => i.equipped !== null);
       card.append(
         el(
@@ -1866,17 +1875,6 @@ export function statNode(
   if (gear !== 0) out.append(" ", el("span", "src-gear", signed(gear)));
   if (potions !== 0) out.append(" ", el("span", "src-potion", signed(potions)));
   return out;
-}
-
-/** The key to the brackets' colours, under stat lists (D-151). */
-export function statKey(): HTMLElement {
-  const p = el("p", "side-gear", "Total ");
-  p.append(
-    el("span", "src-gear", "(+gear)"),
-    " ",
-    el("span", "src-potion", "(+potions)"),
-  );
-  return p;
 }
 
 /** Display names of the 10 worn slots (D-082). */
