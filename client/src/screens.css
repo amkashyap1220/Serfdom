@@ -1502,3 +1502,23 @@ button.sell {
   border-color: #f0c419;
   color: #f0c419;
 }
+
+/* First-run cards (D-159). Placeholder colours. */
+.first-run {
+  max-width: 820px;
+  margin: 0 auto 8px;
+  padding: 8px 14px;
+  border: 1px solid #f0c419;
+  background: #1c1a10;
+  color: #e8e2c8;
+  text-align: left;
+}
+
+.first-run h3 {
+  margin: 0 0 4px;
+  color: #f0c419;
+}
+
+.first-run p {
+  margin: 0 0 6px;
+}

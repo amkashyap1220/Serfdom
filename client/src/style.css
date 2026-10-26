@@ -102,6 +102,30 @@ body {
   flex: 0 0 960px;
   height: 800px;
   overflow: hidden;
+  /* The anchor for the hint banner. */
+  position: relative;
+}
+
+/* A first-run hint (D-159). Placeholder colours. */
+.hint-banner {
+  position: absolute;
+  z-index: 5;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 620px;
+  margin: 0;
+  padding: 8px 16px;
+  border: 1px solid #f0c419;
+  background: #12151bdd;
+  color: #ffffff;
+  font-size: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.hint-banner[hidden] {
+  display: none;
 }
 
 #gameplay canvas {

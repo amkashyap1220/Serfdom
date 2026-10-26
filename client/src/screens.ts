@@ -74,6 +74,7 @@ import {
   type FireMode,
   type KeyBinds,
   type Settings,
+  type HintId,
 } from "@serfdom/shared";
 import {
   accuracy,
@@ -246,6 +247,40 @@ export class ScreenView {
       }
     }
     this.shown = null;
+  }
+
+  /** Whether a first-run hint should show: hints on, and not seen yet (D-159). */
+  private hintDue(id: HintId): boolean {
+    return this.settings.hints && !this.settings.seenHints.includes(id);
+  }
+
+  /** Marks a hint seen for the account; `redraw` when its card should go now. */
+  private markSeen(id: HintId, redraw: boolean): void {
+    if (this.settings.seenHints.includes(id)) return;
+    this.settings = {
+      ...this.settings,
+      seenHints: [...this.settings.seenHints, id],
+    };
+    this.actions.saveSettings(this.settings);
+    if (redraw) this.shown = null;
+  }
+
+  /** The welcome card at the top of the home screen, until Got it (D-159). */
+  private welcomeCard(): HTMLElement {
+    const serf = this.playing;
+    const card = el("div", "first-run");
+    card.append(
+      el("h3", "", serf ? `Welcome, ${serf.name}!` : "Welcome to Serfdom!"),
+      el(
+        "p",
+        "",
+        serf
+          ? "Your serf grows by clearing dungeons. Open Play and enter the Goblin Warrens (or press Enter) for your first run; tips appear while you play. At level 5 your serf picks a class."
+          : "Start by naming your first serf below. Serfs level up by clearing dungeons, and every serf you make shares your stash and money.",
+      ),
+      button("Got it", () => this.markSeen("welcome", true)),
+    );
+    return card;
   }
 
   private saveBinds(binds: KeyBinds): void {
@@ -716,6 +751,7 @@ export class ScreenView {
     const main = el("div", "home-main");
     main.append(account, nav);
     if (notice) main.append(el("p", "notice", notice));
+    if (this.hintDue("welcome")) main.append(this.welcomeCard());
     main.append(body);
     const home = el("div", "home");
     home.append(this.homeSide(), main);
@@ -946,6 +982,22 @@ export class ScreenView {
       ` Show the debug readout in the HUD (the ${keyName(binds.debug)} key; this device only)`,
     );
     body.append(label);
+    // First-run hints (D-159).
+    const hints = document.createElement("label");
+    hints.className = "setting";
+    const hintBox = document.createElement("input");
+    hintBox.type = "checkbox";
+    hintBox.checked = set.hints;
+    hintBox.addEventListener("change", () =>
+      this.actions.saveSettings({ ...set, hints: hintBox.checked }),
+    );
+    hints.append(hintBox, " Show hints");
+    body.append(
+      hints,
+      button("Show all hints again", () =>
+        this.actions.saveSettings({ ...set, hints: true, seenHints: [] }),
+      ),
+    );
     // Full screen (D-159): the game box grows to fill it; F11 works too.
     const full = document.fullscreenElement !== null;
     body.append(
@@ -1794,8 +1846,20 @@ export class ScreenView {
       chest,
       this.lootReveal(screen),
       this.potionReveal(screen),
-      actions,
     );
+    // The first clear's tip (D-159): shown once, marked seen at once
+    // (quietly, so the reveal animations are not restarted).
+    if (this.hintDue("firstClear")) {
+      this.markSeen("firstClear", false);
+      this.root.append(
+        el(
+          "p",
+          "first-run",
+          "Your loot went to your Stash (the Stash tab): wear it there, or Sell to Lord. Clear more dungeons to level up; at level 5 your serf picks a class.",
+        ),
+      );
+    }
+    this.root.append(actions);
   }
 
   /** To the Stash tab (or the Potion rack, D-118), where waiting rewards are settled. */

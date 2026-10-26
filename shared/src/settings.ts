@@ -28,15 +28,44 @@ export const DEFAULT_BINDS: KeyBinds = Object.fromEntries(
   GAME_ACTIONS.map((a) => [a.id, a.key]),
 ) as KeyBinds;
 
+/**
+ * The first-run hints (D-159), each shown once per account, in this order
+ * as their moments come: the welcome card, then in runs, then after the
+ * first clear.
+ */
+export const HINTS = [
+  "welcome",
+  "move",
+  "fire",
+  "turn",
+  "dodge",
+  "boss",
+  "portal",
+  "leave",
+  "ability",
+  "firstClear",
+] as const;
+export type HintId = (typeof HINTS)[number];
+
+export function isHintId(v: unknown): v is HintId {
+  return (HINTS as readonly unknown[]).includes(v);
+}
+
 export interface Settings {
   binds: KeyBinds;
   /** The fire mode, kept between runs; the fire mode key cycles it. */
   fireMode: FireMode;
+  /** Show the first-run hints (Settings: Show hints). */
+  hints: boolean;
+  /** The hints already shown. */
+  seenHints: HintId[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   binds: DEFAULT_BINDS,
   fireMode: DEFAULT_FIRE_MODE,
+  hints: true,
+  seenHints: [],
 };
 
 /** Keys the menus keep for themselves: never bindable. */
@@ -121,13 +150,26 @@ export function isValidBinds(v: unknown): v is KeyBinds {
 export function parseSettings(v: unknown): Settings | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
-  if (Object.keys(o).length !== 2) return null;
+  if (Object.keys(o).length !== 4) return null;
   if (!isValidBinds(o.binds)) return null;
   if (!(FIRE_MODES as readonly unknown[]).includes(o.fireMode)) return null;
+  if (typeof o.hints !== "boolean" || !isValidSeen(o.seenHints)) return null;
   return {
     binds: { ...(o.binds as KeyBinds) },
     fireMode: o.fireMode as FireMode,
+    hints: o.hints,
+    seenHints: [...o.seenHints],
   };
+}
+
+/** Known hints, each at most once. */
+function isValidSeen(v: unknown): v is HintId[] {
+  return (
+    Array.isArray(v) &&
+    v.length <= HINTS.length &&
+    v.every(isHintId) &&
+    new Set(v).size === v.length
+  );
 }
 
 /**
@@ -144,5 +186,7 @@ export function settingsOrDefaults(v: unknown): Settings {
     fireMode: (FIRE_MODES as readonly unknown[]).includes(o.fireMode)
       ? (o.fireMode as FireMode)
       : DEFAULT_FIRE_MODE,
+    hints: typeof o.hints === "boolean" ? o.hints : true,
+    seenHints: isValidSeen(o.seenHints) ? [...o.seenHints] : [],
   };
 }

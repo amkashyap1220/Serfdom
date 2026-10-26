@@ -13,6 +13,10 @@ import {
   DEFAULT_SETTINGS,
   keyName,
   type Settings,
+  type HintId,
+  type KeyBinds,
+  type FireMode,
+  type Vec2,
 } from "@serfdom/shared";
 import "./style.css";
 import "./screens.css";
@@ -37,6 +41,8 @@ import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
 import { fitGameToWindow, fitWindow } from "./window-fit";
+import { RunHints, type RunFacts } from "./hint-rules";
+import { bossBar } from "./boss-bar";
 import type { ConnectionStatus } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
 import { ScreenView, statText } from "./screens";
@@ -351,6 +357,12 @@ game.events.once(Phaser.Core.Events.READY, () => {
       scene.setGameKeysActive(screen.kind === "inRun");
       scene.setDebugVisible(debugHud);
       renderHud(scene);
+      updateHints(scene, screen.kind === "inRun", (id) => {
+        if (settings.seenHints.includes(id)) return;
+        const next = { ...settings, seenHints: [...settings.seenHints, id] };
+        applySettings(next);
+        net.connection.sendSaveSettings(next);
+      });
       // The debug readout costs work every frame; only while shown.
       if (debugHud) reportLive(game);
     });
@@ -367,6 +379,100 @@ game.events.once(Phaser.Core.Events.READY, () => {
     },
   );
 });
+
+/** In-run first-run hints (D-159): what has happened this run, and the banner. */
+const runHints = new RunHints();
+const hintBanner = requireElement("hint");
+let runFacts:
+  (RunFacts & { startedAt: number; start: Vec2; startMode: FireMode }) | null =
+  null;
+
+/**
+ * Updates the hint banner every frame in a run. A finished hint is marked
+ * seen on the account through `markSeen`; nothing shows while hints are off.
+ */
+function updateHints(
+  scene: WorldScene,
+  inRun: boolean,
+  markSeen: (id: HintId) => void,
+): void {
+  if (!inRun) {
+    runFacts = null;
+    hintBanner.hidden = true;
+    return;
+  }
+  const { local, net, view, viewRotation, fireMode, keys } =
+    scene.getDebugState();
+  const now = performance.now() / 1000;
+  if (!runFacts) {
+    runHints.reset();
+    runFacts = {
+      startedAt: now,
+      start: { ...local.position },
+      startMode: fireMode,
+      seconds: 0,
+      moved: false,
+      fireModeChanged: false,
+      turned: false,
+      hurt: false,
+      bossVisible: false,
+      portalOpen: false,
+      hasAbility: false,
+      abilityUsed: false,
+    };
+  }
+  const f = runFacts;
+  f.seconds = now - f.startedAt;
+  f.moved ||=
+    Math.hypot(local.position.x - f.start.x, local.position.y - f.start.y) > 24;
+  f.fireModeChanged ||= fireMode !== f.startMode;
+  f.turned ||= viewRotation !== 0;
+  f.hurt ||= local.hp > 0 && local.hp < local.maxHp;
+  f.bossVisible = view.enemies.some(
+    (e) => e.hp > 0 && bossBar(e.kind, e.hp, e.maxHp) !== undefined,
+  );
+  f.portalOpen = view.portalOpen;
+  f.hasAbility = net.online && net.myAbility !== null;
+  f.abilityUsed ||= keys.ability;
+  if (!settings.hints) {
+    hintBanner.hidden = true;
+    return;
+  }
+  const { show, finished } = runHints.update(f, new Set(settings.seenHints));
+  if (finished) markSeen(finished);
+  const text = show ? hintText(show, settings.binds, fireMode) : "";
+  if (hintBanner.textContent !== text) hintBanner.textContent = text;
+  hintBanner.hidden = !show;
+}
+
+/** A hint's words, naming the account's own keys (D-159). */
+function hintText(id: HintId, binds: KeyBinds, fireMode: FireMode): string {
+  const k = (a: keyof KeyBinds) => keyName(binds[a]);
+  switch (id) {
+    case "move":
+      return `${k("up")} ${k("left")} ${k("down")} ${k("right")} to move.`;
+    case "fire":
+      return fireMode === "manual"
+        ? `Hold left click to fire at the mouse. ${k("fireMode")} changes the fire mode.`
+        : fireMode === "autoFire"
+          ? `You fire toward the mouse all the time. ${k("fireMode")} changes the fire mode.`
+          : `Your serf attacks by itself when an enemy is in reach (${FIRE_MODE_LABELS[fireMode]}). ${k("fireMode")} changes the fire mode.`;
+    case "turn":
+      return `${k("turnLeft")} and ${k("turnRight")} turn the view; ${k("resetView")} puts it back.`;
+    case "dodge":
+      return "Enemies fight back: keep moving to dodge their shots.";
+    case "boss":
+      return "A boss! Defeat it to open the way out.";
+    case "portal":
+      return "The portal is open: walk into it to finish the dungeon.";
+    case "leave":
+      return `${k("leave")} leaves the dungeon at once, but a run you leave earns nothing.`;
+    case "ability":
+      return `${k("ability")} uses your class ability (it costs MP).`;
+    default:
+      return "";
+  }
+}
 
 /** The player HUD (D-146), every frame. */
 function renderHud(scene: WorldScene): void {

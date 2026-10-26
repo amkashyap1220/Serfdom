@@ -40,7 +40,10 @@
           <dl id="hud-layout" class="debug-list"></dl>
         </div>
       </aside>
-      <main id="gameplay"></main>
+      <main id="gameplay">
+        <!-- First-run hints over the top of the view (D-159); never takes the mouse. -->
+        <p id="hint" class="hint-banner" hidden></p>
+      </main>
       <!-- Menu, queue, death and completion screens (screens.ts). -->
       <section id="screen" class="screen"></section>
     </div>

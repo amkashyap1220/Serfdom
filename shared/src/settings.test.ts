@@ -82,8 +82,31 @@ describe("settings (D-159)", () => {
     expect(isValidBinds(missing)).toBe(false);
     expect(settingsOrDefaults(null)).toEqual(DEFAULT_SETTINGS);
     expect(settingsOrDefaults({ fireMode: "manual", binds: twice })).toEqual({
-      binds: DEFAULT_BINDS,
+      ...DEFAULT_SETTINGS,
       fireMode: "manual",
+    });
+  });
+});
+
+describe("first-run hints in settings (D-159)", () => {
+  it("are on, and none seen, by default; seen ones must be known and once each", () => {
+    expect(DEFAULT_SETTINGS.hints).toBe(true);
+    expect(DEFAULT_SETTINGS.seenHints).toEqual([]);
+    const seen = { ...DEFAULT_SETTINGS, seenHints: ["welcome", "move"] };
+    expect(parseSettings(seen)).toEqual(seen);
+    expect(
+      parseSettings({ ...DEFAULT_SETTINGS, seenHints: ["welcome", "welcome"] }),
+    ).toBeNull();
+    expect(
+      parseSettings({ ...DEFAULT_SETTINGS, seenHints: ["secret"] }),
+    ).toBeNull();
+    expect(parseSettings({ ...DEFAULT_SETTINGS, hints: "yes" })).toBeNull();
+    // Older saves without hints read as hints on, none seen.
+    expect(
+      settingsOrDefaults({ binds: DEFAULT_BINDS, fireMode: "manual" }),
+    ).toMatchObject({
+      hints: true,
+      seenHints: [],
     });
   });
 });
