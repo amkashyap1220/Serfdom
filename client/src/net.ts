@@ -37,6 +37,7 @@ export type LobbyMessage = Extract<
     type:
       | "queueStatus"
       | "queueLeft"
+      | "rooms"
       | "runStarted"
       | "runEnded"
       | "authOk"
@@ -282,6 +283,7 @@ export class Connection {
         break;
       case "queueStatus":
       case "queueLeft":
+      case "rooms":
       case "runStarted":
       case "runEnded":
       case "authOk":

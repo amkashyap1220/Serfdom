@@ -178,6 +178,8 @@ export class GameServer {
     maxInvites: MAX_INVITES_PER_MINUTE,
   });
   private readonly instances = new Map<number, DungeonInstance>();
+  /** Each run's last room list sent, so it goes out only on change (D-147). */
+  private readonly roomsSent = new Map<number, string>();
   private readonly runOf = new Map<number, DungeonInstance>();
   private readonly socketOf = new Map<number, WebSocket>();
   /** One logged-in connection per account. */
@@ -301,12 +303,16 @@ export class GameServer {
         this.socketOf.get(id)?.close(CLOSE_POLICY, "invalid state");
       }
       for (const end of ended) this.finishRun(instance, end, true);
+      this.sendRoomsIfChanged(instance);
       if (sendSnapshots && !instance.isEmpty) {
         const encoded = encodeMessage(instance.snapshot(this.tickCount));
         this.lastSnapshotBytes = Buffer.byteLength(encoded);
         for (const id of instance.playerIds) this.sendEncoded(id, encoded);
       }
-      if (instance.isEmpty) this.instances.delete(instance.id);
+      if (instance.isEmpty) {
+        this.instances.delete(instance.id);
+        this.roomsSent.delete(instance.id);
+      }
     }
   }
 
@@ -784,7 +790,19 @@ export class GameServer {
       weaponType: loadout.weaponType,
       ability: loadout.ability,
     });
+    // A late joiner learns the rooms already woken (D-147).
+    this.sendTo(playerId, { type: "rooms", ...best.roomsSeen });
     this.log.info(`guest #${playerId} joined run #${best.id} in progress`);
+  }
+
+  /** Sends a run's woken and cleared rooms to its members when they change (D-147). */
+  private sendRoomsIfChanged(instance: DungeonInstance): void {
+    const rooms = instance.roomsSeen;
+    const key = JSON.stringify(rooms);
+    if (this.roomsSent.get(instance.id) === key) return;
+    this.roomsSent.set(instance.id, key);
+    const encoded = encodeMessage({ type: "rooms", ...rooms });
+    for (const id of instance.playerIds) this.sendEncoded(id, encoded);
   }
 
   private startRun(dungeon: DungeonId, players: readonly number[]): void {

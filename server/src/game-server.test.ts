@@ -2143,3 +2143,30 @@ describe("parties (14a, D-142, D-143)", () => {
     });
   });
 });
+
+describe("room states for the minimap (15c, D-147)", () => {
+  it("sends woken and cleared rooms when they change, and to late joiners", async () => {
+    const [a] = await inRun(1);
+    server.tick();
+    const first = await nextOfType(a!, "rooms");
+    // The training yard's one room wakes with the player in it.
+    expect(first.seen.length).toBeGreaterThan(0);
+    // Nothing changes: nothing more is sent.
+    const run = server.instanceOf(1)!;
+    expect(run.roomsSeen).toEqual({
+      seen: first.seen,
+      cleared: first.cleared,
+    });
+    // A late joiner gets the current list right after runStarted.
+    const late = (await joined()).client;
+    late.send(queue);
+    await until(() => server.isQueued(2));
+    server.tick();
+    await nextOfType(late, "runStarted");
+    expect(await nextOfType(late, "rooms")).toEqual({
+      type: "rooms",
+      seen: first.seen,
+      cleared: first.cleared,
+    });
+  });
+});

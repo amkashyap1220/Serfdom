@@ -30,6 +30,7 @@ import {
   saveToken,
 } from "./auth-store";
 import { Hud, type HudInput } from "./hud";
+import { minimapShapes, MinimapView } from "./minimap";
 import { meetsVisibilityTarget, visibleExtentFromCenter } from "./camera-math";
 import { DebugList } from "./debug-list";
 import { LAYOUT } from "./layout";
@@ -72,6 +73,9 @@ const hud = new Hud({
 });
 /** Your party as the server last sent it, for the HUD (D-146). */
 let currentParty: HudInput["party"] = null;
+const minimap = new MinimapView(
+  requireElement("hud-minimap") as HTMLCanvasElement,
+);
 const debugPanel = requireElement("hud-debug");
 /** The debug readout (D-146): hidden unless switched on (` or Settings). */
 let debugHud = loadDebugHud();
@@ -300,7 +304,23 @@ game.events.once(Phaser.Core.Events.READY, () => {
 
 /** The player HUD (D-146), every frame. */
 function renderHud(scene: WorldScene): void {
-  const { local, net, fireMode } = scene.getDebugState();
+  const { local, net, fireMode, view, renderPosition, viewRotation } =
+    scene.getDebugState();
+  const layout = net.layout;
+  minimap.draw(
+    net.online && layout
+      ? minimapShapes({
+          layout,
+          seen: net.seenRooms,
+          cleared: net.clearedRooms,
+          closedDoors: net.closedDoors,
+          portalOpen: view.portalOpen,
+          me: renderPosition,
+          others: [...net.remotePositions(performance.now()).values()],
+          rotation: viewRotation,
+        })
+      : null,
+  );
   const status = net.connection.snapshot.status;
   hud.render({
     serf: playedSerf,

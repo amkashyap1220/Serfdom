@@ -70,6 +70,9 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v47 (15c): server rooms {seen, cleared}: the rooms the run has woken
+ *          and which of those are cleared, sent when they change and to
+ *          late joiners (the minimap, D-147).
  * v46 (15b): snapshot players carry `abilityCooldown` (seconds), for
  *          the HUD's ready line (D-146).
  * v45 (14b): queueing as a party (D-143): server queueLeft {reason}:
@@ -163,7 +166,10 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 46;
+export const PROTOCOL_VERSION = 47;
+
+/** More rooms than any dungeon has: a sanity bound for room lists. */
+const MAX_ROOMS = 200;
 
 /** Session tokens are 32 random bytes, base64url: 43 characters. */
 const TOKEN_LENGTH = 43;
@@ -650,6 +656,8 @@ export type ServerMessage =
       party: { leaderId: number; members: PartyMember[] } | null;
       invited: { inviteId: number; name: string }[];
     }
+  /** The rooms your run has woken, and which are cleared (the minimap, D-147). */
+  | { type: "rooms"; seen: string[]; cleared: string[] }
   /** You are not queued (any more); `reason` (safe to show) when it was not your doing. */
   | { type: "queueLeft"; reason: string | null }
   /** Someone invites you; it lapses after `expiresIn` seconds. */
@@ -1186,6 +1194,21 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         return fail("stashError: reason must be a string");
       }
       return { ok: true, message: { type: "stashError", reason: obj.reason } };
+    case "rooms": {
+      if (!hasExactKeys(obj, ["type", "seen", "cleared"])) {
+        return fail("rooms: unexpected fields");
+      }
+      const ids = (v: unknown): string[] | null =>
+        Array.isArray(v) &&
+        v.length <= MAX_ROOMS &&
+        v.every((x) => typeof x === "string" && x.length <= 64)
+          ? (v as string[])
+          : null;
+      const seen = ids(obj.seen);
+      const cleared = ids(obj.cleared);
+      if (!seen || !cleared) return fail("rooms: bad room ids");
+      return { ok: true, message: { type: "rooms", seen, cleared } };
+    }
     case "queueLeft":
       if (!hasExactKeys(obj, ["type", "reason"])) {
         return fail("queueLeft: unexpected fields");

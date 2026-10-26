@@ -221,6 +221,18 @@ export class DungeonInstance {
     return this.sim;
   }
 
+  /** The rooms this run has woken, and which are cleared (the minimap, D-147). */
+  get roomsSeen(): { seen: string[]; cleared: string[] } {
+    const seen: string[] = [];
+    const cleared: string[] = [];
+    this.layout.rooms.forEach((room, i) => {
+      const status = this.rooms[i]?.status ?? "dormant";
+      if (status !== "dormant") seen.push(room.id);
+      if (status === "cleared") cleared.push(room.id);
+    });
+    return { seen, cleared };
+  }
+
   /** Room states, in layout order (tests and diagnostics). */
   get roomProgress(): RunProgress {
     return this.rooms;

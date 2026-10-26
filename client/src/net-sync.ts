@@ -161,6 +161,10 @@ export class NetSync {
         if (message.type === "runEnded" || message.type === "loggedOut") {
           this.resetRun(false);
         }
+        if (message.type === "rooms" && this.inRun) {
+          this.seenRooms = new Set(message.seen);
+          this.clearedRooms = new Set(message.cleared);
+        }
         this.onLobby(message, at);
       },
     });
@@ -169,6 +173,8 @@ export class NetSync {
   /** Forget everything about the previous run. */
   private resetRun(inRun: boolean): void {
     this.inRun = inRun;
+    this.seenRooms = new Set();
+    this.clearedRooms = new Set();
     this.synced = false;
     this.predictor = null;
     this.predictorId = null;
@@ -226,6 +232,10 @@ export class NetSync {
   get seed(): number | null {
     return this.inRun ? this.currentSeed : null;
   }
+
+  /** Rooms the run has woken and cleared, from the server (the minimap, D-147). */
+  seenRooms: ReadonlySet<string> = new Set();
+  clearedRooms: ReadonlySet<string> = new Set();
 
   /** Everyone in the run, from the latest snapshot (the HUD's party HP). */
   get players(): readonly SnapshotPlayer[] {
