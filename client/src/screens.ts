@@ -660,7 +660,7 @@ export class ScreenView {
           String(luckOf(serf.items.filter((i) => i.equipped !== null))),
         ),
       );
-      card.append(stats);
+      card.append(stats, el("p", "side-gear", STAT_KEY_HINT));
       const worn = serf.items.filter((i) => i.equipped !== null);
       card.append(
         el(
@@ -1811,16 +1811,21 @@ export function statLine(serf: SerfSummary): string {
 }
 
 /**
- * One stat with gear: "18 (+3)". The caps (class and Serf maxes) are never
- * shown (D-150, the user); they still limit leveling and potions.
+ * One stat as "25 (+3)(+1)" (D-151, the user): the total, then what worn
+ * gear adds, then what potions added; the base is the rest (here 21). With
+ * neither, just the total. The caps are never shown (D-150).
  */
 export function statText(serf: SerfSummary, key: StatKey): string {
   const value = loadoutOf(serf).stats[key];
   const gear = value - serf.stats[key];
-  return gear === 0
-    ? String(value)
-    : `${value} (${gear > 0 ? "+" : "−"}${Math.abs(gear)})`;
+  const potions = serf.potionStats[key];
+  if (gear === 0 && potions === 0) return String(value);
+  const signed = (n: number) => `(${n < 0 ? "−" : "+"}${Math.abs(n)})`;
+  return `${value} ${signed(gear)}${signed(potions)}`;
 }
+
+/** The key to statText's brackets, shown under stat lists (D-151). */
+export const STAT_KEY_HINT = "Total (+gear)(+potions)";
 
 /** Display names of the 10 worn slots (D-082). */
 const SLOT_LABELS: Record<EquipSlot, string> = {

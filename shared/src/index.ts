@@ -462,6 +462,7 @@ export {
 } from "./pathing.ts";
 export {
   drinkPotion,
+  drinkPotionTally,
   POTION_CHANCE,
   potionAmount,
   potionName,

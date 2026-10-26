@@ -13,6 +13,7 @@ import {
   SERF_BASE,
   type ServerMessage,
   type LeaderboardQuery,
+  zeroStats,
 } from "@serfdom/shared";
 import {
   MemorySerfRepo,
@@ -847,6 +848,13 @@ function serfContract(
       });
       const drankAtk = await repo.drinkPotion(a, serf.id, again!, 20);
       expect(drankAtk).toMatchObject({ serf: { stats: { attack: 50 } } });
+      // The tally counts what each potion really added (D-151): two ATK
+      // potions, and HP cut to +2 by the max.
+      expect((await repo.find(a, serf.id))?.potionStats).toEqual({
+        ...zeroStats(),
+        attack: 2,
+        hp: 2,
+      });
       expect(await repo.drinkPotion(a, serf.id, wisdom!, 20)).toMatchObject({
         refused: expect.stringContaining("already at its max"),
       });

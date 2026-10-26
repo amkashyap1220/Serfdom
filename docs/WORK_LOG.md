@@ -785,3 +785,9 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 
 - The user asked to hide what the stat caps are (D-150). Stats now read "18 (+3)" instead of "18/60 (+3)" everywhere (`statText`: the home panel, the Serfs tab, the HUD readout); potion buttons show the stat without its cap; the Serf-max refusal no longer names the number. The caps still limit leveling and potions on the server.
 - `npm run check`: 584 shared, 245 server, 87 client, build.
+
+### Stats split into gear and potions — 2026-10-26
+
+- The user asked for "ATK 25 (+3)(+1)": 21 base, +3 gear, +1 potions (D-151). Serfs keep a potion tally (migration 012, `potionStats` in serf summaries, protocol v49), raised by what each drink really added, in the same database write as the stat. Earlier potions count as base.
+- `npm run check`: 584 shared, 245 server, 90 client, build; the drink test checks the tally on memory and PostgreSQL.
+- Live (harness, **test** DB, headless): an MP potion showed "MP 15 (+0)(+5)"; a T0 Cape of HP showed "HP 23 (+3)(+0)"; no console errors.

@@ -70,6 +70,8 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v49: serfs carry `potionStats`, what potions added to their stats,
+ *          shown apart from the base and gear (D-151).
  * v48 (15d): leaderboards (D-148). Client getLeaderboard {board,
  *          classId, dungeon, soloOnly}; server leaderboard {query,
  *          entries}; entries carry `value` (EXP, clears, enemies slain, or
@@ -170,7 +172,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 48;
+export const PROTOCOL_VERSION = 49;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -1592,6 +1594,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
       "exp",
       "classId",
       "stats",
+      "potionStats",
       "items",
       "alive",
       "life",
@@ -1600,6 +1603,8 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
   ) {
     return undefined;
   }
+  const potionStats = parseStats(v.potionStats);
+  if (!potionStats) return undefined;
   const items = parseList(v.items, parseItem);
   if (!items) return undefined;
   const stats = parseStats(v.stats);
@@ -1630,6 +1635,7 @@ function parseSerfSummary(v: unknown): SerfSummary | undefined {
     exp: v.exp,
     classId: v.classId,
     stats,
+    potionStats,
     items,
     alive: v.alive,
     life,

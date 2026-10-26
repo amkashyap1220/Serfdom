@@ -377,6 +377,7 @@ describe("menu, queue, and run messages (v4)", () => {
           exp: 400,
           classId: "rogue",
           stats: { ...SERF_BASE, hp: 31 },
+          potionStats: { ...zeroStats(), hp: 5 },
           items: [],
           alive: false,
           life: { ...stats, runs: 4, clears: 2 },
@@ -920,6 +921,7 @@ describe("serf messages (v9)", () => {
       exp: 0,
       classId: null,
       stats: SERF_BASE,
+      potionStats: zeroStats(),
       items: [] as unknown[],
       alive: true,
       life,
@@ -943,6 +945,11 @@ describe("serf messages (v9)", () => {
       false,
     );
     expect(list([{ ...serf, stats: { ...SERF_BASE, luck: 9 } }])).toBe(false);
+    // The potion tally (v49, D-151) is required and is a set of stats.
+    const untallied: Record<string, unknown> = { ...serf };
+    delete untallied.potionStats;
+    expect(list([untallied])).toBe(false);
+    expect(list([{ ...serf, potionStats: { hp: 5 } }])).toBe(false);
     // v14 items: owned items with an id and where they are worn.
     const owned = { ...RING, id: 5, equipped: "ring2" };
     expect(

@@ -84,6 +84,8 @@ export interface SerfSummary {
   classId: ClassId | null;
   /** Rolled by the server at each level-up (D-074); never sent by a client. */
   stats: Stats;
+  /** What potions have added to `stats` (already included in it, D-151). */
+  potionStats: Stats;
   /** Bag and equipped items (D-079: gone when the serf dies). */
   items: Item[];
   alive: boolean;

@@ -99,6 +99,20 @@ export function potionProblem(
     : `${serf.name}'s ${POTION_NAMES[stat]} is at the Serf max; a class raises it.`;
 }
 
+/**
+ * What a serf's potion tally becomes after drinking (D-151): up by what the
+ * potion actually added (less than its amount when the max cut it short).
+ */
+export function drinkPotionTally(
+  potionStats: Stats,
+  stats: Stats,
+  classId: ClassId | null,
+  stat: StatKey,
+): Stats {
+  const gained = drinkPotion(stats, classId, stat)[stat] - stats[stat];
+  return { ...potionStats, [stat]: potionStats[stat] + gained };
+}
+
 /** The serf's stats after drinking: up by the potion's amount, never past its max. */
 export function drinkPotion(
   stats: Stats,

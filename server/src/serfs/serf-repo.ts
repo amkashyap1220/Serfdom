@@ -27,6 +27,8 @@ import {
   type RunResult,
   type RunStats,
   type SerfSummary,
+  drinkPotionTally,
+  zeroStats,
 } from "@serfdom/shared";
 import type pg from "pg";
 
@@ -227,6 +229,7 @@ interface SerfRow {
   exp: string;
   class_id: string | null;
   stats: unknown;
+  potion_stats: unknown;
   stats_level: number;
   died_at: Date | null;
   death_dungeon: string | null;
@@ -251,6 +254,7 @@ function fromRow(r: SerfRow): SerfSummary {
     exp,
     classId: classFromRow(r.class_id),
     stats: statsFromRow(r.stats),
+    potionStats: statsFromRow(r.potion_stats),
     items: [],
     alive,
     life: {
@@ -643,13 +647,17 @@ export class PgSerfRepo implements SerfRepo {
       const serf = fromRow(serfRow);
       const problem = potionProblem(serf, stat);
       if (problem) return { refused: problem } as const;
+      // The stat and the potion tally (D-151) change together.
       const drunk = await client.query<SerfRow>(
-        `update serfs set stats = $3
+        `update serfs set stats = $3, potion_stats = $4
          where id = $1 and account_id = $2 and died_at is null returning *`,
         [
           serfId,
           accountId,
           JSON.stringify(drinkPotion(serf.stats, serf.classId, stat)),
+          JSON.stringify(
+            drinkPotionTally(serf.potionStats, serf.stats, serf.classId, stat),
+          ),
         ],
       );
       await client.query("delete from potions where id = $1", [potionId]);
@@ -1093,6 +1101,7 @@ export class MemorySerfRepo implements SerfRepo {
       exp: 0,
       classId: null,
       stats: { ...SERF_BASE },
+      potionStats: zeroStats(),
       items: [],
       alive: true,
       life: newLifeStats(),
@@ -1355,6 +1364,12 @@ export class MemorySerfRepo implements SerfRepo {
     s.summary = {
       ...s.summary,
       stats: drinkPotion(s.summary.stats, s.summary.classId, stat),
+      potionStats: drinkPotionTally(
+        s.summary.potionStats,
+        s.summary.stats,
+        s.summary.classId,
+        stat,
+      ),
     };
     this.potions = this.potions.filter((x) => x !== entry);
     this.fillRack(accountId, capacity);

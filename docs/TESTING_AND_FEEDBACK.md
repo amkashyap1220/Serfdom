@@ -218,7 +218,7 @@ Shared combat (Phase 5b): with two windows, HUD `Movement + combat: server-autho
 
 Run `npm run dev` (it applies migration 011 to the dev database on start), then hard-refresh (Ctrl+Shift+R).
 
-1. **Home screen:** the left panel shows your serf (name, class, level, EXP bar, stats with no caps shown, D-150, worn gear) and your party with Invite (and Leave when in one). The tabs read Play, Serfs, Party, Stash, Potion rack, Leaderboards, Settings, with gold and Log out above them. Open every tab: nothing overlaps or spills out of the box; a full stash scrolls inside its grid.
+1. **Home screen:** the left panel shows your serf (name, class, level, EXP bar, stats as total (+gear)(+potions) with no caps shown, D-150, D-151, worn gear). Drink a potion: that stat's second bracket grows; equip an item: the first does and your party with Invite (and Leave when in one). The tabs read Play, Serfs, Party, Stash, Potion rack, Leaderboards, Settings, with gold and Log out above them. Open every tab: nothing overlaps or spills out of the box; a full stash scrolls inside its grid.
 2. **Invites** appear in the left panel (Accept, Decline) whatever tab is open.
 3. **HUD in a run:** name, class, level; HP and MP bars with numbers; the EXP bar; "Space: … · ready" (it shows the seconds while cooling down, or "need MP"); "Fire (T): Full auto" at the start; the dungeon and a running clock; party members with HP bars. Nothing covers the 960×800 gameplay area.
 4. Press **T** once: "Auto aim + Space". Press **`** (left of 1): the debug readout appears below (the panel scrolls) and the world shows the green box, room coordinates, and "#id" tags; press it again to hide them. Settings has the same switch, and a reload keeps your choice.
