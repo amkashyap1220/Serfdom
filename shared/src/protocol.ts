@@ -92,6 +92,11 @@ import {
  * v25 (12e): skulkers, bombers, shamans; snapshot enemies say whether a
  *          chant strengthens them, hazards say boulder or bomb, snapshots
  *          list burning floor, and blasts may be a shaman's chant (D-115).
+ * v57 (19b): snapshots send only what changed (T-053). A run's first
+ *          snapshot is whole; after it the server sends delta {tick, base,
+ *          set?, players?, enemies?, projectiles?} against the previous one
+ *          (snapshot-delta.ts); client resync asks for a whole one again.
+ *          Snapshot enemy positions are rounded to 0.01.
  * v56 (18a): settings per account (D-159): server settings {settings}
  *          after login and after each save; client saveSettings {settings}.
  *          Exchange queries lost their name search.
@@ -215,7 +220,7 @@ import {
  * v8 (7a): accounts. Client register / login / resume / logout; server
  *          authOk / authError / loggedOut. Queueing requires being logged in.
  */
-export const PROTOCOL_VERSION = 56;
+export const PROTOCOL_VERSION = 57;
 
 /** More rooms than any dungeon has: a sanity bound for room lists. */
 const MAX_ROOMS = 200;
@@ -259,6 +264,8 @@ export type ClientMessage =
       /** Space held: where to cast, as an offset from the player (D-094); null when not. */
       ability: Vec2 | null;
     }
+  /** A delta could not be applied: send the next snapshot whole (T-053). */
+  | { type: "resync" }
   /** From the menu or a results screen: wait for a run of this dungeon (D-048, D-051). */
   | { type: "queue"; dungeon: DungeonId }
   /** Stop waiting. Harmless if not queued. */
@@ -870,7 +877,65 @@ export type ServerMessage =
       chains: SnapshotChain[];
       /** Nature's Reach patches on the ground now. */
       zones: SnapshotZone[];
-    };
+    }
+  | SnapshotDelta;
+
+export type SnapshotMessage = Extract<ServerMessage, { type: "snapshot" }>;
+
+/** The snapshot's lists of things with ids, which a delta changes entry by entry. */
+export const SNAPSHOT_LISTS = ["players", "enemies", "projectiles"] as const;
+export type SnapshotList = (typeof SNAPSHOT_LISTS)[number];
+
+/** Every other snapshot field, which a delta sends whole when it changes. */
+export const SNAPSHOT_FIELDS = [
+  "closedDoors",
+  "hazards",
+  "fires",
+  "beams",
+  "waves",
+  "plates",
+  "clock",
+  "whirlpools",
+  "surges",
+  "frost",
+  "cones",
+  "blades",
+  "swings",
+  "traps",
+  "runes",
+  "portalOpen",
+  "blasts",
+  "chains",
+  "zones",
+] as const;
+
+/** An entry of a snapshot list, before the rebuilt snapshot is validated. */
+export type DeltaEntry = Record<string, unknown> & { id: number };
+
+/** How one list changed (T-053); every part is left out when empty. */
+export interface ListDelta {
+  /** New entries, whole (or replacing one with the same id). */
+  add?: DeltaEntry[];
+  /** For entries already there: the id and the fields that changed. */
+  change?: DeltaEntry[];
+  remove?: number[];
+  /** The ids in their new order, only when it changed otherwise. */
+  order?: number[];
+}
+
+/**
+ * The snapshot for `tick` as changes to the one for `base` (T-053). The
+ * client rebuilds the whole snapshot and validates it like any other.
+ */
+export interface SnapshotDelta {
+  type: "delta";
+  tick: number;
+  base: number;
+  set?: Record<string, unknown>;
+  players?: ListDelta;
+  enemies?: ListDelta;
+  projectiles?: ListDelta;
+}
 
 export type ParseResult<T> =
   { ok: true; message: T } | { ok: false; error: string };
@@ -1245,6 +1310,11 @@ export function parseClientMessage(raw: string): ParseResult<ClientMessage> {
         return fail("partyLeave: unexpected fields");
       }
       return { ok: true, message: { type: "partyLeave" } };
+    case "resync":
+      if (!hasExactKeys(obj, ["type"])) {
+        return fail("resync: unexpected fields");
+      }
+      return { ok: true, message: { type: "resync" } };
     case "partyKick":
       if (!hasExactKeys(obj, ["type", "playerId"])) {
         return fail("partyKick: unexpected fields");
@@ -1762,129 +1832,182 @@ export function parseServerMessage(raw: string): ParseResult<ServerMessage> {
         },
       };
     }
-    case "snapshot": {
-      if (
-        !hasExactKeys(obj, [
-          "type",
-          "tick",
-          "players",
-          "enemies",
-          "projectiles",
-          "closedDoors",
-          "hazards",
-          "fires",
-          "beams",
-          "waves",
-          "plates",
-          "clock",
-          "whirlpools",
-          "surges",
-          "frost",
-          "cones",
-          "blades",
-          "swings",
-          "traps",
-          "runes",
-          "portalOpen",
-          "blasts",
-          "chains",
-          "zones",
-        ])
-      ) {
-        return fail("snapshot: unexpected fields");
-      }
-      const blasts = parseList(obj.blasts, parseSnapshotBlast);
-      if (!blasts) return fail("snapshot: bad blast entry");
-      const chains = parseList(obj.chains, parseSnapshotChain);
-      if (!chains) return fail("snapshot: bad chain entry");
-      const zones = parseList(obj.zones, parseSnapshotZone);
-      if (!zones) return fail("snapshot: bad zone entry");
-      if (typeof obj.portalOpen !== "boolean") {
-        return fail("snapshot: portalOpen must be a boolean");
-      }
-      const hazards = parseList(obj.hazards, parseSnapshotHazard);
-      if (!hazards) return fail("snapshot: bad hazard entry");
-      if (
-        !Array.isArray(obj.closedDoors) ||
-        !obj.closedDoors.every(
-          (d) => typeof d === "string" && d.length > 0 && d.length <= 64,
-        )
-      ) {
-        return fail("snapshot: closedDoors must be door ids");
-      }
-      const closedDoors = obj.closedDoors as string[];
-      const traps = parseList(obj.traps, parseTrapWarning);
-      if (!traps) return fail("snapshot: bad trap entry");
-      const runes = parseList(obj.runes, parseRuneWarning);
-      if (!runes) return fail("snapshot: bad rune entry");
-      const fires = parseList(obj.fires, parseSnapshotFire);
-      if (!fires) return fail("snapshot: bad fire entry");
-      const beams = parseList(obj.beams, parseSnapshotBeam);
-      if (!beams) return fail("snapshot: bad beam entry");
-      const waves = parseList(obj.waves, parseSnapshotWave);
-      if (!waves) return fail("snapshot: bad wave entry");
-      const plates = parseList(obj.plates, parseSnapshotPlates);
-      if (!plates) return fail("snapshot: bad plates entry");
-      if (!isNonNegative(obj.clock)) return fail("snapshot: bad clock");
-      const whirlpools = parseList(obj.whirlpools, parseSnapshotWhirlpool);
-      if (!whirlpools) return fail("snapshot: bad whirlpool entry");
-      const surges = parseList(obj.surges, parseSnapshotSurge);
-      if (!surges) return fail("snapshot: bad surge entry");
-      const frost = parseList(obj.frost, parseSnapshotFrost);
-      if (!frost) return fail("snapshot: bad frost entry");
-      const cones = parseList(obj.cones, parseSnapshotCone);
-      if (!cones) return fail("snapshot: bad cone entry");
-      const blades = parseList(obj.blades, parseSnapshotBlade);
-      if (!blades) return fail("snapshot: bad blade entry");
-      const swings = parseList(obj.swings, parseSnapshotSwing);
-      if (!swings) return fail("snapshot: bad swing entry");
-      if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
-      const players = parseList(obj.players, parseSnapshotPlayer);
-      if (!players) return fail("snapshot: bad player entry");
-      const enemies = parseList(obj.enemies, parseSnapshotEnemy);
-      if (!enemies) return fail("snapshot: bad enemy entry");
-      const projectiles = parseList(obj.projectiles, parseSnapshotProjectile);
-      if (!projectiles) return fail("snapshot: bad projectile entry");
-      return {
-        ok: true,
-        message: {
-          type: "snapshot",
-          tick: obj.tick,
-          players,
-          enemies,
-          projectiles,
-          closedDoors: [...closedDoors],
-          hazards,
-          fires,
-          beams,
-          waves,
-          plates,
-          clock: obj.clock,
-          whirlpools,
-          surges,
-          frost,
-          cones,
-          blades,
-          swings,
-          traps,
-          runes,
-          portalOpen: obj.portalOpen,
-          blasts,
-          chains,
-          zones,
-        },
-      };
-    }
+    case "snapshot":
+      return parseSnapshot(obj);
+    case "delta":
+      return parseSnapshotDelta(obj);
     default:
       return fail(`unknown message type ${describe(obj.type)}`);
   }
+}
+
+/** A whole snapshot, from the wire or rebuilt from a delta (T-053). */
+export function parseSnapshot(
+  obj: Record<string, unknown>,
+): ParseResult<SnapshotMessage> {
+  if (
+    !hasExactKeys(obj, ["type", "tick", ...SNAPSHOT_LISTS, ...SNAPSHOT_FIELDS])
+  ) {
+    return fail("snapshot: unexpected fields");
+  }
+  const blasts = parseList(obj.blasts, parseSnapshotBlast);
+  if (!blasts) return fail("snapshot: bad blast entry");
+  const chains = parseList(obj.chains, parseSnapshotChain);
+  if (!chains) return fail("snapshot: bad chain entry");
+  const zones = parseList(obj.zones, parseSnapshotZone);
+  if (!zones) return fail("snapshot: bad zone entry");
+  if (typeof obj.portalOpen !== "boolean") {
+    return fail("snapshot: portalOpen must be a boolean");
+  }
+  const hazards = parseList(obj.hazards, parseSnapshotHazard);
+  if (!hazards) return fail("snapshot: bad hazard entry");
+  if (
+    !Array.isArray(obj.closedDoors) ||
+    !obj.closedDoors.every(
+      (d) => typeof d === "string" && d.length > 0 && d.length <= 64,
+    )
+  ) {
+    return fail("snapshot: closedDoors must be door ids");
+  }
+  const closedDoors = obj.closedDoors as string[];
+  const traps = parseList(obj.traps, parseTrapWarning);
+  if (!traps) return fail("snapshot: bad trap entry");
+  const runes = parseList(obj.runes, parseRuneWarning);
+  if (!runes) return fail("snapshot: bad rune entry");
+  const fires = parseList(obj.fires, parseSnapshotFire);
+  if (!fires) return fail("snapshot: bad fire entry");
+  const beams = parseList(obj.beams, parseSnapshotBeam);
+  if (!beams) return fail("snapshot: bad beam entry");
+  const waves = parseList(obj.waves, parseSnapshotWave);
+  if (!waves) return fail("snapshot: bad wave entry");
+  const plates = parseList(obj.plates, parseSnapshotPlates);
+  if (!plates) return fail("snapshot: bad plates entry");
+  if (!isNonNegative(obj.clock)) return fail("snapshot: bad clock");
+  const whirlpools = parseList(obj.whirlpools, parseSnapshotWhirlpool);
+  if (!whirlpools) return fail("snapshot: bad whirlpool entry");
+  const surges = parseList(obj.surges, parseSnapshotSurge);
+  if (!surges) return fail("snapshot: bad surge entry");
+  const frost = parseList(obj.frost, parseSnapshotFrost);
+  if (!frost) return fail("snapshot: bad frost entry");
+  const cones = parseList(obj.cones, parseSnapshotCone);
+  if (!cones) return fail("snapshot: bad cone entry");
+  const blades = parseList(obj.blades, parseSnapshotBlade);
+  if (!blades) return fail("snapshot: bad blade entry");
+  const swings = parseList(obj.swings, parseSnapshotSwing);
+  if (!swings) return fail("snapshot: bad swing entry");
+  if (!isNonNegativeInt(obj.tick)) return fail("snapshot: bad tick");
+  const players = parseList(obj.players, parseSnapshotPlayer);
+  if (!players) return fail("snapshot: bad player entry");
+  const enemies = parseList(obj.enemies, parseSnapshotEnemy);
+  if (!enemies) return fail("snapshot: bad enemy entry");
+  const projectiles = parseList(obj.projectiles, parseSnapshotProjectile);
+  if (!projectiles) return fail("snapshot: bad projectile entry");
+  return {
+    ok: true,
+    message: {
+      type: "snapshot",
+      tick: obj.tick,
+      players,
+      enemies,
+      projectiles,
+      closedDoors: [...closedDoors],
+      hazards,
+      fires,
+      beams,
+      waves,
+      plates,
+      clock: obj.clock,
+      whirlpools,
+      surges,
+      frost,
+      cones,
+      blades,
+      swings,
+      traps,
+      runes,
+      portalOpen: obj.portalOpen,
+      blasts,
+      chains,
+      zones,
+    },
+  };
+}
+
+/**
+ * A delta's shape only (T-053). Its entries are checked when the rebuilt
+ * snapshot goes through parseSnapshot, so a tampered value is refused there.
+ */
+function parseSnapshotDelta(
+  obj: Record<string, unknown>,
+): ParseResult<ServerMessage> {
+  const known: readonly string[] = [
+    "type",
+    "tick",
+    "base",
+    "set",
+    ...SNAPSHOT_LISTS,
+  ];
+  if (!Object.keys(obj).every((k) => known.includes(k))) {
+    return fail("delta: unexpected fields");
+  }
+  if (!isNonNegativeInt(obj.tick) || !isNonNegativeInt(obj.base)) {
+    return fail("delta: bad tick");
+  }
+  const message: SnapshotDelta = {
+    type: "delta",
+    tick: obj.tick,
+    base: obj.base,
+  };
+  if (obj.set !== undefined) {
+    const fields: readonly string[] = SNAPSHOT_FIELDS;
+    if (
+      !isPlainObject(obj.set) ||
+      !Object.keys(obj.set).every((k) => fields.includes(k))
+    ) {
+      return fail("delta: bad set");
+    }
+    message.set = { ...obj.set };
+  }
+  for (const list of SNAPSHOT_LISTS) {
+    if (obj[list] === undefined) continue;
+    const parsed = parseListDelta(obj[list]);
+    if (!parsed) return fail(`delta: bad ${list}`);
+    message[list] = parsed;
+  }
+  return { ok: true, message };
+}
+
+function parseListDelta(v: unknown): ListDelta | null {
+  const parts: readonly string[] = ["add", "change", "remove", "order"];
+  if (!isPlainObject(v) || !Object.keys(v).every((k) => parts.includes(k))) {
+    return null;
+  }
+  const out: ListDelta = {};
+  for (const part of ["add", "change"] as const) {
+    const entries = v[part];
+    if (entries === undefined) continue;
+    if (
+      !Array.isArray(entries) ||
+      !entries.every((e) => isPlainObject(e) && isNonNegativeInt(e.id))
+    ) {
+      return null;
+    }
+    out[part] = (entries as DeltaEntry[]).map((e) => ({ ...e }));
+  }
+  for (const part of ["remove", "order"] as const) {
+    const ids = v[part];
+    if (ids === undefined) continue;
+    if (!Array.isArray(ids) || !ids.every(isNonNegativeInt)) return null;
+    out[part] = [...(ids as number[])];
+  }
+  return out;
 }
 
 export function encodeMessage(message: ClientMessage | ServerMessage): string {
   return JSON.stringify(message);
 }
 
-/** Rounds to 0.01 for projectile positions in snapshots (drawing only). */
+/** Rounds to 0.01: snapshot values that are only drawn (enemy and projectile positions, timers). */
 export function roundCoord(v: number): number {
   return Math.round(v * 100) / 100;
 }

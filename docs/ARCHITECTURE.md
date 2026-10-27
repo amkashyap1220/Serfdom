@@ -46,7 +46,7 @@ Every consequential rule lives in `shared/` as pure TypeScript, so the server ru
 - Enemies: `enemy.ts`, `enemy-config.ts`, `enemy-ai.ts` (one behaviour per kind), `pathing.ts` (`Navigator` grid path finding).
 - Dungeons: `dungeons.ts` (the list, entry rules, `MAX_PARTY_SIZE`), `dungeon-layout.ts` (rooms, doors, validation), `dungeon-gen.ts` (placing room pieces), `dungeon-recipe.ts` (`buildFromRecipe`), `dungeon-run.ts` (room progress, waves, doors, traps), `seeded-random.ts`, and one file per dungeon: `goblin-warrens.ts`, `goblin-stronghold.ts`, `forgotten-crypt.ts`, `ember-forge.ts`. `test-world.ts` is the Training Yard fixture.
 - Progression and items: `progression.ts` (EXP, levels), `classes.ts`, `stats.ts` (growth, maxes, formulas), `items.ts` (gear, loot pools, values), `potions.ts`, `serf-rules.ts`, `account-rules.ts`, `run-stats.ts`.
-- `protocol.ts`: every network message, its strict parser, and `PROTOCOL_VERSION`.
+- `protocol.ts`: every network message, its strict parser, and `PROTOCOL_VERSION`. `snapshot-delta.ts`: `diffSnapshot` and `applySnapshotDelta` (T-053).
 
 **`server/src/` (Node 24 + `ws`, no build step)**
 
@@ -104,6 +104,7 @@ Keep pure deterministic rules (such as tier lookup or XP calculations) separate 
 - Avoid trusting client timestamps or client-provided outcome values.
 - Make disconnect and reconnect behavior explicit.
 - Keep message handlers small and route requests to authoritative game services.
+- Snapshots (T-053): each run's first snapshot to a player is whole; after that the server sends only what changed (`delta`), and the client rebuilds the whole snapshot and validates it like one from the wire. A client that cannot apply a delta sends `resync`.
 - Do not expose database internals or secrets to clients.
 
 Do not finalize the protocol before the first multiplayer milestone. Start small and evolve it deliberately.

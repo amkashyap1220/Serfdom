@@ -16,6 +16,9 @@ import {
   encodeMessage,
   parseServerMessage,
   type ServerMessage,
+  type SnapshotMessage,
+  applySnapshotDelta,
+  diffSnapshot,
 } from "@serfdom/shared";
 import { describe, expect, it } from "vitest";
 import { DungeonInstance, type RunEnd } from "./dungeon-instance.ts";
@@ -804,5 +807,66 @@ describe("cast-time flashes reach the snapshot (10c)", () => {
     expect(snap.blasts).toEqual([
       expect.objectContaining({ kind: "curse", by: 1, radius: 50 }),
     ]);
+  });
+});
+
+describe("a crowded room's snapshots send only what changed (T-053, 19b)", () => {
+  it("every delta rebuilds the whole snapshot exactly, at a fraction of its size", () => {
+    // The Sunken Temple's Great cistern: about 30 enemies and their bolts.
+    const r = new DungeonInstance(1, "sunken-temple", [1], {
+      maxQueuedInputs: 30,
+      joinWindowTicks: 900,
+    });
+    const b = r.layout.rooms.find(
+      (room) => room.name === "Great cistern",
+    )!.bounds;
+    const s = r.state;
+    r.setStateForTest({
+      ...s,
+      players: s.players.map((p) => ({
+        ...p,
+        hp: 1e6,
+        maxHp: 1e6,
+        position: { x: b.x + b.width / 2, y: b.y + b.height / 2 },
+      })),
+    });
+    let prev: SnapshotMessage | null = null;
+    let client: SnapshotMessage | null = null;
+    let whole = 0;
+    let sent = 0;
+    for (let t = 1; t <= 300; t++) {
+      r.queueInput(1, t, {
+        move: { x: t % 120 < 60 ? 1 : -1, y: 0 },
+        fire: { trigger: true, aim: null },
+        ability: null,
+      });
+      r.tick();
+      const snap = r.snapshot(t);
+      const text = encodeMessage(snap);
+      if (prev && client) {
+        const delta = encodeMessage(diffSnapshot(prev, snap)!);
+        const parsed = parseServerMessage(delta);
+        if (!parsed.ok || parsed.message.type !== "delta") {
+          throw new Error("not a delta");
+        }
+        const rebuilt = applySnapshotDelta(client, parsed.message);
+        if (!rebuilt.ok) throw new Error(rebuilt.error);
+        // Exactly what the whole snapshot would have said, over the wire.
+        expect(rebuilt.message).toEqual(JSON.parse(text));
+        client = rebuilt.message;
+        whole += text.length;
+        sent += delta.length;
+      } else {
+        const parsed = parseServerMessage(text);
+        if (!parsed.ok || parsed.message.type !== "snapshot") {
+          throw new Error("not a snapshot");
+        }
+        client = parsed.message;
+      }
+      prev = snap;
+    }
+    expect(whole / 299).toBeGreaterThan(5000); // it really is crowded
+    // Measured 8.6x smaller (T-053); fail if that ever falls below 4x.
+    expect(sent * 4).toBeLessThan(whole);
   });
 });

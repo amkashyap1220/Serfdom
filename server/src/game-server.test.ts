@@ -17,6 +17,8 @@ import {
   RACK_SIZE,
   SERF_MAX,
   type ServerMessage,
+  type SnapshotMessage,
+  applySnapshotDelta,
   LOOT_POOLS,
   layoutFor,
   rollArtifact,
@@ -37,25 +39,44 @@ import { SerfService } from "./serfs/serf-service.ts";
 import { GameServer } from "./game-server.ts";
 import { silentLogger } from "./log.ts";
 
-/** A test client that queues every server message for step-by-step assertions. */
+/**
+ * A test client that queues every server message for step-by-step
+ * assertions. Like the game's client, it rebuilds each snapshot delta into
+ * the whole snapshot (T-053), so tests see whole snapshots.
+ */
 interface TestClient {
   socket: WebSocket;
   next(): Promise<ServerMessage>;
   closed: Promise<{ code: number; reason: string }>;
   send(raw: string | Buffer): void;
+  /** How each snapshot arrived, in order: whole or as a delta. */
+  wire: ("snapshot" | "delta")[];
 }
 
 async function connect(port: number): Promise<TestClient> {
   const socket = new WebSocket(`ws://localhost:${port}`);
   const queue: ServerMessage[] = [];
   const waiters: ((m: ServerMessage) => void)[] = [];
+  const wire: TestClient["wire"] = [];
+  let lastSnapshot: SnapshotMessage | null = null;
   socket.on("message", (data) => {
     const parsed = parseServerMessage(data.toString());
     if (!parsed.ok)
       throw new Error(`server sent invalid message: ${parsed.error}`);
+    let message = parsed.message;
+    if (message.type === "delta") {
+      wire.push("delta");
+      if (!lastSnapshot) throw new Error("a delta before any whole snapshot");
+      const rebuilt = applySnapshotDelta(lastSnapshot, message);
+      if (!rebuilt.ok) throw new Error(`delta did not apply: ${rebuilt.error}`);
+      message = rebuilt.message;
+    } else if (message.type === "snapshot") {
+      wire.push("snapshot");
+    }
+    if (message.type === "snapshot") lastSnapshot = message;
     const waiter = waiters.shift();
-    if (waiter) waiter(parsed.message);
-    else queue.push(parsed.message);
+    if (waiter) waiter(message);
+    else queue.push(message);
   });
   const closed = new Promise<{ code: number; reason: string }>((resolve) =>
     socket.on("close", (code, reason) =>
@@ -69,6 +90,7 @@ async function connect(port: number): Promise<TestClient> {
   return {
     socket,
     closed,
+    wire,
     send: (raw) => socket.send(raw),
     next: () =>
       new Promise((resolve, reject) => {
@@ -845,6 +867,34 @@ describe("shared combat on the server (5b)", () => {
     ).toBe(true);
     expect(server.lastSnapshotBytes).toBeGreaterThan(0);
     expect(server.lastSnapshotBytes).toBeLessThan(65536);
+  });
+
+  it("a late joiner's first snapshot is whole; everyone else keeps getting changes (T-053)", async () => {
+    const [a] = await inRun(1);
+    for (let t = 0; t < 3; t++) server.tick();
+    const { client: b } = await joined();
+    b.send(queue);
+    await until(() => server.isQueued(2));
+    server.tick(); // b joins
+    server.tick();
+    await until(() => a!.wire.length >= 6 && b.wire.length >= 2);
+    expect(a!.wire).toEqual(["snapshot", ...Array(5).fill("delta")]);
+    expect(b.wire).toEqual(["snapshot", "delta"]);
+    const joinerFirst = await nextOfType(b, "snapshot");
+    expect(joinerFirst.players.map((p) => p.id)).toEqual([1, 2]);
+  });
+
+  it("after a resync the next snapshot is whole (T-053)", async () => {
+    const [a] = await inRun(1);
+    server.tick();
+    a!.send(encodeMessage({ type: "resync" }));
+    // Messages are handled in order: once this input is queued, so is the resync.
+    a!.send(input(0, 0, 0));
+    await until(() => server.queuedInputs(1) >= 1);
+    server.tick();
+    server.tick();
+    await until(() => a!.wire.length >= 4);
+    expect(a!.wire).toEqual(["snapshot", "delta", "snapshot", "delta"]);
   });
 
   it("rejects an input claiming a hit", async () => {

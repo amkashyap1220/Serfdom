@@ -17,6 +17,8 @@ import {
   type ClientMessage,
   type DungeonId,
   type ServerMessage,
+  type SnapshotMessage,
+  diffSnapshot,
   loadoutOf,
   type Loadout,
   normalizeSerfName,
@@ -189,6 +191,13 @@ export class GameServer {
   private readonly instances = new Map<number, DungeonInstance>();
   /** Each run's last room list sent, so it goes out only on change (D-147). */
   private readonly roomsSent = new Map<number, string>();
+  /** Each run's last snapshot sent; the next is sent as changes to it (T-053). */
+  private readonly snapshotSent = new Map<number, SnapshotMessage>();
+  /**
+   * The run whose snapshots each player has been getting. Anyone else (just
+   * joined, or asked to resync) gets the next one whole.
+   */
+  private readonly snapshotsOf = new Map<number, number>();
   private readonly runOf = new Map<number, DungeonInstance>();
   private readonly socketOf = new Map<number, WebSocket>();
   /** One logged-in connection per account. */
@@ -204,7 +213,7 @@ export class GameServer {
   private nextInstanceId = 1;
   private tickCount = 0;
   private loop: ReturnType<typeof setInterval> | undefined;
-  /** Size in bytes of the most recent snapshot (diagnostics). */
+  /** Size in bytes of the most recent snapshot or delta sent (diagnostics). */
   lastSnapshotBytes = 0;
 
   private constructor(wss: WebSocketServer, options: GameServerOptions) {
@@ -314,16 +323,36 @@ export class GameServer {
       }
       for (const end of ended) this.finishRun(instance, end, true);
       this.sendRoomsIfChanged(instance);
-      if (sendSnapshots && !instance.isEmpty) {
-        const encoded = encodeMessage(instance.snapshot(this.tickCount));
-        this.lastSnapshotBytes = Buffer.byteLength(encoded);
-        for (const id of instance.playerIds) this.sendEncoded(id, encoded);
-      }
+      if (sendSnapshots && !instance.isEmpty) this.sendSnapshot(instance);
       if (instance.isEmpty) {
         this.instances.delete(instance.id);
         this.roomsSent.delete(instance.id);
+        this.snapshotSent.delete(instance.id);
       }
     }
+  }
+
+  /**
+   * One snapshot to everyone in the run (T-053): as changes to the last one
+   * for players who got it, whole for anyone who did not. Each is encoded
+   * once and the same text goes to every player who needs it.
+   */
+  private sendSnapshot(instance: DungeonInstance): void {
+    const full = instance.snapshot(this.tickCount);
+    const last = this.snapshotSent.get(instance.id);
+    const delta = last ? diffSnapshot(last, full) : null;
+    let deltaText: string | undefined;
+    let fullText: string | undefined;
+    for (const id of instance.playerIds) {
+      const text =
+        delta && this.snapshotsOf.get(id) === instance.id
+          ? (deltaText ??= encodeMessage(delta))
+          : (fullText ??= encodeMessage(full));
+      this.snapshotsOf.set(id, instance.id);
+      this.sendEncoded(id, text);
+    }
+    this.snapshotSent.set(instance.id, full);
+    this.lastSnapshotBytes = Buffer.byteLength(deltaText ?? fullText ?? "");
   }
 
   close(): Promise<void> {
@@ -572,6 +601,12 @@ export class GameServer {
         if (instance && end) this.finishRun(instance, end, true);
         return;
       }
+      case "resync":
+        // The client could not apply a delta: its next snapshot goes whole.
+        if (session.id === null) return;
+        this.log.warn(`${label(session)} asked to resync snapshots`);
+        this.snapshotsOf.delete(session.id);
+        return;
     }
   }
 
@@ -1812,6 +1847,7 @@ export class GameServer {
     if (session.id !== null) {
       const id = session.id;
       this.socketOf.delete(id);
+      this.snapshotsOf.delete(id);
       this.leaveEverything(id, false, session.serfName);
       this.dropFromParties(id, session.serfName);
       this.broadcast({ type: "playerLeft", playerId: session.id });

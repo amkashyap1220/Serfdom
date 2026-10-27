@@ -359,7 +359,9 @@ Restart `npm run dev` (protocol v42) and reload. The ladder dungeons open once a
 9. **Weapons** (D-141): equip each weapon type in turn (the stash has some) and attack a group. The wand fires one long bolt; the bow's arrow goes through a line of enemies; the staff's orb bursts where it lands (a purple ring) and hurts those beside it; the sword slashes a pale wedge in front of you, the axe a wider half-circle, the dagger a narrow stab, the mace a full circle all round you. Melee hits land at once (no projectile) and are slow and heavy: about one sword swing a second, big damage numbers; in Auto aim you swing as soon as an enemy is up against you. Your own attacks must not stutter or jump.
 10. **Two players** (two browser windows), any one dungeon: both see the same waves, traps, and boss; both get a chest at the end.
 
-#### Known issue: snapshot size in crowded rooms (found in 13e)
+#### Known issue: snapshot size in crowded rooms (found in 13e) — fixed in 19b (T-053)
+
+Fixed: snapshots now send only what changed; the same room averages about 1.1 KB (63 KB/s). `server/src/dungeon-instance.test.ts` fails if it is ever less than 4× smaller than whole snapshots. The original note:
 
 A full heavy Sunken Temple room (30 enemies, the callers' paired bolts) sent about 9.6 KB per snapshot, about 640 KB/s, roughly twice the forge's busiest rooms. Fine on localhost; on real connections that much data is a lag risk. To address before production hosting (Phase 19): send only what changed between snapshots.
 

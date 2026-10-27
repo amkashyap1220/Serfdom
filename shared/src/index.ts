@@ -308,7 +308,10 @@ export {
   type SnapshotHazard,
   type SnapshotPlayer,
   type SnapshotProjectile,
+  type SnapshotDelta,
+  type SnapshotMessage,
 } from "./protocol.ts";
+export { applySnapshotDelta, diffSnapshot } from "./snapshot-delta.ts";
 export {
   DUMMY_POSITIONS,
   PLAYER_START,

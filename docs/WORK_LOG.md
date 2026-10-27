@@ -4,7 +4,7 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-**Next step:** Phase 19 (production hosting, D-160): 19a, checks on every push.
+**Next step:** Phase 19c (a tick watchdog), D-160.
 
 Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
@@ -902,3 +902,6 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 ### Phase 19: production hosting — 2026-10-26
 
 - The user approved the plan (D-160): host from their own PC behind a Cloudflare Tunnel at serfdom.alexanderk.dev (their domain, on Cloudflare; 111 Mbps upload), a rented server before the public alpha; the deploy-restart rule; no outside analytics (open question 23). Branch `phase-19`.
+- 19a built: `.github/workflows/check.yml` runs `npm run check` on every push and pull request, on Ubuntu with a throwaway PostgreSQL 17 (read-only permissions; a newer push cancels an older run). Checks: the same steps in a clean clone (`npm ci`, `npm run check`) passed locally; on GitHub `phase-19` went green in about 80 s and a throwaway `ci-red-test` branch with one test broken on purpose went red at the check step (the branch was then deleted).
+- 19b built (T-053): snapshots send only what changed. `shared/src/snapshot-delta.ts` (`diffSnapshot`, `applySnapshotDelta`); protocol v57 (`delta`, client `resync`, `parseSnapshot` used for wire and rebuilt snapshots alike); the server sends each run's first snapshot to a player whole and deltas after; the client rebuilds and validates. Snapshot enemy positions rounded to 0.01. The server tests' client rebuilds deltas like the game does, so every existing snapshot test now runs through them.
+- Checks: `npm run check` (646 shared, 276 server, 104 client). Measured with a real dungeon instance and no browser: the Great cistern 9.2 KB → 1.1 KB per snapshot (541 → 63 KB/s, 8.6×), the Forge heart 3.6×, the Warrens 6×; every one of 1,199 deltas per room rebuilt the exact snapshot. Live (headless, test DB, two players, B joining A's run late): each saw the other; a quiet room 7.9 KB/s; 30 grunts at most 52 KB/s for both; prediction corrections 0.00 px; no refused deltas or console errors.

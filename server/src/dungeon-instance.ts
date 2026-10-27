@@ -53,7 +53,7 @@ import {
   type RunProgress,
   type RunResult,
   type RunStats,
-  type ServerMessage,
+  type SnapshotMessage,
   type SimState,
   type SimEvent,
   type SnapshotBlast,
@@ -505,7 +505,7 @@ export class DungeonInstance {
     return out;
   }
 
-  snapshot(tick: number): ServerMessage {
+  snapshot(tick: number): SnapshotMessage {
     return {
       type: "snapshot",
       tick,
@@ -513,8 +513,8 @@ export class DungeonInstance {
       enemies: this.sim.enemies.map((e) => ({
         id: e.id,
         kind: e.kind,
-        x: e.position.x,
-        y: e.position.y,
+        x: roundCoord(e.position.x),
+        y: roundCoord(e.position.y),
         size: e.size,
         hp: e.hp,
         maxHp: e.maxHp,

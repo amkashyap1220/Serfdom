@@ -1,4 +1,5 @@
 import {
+  applySnapshotDelta,
   encodeMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
@@ -13,6 +14,7 @@ import {
   type RollWish,
   type PlayerInput,
   type ServerMessage,
+  type SnapshotMessage,
   type ItemSlot,
   type Settings,
 } from "@serfdom/shared";
@@ -35,7 +37,7 @@ export interface NetState {
   lastServerError: string | null;
 }
 
-export type SnapshotMessage = Extract<ServerMessage, { type: "snapshot" }>;
+export type { SnapshotMessage };
 
 /** Messages about accounts, the menu, queue, and runs (everything but snapshots and presence). */
 export type LobbyMessage = Extract<
@@ -107,6 +109,10 @@ export class Connection {
   };
   private readonly url: string;
   private readonly handlers: ConnectionHandlers;
+  /** The last whole snapshot, which the next delta changes (T-053). */
+  private lastSnapshot: SnapshotMessage | null = null;
+  /** A resync was asked for; deltas are skipped until a whole snapshot comes. */
+  private resyncing = false;
 
   constructor(handlers: ConnectionHandlers = {}, url: string = serverUrl()) {
     this.url = url;
@@ -305,6 +311,8 @@ export class Connection {
 
   private open(): void {
     this.state = { ...this.state, status: { kind: "connecting" } };
+    this.lastSnapshot = null;
+    this.resyncing = false;
     const socket = new WebSocket(this.url);
     this.socket = socket;
 
@@ -371,8 +379,27 @@ export class Connection {
         console.warn(`[net] server error: ${msg.reason}`);
         break;
       case "snapshot":
+        this.lastSnapshot = msg;
+        this.resyncing = false;
         this.handlers.onSnapshot?.(msg, performance.now(), bytes);
         break;
+      case "delta": {
+        if (this.resyncing) break;
+        const rebuilt = this.lastSnapshot
+          ? applySnapshotDelta(this.lastSnapshot, msg)
+          : { ok: false as const, error: "no snapshot to apply it to" };
+        if (!rebuilt.ok) {
+          // Should never happen over one in-order connection; recover
+          // rather than draw a wrong world.
+          console.warn(`[net] snapshot delta refused: ${rebuilt.error}`);
+          this.resyncing = true;
+          this.send({ type: "resync" });
+          break;
+        }
+        this.lastSnapshot = rebuilt.message;
+        this.handlers.onSnapshot?.(rebuilt.message, performance.now(), bytes);
+        break;
+      }
       case "queueStatus":
       case "queueLeft":
       case "rooms":
