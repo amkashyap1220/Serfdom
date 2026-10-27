@@ -4,7 +4,7 @@ Keep this concise and update it after each meaningful milestone.
 
 ## Current status
 
-**Next step:** the user runs the Phase 13 combined checklist (TESTING_AND_FEEDBACK.md); then push `phase-13-rest` and start Phase 14 (partying up).
+**Next step:** Phase 19 (production hosting, D-160): 19a, checks on every push.
 
 Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 use the older 18-phase numbers). `docs/ROADMAP.md` holds each phase's acceptance criteria. Session entries below are oldest first.
 
@@ -25,8 +25,8 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 - [x] Phase 14 — Partying up
 - [x] Phase 15 — Home screen, HUD, minimap, and leaderboards
 - [x] Phase 16 — Rare loot
-- [ ] Phase 17 — Economy and account systems
-- [ ] Phase 18 — Onboarding and settings
+- [x] Phase 17 — Economy and account systems
+- [x] Phase 18 — Onboarding and settings
 - [ ] Phase 19 — Production hosting
 - [ ] Phase 20 — Accounts, sessions, and player safety
 - [ ] Phase 21 — Website alpha
@@ -898,3 +898,7 @@ Phase numbering follows the 27-phase roadmap (D-124; entries before 2026-10-24 u
 
 - The user answered open question 28: no HP numbers over enemies at all (the boss bar is the only health bar), and the game never grows past 1200×800. Built on `phase-18-followup`: enemy labels show only a bone pile or a respawn; `fitWindow` caps the scale at 1.
 - Checks: `npm run check`. Live (headless, test DB): the box stayed 1200×800 and centred at 1920×1080 (360, 140) and 2560×1440 (680, 320), and still shrank at 1000×640; no numbers over goblins or the Warlord, the Warlord's bar shown; no console errors.
+
+### Phase 19: production hosting — 2026-10-26
+
+- The user approved the plan (D-160): host from their own PC behind a Cloudflare Tunnel at serfdom.alexanderk.dev (their domain, on Cloudflare; 111 Mbps upload), a rented server before the public alpha; the deploy-restart rule; no outside analytics (open question 23). Branch `phase-19`.

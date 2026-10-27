@@ -1,0 +1,47 @@
+# Phase 19a (D-160): every push runs the same checks as `npm run check`
+# locally, so a failing check shows as a red ✗ on GitHub.
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+# Read-only: this workflow never needs to change the repository.
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the older, now-outdated run.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      # A throwaway PostgreSQL 17 (the version used locally, D-059) that
+      # exists only for this run; its password protects nothing.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: serfdom
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: serfdom_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://serfdom:ci-only@localhost:5432/serfdom_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run check
